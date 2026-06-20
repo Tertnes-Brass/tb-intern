@@ -120,7 +120,24 @@ brew install rclone                                        # + rclone config (se
 OFFSITE="offsite:min-b2-bucket" pnpm backup:offsite        # eller OFFSITE=/Volumes/Backup/...
 ```
 
-Planlegg det f.eks. via `launchd`/`cron` på en alltid-på maskin, eller en GitHub Actions-jobb (ukentlig, med R2-/B2-nøkler som repo-secrets) som kjører `scripts/offsite-sync.sh` etter at Worker-cron-en har lagt en fersk dump i R2.
+#### Automatisk off-site via GitHub Actions
+
+[.github/workflows/offsite-backup.yml](.github/workflows/offsite-backup.yml) kjører off-site-synken ukentlig (søndag 05:00 UTC, én time etter Worker-cron-en) og kjører **restore-test på den nyeste dumpen** etterpå — så vi får bekreftet hver uke at backupene lar seg gjenopprette. Workflowen feiler synlig hvis noe er galt.
+
+For å skru den på, legg inn disse repo-secretene (Settings → Secrets and variables → Actions):
+
+| Secret | Hva |
+|---|---|
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | R2 S3 API-token (R2 → Manage R2 API Tokens), lesetilgang til bøtta |
+| `R2_ACCOUNT_ID` | Cloudflare account-id (brukes i R2-endepunktet) |
+| `B2_KEY_ID`, `B2_APP_KEY` | Backblaze B2 application key |
+| `B2_BUCKET` | Navn på B2-bøtta dumper/filer speiles til |
+
+rclone konfigureres fra disse via miljøvariabler i selve workflowen — ingen `rclone config` trengs i CI. Kjør den manuelt fra Actions-fanen («Run workflow») for å teste oppsettet. Alternativt kan `scripts/offsite-sync.sh` planlegges via `launchd`/`cron` på en alltid-på maskin.
+
+Synken er **inkrementell** — rclone overfører kun nye/endrede filer, så den ukentlige jobben er rask uansett arkivstørrelse. Skulle arkivet en gang trenge full re-seeding av mange GB (f.eks. etter migrering av hele notearkivet), kjør `scripts/offsite-sync.sh` én gang lokalt i stedet — Actions-jobber har 6 timers grense.
+
+> **NB:** GitHub deaktiverer scheduled workflows automatisk etter 60 dager uten aktivitet i repoet. Får du e-post om «scheduled workflow disabled», re-aktiver den fra Actions-fanen.
 
 ### Restore-test — *en utestet backup er bare et håp*
 
