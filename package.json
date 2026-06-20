@@ -15,7 +15,10 @@
 		"db:migrate:remote": "wrangler d1 migrations apply tb-notearkiv --remote",
 		"deploy": "pnpm run build && pnpm run db:migrate:remote && wrangler deploy",
 		"auth:generate": "pnpm dlx @better-auth/cli@latest generate --config src/server/auth.cli.ts --output src/db/auth-schema.ts -y",
-		"cf-typegen": "wrangler types"
+		"cf-typegen": "wrangler types",
+		"backup:export": "wrangler d1 export tb-notearkiv --remote --output backups/manual-$(date -u +%Y-%m-%dT%H%M)Z.sql",
+		"backup:restore-test": "scripts/restore-test.sh",
+		"backup:offsite": "scripts/offsite-sync.sh"
 	},
 	"dependencies": {
 		"@cloudflare/vite-plugin": "^1.26.0",

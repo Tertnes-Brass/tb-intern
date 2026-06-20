@@ -19,6 +19,8 @@ Notearkiv for brass band (Tertnes Brass). TanStack Start (React) på Cloudflare 
 - **Auth: better-auth** — instans i `src/server/auth-instance.ts` (lat `getAuth()`), klient i `src/lib/auth-client.ts`, handler i `src/routes/api/auth/$.ts` (normaliserer e-post til små bokstaver). Invitasjonsbasert: `databaseHooks.user.create.before` avviser ikke-inviterte (gjelder både passord og magisk lenke); `ADMIN_EMAIL` bootstrapper første admin. RBAC kobles via `member_profiles`. Skjemaendring i auth: `pnpm auth:generate` → `drizzle-kit generate`. `auth.cli.ts` er KUN for skjemautledning (importerer ikke cloudflare:workers).
 - E-post: `src/server/email.ts` via Cloudflare `EMAIL`-binding; faller tilbake til konsoll-logg i dev / ved feil.
 - Demodata: `src/server/seed.ts`, kun via dev-ruten `/api/dev-seed` (gated på `import.meta.env.DEV`).
+- **Server-entry: `src/server.ts`** er en egendefinert Worker-entry (`main` i wrangler.jsonc peker hit) som gjenskaper TanStack Starts `fetch`-handler og legger til en `scheduled()`-handler. Endre den varsomt — `fetch` må fortsatt være `createStartHandler(defaultStreamHandler)`.
+- Backup: `src/server/backup.ts` dumper hele D1 til R2 (`backups/`, 8 ukers rotasjon) ukentlig via Cron Trigger (`scheduled()`). Off-site + restore-test ligger i `scripts/`. Se README. Test cron lokalt: `curl localhost:3000/cdn-cgi/handler/scheduled?cron=0+4+*+*+0`.
 
 ## Konvensjoner
 
