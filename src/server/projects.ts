@@ -4,7 +4,14 @@ import { z } from 'zod'
 import { db, type Db } from '../db'
 import { parts, projectWorks, projects, seasons, workFiles, workLinks, works } from '../db/schema'
 import { newId } from '../lib/id'
-import { hasFullArchiveAccess, hasPermission, requireMe, requirePermission } from './access'
+import {
+  hasFullArchiveAccess,
+  hasPermission,
+  memberFileAccessContext,
+  requireMe,
+  requirePermission,
+} from './access'
+import { type AccessCtx, memberCanAccessFile, memberCanSeeFile } from './file-access'
 
 export type ProjectWorkDetail = {
   workId: string
@@ -25,7 +32,7 @@ export type ProjectWorkDetail = {
 export async function assembleRepertoire(
   d: Db,
   projectId: string,
-  opts: { effectivePartIds: string[]; includeScore: boolean; canViewAll: boolean },
+  access: AccessCtx,
 ): Promise<ProjectWorkDetail[]> {
   const rows = await d
     .select({
@@ -67,10 +74,10 @@ export async function assembleRepertoire(
 
   return rows.map((r) => {
     const wf = files.filter((f) => f.workId === r.workId)
-    // Hard tilgang: uten fullt arkivinnsyn ser et medlem kun egne stemmer i
-    // «alle stemmer»-listen (samme sett som fil-gaten slipper gjennom).
+    // Samme policy som fil-gaten: metadata kan ikke røpe stemmer som
+    // nedlastings-API-et ville avvist.
     const partFiles = wf
-      .filter((f) => f.kind === 'part' && (opts.canViewAll || (!!f.partId && opts.effectivePartIds.includes(f.partId))))
+      .filter((f) => f.kind === 'part' && memberCanSeeFile(f, access))
       .map((f) => ({ id: f.id, partId: f.partId, partName: f.partName, partSort: f.partSort ?? 900, pageCount: f.pageCount }))
       .sort((a, b) => a.partSort - b.partSort)
     const score = wf.find((f) => f.kind === 'score')
@@ -79,11 +86,17 @@ export async function assembleRepertoire(
       links: links.filter((l) => l.workId === r.workId).map((l) => ({ id: l.id, kind: l.kind, url: l.url, label: l.label })),
       partFiles,
       myFiles: wf
-        .filter((f) => f.kind === 'part' && f.partId && opts.effectivePartIds.includes(f.partId))
+        .filter(
+          (f) =>
+            f.kind === 'part' &&
+            f.partId &&
+            access.effectivePartIds.includes(f.partId) &&
+            memberCanSeeFile(f, access),
+        )
         .map((f) => ({ id: f.id, partName: f.partName, pageCount: f.pageCount })),
-      scoreFileId: opts.includeScore && score ? score.id : null,
+      scoreFileId: score && memberCanAccessFile(score, access) ? score.id : null,
       audioFiles: wf
-        .filter((f) => f.kind === 'audio')
+        .filter((f) => f.kind === 'audio' && memberCanSeeFile(f, access))
         .map((f) => ({ id: f.id, label: f.label, fileName: f.fileName })),
     }
   })
@@ -103,11 +116,7 @@ export const getHome = createServerFn().handler(async () => {
 
   const next = upcoming[0] ?? null
   const repertoire = next
-    ? await assembleRepertoire(d, next.id, {
-        effectivePartIds: me.effectivePartIds,
-        includeScore: hasPermission(me, 'scores.view'),
-        canViewAll: canBrowseArchive,
-      })
+    ? await assembleRepertoire(d, next.id, memberFileAccessContext(me, true))
     : []
 
   const archive = canBrowseArchive
@@ -183,11 +192,13 @@ export const getProject = createServerFn()
       throw new Error('Prosjektet er ikke lenger tilgjengelig')
     }
 
-    const repertoire = await assembleRepertoire(d, project.id, {
-      effectivePartIds: me.effectivePartIds,
-      includeScore: hasPermission(me, 'scores.view'),
-      canViewAll: canBrowseArchive,
-    })
+    const inAccessibleProject =
+      project.isPublished && !!project.eventDate && project.eventDate >= today
+    const repertoire = await assembleRepertoire(
+      d,
+      project.id,
+      memberFileAccessContext(me, inAccessibleProject),
+    )
 
     return {
       project,
