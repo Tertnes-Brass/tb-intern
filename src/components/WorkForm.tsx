@@ -9,6 +9,8 @@ type Work = typeof works.$inferSelect
 
 type FormState = {
   title: string
+  subtitle: string
+  archiveNumber: string
   composer: string
   arranger: string
   publisher: string
@@ -22,6 +24,8 @@ type FormState = {
 
 const empty: FormState = {
   title: '',
+  subtitle: '',
+  archiveNumber: '',
   composer: '',
   arranger: '',
   publisher: '',
@@ -53,6 +57,8 @@ export function WorkFormModal({
       work
         ? {
             title: work.title,
+            subtitle: work.subtitle ?? '',
+            archiveNumber: work.archiveNumber ?? '',
             composer: work.composer ?? '',
             arranger: work.arranger ?? '',
             publisher: work.publisher ?? '',
@@ -85,6 +91,8 @@ export function WorkFormModal({
     try {
       const payload = {
         title: form.title,
+        subtitle: form.subtitle || undefined,
+        archiveNumber: form.archiveNumber || undefined,
         composer: form.composer || undefined,
         arranger: form.arranger || undefined,
         publisher: form.publisher || undefined,
@@ -123,6 +131,9 @@ export function WorkFormModal({
         <Field label="Tittel *">
           <input className="field-input" value={form.title} onChange={set('title')} placeholder="F.eks. «Where Eagles Sing»" autoFocus />
         </Field>
+        <Field label="Undertittel">
+          <input className="field-input" value={form.subtitle} onChange={set('subtitle')} placeholder="Valgfri undertittel" />
+        </Field>
         <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <Field label="Komponist" className="col-span-2 sm:col-span-1">
             <input className="field-input" value={form.composer} onChange={set('composer')} placeholder="Paul Lovatt-Cooper" />
@@ -151,6 +162,9 @@ export function WorkFormModal({
           </Field>
           <Field label="Fysisk plassering" className="col-span-2 sm:col-span-1">
             <input className="field-input" value={form.physicalLocation} onChange={set('physicalLocation')} placeholder="Skap 2 · Mappe 014" />
+          </Field>
+          <Field label="Arkivnummer" className="col-span-2 sm:col-span-1">
+            <input className="field-input" value={form.archiveNumber} onChange={set('archiveNumber')} placeholder="F.eks. 014" autoComplete="off" />
           </Field>
           <Field label="Anskaffet år" className="col-span-2 sm:col-span-1">
             <input className="field-input" value={form.acquiredYear} onChange={set('acquiredYear')} placeholder="2024" inputMode="numeric" enterKeyHint="done" autoComplete="off" />

@@ -51,6 +51,9 @@ function WorkPage() {
             <h1 className="display-title text-4xl font-semibold italic leading-tight text-ink sm:text-5xl">
               {w.title}
             </h1>
+            {w.subtitle && (
+              <p className="display-title mt-1 text-xl italic text-ink-soft sm:text-2xl">{w.subtitle}</p>
+            )}
             {composerLine && <p className="mt-2 text-[0.95rem] text-ink-soft">{composerLine}</p>}
           </div>
           {data.canManage && (
@@ -69,6 +72,7 @@ function WorkPage() {
           {w.durationSec ? <Stamp>{formatDuration(w.durationSec)} min</Stamp> : null}
           {w.publisher && <Stamp>{w.publisher}</Stamp>}
           {w.acquiredYear && <Stamp>Anskaffet {w.acquiredYear}</Stamp>}
+          {w.archiveNumber && <Stamp tone="brass">Arkivnummer {w.archiveNumber}</Stamp>}
           {w.physicalLocation && <Stamp tone="oxblood">{w.physicalLocation}</Stamp>}
           <Stamp tone={partFileCount >= totalParts ? 'brass' : partFileCount > 0 ? 'neutral' : 'oxblood'}>
             {partFileCount}/{totalParts} stemmer

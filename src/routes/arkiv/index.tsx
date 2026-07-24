@@ -73,7 +73,7 @@ function ArchivePage() {
           <input
             type="search"
             defaultValue={q ?? ''}
-            placeholder="Søk på tittel, komponist eller arrangør …"
+            placeholder="Søk på tittel, arkivnummer, komponist eller arrangør …"
             className="field-input !pl-9"
             enterKeyHint="search"
             autoCorrect="off"
@@ -118,6 +118,11 @@ function ArchivePage() {
                   <span className="display-title block truncate text-[1.12rem] font-semibold leading-snug">
                     {w.title}
                   </span>
+                  {w.subtitle && (
+                    <span className="display-title block truncate text-[0.9rem] italic text-ink-soft">
+                      {w.subtitle}
+                    </span>
+                  )}
                   <span className="block truncate text-[0.82rem] text-ink-soft">
                     {[w.composer, w.arranger ? `arr. ${w.arranger}` : null].filter(Boolean).join(' · ') || '—'}
                   </span>
@@ -141,6 +146,9 @@ function ArchivePage() {
                   </span>
                   {w.physicalLocation && (
                     <span className="hidden font-mono text-[0.62rem] text-ink-faint md:block">{w.physicalLocation}</span>
+                  )}
+                  {w.archiveNumber && (
+                    <span className="font-mono text-[0.62rem] text-ink-faint">Arkivnr. {w.archiveNumber}</span>
                   )}
                 </span>
               </Link>
