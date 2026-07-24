@@ -4,6 +4,7 @@ import { getRequest } from '@tanstack/react-start/server'
 import { db } from '../db'
 import { memberProfiles, parts, rolePermissions, roles, sectionLeaders, userParts } from '../db/schema'
 import { getAuth } from './auth-instance'
+import type { AccessCtx } from './file-access'
 import { buildChildrenMap, expandPartIds, leaderCanAssign } from './parts-tree'
 
 export type Me = {
@@ -20,6 +21,9 @@ export type Me = {
   // Stemmer denne brukeren er seksjonsleder for, ekspandert nedover. Tomt for
   // de fleste. Scope for `members.manage.section`.
   leadsPartIds: string[]
+  // Kun konkrete løvstemmer i det ekspanderte lederomfanget. Brukes til
+  // notetilgang; forelder-rader er grupper og gir ikke en egen notefiltilgang.
+  leadsLeafPartIds: string[]
 }
 
 export async function currentUser(): Promise<Me | null> {
@@ -59,6 +63,7 @@ export async function currentUser(): Promise<Me | null> {
   ])
 
   const childrenMap = buildChildrenMap(allPartRows)
+  const leadsPartIds = expandPartIds(leaderRows.map((r) => r.partId), childrenMap)
 
   return {
     id: authUserId,
@@ -69,7 +74,8 @@ export async function currentUser(): Promise<Me | null> {
     permissions: perms.map((p) => p.permission),
     parts: myParts,
     effectivePartIds: expandPartIds(myParts.map((p) => p.id), childrenMap),
-    leadsPartIds: expandPartIds(leaderRows.map((r) => r.partId), childrenMap),
+    leadsPartIds,
+    leadsLeafPartIds: leadsPartIds.filter((id) => !childrenMap.has(id)),
   }
 }
 
@@ -81,6 +87,22 @@ export function hasPermission(me: Me | null, permission: string): boolean {
 /** Fullt arkivinnsyn, uavhengig av om det kommer fra lesing eller forvaltning. */
 export function hasFullArchiveAccess(me: Me | null): boolean {
   return hasPermission(me, 'archive.viewAll') || hasPermission(me, 'works.manage')
+}
+
+/**
+ * Bygger den felles konteksten for filmetadata og filstrømming. Lederomfanget
+ * holdes separat fra egne stemmer slik at en foreldet section_leaders-rad aldri
+ * virker uten den faktiske rettigheten.
+ */
+export function memberFileAccessContext(me: Me, inAccessibleProject: boolean): AccessCtx {
+  return {
+    effectivePartIds: me.effectivePartIds,
+    sectionLeaderPartIds: me.leadsLeafPartIds,
+    canManageSection: hasPermission(me, 'members.manage.section'),
+    canViewScore: hasPermission(me, 'scores.view'),
+    canViewAll: hasFullArchiveAccess(me),
+    inAccessibleProject,
+  }
 }
 
 /**

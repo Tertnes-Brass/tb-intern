@@ -1,23 +1,34 @@
 /**
  * Ren, runtime-uavhengig autorisasjon for nedlasting av en fil. ÉN sannhetskilde
- * brukt av fil-gaten (`routes/api/files/$fileId.ts`), `getWork` og `getShareView`
- * — slik at liste og gate aldri kan divergere. Holdes import-fri så den kan
- * enhetstestes i node.
+ * brukt av fil-gaten (`routes/api/files/$fileId.ts`), prosjektvisningen og
+ * `getShareView` — slik at liste og gate aldri kan divergere. Holdes import-fri
+ * så den kan enhetstestes i node.
  *
- * Hard tilgangsstyring: en innlogget bruker når en stemmefil kun hvis stemma er
- * i `effectivePartIds` (tildelte stemmer ekspandert nedover treet) OG verket er
- * med i et publisert, kommende prosjekt. Fullt arkivinnsyn omgår prosjektkravet.
- * Partitur styres ortogonalt av `scores.view`. Uplassert ('other') krever fullt
- * arkivinnsyn.
+ * Hard tilgangsstyring: en innlogget bruker når en stemmefil hvis stemma er i
+ * `effectivePartIds` (egne tildelte stemmer ekspandert nedover treet), eller i
+ * det eksplisitte løv-omfanget hen leder OG hen fortsatt har
+ * `members.manage.section`. Verket må være med i et publisert, kommende
+ * prosjekt. Fullt arkivinnsyn omgår prosjektkravet. Partitur styres ortogonalt
+ * av `scores.view`. Uplassert ('other') krever fullt arkivinnsyn.
  */
 
 export type FileLite = { kind: string; partId: string | null }
 
 export type AccessCtx = {
   effectivePartIds: string[]
+  sectionLeaderPartIds: string[] // løv-stemmer i eksplisitt section_leaders-scope
+  canManageSection: boolean // members.manage.section; scope-rader alene er ikke nok
   canViewScore: boolean // scores.view
   canViewAll: boolean // archive.viewAll ELLER works.manage (sistnevnte = fail-safe for arkivforvaltere)
   inAccessibleProject: boolean // verket finnes i minst ett publisert, kommende prosjekt
+}
+
+function memberCanAccessPart(partId: string | null, ctx: AccessCtx): boolean {
+  if (!partId) return false
+  return (
+    ctx.effectivePartIds.includes(partId) ||
+    (ctx.canManageSection && ctx.sectionLeaderPartIds.includes(partId))
+  )
 }
 
 /** Kan en innlogget bruker laste ned denne filen? */
@@ -29,7 +40,7 @@ export function memberCanAccessFile(file: FileLite, ctx: AccessCtx): boolean {
     case 'score':
       return ctx.canViewScore
     case 'part':
-      return ctx.canViewAll || (!!file.partId && ctx.effectivePartIds.includes(file.partId))
+      return ctx.canViewAll || memberCanAccessPart(file.partId, ctx)
     default:
       // 'other'/uplassert og ukjente kinds: kun fullt arkivinnsyn.
       return ctx.canViewAll
@@ -57,6 +68,6 @@ export function memberCanSeeFile(file: FileLite, ctx: AccessCtx): boolean {
   if (ctx.canViewAll) return true
   if (!ctx.inAccessibleProject) return false
   if (file.kind === 'score' || file.kind === 'audio') return true
-  if (file.kind === 'part') return !!file.partId && ctx.effectivePartIds.includes(file.partId)
+  if (file.kind === 'part') return memberCanAccessPart(file.partId, ctx)
   return false // 'other'/uplassert skjules
 }

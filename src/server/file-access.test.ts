@@ -6,6 +6,8 @@ const file = (kind: string, partId: string | null = null) => ({ kind, partId })
 // Vanlig medlem med Slagverk 1, kan se partitur, ikke fullt arkivinnsyn.
 const member: AccessCtx = {
   effectivePartIds: ['percussion-1'],
+  sectionLeaderPartIds: [],
+  canManageSection: false,
   canViewScore: true,
   canViewAll: false,
   inAccessibleProject: true,
@@ -13,6 +15,8 @@ const member: AccessCtx = {
 // Stab/dirigent: fullt arkivinnsyn.
 const viewAll: AccessCtx = {
   effectivePartIds: [],
+  sectionLeaderPartIds: [],
+  canManageSection: false,
   canViewScore: true,
   canViewAll: true,
   inAccessibleProject: false,
@@ -20,11 +24,19 @@ const viewAll: AccessCtx = {
 // Medlem uten partitur-rett.
 const noScore: AccessCtx = {
   effectivePartIds: ['percussion-1'],
+  sectionLeaderPartIds: [],
+  canManageSection: false,
   canViewScore: false,
   canViewAll: false,
   inAccessibleProject: true,
 }
 const outsideProject: AccessCtx = { ...member, inAccessibleProject: false }
+const sectionLeader: AccessCtx = {
+  ...member,
+  effectivePartIds: ['flugel'],
+  sectionLeaderPartIds: ['solo-cornet', 'repiano-cornet'],
+  canManageSection: true,
+}
 
 describe('memberCanAccessFile (nedlasting)', () => {
   it('egen stemme: ja', () => {
@@ -32,6 +44,20 @@ describe('memberCanAccessFile (nedlasting)', () => {
   })
   it('andres stemme: nei', () => {
     expect(memberCanAccessFile(file('part', 'solo-cornet'), member)).toBe(false)
+  })
+  it('seksjonsleder kan laste ned alle løvstemmer i eksplisitt scope', () => {
+    expect(memberCanAccessFile(file('part', 'solo-cornet'), sectionLeader)).toBe(true)
+    expect(memberCanAccessFile(file('part', 'repiano-cornet'), sectionLeader)).toBe(true)
+  })
+  it('seksjonsleder avvises for forelder, annen seksjon og partitur uten egne rettigheter', () => {
+    const withoutScore = { ...sectionLeader, canViewScore: false }
+    expect(memberCanAccessFile(file('part', 'cornets'), withoutScore)).toBe(false)
+    expect(memberCanAccessFile(file('part', 'tenor-horn'), withoutScore)).toBe(false)
+    expect(memberCanAccessFile(file('score'), withoutScore)).toBe(false)
+  })
+  it('foreldet section_leaders-scope gir ikke tilgang uten members.manage.section', () => {
+    const staleLeaderRow = { ...sectionLeader, canManageSection: false }
+    expect(memberCanAccessFile(file('part', 'solo-cornet'), staleLeaderRow)).toBe(false)
   })
   it('partitur følger scores.view', () => {
     expect(memberCanAccessFile(file('score'), member)).toBe(true)
@@ -52,6 +78,12 @@ describe('memberCanAccessFile (nedlasting)', () => {
     expect(memberCanAccessFile(file('part', 'percussion-1'), outsideProject)).toBe(false)
     expect(memberCanAccessFile(file('score'), outsideProject)).toBe(false)
     expect(memberCanAccessFile(file('audio'), outsideProject)).toBe(false)
+    expect(
+      memberCanAccessFile(file('part', 'solo-cornet'), {
+        ...sectionLeader,
+        inAccessibleProject: false,
+      }),
+    ).toBe(false)
   })
   it('medlem uten stemme når ingen part-filer', () => {
     const none: AccessCtx = { ...member, effectivePartIds: [] }
@@ -83,6 +115,16 @@ describe('memberCanSeeFile (metadata i liste)', () => {
   it('egen stemme vises, andres skjules', () => {
     expect(memberCanSeeFile(file('part', 'percussion-1'), member)).toBe(true)
     expect(memberCanSeeFile(file('part', 'solo-cornet'), member)).toBe(false)
+  })
+  it('viser samme leder-scope som nedlastingsporten tillater', () => {
+    expect(memberCanSeeFile(file('part', 'solo-cornet'), sectionLeader)).toBe(true)
+    expect(memberCanSeeFile(file('part', 'tenor-horn'), sectionLeader)).toBe(false)
+    expect(
+      memberCanSeeFile(file('part', 'solo-cornet'), {
+        ...sectionLeader,
+        canManageSection: false,
+      }),
+    ).toBe(false)
   })
   it('uplassert skjules for ikke-arkivinnsyn, vises ellers', () => {
     expect(memberCanSeeFile(file('other'), member)).toBe(false)

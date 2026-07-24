@@ -14,7 +14,7 @@ export const PERMISSION_CATALOG: Array<{ key: string; label: string; hint: strin
   { key: 'projects.manage', label: 'Prosjekter', hint: 'Lage prosjekter, sette repertoar, publisere' },
   { key: 'shares.manage', label: 'Vikarlenker', hint: 'Dele stemmer med vikarer' },
   { key: 'members.manage', label: 'Medlemmer', hint: 'Invitere og endre roller/stemmer' },
-  { key: 'members.manage.section', label: 'Lede egen seksjon', hint: 'Tildele understemmer til folk i egen seksjon' },
+  { key: 'members.manage.section', label: 'Lede egen seksjon', hint: 'Tildele stemmer og se noter for egen seksjon' },
   { key: 'scores.view', label: 'Partitur', hint: 'Se og laste ned partitur' },
   { key: 'archive.viewAll', label: 'Se hele arkivet', hint: 'Se og laste ned ALLE stemmer, ikke bare egne' },
   { key: 'downloads.view', label: 'Nedlastingslogg', hint: 'Se hvem som har lastet ned hvilke filer' },

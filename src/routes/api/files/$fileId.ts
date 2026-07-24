@@ -4,7 +4,7 @@ import { and, eq, gte } from 'drizzle-orm'
 import { db } from '../../../db'
 import { downloadLog, projects, projectWorks, shareLinks, workFiles } from '../../../db/schema'
 import { newId, sha256Hex } from '../../../lib/id'
-import { currentUser, hasFullArchiveAccess, hasPermission } from '../../../server/access'
+import { currentUser, hasFullArchiveAccess, memberFileAccessContext } from '../../../server/access'
 import { memberCanAccessFile, shareAllows } from '../../../server/file-access'
 
 function contentTypeFor(fileName: string): string {
@@ -56,17 +56,12 @@ export const Route = createFileRoute('/api/files/$fileId')({
             )[0]
             inAccessibleProject = !!accessibleProject
           }
-          // Hard tilgangsstyring: stemmefiler krever at stemma er i brukerens
-          // effektive stemmer (forelder ⇒ barn) og at verket er i et publisert,
+          // Hard tilgangsstyring: stemmefiler krever egen effektiv stemme eller
+          // et løv i aktivt seksjonsleder-scope, og at verket er i et publisert,
           // kommende prosjekt. Partitur krever scores.view. Fullt arkivinnsyn
           // omgår prosjektkravet. Håndheves server-side her — den ENESTE reelle
           // porten — ikke bare i UI-et.
-          const ok = memberCanAccessFile(file, {
-            effectivePartIds: me.effectivePartIds,
-            canViewScore: hasPermission(me, 'scores.view'),
-            canViewAll,
-            inAccessibleProject,
-          })
+          const ok = memberCanAccessFile(file, memberFileAccessContext(me, inAccessibleProject))
           if (!ok) return new Response('Ingen tilgang til denne filen', { status: 403 })
         } else if (shareToken) {
           // Vikartilgang: token må være gyldig, og filen må tilhøre prosjektet
