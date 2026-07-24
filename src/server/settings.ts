@@ -3,6 +3,7 @@ import { asc, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
 import { invitations, memberProfiles, parts, rolePermissions, roles, userParts, workFiles } from '../db/schema'
+import { SECTION_ORDER } from '../lib/taxonomy'
 import { requirePermission } from './access'
 import { buildDisplayOrder, listSiblings, reorderAfter } from './parts-tree'
 
@@ -20,8 +21,6 @@ export const PERMISSION_CATALOG: Array<{ key: string; label: string; hint: strin
   { key: 'downloads.view', label: 'Nedlastingslogg', hint: 'Se hvem som har lastet ned hvilke filer' },
   { key: SETTINGS_PERMISSION, label: 'Innstillinger', hint: 'Administrere besetning og roller' },
 ]
-
-const SECTIONS = ['cornet', 'horn', 'trombone', 'low', 'perc', 'score'] as const
 
 function slugify(input: string): string {
   return (
@@ -89,7 +88,7 @@ export const getSettingsData = createServerFn().handler(async () => {
       memberCount: (roleMembers.get(r.id) ?? 0) + (roleInvites.get(r.id) ?? 0),
     })),
     permissionCatalog: PERMISSION_CATALOG,
-    sections: SECTIONS,
+    sections: SECTION_ORDER,
   }
 })
 
@@ -98,7 +97,7 @@ export const getSettingsData = createServerFn().handler(async () => {
 const partInput = z.object({
   nameNo: z.string().min(1, 'Norsk navn er påkrevd'),
   nameEn: z.string().min(1, 'Engelsk navn er påkrevd'),
-  section: z.enum(SECTIONS),
+  section: z.enum(SECTION_ORDER),
   aliases: z.array(z.string()).default([]),
   parentId: z.string().nullable().optional(),
 })

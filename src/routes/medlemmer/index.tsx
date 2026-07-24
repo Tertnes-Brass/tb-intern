@@ -2,7 +2,7 @@ import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { toast, toastError } from '../../components/toast'
 import { Avatar, Button, Field, Kicker, Modal, Stamp } from '../../components/ui'
-import { SECTION_LABELS } from '../../lib/taxonomy'
+import { SECTION_LABELS, SECTION_ORDER } from '../../lib/taxonomy'
 import {
   inviteMember,
   listMembers,
@@ -44,7 +44,7 @@ function MembersPage() {
     list.push(m)
     groups.set(section, list)
   }
-  const order = ['cornet', 'horn', 'trombone', 'low', 'perc', 'other']
+  const order = [...SECTION_ORDER, 'other']
   const labels: Record<string, string> = { ...SECTION_LABELS, other: 'Stab og uten stemme' }
 
   const setPart = async (userId: string, partId: string) => {
