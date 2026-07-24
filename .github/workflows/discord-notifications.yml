@@ -10,7 +10,8 @@ name: Discord-varslinger
     types: [submitted]
   release:
     types: [published]
-  deployment_status:
+  check_run:
+    types: [completed]
 
 permissions:
   contents: read
@@ -18,6 +19,10 @@ permissions:
 jobs:
   notify:
     name: Varsle Discord
+    if: >-
+      github.event_name != 'check_run' ||
+      (github.event.check_run.name == 'Workers Builds: tb-notearkiv' &&
+      github.event.check_run.app.slug == 'cloudflare-workers-and-pages')
     runs-on: ubuntu-latest
     timeout-minutes: 5
 

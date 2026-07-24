@@ -14,6 +14,8 @@ const colors = {
 	warning: 0xfbca04,
 };
 
+const productionBranches = new Set(["main"]);
+
 const truncate = (value, length) => {
 	const text = String(value ?? "").trim();
 	return text.length <= length ? text : `${text.slice(0, length - 1)}…`;
@@ -179,32 +181,52 @@ if (eventName === "release" && action === "published") {
 	};
 }
 
-if (eventName === "deployment_status") {
-	const deployment = event.deployment;
-	const status = event.deployment_status;
-	const state = status.state?.toLocaleLowerCase("en-US");
-	const environment = status.environment || deployment.environment || "production";
-	const isProduction =
-		!environment || environment.toLocaleLowerCase("en-US").includes("prod");
+if (eventName === "check_run") {
+	const checkRun = event.check_run;
+	const branch =
+		checkRun.check_suite?.head_branch ??
+		checkRun.pull_requests?.[0]?.head?.ref;
+	const isCloudflareBuild =
+		checkRun.app?.slug === "cloudflare-workers-and-pages" &&
+		checkRun.name === "Workers Builds: tb-notearkiv";
+	const isPreview = /Preview URL:/i.test(checkRun.output?.summary ?? "");
+	const isProduction = productionBranches.has(branch) && !isPreview;
+	const conclusion = checkRun.conclusion?.toLocaleLowerCase("en-US");
+	const commit = truncate(checkRun.head_sha, 12);
+	const description = [
+		branch ? `Branch \`${truncate(branch, 100)}\`.` : undefined,
+		commit ? `Commit \`${commit}\`.` : undefined,
+	]
+		.filter(Boolean)
+		.join(" ");
 
-	if (isProduction && state === "success") {
+	if (isCloudflareBuild && isProduction && conclusion === "success") {
 		notification = {
 			color: colors.success,
-			description: `Commit \`${truncate(deployment.sha, 12)}\` er nå i produksjon.`,
-			title: "🚀 Ny versjon ble deployet",
+			description,
+			title: "🚀 Notearkivet ble deployet",
 			url:
-				status.environment_url ||
-				status.target_url ||
-				repository.html_url,
+				checkRun.details_url ||
+				checkRun.html_url ||
+				"https://noter.tertnesbrass.com",
 		};
 	}
 
-	if (isProduction && ["error", "failure"].includes(state)) {
+	if (
+		isCloudflareBuild &&
+		isProduction &&
+		["action_required", "cancelled", "failure", "timed_out"].includes(
+			conclusion,
+		)
+	) {
 		notification = {
 			color: colors.failure,
-			description: `Deploy av commit \`${truncate(deployment.sha, 12)}\` feilet.`,
+			description,
 			title: "🔥 Produksjonsdeploy feilet",
-			url: status.target_url || repository.html_url,
+			url:
+				checkRun.details_url ||
+				checkRun.html_url ||
+				repository.html_url,
 		};
 	}
 }
