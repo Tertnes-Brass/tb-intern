@@ -70,6 +70,7 @@ export const listDownloads = createServerFn()
       .select({
         id: downloadLog.id,
         at: downloadLog.at,
+        accessType: downloadLog.accessType,
         userId: downloadLog.userId,
         userName: user.name,
         shareLinkId: downloadLog.shareLinkId,

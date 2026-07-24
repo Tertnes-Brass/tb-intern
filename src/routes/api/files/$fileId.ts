@@ -2,10 +2,15 @@ import { createFileRoute } from '@tanstack/react-router'
 import { env } from 'cloudflare:workers'
 import { and, eq, gte } from 'drizzle-orm'
 import { db } from '../../../db'
-import { downloadLog, projects, projectWorks, shareLinks, workFiles } from '../../../db/schema'
-import { newId, sha256Hex } from '../../../lib/id'
+import { projects, projectWorks, shareLinks, workFiles } from '../../../db/schema'
+import { sha256Hex } from '../../../lib/id'
 import { currentUser, hasFullArchiveAccess, memberFileAccessContext } from '../../../server/access'
 import { memberCanAccessFile, shareAllows } from '../../../server/file-access'
+import {
+  accessTypeForRequestUrl,
+  logFileAccess,
+  type FileAccessActor,
+} from '../../../server/file-access-log'
 
 function contentTypeFor(fileName: string): string {
   if (/\.pdf$/i.test(fileName)) return 'application/pdf'
@@ -22,7 +27,8 @@ export const Route = createFileRoute('/api/files/$fileId')({
       GET: async ({ request, params }) => {
         const url = new URL(request.url)
         const shareToken = url.searchParams.get('t')
-        const wantsDownload = url.searchParams.get('download') === '1'
+        const accessType = accessTypeForRequestUrl(url)
+        const wantsDownload = accessType === 'download'
 
         const d = db()
         const file = (
@@ -30,12 +36,11 @@ export const Route = createFileRoute('/api/files/$fileId')({
         )[0]
         if (!file) return new Response('Fant ikke filen', { status: 404 })
 
-        let shareLinkId: string | null = null
-        let userId: string | null = null
+        let actor: FileAccessActor
 
         const me = await currentUser()
         if (me) {
-          userId = me.id
+          actor = { kind: 'user', id: me.id }
           const canViewAll = hasFullArchiveAccess(me)
           let inAccessibleProject = canViewAll
           if (!canViewAll) {
@@ -85,7 +90,7 @@ export const Route = createFileRoute('/api/files/$fileId')({
           if (!inProject || !shareAllows(file, sharedLeafIds)) {
             return new Response('Ingen tilgang til denne filen', { status: 403 })
           }
-          shareLinkId = share.id
+          actor = { kind: 'share', id: share.id }
         } else {
           return new Response('Krever innlogging', { status: 401 })
         }
@@ -93,19 +98,13 @@ export const Route = createFileRoute('/api/files/$fileId')({
         const object = await env.FILES.get(file.r2Key)
         if (!object) return new Response('Filen mangler i lageret', { status: 404 })
 
-        if (wantsDownload) {
-          // Revisjonslogg skal aldri blokkere selve nedlastingen.
-          try {
-            await d.insert(downloadLog).values({
-              id: newId(),
-              userId,
-              shareLinkId,
-              workFileId: file.id,
-              at: new Date(),
-            })
-          } catch (err) {
-            console.error('[download_log] kunne ikke logge nedlasting:', err)
-          }
+        // Logg først når objektet finnes og faktisk skal strømmes. Direkte
+        // fil-URL, inline-visning og eksplisitt nedlasting går alle gjennom her.
+        // Revisjonsloggen skal aldri blokkere selve filstrømmen.
+        try {
+          await logFileAccess(d, { actor, workFileId: file.id, accessType })
+        } catch (err) {
+          console.error('[download_log] kunne ikke logge filtilgang:', err)
         }
 
         // RFC 5987-dobbelform: filename* gir korrekte norske filnavn (æøå),

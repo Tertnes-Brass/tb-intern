@@ -72,8 +72,8 @@ function DownloadsPage() {
     <div className="space-y-7">
       <header className="rise">
         <Kicker className="mb-2">Administrasjon</Kicker>
-        <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Nedlastinger</h1>
-        <p className="mt-2 text-sm text-ink-soft">Hvem som har lastet ned hvilke filer fra arkivet.</p>
+        <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Filtilganger</h1>
+        <p className="mt-2 text-sm text-ink-soft">Hvem som har vist eller lastet ned filer fra arkivet.</p>
       </header>
 
       <div className="rise grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" style={{ animationDelay: '80ms' }}>
@@ -154,10 +154,10 @@ function DownloadsPage() {
 
       {data.rows.length === 0 ? (
         <div className="sheet rise" style={{ animationDelay: '140ms' }}>
-          <EmptyState title={hasFilter ? 'Ingen treff på filteret' : 'Ingen nedlastinger ennå'}>
+          <EmptyState title={hasFilter ? 'Ingen treff på filteret' : 'Ingen filtilganger ennå'}>
             {hasFilter
               ? 'Prøv å fjerne eller justere ett av filtrene.'
-              : 'Når noen laster ned en fil fra arkivet, dukker det opp her.'}
+              : 'Når noen viser eller laster ned en fil fra arkivet, dukker det opp her.'}
           </EmptyState>
         </div>
       ) : (
@@ -173,6 +173,9 @@ function DownloadsPage() {
                 </th>
                 <th className="px-4 py-3 text-left font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint sm:px-5">
                   Hvem
+                </th>
+                <th className="px-4 py-3 text-left font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint sm:px-5">
+                  Tilgang
                 </th>
                 <th className="px-4 py-3 text-left font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint sm:px-5">
                   Verk
@@ -200,6 +203,11 @@ function DownloadsPage() {
                       <span className="text-ink-faint">Slettet bruker</span>
                     )}
                   </td>
+                  <td className="whitespace-nowrap px-4 py-3 sm:px-5">
+                    <Stamp tone={r.accessType === 'download' ? 'brass' : 'neutral'}>
+                      {r.accessType === 'download' ? 'nedlasting' : 'visning'}
+                    </Stamp>
+                  </td>
                   <td className="px-4 py-3 sm:px-5">
                     <Link
                       to="/arkiv/$workId"
@@ -224,7 +232,7 @@ function DownloadsPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="font-mono text-[0.66rem] uppercase tracking-[0.14em] text-ink-faint">
-          {data.total === 0 ? '0 nedlastinger' : `Viser ${first}–${last} av ${data.total}`}
+          {data.total === 0 ? '0 filtilganger' : `Viser ${first}–${last} av ${data.total}`}
         </p>
         {(data.total > data.pageSize || data.page > 1) && (
           <div className="flex items-center gap-2">

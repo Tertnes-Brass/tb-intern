@@ -233,9 +233,15 @@ export const downloadLog = sqliteTable(
     workFileId: text('work_file_id')
       .notNull()
       .references(() => workFiles.id, { onDelete: 'cascade' }),
+    accessType: text('access_type', { enum: ['view', 'download'] }).notNull().default('download'),
     at: integer('at', { mode: 'timestamp_ms' }).notNull(),
   },
-  (t) => [index('download_log_file_idx').on(t.workFileId), index('download_log_at_idx').on(t.at)],
+  (t) => [
+    index('download_log_file_idx').on(t.workFileId),
+    index('download_log_at_idx').on(t.at),
+    index('download_log_user_dedupe_idx').on(t.workFileId, t.accessType, t.userId, t.at),
+    index('download_log_share_dedupe_idx').on(t.workFileId, t.accessType, t.shareLinkId, t.at),
+  ],
 )
 
 // ---------- Innstillinger ----------
