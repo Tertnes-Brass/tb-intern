@@ -22,6 +22,13 @@
       "when": 1783117323796,
       "tag": "0002_download-log-at-idx",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784915204920,
+      "tag": "0003_sections-taxonomy",
+      "breakpoints": true
     }
   ]
 }

@@ -35,6 +35,7 @@ export const listMembers = createServerFn().handler(async () => {
       partId: parts.id,
       partName: parts.nameNo,
       partSort: parts.sortOrder,
+      partPrimary: userParts.isPrimary,
     })
     .from(memberProfiles)
     .innerJoin(user, eq(memberProfiles.authUserId, user.id))
@@ -51,15 +52,21 @@ export const listMembers = createServerFn().handler(async () => {
       roleId: string
       roleName: string
       isActive: boolean
-      parts: Array<{ id: string; name: string; sort: number }>
+      parts: Array<{ id: string; name: string; sort: number; isPrimary: boolean }>
     }
   >()
   for (const r of rows) {
     const m =
       byId.get(r.id) ??
       { id: r.id, name: r.name, email: r.email, roleId: r.roleId, roleName: r.roleName, isActive: r.isActive, parts: [] }
-    if (r.partId && r.partName) m.parts.push({ id: r.partId, name: r.partName, sort: r.partSort ?? 999 })
+    if (r.partId && r.partName) {
+      m.parts.push({ id: r.partId, name: r.partName, sort: r.partSort ?? 999, isPrimary: r.partPrimary ?? false })
+    }
     byId.set(r.id, m)
+  }
+
+  for (const member of byId.values()) {
+    member.parts.sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.sort - b.sort)
   }
 
   const members = [...byId.values()].sort((a, b) => {
@@ -108,7 +115,7 @@ export const listMembers = createServerFn().handler(async () => {
 
   return {
     members: membersOut,
-    allParts: allParts.filter((p) => p.section !== 'score'),
+    allParts,
     allRoles,
     canManage,
     canManageSection,

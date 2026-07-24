@@ -48,19 +48,24 @@ export async function seedBaseConfig(): Promise<void> {
     await d.insert(roles).values(SEED_ROLES.map((r) => ({ ...r })))
     await d.insert(rolePermissions).values(SEED_ROLE_PERMISSIONS)
   }
-  // Besetning
-  if ((await d.select({ id: parts.id }).from(parts).limit(1)).length === 0) {
-    for (const batch of chunkArray(BRASS_BAND_PARTS, 10)) {
-      await d.insert(parts).values(
-        batch.map((p) => ({
+  // Besetning: legg til manglende standardstemmer og synkroniser bare feltene
+  // taxonomy eier. Behold eventuelle lokalt redigerte navn og aliaser.
+  for (const batch of chunkArray(BRASS_BAND_PARTS, 10)) {
+    for (const p of batch) {
+      await d
+        .insert(parts)
+        .values({
           id: p.id,
           sortOrder: p.sortOrder,
           nameNo: p.nameNo,
           nameEn: p.nameEn,
           aliases: JSON.stringify(p.aliases),
           section: p.section,
-        })),
-      )
+        })
+        .onConflictDoUpdate({
+          target: parts.id,
+          set: { sortOrder: p.sortOrder, section: p.section },
+        })
     }
   }
 }

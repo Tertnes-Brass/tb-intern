@@ -4,7 +4,7 @@ import { WorkFormModal } from '../../components/WorkForm'
 import { toast, toastError } from '../../components/toast'
 import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../components/ui'
 import { formatBytes, formatDate, formatDuration } from '../../lib/format'
-import { SECTION_LABELS } from '../../lib/taxonomy'
+import { SECTION_LABELS, SECTION_ORDER } from '../../lib/taxonomy'
 import {
   addWorkLink,
   deleteWork,
@@ -262,7 +262,7 @@ function FilesSection({ data }: { data: WorkData }) {
     sections.set(key, list)
   }
 
-  const order = ['other', 'cornet', 'horn', 'trombone', 'low', 'perc', 'score', 'audio']
+  const order = ['other', ...SECTION_ORDER, 'audio']
   const labels: Record<string, string> = { ...SECTION_LABELS, other: 'Uplassert — velg stemme', audio: 'Lyd' }
 
   if (data.files.length === 0) {

@@ -68,7 +68,7 @@ export const parts = sqliteTable('parts', {
   nameEn: text('name_en').notNull(),
   // JSON-array med aliaser for filnavn-gjenkjenning, f.eks. ["2nd cornet","2. kornett"]
   aliases: text('aliases').notNull().default('[]'),
-  section: text('section').notNull(), // 'cornet' | 'horn' | 'trombone' | 'low' | 'perc' | 'score'
+  section: text('section').notNull(), // Se SectionId/SECTION_ORDER i lib/taxonomy.ts
   // Nullable self-FK for nøstede stemmer: en forelder-stemme («Slagverk»)
   // dekker barna sine (Slagverk 1/2/3 …). NULL = rotnode / selvstendig blad.
   parentId: text('parent_id').references((): AnySQLiteColumn => parts.id),

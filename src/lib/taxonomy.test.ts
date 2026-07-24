@@ -1,7 +1,40 @@
 import { describe, expect, it } from 'vitest'
-import { BRASS_BAND_PARTS, guessPartFromFilename } from './taxonomy'
+import { BRASS_BAND_PARTS, SECTION_LABELS, SECTION_ORDER, guessPartFromFilename } from './taxonomy'
 
 const guess = (name: string) => guessPartFromFilename(name, BRASS_BAND_PARTS)
+
+describe('brass band-seksjoner', () => {
+  it('har eksakte etiketter og rekkefølge', () => {
+    expect(SECTION_ORDER.map((id) => SECTION_LABELS[id])).toEqual([
+      'Dirigent',
+      'Kornetter',
+      'Horn/Flugel',
+      'Euph/Bari',
+      'Trombone',
+      'Tuba',
+      'Slagverk',
+    ])
+  })
+
+  it('plasserer standardstemmene i riktig seksjon', () => {
+    const sectionByPart = new Map(BRASS_BAND_PARTS.map((part) => [part.id, part.section]))
+    expect(sectionByPart.get('score')).toBe('score')
+    expect(sectionByPart.get('flugel')).toBe('horn')
+    expect(sectionByPart.get('first-baritone')).toBe('euph-bari')
+    expect(sectionByPart.get('second-baritone')).toBe('euph-bari')
+    expect(sectionByPart.get('euphonium')).toBe('euph-bari')
+    expect(sectionByPart.get('first-trombone')).toBe('trombone')
+    expect(sectionByPart.get('bass-trombone')).toBe('trombone')
+    expect(sectionByPart.get('eb-bass')).toBe('tuba')
+    expect(sectionByPart.get('bb-bass')).toBe('tuba')
+  })
+
+  it('sorterer Partitur først og standardstemmene seksjonsvis', () => {
+    const sectionPositions = BRASS_BAND_PARTS.map((part) => SECTION_ORDER.indexOf(part.section))
+    expect(BRASS_BAND_PARTS[0]?.id).toBe('score')
+    expect(sectionPositions).toEqual([...sectionPositions].sort((a, b) => a - b))
+  })
+})
 
 describe('guessPartFromFilename', () => {
   it('matches standard «Verk - 2nd Cornet.pdf»-mønster', () => {
