@@ -1,0 +1,57 @@
+name: Discord-varslinger
+
+"on":
+  workflow_dispatch:
+  issues:
+    types: [opened, labeled, closed, reopened]
+  pull_request:
+    types: [opened, ready_for_review, review_requested, closed]
+  pull_request_review:
+    types: [submitted]
+  release:
+    types: [published]
+  deployment_status:
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    name: Varsle Discord
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Hent repoet
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Bygg Discord-melding
+        id: payload
+        env:
+          DISCORD_PAYLOAD_PATH: ${{ runner.temp }}/discord-payload.json
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: node .github/scripts/build-discord-notification.mjs
+
+      - name: Send til Discord
+        if: steps.payload.outputs.notify == 'true'
+        env:
+          DISCORD_PAYLOAD_PATH: ${{ runner.temp }}/discord-payload.json
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "::warning::DISCORD_WEBHOOK_URL er ikke tilgjengelig; varslingen hoppes over."
+            exit 0
+          fi
+
+          curl \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --retry 3 \
+            --retry-all-errors \
+            --header "Content-Type: application/json" \
+            --data-binary "@$DISCORD_PAYLOAD_PATH" \
+            "$DISCORD_WEBHOOK_URL"
