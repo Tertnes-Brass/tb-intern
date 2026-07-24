@@ -6,6 +6,7 @@ import { db } from '../db'
 import { parts, projectWorks, projects, workFiles, workLinks, works } from '../db/schema'
 import { newId } from '../lib/id'
 import { guessPartFromFilename } from '../lib/taxonomy'
+import { normalizeWorkMetadata, workMetadataInput } from '../lib/work-metadata'
 import { hasFullArchiveAccess, hasPermission, requireMe, requirePermission } from './access'
 
 export const listWorks = createServerFn()
@@ -17,7 +18,13 @@ export const listWorks = createServerFn()
     const q = data?.q?.trim()
 
     const where = q
-      ? or(like(works.title, `%${q}%`), like(works.composer, `%${q}%`), like(works.arranger, `%${q}%`))
+      ? or(
+          like(works.title, `%${q}%`),
+          like(works.subtitle, `%${q}%`),
+          like(works.archiveNumber, `%${q}%`),
+          like(works.composer, `%${q}%`),
+          like(works.arranger, `%${q}%`),
+        )
       : undefined
 
     const workRows = await d
@@ -105,7 +112,7 @@ export const getWork = createServerFn()
     }
   })
 
-const workInput = z.object({
+const workInput = workMetadataInput.extend({
   title: z.string().min(1, 'Tittel er påkrevd'),
   composer: z.string().optional(),
   arranger: z.string().optional(),
@@ -128,6 +135,7 @@ export const createWork = createServerFn({ method: 'POST' })
     await d.insert(works).values({
       id,
       title: data.title.trim(),
+      ...normalizeWorkMetadata(data),
       composer: data.composer?.trim() || null,
       arranger: data.arranger?.trim() || null,
       publisher: data.publisher?.trim() || null,
@@ -152,6 +160,7 @@ export const updateWork = createServerFn({ method: 'POST' })
       .update(works)
       .set({
         title: data.title.trim(),
+        ...normalizeWorkMetadata(data),
         composer: data.composer?.trim() || null,
         arranger: data.arranger?.trim() || null,
         publisher: data.publisher?.trim() || null,

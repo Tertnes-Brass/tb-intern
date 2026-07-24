@@ -110,6 +110,8 @@ export const works = sqliteTable(
   {
     id: text('id').primaryKey(),
     title: text('title').notNull(),
+    subtitle: text('subtitle'),
+    archiveNumber: text('archive_number'),
     composer: text('composer'),
     arranger: text('arranger'),
     publisher: text('publisher'),
