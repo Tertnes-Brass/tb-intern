@@ -124,7 +124,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
     me.permissions.includes('works.manage')
   const NAV: NavItem[] = [...BASE_NAV]
   if (canBrowseArchive) NAV.splice(2, 0, { to: '/arkiv', label: 'Arkiv' })
-  if (canViewDownloads) NAV.push({ to: '/innstillinger/nedlastinger', label: 'Nedlastinger' })
+  if (canViewDownloads) NAV.push({ to: '/innstillinger/nedlastinger', label: 'Filtilganger' })
   // exact, ellers markeres Innstillinger som aktiv også på /innstillinger/nedlastinger
   if (canManageSettings) NAV.push({ to: '/innstillinger', label: 'Innstillinger', exact: true })
   return (
