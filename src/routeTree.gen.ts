@@ -9,44 +9,39 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ProsjekterIndexRouteImport } from './routes/prosjekter/index'
-import { Route as MedlemmerIndexRouteImport } from './routes/medlemmer/index'
-import { Route as InnstillingerIndexRouteImport } from './routes/innstillinger/index'
-import { Route as ArkivIndexRouteImport } from './routes/arkiv/index'
-import { Route as VTokenRouteImport } from './routes/v/$token'
-import { Route as ProsjekterProjectIdRouteImport } from './routes/prosjekter/$projectId'
-import { Route as InnstillingerNedlastingerRouteImport } from './routes/innstillinger/nedlastinger'
-import { Route as ArkivWorkIdRouteImport } from './routes/arkiv/$workId'
-import { Route as ApiUploadRouteImport } from './routes/api/upload'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as ApiDevSeedRouteImport } from './routes/api/dev-seed'
-import { Route as ApiFilesFileIdRouteImport } from './routes/api/files/$fileId'
+import { Route as ApiUploadRouteImport } from './routes/api/upload'
+import { Route as ArkivIndexRouteImport } from './routes/arkiv/index'
+import { Route as ArkivWorkIdRouteImport } from './routes/arkiv/$workId'
+import { Route as InnstillingerIndexRouteImport } from './routes/innstillinger/index'
+import { Route as InnstillingerNedlastingerRouteImport } from './routes/innstillinger/nedlastinger'
+import { Route as MedlemmerIndexRouteImport } from './routes/medlemmer/index'
+import { Route as ProsjekterIndexRouteImport } from './routes/prosjekter/index'
+import { Route as ProsjekterProjectIdRouteImport } from './routes/prosjekter/$projectId'
+import { Route as VTokenRouteImport } from './routes/v/$token'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiFilesFileIdRouteImport } from './routes/api/files/$fileId'
 
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProsjekterIndexRoute = ProsjekterIndexRouteImport.update({
-  id: '/prosjekter/',
-  path: '/prosjekter/',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MedlemmerIndexRoute = MedlemmerIndexRouteImport.update({
-  id: '/medlemmer/',
-  path: '/medlemmer/',
+const ApiDevSeedRoute = ApiDevSeedRouteImport.update({
+  id: '/api/dev-seed',
+  path: '/api/dev-seed',
   getParentRoute: () => rootRouteImport,
 } as any)
-const InnstillingerIndexRoute = InnstillingerIndexRouteImport.update({
-  id: '/innstillinger/',
-  path: '/innstillinger/',
+const ApiUploadRoute = ApiUploadRouteImport.update({
+  id: '/api/upload',
+  path: '/api/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ArkivIndexRoute = ArkivIndexRouteImport.update({
@@ -54,14 +49,14 @@ const ArkivIndexRoute = ArkivIndexRouteImport.update({
   path: '/arkiv/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const VTokenRoute = VTokenRouteImport.update({
-  id: '/v/$token',
-  path: '/v/$token',
+const ArkivWorkIdRoute = ArkivWorkIdRouteImport.update({
+  id: '/arkiv/$workId',
+  path: '/arkiv/$workId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProsjekterProjectIdRoute = ProsjekterProjectIdRouteImport.update({
-  id: '/prosjekter/$projectId',
-  path: '/prosjekter/$projectId',
+const InnstillingerIndexRoute = InnstillingerIndexRouteImport.update({
+  id: '/innstillinger/',
+  path: '/innstillinger/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InnstillingerNedlastingerRoute =
@@ -70,29 +65,34 @@ const InnstillingerNedlastingerRoute =
     path: '/innstillinger/nedlastinger',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ArkivWorkIdRoute = ArkivWorkIdRouteImport.update({
-  id: '/arkiv/$workId',
-  path: '/arkiv/$workId',
+const MedlemmerIndexRoute = MedlemmerIndexRouteImport.update({
+  id: '/medlemmer/',
+  path: '/medlemmer/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiUploadRoute = ApiUploadRouteImport.update({
-  id: '/api/upload',
-  path: '/api/upload',
+const ProsjekterIndexRoute = ProsjekterIndexRouteImport.update({
+  id: '/prosjekter/',
+  path: '/prosjekter/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiDevSeedRoute = ApiDevSeedRouteImport.update({
-  id: '/api/dev-seed',
-  path: '/api/dev-seed',
+const ProsjekterProjectIdRoute = ProsjekterProjectIdRouteImport.update({
+  id: '/prosjekter/$projectId',
+  path: '/prosjekter/$projectId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiFilesFileIdRoute = ApiFilesFileIdRouteImport.update({
-  id: '/api/files/$fileId',
-  path: '/api/files/$fileId',
+const VTokenRoute = VTokenRouteImport.update({
+  id: '/v/$token',
+  path: '/v/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiFilesFileIdRoute = ApiFilesFileIdRouteImport.update({
+  id: '/api/files/$fileId',
+  path: '/api/files/$fileId',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -215,13 +215,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -229,67 +222,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/prosjekter/': {
-      id: '/prosjekter/'
-      path: '/prosjekter'
-      fullPath: '/prosjekter/'
-      preLoaderRoute: typeof ProsjekterIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/medlemmer/': {
-      id: '/medlemmer/'
-      path: '/medlemmer'
-      fullPath: '/medlemmer/'
-      preLoaderRoute: typeof MedlemmerIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/innstillinger/': {
-      id: '/innstillinger/'
-      path: '/innstillinger'
-      fullPath: '/innstillinger/'
-      preLoaderRoute: typeof InnstillingerIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/arkiv/': {
-      id: '/arkiv/'
-      path: '/arkiv'
-      fullPath: '/arkiv/'
-      preLoaderRoute: typeof ArkivIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/v/$token': {
-      id: '/v/$token'
-      path: '/v/$token'
-      fullPath: '/v/$token'
-      preLoaderRoute: typeof VTokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/prosjekter/$projectId': {
-      id: '/prosjekter/$projectId'
-      path: '/prosjekter/$projectId'
-      fullPath: '/prosjekter/$projectId'
-      preLoaderRoute: typeof ProsjekterProjectIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/innstillinger/nedlastinger': {
-      id: '/innstillinger/nedlastinger'
-      path: '/innstillinger/nedlastinger'
-      fullPath: '/innstillinger/nedlastinger'
-      preLoaderRoute: typeof InnstillingerNedlastingerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/arkiv/$workId': {
-      id: '/arkiv/$workId'
-      path: '/arkiv/$workId'
-      fullPath: '/arkiv/$workId'
-      preLoaderRoute: typeof ArkivWorkIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/upload': {
-      id: '/api/upload'
-      path: '/api/upload'
-      fullPath: '/api/upload'
-      preLoaderRoute: typeof ApiUploadRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/dev-seed': {
@@ -299,11 +236,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDevSeedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/files/$fileId': {
-      id: '/api/files/$fileId'
-      path: '/api/files/$fileId'
-      fullPath: '/api/files/$fileId'
-      preLoaderRoute: typeof ApiFilesFileIdRouteImport
+    '/api/upload': {
+      id: '/api/upload'
+      path: '/api/upload'
+      fullPath: '/api/upload'
+      preLoaderRoute: typeof ApiUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/arkiv/': {
+      id: '/arkiv/'
+      path: '/arkiv'
+      fullPath: '/arkiv/'
+      preLoaderRoute: typeof ArkivIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/arkiv/$workId': {
+      id: '/arkiv/$workId'
+      path: '/arkiv/$workId'
+      fullPath: '/arkiv/$workId'
+      preLoaderRoute: typeof ArkivWorkIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/innstillinger/': {
+      id: '/innstillinger/'
+      path: '/innstillinger'
+      fullPath: '/innstillinger/'
+      preLoaderRoute: typeof InnstillingerIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/innstillinger/nedlastinger': {
+      id: '/innstillinger/nedlastinger'
+      path: '/innstillinger/nedlastinger'
+      fullPath: '/innstillinger/nedlastinger'
+      preLoaderRoute: typeof InnstillingerNedlastingerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/medlemmer/': {
+      id: '/medlemmer/'
+      path: '/medlemmer'
+      fullPath: '/medlemmer/'
+      preLoaderRoute: typeof MedlemmerIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/prosjekter/': {
+      id: '/prosjekter/'
+      path: '/prosjekter'
+      fullPath: '/prosjekter/'
+      preLoaderRoute: typeof ProsjekterIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/prosjekter/$projectId': {
+      id: '/prosjekter/$projectId'
+      path: '/prosjekter/$projectId'
+      fullPath: '/prosjekter/$projectId'
+      preLoaderRoute: typeof ProsjekterProjectIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/v/$token': {
+      id: '/v/$token'
+      path: '/v/$token'
+      fullPath: '/v/$token'
+      preLoaderRoute: typeof VTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
@@ -311,6 +304,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/files/$fileId': {
+      id: '/api/files/$fileId'
+      path: '/api/files/$fileId'
+      fullPath: '/api/files/$fileId'
+      preLoaderRoute: typeof ApiFilesFileIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }

@@ -23,7 +23,11 @@ export const Route = createRootRoute({
       { name: 'theme-color', media: '(prefers-color-scheme: light)', content: '#f7f1e6' },
       { name: 'theme-color', media: '(prefers-color-scheme: dark)', content: '#171310' },
     ],
-    links: [{ rel: 'stylesheet', href: appCss }],
+    links: [
+      { rel: 'icon', href: '/favicon.ico' },
+      { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+      { rel: 'stylesheet', href: appCss },
+    ],
     scripts: [{ children: THEME_INIT_SCRIPT }],
   }),
   shellComponent: RootDocument,

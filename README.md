@@ -74,7 +74,7 @@ Logg så inn med `ADMIN_EMAIL`-adressen (blir admin automatisk) og inviter reste
 
 - **Fase 1 (gjort)** — better-auth (magisk lenke + passord, invitasjonsbasert), e-post via Cloudflare, prod på noter.tertnesbrass.com
 - **Neste** — Google-innlogging, import fra dagens Google Sheets/Drive, backup-cron (D1-dump + rclone til off-site)
-- **Fase 2** — PDF-splitter i nettleser (samle-PDF → stemmer), ZIP-nedlasting, e-postvarsler, nedlastingslogg-UI
+- **Fase 2** — PDF-splitter i nettleser (samle-PDF → stemmer), ZIP-nedlasting og e-postvarsler
 - **Fase 3** — «deploy your own»-dokumentasjon for andre korps, besetning som konfigurasjon (janitsjar m.m.), lisensvalg
 
 ## Lisens

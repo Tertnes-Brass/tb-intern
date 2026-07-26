@@ -1,8 +1,6 @@
 /**
  * Ren demodata (ingen Cloudflare-avhengigheter) — brukes både av
- * in-app-seeding i lokal dev (seed.ts) og av scripts/seed-remote.ts
- * som seeder produksjon utenfra (Workers gratisplan har for lite CPU
- * per request til å generere 210 PDF-er i én forespørsel).
+ * in-app-seeding i lokal dev (seed.ts).
  */
 
 /** Fast vikartoken i demo, så vikarvisningen kan demonstreres uten oppsett. */
