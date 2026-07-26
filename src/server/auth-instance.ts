@@ -67,12 +67,16 @@ function buildAuth() {
       'https://noter.tertnesbrass.com',
       'https://tb-notearkiv.tb-370.workers.dev',
       'https://noter.saynain.com',
-      'http://localhost:3000',
+      // Vite velger neste ledige port når 3000 er opptatt. Hold wildcardet
+      // strengt dev-only; localhost skal aldri være trusted origin i prod.
+      ...(import.meta.env.DEV ? ['http://localhost:*'] : []),
     ],
     database: drizzleAdapter(db(), { provider: 'sqlite', schema }),
     emailAndPassword: {
       enabled: true,
-      disableSignUp: true, // ingen åpen registrering — kun via invitasjon/magisk lenke
+      // Lokal dev-login oppretter en passordkonto for en seedet, invitert
+      // demobruker. I produksjon er registrering alltid stengt.
+      disableSignUp: import.meta.env.PROD,
       minPasswordLength: 8,
       sendResetPassword: async ({ user, url }) => {
         const { subject, html, text } = resetPasswordEmail(url)
