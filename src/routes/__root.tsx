@@ -37,7 +37,11 @@ export const Route = createRootRoute({
 function RootLayout() {
   const me = Route.useRouteContext().me
   const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const bare = pathname === '/login' || pathname.startsWith('/v/')
+  const bare =
+    pathname === '/login' ||
+    pathname === '/glemt-passord' ||
+    pathname === '/tilbakestill-passord' ||
+    pathname.startsWith('/v/')
 
   if (bare || !me) return <Outlet />
   return (

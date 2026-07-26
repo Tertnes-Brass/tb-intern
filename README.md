@@ -14,7 +14,7 @@ Notearkiv, publisering og deling av noter for brass band — bygget for [Tertnes
 - **Prosjekter** — sesonger, program i rekkefølge, publisering (utkast er kun synlig for stab)
 - **Mine noter** — medlemmet ser neste konsert med direktelenker til egne stemmer, partitur og lytteeksempler (YouTube/lyd)
 - **Vikarlenker** — del valgte stemmer for ett prosjekt; lenken utløper automatisk og kan trekkes tilbake; kun hash av tokenet lagres
-- **Innlogging** — [better-auth](https://better-auth.com): magisk e-postlenke + passord, invitasjonsbasert (ingen åpen registrering). Google kan legges til senere.
+- **Innlogging** — [better-auth](https://better-auth.com): e-postkode som standard, valgfritt passord og magisk lenke, invitasjonsbasert (ingen åpen registrering). Google/passkeys kan legges til senere.
 - **RBAC** — roller (admin/arkivar/dirigent/musiker) med rettigheter i database, håndhevet server-side i alle funksjoner
 - **Tilgangsstyrte filer** — alle PDF-er streames via API med sesjons- eller token-sjekk; partitur er rettighetsstyrt (scores.view); ingen offentlige filer
 
@@ -24,7 +24,7 @@ Ingen kan registrere seg selv. Flyten er:
 
 1. **Første admin** bootstrappes via `ADMIN_EMAIL` (wrangler.jsonc) — første innlogging med den adressen blir automatisk admin.
 2. Admin **inviterer** medlemmer (e-post + rolle + stemme) under *Medlemmer*. En innloggingslenke sendes på e-post (eller del-en-lenke via Spond hvis e-post ikke er satt opp).
-3. Medlemmet logger inn med **magisk lenke** (skriv e-post → klikk lenke) eller setter et passord.
+3. Medlemmet logger inn med en **engangskode på e-post**. Passord og magisk lenke er valgfrie alternativer.
 
 ## Kom i gang (lokalt)
 
@@ -36,7 +36,7 @@ pnpm dev
 ```
 
 Seed besetning + roller + demoinnhold (kun i dev): `curl -X POST http://localhost:3000/api/dev-seed`.
-I dev sendes ikke e-post — magiske lenker skrives til serverkonsollen (og miniflares e-postmappe), så du kan klikke dem derfra. Logg inn med `ADMIN_EMAIL` for admin, eller en av de seedede demo-adressene (f.eks. `jonas@demo.tertnesbrass.no`).
+I dev sendes ikke e-post — koder og magiske lenker skrives til serverkonsollen (og miniflares e-postmappe). Logg inn med `ADMIN_EMAIL` for admin, eller en av de seedede demo-adressene (f.eks. `jonas@demo.tertnesbrass.no`).
 
 For e-postfri nettlesertesting kan lokale agenter og utviklere åpne
 `http://localhost:3000/api/dev-login?to=/`. Ruten seeder og logger inn standard-
@@ -70,7 +70,7 @@ pnpm exec wrangler d1 create tb-notearkiv           # legg database_id inn i wra
 pnpm exec wrangler r2 bucket create tb-notearkiv-files
 pnpm exec wrangler d1 migrations apply tb-notearkiv --remote
 pnpm exec wrangler secret put BETTER_AUTH_SECRET    # `openssl rand -base64 32`
-pnpm exec wrangler email sending enable tertnesbrass.com # magisk lenke + reset (dashboard hvis token mangler scope)
+pnpm exec wrangler email sending enable tertnesbrass.com # e-postkode + lenker/reset (dashboard hvis token mangler scope)
 pnpm run deploy                                     # migrerer D1 før Worker-koden deployes
 ```
 
@@ -83,8 +83,8 @@ Logg så inn med `ADMIN_EMAIL`-adressen (blir admin automatisk) og inviter reste
 
 ## Veikart (kort)
 
-- **Fase 1 (gjort)** — better-auth (magisk lenke + passord, invitasjonsbasert), e-post via Cloudflare, prod på noter.tertnesbrass.com
-- **Neste** — Google-innlogging, import fra dagens Google Sheets/Drive, backup-cron (D1-dump + rclone til off-site)
+- **Fase 1 (gjort)** — better-auth (e-postkode + valgfritt passord/magisk lenke, invitasjonsbasert), e-post via Cloudflare, prod på noter.tertnesbrass.com
+- **Neste** — passkey/sterk autentisering for privilegerte roller, Google-innlogging, import fra dagens Google Sheets/Drive, backup-cron (D1-dump + rclone til off-site)
 - **Fase 2** — PDF-splitter i nettleser (samle-PDF → stemmer), ZIP-nedlasting og e-postvarsler
 - **Fase 3** — «deploy your own»-dokumentasjon for andre korps, besetning som konfigurasjon (janitsjar m.m.), lisensvalg
 

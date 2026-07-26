@@ -3,7 +3,8 @@ import { SEED_MEMBERS } from '../../server/seed-data'
 import { getAuth } from '../../server/auth-instance'
 import { seedDemoData } from '../../server/seed'
 
-const DEV_PASSWORD = 'notearkiv-demo'
+const DEV_PASSWORD = 'notearkiv-demo!'
+const LEGACY_DEV_PASSWORD = 'notearkiv-demo'
 const DEFAULT_EMAIL = SEED_MEMBERS.find((member) => member.roleId === 'admin')!.email
 
 function internalPath(value: string | null): string {
@@ -89,6 +90,15 @@ export const Route = createFileRoute('/api/dev-login')({
             password: DEV_PASSWORD,
             rememberMe: true,
           })
+          // Behold eksisterende lokale databaser fra før minstekravet ble
+          // hevet. Nye demokontoer får det lengre passordet.
+          if (!authResponse.ok) {
+            authResponse = await authRequest(request, '/api/auth/sign-in/email', {
+              email: member.email,
+              password: LEGACY_DEV_PASSWORD,
+              rememberMe: true,
+            })
+          }
         }
         if (!authResponse.ok) return authResponse
 

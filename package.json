@@ -14,7 +14,7 @@
 		"db:migrate:local": "wrangler d1 migrations apply tb-notearkiv --local",
 		"db:migrate:remote": "wrangler d1 migrations apply tb-notearkiv --remote",
 		"deploy": "pnpm run build && pnpm run db:migrate:remote && wrangler deploy",
-		"auth:generate": "better-auth generate --config src/server/auth.cli.ts --output src/db/auth-schema.ts -y",
+		"auth:generate": "pnpm dlx @better-auth/cli@latest generate --config src/server/auth.cli.ts --output src/db/auth-schema.ts -y",
 		"cf-typegen": "wrangler types"
 	},
 	"dependencies": {

@@ -43,6 +43,13 @@
       "when": 1784935379587,
       "tag": "0005_file-access-log",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1785027922613,
+      "tag": "0006_profile-auth-audit",
+      "breakpoints": true
     }
   ]
 }

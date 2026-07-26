@@ -40,6 +40,7 @@ export const memberProfiles = sqliteTable('member_profiles', {
   roleId: text('role_id')
     .notNull()
     .references(() => roles.id),
+  phone: text('phone'),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 })
@@ -241,6 +242,28 @@ export const downloadLog = sqliteTable(
     index('download_log_at_idx').on(t.at),
     index('download_log_user_dedupe_idx').on(t.workFileId, t.accessType, t.userId, t.at),
     index('download_log_share_dedupe_idx').on(t.workFileId, t.accessType, t.shareLinkId, t.at),
+  ],
+)
+
+// ---------- Revisjonslogg ----------
+
+// Append-only logg over sikkerhets- og medlemsendringer. Detaljer skal aldri
+// inneholde passord, OTP-er, sesjonstokens eller andre hemmeligheter.
+export const auditLog = sqliteTable(
+  'audit_log',
+  {
+    id: text('id').primaryKey(),
+    actorUserId: text('actor_user_id').references(() => user.id, { onDelete: 'set null' }),
+    targetUserId: text('target_user_id').references(() => user.id, { onDelete: 'set null' }),
+    action: text('action').notNull(),
+    details: text('details').notNull().default('{}'),
+    ipAddress: text('ip_address'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    index('audit_log_created_idx').on(t.createdAt),
+    index('audit_log_target_idx').on(t.targetUserId, t.createdAt),
+    index('audit_log_action_idx').on(t.action, t.createdAt),
   ],
 )
 
