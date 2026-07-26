@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ApiDevLoginRouteImport } from './routes/api/dev-login'
 import { Route as ApiDevSeedRouteImport } from './routes/api/dev-seed'
 import { Route as ApiUploadRouteImport } from './routes/api/upload'
 import { Route as ArkivIndexRouteImport } from './routes/arkiv/index'
@@ -32,6 +33,11 @@ const IndexRoute = IndexRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDevLoginRoute = ApiDevLoginRouteImport.update({
+  id: '/api/dev-login',
+  path: '/api/dev-login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDevSeedRoute = ApiDevSeedRouteImport.update({
@@ -99,6 +105,7 @@ const ApiFilesFileIdRoute = ApiFilesFileIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/api/dev-login': typeof ApiDevLoginRoute
   '/api/dev-seed': typeof ApiDevSeedRoute
   '/api/upload': typeof ApiUploadRoute
   '/arkiv/$workId': typeof ArkivWorkIdRoute
@@ -115,6 +122,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/api/dev-login': typeof ApiDevLoginRoute
   '/api/dev-seed': typeof ApiDevSeedRoute
   '/api/upload': typeof ApiUploadRoute
   '/arkiv/$workId': typeof ArkivWorkIdRoute
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/api/dev-login': typeof ApiDevLoginRoute
   '/api/dev-seed': typeof ApiDevSeedRoute
   '/api/upload': typeof ApiUploadRoute
   '/arkiv/$workId': typeof ArkivWorkIdRoute
@@ -150,6 +159,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/api/dev-login'
     | '/api/dev-seed'
     | '/api/upload'
     | '/arkiv/$workId'
@@ -166,6 +176,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/api/dev-login'
     | '/api/dev-seed'
     | '/api/upload'
     | '/arkiv/$workId'
@@ -182,6 +193,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/login'
+    | '/api/dev-login'
     | '/api/dev-seed'
     | '/api/upload'
     | '/arkiv/$workId'
@@ -199,6 +211,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
+  ApiDevLoginRoute: typeof ApiDevLoginRoute
   ApiDevSeedRoute: typeof ApiDevSeedRoute
   ApiUploadRoute: typeof ApiUploadRoute
   ArkivWorkIdRoute: typeof ArkivWorkIdRoute
@@ -227,6 +240,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/dev-login': {
+      id: '/api/dev-login'
+      path: '/api/dev-login'
+      fullPath: '/api/dev-login'
+      preLoaderRoute: typeof ApiDevLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/dev-seed': {
@@ -319,6 +339,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
+  ApiDevLoginRoute: ApiDevLoginRoute,
   ApiDevSeedRoute: ApiDevSeedRoute,
   ApiUploadRoute: ApiUploadRoute,
   ArkivWorkIdRoute: ArkivWorkIdRoute,

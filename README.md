@@ -38,6 +38,12 @@ pnpm dev
 Seed besetning + roller + demoinnhold (kun i dev): `curl -X POST http://localhost:3000/api/dev-seed`.
 I dev sendes ikke e-post — magiske lenker skrives til serverkonsollen (og miniflares e-postmappe), så du kan klikke dem derfra. Logg inn med `ADMIN_EMAIL` for admin, eller en av de seedede demo-adressene (f.eks. `jonas@demo.tertnesbrass.no`).
 
+For e-postfri nettlesertesting kan lokale agenter og utviklere åpne
+`http://localhost:3000/api/dev-login?to=/`. Ruten seeder og logger inn standard-
+demoadministratoren. Velg en annen seedet rolle med `as`, for eksempel
+`/api/dev-login?as=jonas@demo.tertnesbrass.no&to=/arkiv`. Ruten svarer 404 i
+produksjonsbygg og godtar bare adressene i `SEED_MEMBERS`.
+
 Nullstill lokalt ved å slette `.wrangler/state` og kjøre migreringen på nytt.
 
 ## Auth-skjema
@@ -65,8 +71,13 @@ pnpm exec wrangler r2 bucket create tb-notearkiv-files
 pnpm exec wrangler d1 migrations apply tb-notearkiv --remote
 pnpm exec wrangler secret put BETTER_AUTH_SECRET    # `openssl rand -base64 32`
 pnpm exec wrangler email sending enable tertnesbrass.com # magisk lenke + reset (dashboard hvis token mangler scope)
-pnpm run deploy                                      # sett ADMIN_EMAIL + BETTER_AUTH_URL i wrangler.jsonc først
+pnpm run deploy                                     # migrerer D1 før Worker-koden deployes
 ```
+
+`pnpm run deploy` anvender alltid ventende D1-migrasjoner før ny Worker-kode
+publiseres. Dermed kan ikke kode som forventer et nytt skjema bli deployet før
+skjemaet er på plass. Sett `ADMIN_EMAIL` + `BETTER_AUTH_URL` i `wrangler.jsonc`
+før første deploy.
 
 Logg så inn med `ADMIN_EMAIL`-adressen (blir admin automatisk) og inviter resten. Custom domene (`noter.tertnesbrass.com`) som ikke skal være bak Cloudflare Access må ha en egen Access-app med **Bypass / Everyone**, ellers blokkeres besøkende.
 

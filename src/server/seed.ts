@@ -76,23 +76,28 @@ export async function seedBaseConfig(): Promise<void> {
  * lenke i dev). Oppretter IKKE brukere — de lages ved første innlogging.
  */
 export async function seedDemoData(): Promise<{ ok: boolean; alreadySeeded?: boolean }> {
-  if (await isSeeded()) return { ok: true, alreadySeeded: true }
   await seedBaseConfig()
 
   const d = db()
   const ts = now()
 
-  // Invitasjoner for demomedlemmene (rolle + stemmer settes ved innlogging)
-  await d.insert(invitations).values(
-    SEED_MEMBERS.map((m) => ({
-      email: m.email.toLowerCase(),
-      name: m.name,
-      roleId: m.roleId,
-      partIds: JSON.stringify(m.partIds),
-      invitedBy: null,
-      createdAt: ts,
-    })),
-  )
+  // Sørg for at dev-login virker også når databasen allerede har verk fra en
+  // eldre/ufullstendig seed. Eksisterende invitasjoner skal ikke overskrives.
+  for (const member of SEED_MEMBERS) {
+    await d
+      .insert(invitations)
+      .values({
+        email: member.email.toLowerCase(),
+        name: member.name,
+        roleId: member.roleId,
+        partIds: JSON.stringify(member.partIds),
+        invitedBy: null,
+        createdAt: ts,
+      })
+      .onConflictDoNothing()
+  }
+
+  if (await isSeeded()) return { ok: true, alreadySeeded: true }
 
   // Verk
   const seedWorks = SEED_WORKS.map((sw) => ({ ...sw, id: newId() }))
