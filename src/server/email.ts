@@ -82,6 +82,45 @@ export function resetPasswordEmail(url: string): { subject: string; html: string
   }
 }
 
+export function verificationCodeEmail(
+  otp: string,
+  type: 'sign-in' | 'email-verification' | 'forget-password' | 'change-email',
+): { subject: string; html: string; text: string } {
+  const copy = {
+    'sign-in': {
+      subject: 'Innloggingskoden din',
+      heading: 'Logg inn',
+      lead: 'Bruk denne engangskoden for å logge inn. Koden er gyldig i 5 minutter.',
+    },
+    'email-verification': {
+      subject: 'Bekreft e-postadressen din',
+      heading: 'Bekreft e-post',
+      lead: 'Bruk denne engangskoden for å bekrefte e-postadressen din.',
+    },
+    'forget-password': {
+      subject: 'Kode for nytt passord',
+      heading: 'Velg nytt passord',
+      lead: 'Bruk denne engangskoden for å opprette eller tilbakestille passordet ditt.',
+    },
+    'change-email': {
+      subject: 'Bekreft den nye e-postadressen',
+      heading: 'Bekreft ny e-post',
+      lead: 'Bruk denne engangskoden for å bekrefte den nye e-postadressen.',
+    },
+  }[type]
+
+  return {
+    subject: copy.subject,
+    html: shell(
+      copy.heading,
+      `<p style="margin:0 0 22px;font-size:15px;line-height:1.6;color:#5f5640">${copy.lead}</p>
+       <p style="margin:0 0 20px;font-family:Menlo,Consolas,monospace;font-size:32px;letter-spacing:8px;font-weight:700;color:#7a5f1d">${otp}</p>
+       <p style="margin:0;font-size:12px;color:#8e8468">Koden kan bare brukes én gang. Del den aldri med andre.</p>`,
+    ),
+    text: `${copy.heading} i Tertnes Brass Notearkiv.\n\n${copy.lead}\n\nKode: ${otp}\n\nKoden kan bare brukes én gang. Del den aldri med andre.\n`,
+  }
+}
+
 export function inviteEmail(url: string, bandName = 'Tertnes Brass'): { subject: string; html: string; text: string } {
   return {
     subject: `Du er invitert til ${bandName} Notearkiv`,

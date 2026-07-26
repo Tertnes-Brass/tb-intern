@@ -1,13 +1,15 @@
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
-import { APIError } from 'better-auth/api'
-import { magicLink } from 'better-auth/plugins'
+import { APIError, createAuthMiddleware } from 'better-auth/api'
+import { emailOTP, magicLink } from 'better-auth/plugins'
 import { tanstackStartCookies } from 'better-auth/tanstack-start'
-import { env } from 'cloudflare:workers'
+import { env, waitUntil } from 'cloudflare:workers'
 import { eq } from 'drizzle-orm'
 import { db, schema } from '../db'
 import { invitations, memberProfiles, user, userParts } from '../db/schema'
-import { magicLinkEmail, resetPasswordEmail, sendEmail } from './email'
+import { memberNameSchema, PASSWORD_MIN_LENGTH } from '../lib/profile'
+import { writeAudit } from './audit'
+import { magicLinkEmail, resetPasswordEmail, sendEmail, verificationCodeEmail } from './email'
 
 const MAGIC_LINK_EXPIRY = 60 * 30 // 30 min
 
@@ -77,10 +79,19 @@ function buildAuth() {
       // Lokal dev-login oppretter en passordkonto for en seedet, invitert
       // demobruker. I produksjon er registrering alltid stengt.
       disableSignUp: import.meta.env.PROD,
-      minPasswordLength: 8,
+      minPasswordLength: PASSWORD_MIN_LENGTH,
+      maxPasswordLength: 128,
+      revokeSessionsOnPasswordReset: true,
       sendResetPassword: async ({ user, url }) => {
         const { subject, html, text } = resetPasswordEmail(url)
         await sendEmail({ to: user.email, subject, html, text }).catch(() => {})
+      },
+      onPasswordReset: async ({ user }) => {
+        await writeAudit({
+          action: 'auth.password_reset_completed',
+          targetUserId: user.id,
+          details: { changedFields: ['password'] },
+        })
       },
     },
     session: {
@@ -90,6 +101,18 @@ function buildAuth() {
     },
     advanced: {
       useSecureCookies: import.meta.env.PROD,
+      backgroundTasks: { handler: waitUntil },
+    },
+    rateLimit: {
+      enabled: true,
+      storage: 'database',
+      window: 60,
+      max: 100,
+      customRules: {
+        '/sign-in/email': { window: 60, max: 5 },
+        '/sign-in/magic-link': { window: 60, max: 3 },
+        '/request-password-reset': { window: 60, max: 3 },
+      },
     },
     databaseHooks: {
       user: {
@@ -134,14 +157,71 @@ function buildAuth() {
                 .set({ acceptedAt: new Date() })
                 .where(eq(invitations.email, access.inviteEmail))
             }
+            await writeAudit({
+              action: 'member.account_created',
+              actorUserId: createdUser.id,
+              targetUserId: createdUser.id,
+              details: { roleId: access.roleId, partIds: access.partIds },
+            })
+          },
+        },
+        update: {
+          before: async (updates) => {
+            const data = { ...updates }
+            if (typeof data.name === 'string') data.name = memberNameSchema.parse(data.name)
+            if (typeof data.email === 'string') data.email = data.email.trim().toLowerCase()
+            return { data }
           },
         },
       },
     },
+    hooks: {
+      after: createAuthMiddleware(async (ctx) => {
+        const userId = ctx.context.session?.user.id ?? ctx.context.newSession?.user.id
+        if (!userId) return
+        if (ctx.path === '/update-user') {
+          const changedFields = ['name', 'image'].filter((field) => field in (ctx.body ?? {}))
+          if (changedFields.length > 0) {
+            await writeAudit({
+              action: 'member.profile_updated',
+              actorUserId: userId,
+              targetUserId: userId,
+              details: { changedFields },
+            })
+          }
+        }
+        if (ctx.path === '/change-password') {
+          await writeAudit({
+            action: 'auth.password_changed',
+            actorUserId: userId,
+            targetUserId: userId,
+            details: {
+              changedFields: ['password'],
+              otherSessionsRevoked: Boolean(ctx.body?.revokeOtherSessions),
+            },
+          })
+        }
+      }),
+    },
     plugins: [
+      emailOTP({
+        expiresIn: 5 * 60,
+        allowedAttempts: 3,
+        storeOTP: 'hashed',
+        rateLimit: { window: 60, max: 3 },
+        sendVerificationOTP: async ({ email, otp, type }) => {
+          // Ikke bruk e-postbindingen som en åpen relay. API-et svarer fortsatt
+          // generisk, så dette røper ikke om adressen er invitert.
+          if (!(await resolveAccess(email))) return
+          const { subject, html, text } = verificationCodeEmail(otp, type)
+          await sendEmail({ to: email, subject, html, text })
+        },
+      }),
       magicLink({
         expiresIn: MAGIC_LINK_EXPIRY,
+        storeToken: 'hashed',
         sendMagicLink: async ({ email, url }) => {
+          if (!(await resolveAccess(email))) return
           const { subject, html, text } = magicLinkEmail(url)
           await sendEmail({ to: email, subject, html, text }).catch(() => {})
         },

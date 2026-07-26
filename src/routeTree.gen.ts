@@ -10,7 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as GlemtPassordRouteImport } from './routes/glemt-passord'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MinProfilRouteImport } from './routes/min-profil'
+import { Route as TilbakestillPassordRouteImport } from './routes/tilbakestill-passord'
 import { Route as ApiDevLoginRouteImport } from './routes/api/dev-login'
 import { Route as ApiDevSeedRouteImport } from './routes/api/dev-seed'
 import { Route as ApiUploadRouteImport } from './routes/api/upload'
@@ -30,9 +33,24 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GlemtPassordRoute = GlemtPassordRouteImport.update({
+  id: '/glemt-passord',
+  path: '/glemt-passord',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MinProfilRoute = MinProfilRouteImport.update({
+  id: '/min-profil',
+  path: '/min-profil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TilbakestillPassordRoute = TilbakestillPassordRouteImport.update({
+  id: '/tilbakestill-passord',
+  path: '/tilbakestill-passord',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDevLoginRoute = ApiDevLoginRouteImport.update({
@@ -104,7 +122,10 @@ const ApiFilesFileIdRoute = ApiFilesFileIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/glemt-passord': typeof GlemtPassordRoute
   '/login': typeof LoginRoute
+  '/min-profil': typeof MinProfilRoute
+  '/tilbakestill-passord': typeof TilbakestillPassordRoute
   '/api/dev-login': typeof ApiDevLoginRoute
   '/api/dev-seed': typeof ApiDevSeedRoute
   '/api/upload': typeof ApiUploadRoute
@@ -121,7 +142,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/glemt-passord': typeof GlemtPassordRoute
   '/login': typeof LoginRoute
+  '/min-profil': typeof MinProfilRoute
+  '/tilbakestill-passord': typeof TilbakestillPassordRoute
   '/api/dev-login': typeof ApiDevLoginRoute
   '/api/dev-seed': typeof ApiDevSeedRoute
   '/api/upload': typeof ApiUploadRoute
@@ -139,7 +163,10 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/glemt-passord': typeof GlemtPassordRoute
   '/login': typeof LoginRoute
+  '/min-profil': typeof MinProfilRoute
+  '/tilbakestill-passord': typeof TilbakestillPassordRoute
   '/api/dev-login': typeof ApiDevLoginRoute
   '/api/dev-seed': typeof ApiDevSeedRoute
   '/api/upload': typeof ApiUploadRoute
@@ -158,7 +185,10 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/glemt-passord'
     | '/login'
+    | '/min-profil'
+    | '/tilbakestill-passord'
     | '/api/dev-login'
     | '/api/dev-seed'
     | '/api/upload'
@@ -175,7 +205,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/glemt-passord'
     | '/login'
+    | '/min-profil'
+    | '/tilbakestill-passord'
     | '/api/dev-login'
     | '/api/dev-seed'
     | '/api/upload'
@@ -192,7 +225,10 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/glemt-passord'
     | '/login'
+    | '/min-profil'
+    | '/tilbakestill-passord'
     | '/api/dev-login'
     | '/api/dev-seed'
     | '/api/upload'
@@ -210,7 +246,10 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  GlemtPassordRoute: typeof GlemtPassordRoute
   LoginRoute: typeof LoginRoute
+  MinProfilRoute: typeof MinProfilRoute
+  TilbakestillPassordRoute: typeof TilbakestillPassordRoute
   ApiDevLoginRoute: typeof ApiDevLoginRoute
   ApiDevSeedRoute: typeof ApiDevSeedRoute
   ApiUploadRoute: typeof ApiUploadRoute
@@ -235,11 +274,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/glemt-passord': {
+      id: '/glemt-passord'
+      path: '/glemt-passord'
+      fullPath: '/glemt-passord'
+      preLoaderRoute: typeof GlemtPassordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/min-profil': {
+      id: '/min-profil'
+      path: '/min-profil'
+      fullPath: '/min-profil'
+      preLoaderRoute: typeof MinProfilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tilbakestill-passord': {
+      id: '/tilbakestill-passord'
+      path: '/tilbakestill-passord'
+      fullPath: '/tilbakestill-passord'
+      preLoaderRoute: typeof TilbakestillPassordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/dev-login': {
@@ -338,7 +398,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  GlemtPassordRoute: GlemtPassordRoute,
   LoginRoute: LoginRoute,
+  MinProfilRoute: MinProfilRoute,
+  TilbakestillPassordRoute: TilbakestillPassordRoute,
   ApiDevLoginRoute: ApiDevLoginRoute,
   ApiDevSeedRoute: ApiDevSeedRoute,
   ApiUploadRoute: ApiUploadRoute,

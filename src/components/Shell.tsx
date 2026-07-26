@@ -84,6 +84,13 @@ function UserMenu({ me }: { me: Me }) {
               {me.parts.map((p) => p.nameNo).join(' · ')}
             </p>
           )}
+          <Link
+            to="/min-profil"
+            onClick={() => setOpen(false)}
+            className="block w-full rounded-lg px-3 py-2 text-left text-sm text-ink-soft transition-colors hover:bg-paper-sunken hover:text-ink"
+          >
+            Min profil
+          </Link>
           <button
             onClick={async () => {
               try {

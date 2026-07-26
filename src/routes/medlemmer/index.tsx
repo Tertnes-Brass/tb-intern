@@ -7,8 +7,10 @@ import {
   inviteMember,
   listMembers,
   revokeInvitation,
+  sendMemberPasswordReset,
   setSectionLeaderParts,
   updateMemberParts,
+  updateMemberProfile,
   updateMemberRole,
 } from '../../server/members'
 
@@ -28,6 +30,7 @@ function MembersPage() {
   const router = useRouter()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [leaderFor, setLeaderFor] = useState<Member | null>(null)
+  const [editFor, setEditFor] = useState<Member | null>(null)
 
   // Stemmer denne brukeren kan tildele: alle (admin) eller eget omfang (leder).
   const partOptions =
@@ -207,12 +210,20 @@ function MembersPage() {
                       )}
 
                       {data.canManage && (
-                        <button
-                          onClick={() => setLeaderFor(m)}
-                          className="inline-flex min-h-[44px] shrink-0 cursor-pointer items-center rounded-lg px-2.5 py-1.5 font-mono text-[0.6rem] uppercase tracking-wide text-ink-faint transition-colors hover:bg-paper-sunken hover:text-brass-strong"
-                        >
-                          Leder…
-                        </button>
+                        <>
+                          <button
+                            onClick={() => setEditFor(m)}
+                            className="inline-flex min-h-[44px] shrink-0 cursor-pointer items-center rounded-lg px-2.5 py-1.5 font-mono text-[0.6rem] uppercase tracking-wide text-ink-faint transition-colors hover:bg-paper-sunken hover:text-brass-strong"
+                          >
+                            Rediger…
+                          </button>
+                          <button
+                            onClick={() => setLeaderFor(m)}
+                            className="inline-flex min-h-[44px] shrink-0 cursor-pointer items-center rounded-lg px-2.5 py-1.5 font-mono text-[0.6rem] uppercase tracking-wide text-ink-faint transition-colors hover:bg-paper-sunken hover:text-brass-strong"
+                          >
+                            Leder…
+                          </button>
+                        </>
                       )}
                     </div>
                   </li>
@@ -244,7 +255,108 @@ function MembersPage() {
           }}
         />
       )}
+
+      {data.canManage && editFor && (
+        <AdminProfileModal
+          key={editFor.id}
+          member={editFor}
+          onClose={() => setEditFor(null)}
+          onSaved={() => {
+            setEditFor(null)
+            router.invalidate()
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+function AdminProfileModal({
+  member,
+  onClose,
+  onSaved,
+}: {
+  member: Member
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [name, setName] = useState(member.name)
+  const [phone, setPhone] = useState(member.phone ?? '')
+  const [saving, setSaving] = useState(false)
+  const [resetting, setResetting] = useState(false)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      await updateMemberProfile({ data: { userId: member.id, name, phone } })
+      toast('Medlemsprofilen er oppdatert')
+      onSaved()
+    } catch (err) {
+      toastError(err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const sendReset = async () => {
+    setResetting(true)
+    try {
+      const result = await sendMemberPasswordReset({ data: { userId: member.id } })
+      toast(
+        result.throttled
+          ? 'En tilbakestillingslenke ble nylig sendt – vent litt før du prøver igjen'
+          : `Tilbakestillingslenke sendt til ${member.email}`,
+      )
+    } catch (err) {
+      toastError(err)
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Rediger medlem" kicker="Administrasjon">
+      <form onSubmit={submit} className="space-y-4">
+        <div className="rounded-xl border border-line bg-paper-sunken/50 px-4 py-3">
+          <p className="font-mono text-[0.62rem] uppercase tracking-[0.12em] text-ink-faint">Innloggingsadresse</p>
+          <p className="mt-1 truncate text-sm font-semibold text-ink">{member.email}</p>
+        </div>
+        <Field label="Navn">
+          <input className="field-input" value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" />
+        </Field>
+        <Field label="Telefon" hint="Valgfritt. Nummeret er bare tilgjengelig for administratorer.">
+          <input
+            type="tel"
+            className="field-input"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            inputMode="tel"
+            placeholder="+47 900 00 000"
+          />
+        </Field>
+        <div className="rounded-xl border border-line px-4 py-4">
+          <p className="text-sm font-semibold text-ink">Problemer med innlogging?</p>
+          <p className="mt-1 text-xs leading-relaxed text-ink-soft">
+            Send en sikker lenke til den registrerte adressen. Administrator får aldri se eller sette passordet.
+          </p>
+          <Button type="button" size="sm" className="mt-3" loading={resetting} onClick={() => void sendReset()}>
+            Send tilbakestillingslenke
+          </Button>
+        </div>
+        <p className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-faint">
+          Profilendringer og passordreset loggføres.
+        </p>
+        <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="ghost" onClick={onClose} className="w-full sm:w-auto">
+            Avbryt
+          </Button>
+          <Button type="submit" variant="primary" loading={saving} className="w-full sm:w-auto">
+            Lagre
+          </Button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
@@ -371,7 +483,7 @@ function InviteModal({
   return (
     <Modal open={open} onClose={onClose} title="Inviter medlem" kicker="Besetningen">
       <form onSubmit={submit} className="space-y-4">
-        <Field label="E-post *" hint="Personen logger inn med denne adressen (e-postlenke eller Google senere)">
+        <Field label="E-post *" hint="Personen logger inn med denne adressen (e-postkode, lenke eller passord)">
           <input
             type="email"
             className="field-input"
