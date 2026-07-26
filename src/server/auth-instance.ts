@@ -102,6 +102,9 @@ function buildAuth() {
     advanced: {
       useSecureCookies: import.meta.env.PROD,
       backgroundTasks: { handler: waitUntil },
+      // Workeren står alltid bak Cloudflare i produksjon. Stol bare på
+      // Cloudflares egen, overskrevne klient-IP-header for rate limiting.
+      ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
     },
     rateLimit: {
       enabled: true,
