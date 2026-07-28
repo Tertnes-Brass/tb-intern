@@ -5,6 +5,8 @@ import { toast, toastError } from '../../components/toast'
 import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../components/ui'
 import { formatBytes, formatDate, formatDuration } from '../../lib/format'
 import { SECTION_LABELS, SECTION_ORDER } from '../../lib/taxonomy'
+import { ACCEPT_ATTR, MAX_UPLOAD_BYTES, uploadRejectionReason } from '../../lib/upload'
+import { uploadWorkFile } from '../../lib/upload-client'
 import {
   addWorkLink,
   deleteWork,
@@ -155,50 +157,88 @@ function WorkPage() {
 
 // ---------- Opplasting ----------
 
+type UploadJob = {
+  id: number
+  name: string
+  size: number
+  loaded: number
+  status: 'venter' | 'laster' | 'ferdig' | 'feil'
+  error?: string
+}
+
 function UploadZone({ workId }: { workId: string }) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [jobs, setJobs] = useState<UploadJob[]>([])
   const [uploading, setUploading] = useState(false)
 
-  const upload = async (files: FileList | null) => {
-    if (!files || files.length === 0) return
-    const fd = new FormData()
-    fd.append('workId', workId)
-    for (const f of files) fd.append('files', f)
-    // Sidetelling skjer i nettleseren (gratis CPU) — Workers-gratisplanen
-    // har ikke budsjett til full PDF-parsing per request.
-    try {
-      const { PDFDocument } = await import('pdf-lib')
-      const counts: Record<string, number> = {}
-      for (const f of files) {
-        if (!/\.pdf$/i.test(f.name)) continue
-        try {
-          const doc = await PDFDocument.load(await f.arrayBuffer(), { ignoreEncryption: true })
-          counts[f.name] = doc.getPageCount()
-        } catch {}
-      }
-      fd.append('pageCounts', JSON.stringify(counts))
-    } catch {}
+  const upload = async (fileList: FileList | null) => {
+    const files = Array.from(fileList ?? [])
+    if (uploading || files.length === 0) return
+
+    // Filer som uansett vil bli avvist merkes med begrunnelse med én gang, i
+    // stedet for å bli forkastet i stillhet slik det skjedde før.
+    const rejections = files.map((f) => uploadRejectionReason(f))
+    setJobs(
+      files.map((f, id) => ({
+        id,
+        name: f.name,
+        size: f.size,
+        loaded: 0,
+        status: rejections[id] ? 'feil' : 'venter',
+        error: rejections[id] ?? undefined,
+      })),
+    )
     setUploading(true)
-    try {
-      const res = await fetch('/api/upload', { method: 'POST', body: fd })
-      const json = (await res.json()) as { uploaded?: Array<{ partId: string | null }>; error?: string }
-      if (!res.ok || !json.uploaded) throw new Error(json.error ?? 'Opplastingen feilet')
-      const unmatched = json.uploaded.filter((u) => !u.partId).length
+
+    const update = (id: number, patch: Partial<UploadJob>) =>
+      setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...patch } : j)))
+
+    // Én fil om gangen: hver fil sendes allerede som mange delkall, og
+    // parallelle filer ville bare gjort framdriften uleselig.
+    let ok = 0
+    let unmatched = 0
+    const errors: string[] = files.flatMap((f, i) => (rejections[i] ? [`${f.name}: ${rejections[i]}`] : []))
+
+    for (const [id, file] of files.entries()) {
+      if (rejections[id]) continue
+      update(id, { status: 'laster' })
+      try {
+        const saved = await uploadWorkFile({
+          workId,
+          file,
+          onProgress: (loaded) => update(id, { loaded }),
+        })
+        ok++
+        if (!saved.partId) unmatched++
+        update(id, { status: 'ferdig', loaded: file.size })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'opplastingen feilet'
+        errors.push(`${file.name}: ${message}`)
+        update(id, { status: 'feil', error: message })
+      }
+    }
+
+    setUploading(false)
+    if (inputRef.current) inputRef.current.value = ''
+    // Behold bare det som gikk galt på skjermen — de vellykkede dukker opp i
+    // fillisten under.
+    setJobs((prev) => prev.filter((j) => j.status === 'feil'))
+
+    if (ok > 0) {
       toast(
-        json.uploaded.length === 0
-          ? 'Ingen gyldige filer (PDF eller lyd)'
-          : `${json.uploaded.length} ${json.uploaded.length === 1 ? 'fil' : 'filer'} lastet opp` +
-              (unmatched > 0 ? ` — ${unmatched} trenger stemmevalg` : ', stemmer gjenkjent fra filnavn'),
-        json.uploaded.length === 0 ? 'error' : 'ok',
+        `${ok} ${ok === 1 ? 'fil' : 'filer'} lastet opp` +
+          (unmatched > 0 ? ` — ${unmatched} trenger stemmevalg` : ', stemmer gjenkjent fra filnavn') +
+          (errors.length > 0 ? ` · ${errors.length} feilet` : ''),
+        errors.length > 0 ? 'error' : 'ok',
       )
       await router.invalidate()
-    } catch (err) {
-      toastError(err)
-    } finally {
-      setUploading(false)
-      if (inputRef.current) inputRef.current.value = ''
+    } else {
+      toast(
+        errors.length === 1 ? errors[0]! : `Ingen av de ${files.length} filene ble lastet opp`,
+        'error',
+      )
     }
   }
 
@@ -223,7 +263,7 @@ function UploadZone({ workId }: { workId: string }) {
         ref={inputRef}
         type="file"
         multiple
-        accept=".pdf,.mp3,.m4a,.wav,.ogg"
+        accept={ACCEPT_ATTR}
         className="hidden"
         onChange={(e) => upload(e.target.files)}
       />
@@ -239,12 +279,50 @@ function UploadZone({ workId }: { workId: string }) {
           </p>
           <p className="mx-auto mt-1 max-w-md text-sm text-ink-soft">
             PDF per stemme eller lydfiler. Stemmen gjenkjennes automatisk fra filnavnet —
-            «Gaelforce – 2nd Cornet.pdf» havner på 2. kornett.
+            «Gaelforce – 2nd Cornet.pdf» havner på 2. kornett. Maks{' '}
+            {Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))} MB per fil.
           </p>
           <Button variant="secondary" size="sm" className="mt-4" onClick={() => inputRef.current?.click()}>
             … eller velg filer
           </Button>
         </>
+      )}
+
+      {jobs.length > 0 && (
+        <ul className="mt-5 space-y-2 text-left">
+          {jobs.map((j) => {
+            const percent = j.size > 0 ? Math.round((j.loaded / j.size) * 100) : 0
+            return (
+              <li key={j.id} className="rounded-xl border border-line bg-paper-raised/70 px-3.5 py-2.5">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="truncate text-sm text-ink">{j.name}</span>
+                  <span
+                    className={`shrink-0 font-mono text-[0.66rem] uppercase tracking-[0.14em] ${
+                      j.status === 'feil' ? 'text-danger' : 'text-ink-faint'
+                    }`}
+                  >
+                    {j.status === 'feil'
+                      ? 'Avvist'
+                      : j.status === 'ferdig'
+                        ? 'Ferdig'
+                        : j.status === 'laster'
+                          ? `${percent} %`
+                          : 'Venter'}
+                  </span>
+                </div>
+                {j.status === 'laster' && (
+                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-paper-sunken">
+                    <div
+                      className="h-full bg-brass transition-[width] duration-200"
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                )}
+                {j.error && <p className="mt-1 text-xs leading-relaxed text-danger">{j.error}</p>}
+              </li>
+            )
+          })}
+        </ul>
       )}
     </section>
   )
