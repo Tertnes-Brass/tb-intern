@@ -13,7 +13,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ApiDevLoginRouteImport } from './routes/api/dev-login'
 import { Route as ApiDevSeedRouteImport } from './routes/api/dev-seed'
-import { Route as ApiUploadRouteImport } from './routes/api/upload'
 import { Route as ArkivIndexRouteImport } from './routes/arkiv/index'
 import { Route as ArkivWorkIdRouteImport } from './routes/arkiv/$workId'
 import { Route as InnstillingerIndexRouteImport } from './routes/innstillinger/index'
@@ -24,6 +23,10 @@ import { Route as ProsjekterProjectIdRouteImport } from './routes/prosjekter/$pr
 import { Route as VTokenRouteImport } from './routes/v/$token'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiFilesFileIdRouteImport } from './routes/api/files/$fileId'
+import { Route as ApiUploadAbortRouteImport } from './routes/api/upload/abort'
+import { Route as ApiUploadCompleteRouteImport } from './routes/api/upload/complete'
+import { Route as ApiUploadPartRouteImport } from './routes/api/upload/part'
+import { Route as ApiUploadStartRouteImport } from './routes/api/upload/start'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -43,11 +46,6 @@ const ApiDevLoginRoute = ApiDevLoginRouteImport.update({
 const ApiDevSeedRoute = ApiDevSeedRouteImport.update({
   id: '/api/dev-seed',
   path: '/api/dev-seed',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiUploadRoute = ApiUploadRouteImport.update({
-  id: '/api/upload',
-  path: '/api/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ArkivIndexRoute = ArkivIndexRouteImport.update({
@@ -101,13 +99,32 @@ const ApiFilesFileIdRoute = ApiFilesFileIdRouteImport.update({
   path: '/api/files/$fileId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiUploadAbortRoute = ApiUploadAbortRouteImport.update({
+  id: '/api/upload/abort',
+  path: '/api/upload/abort',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUploadCompleteRoute = ApiUploadCompleteRouteImport.update({
+  id: '/api/upload/complete',
+  path: '/api/upload/complete',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUploadPartRoute = ApiUploadPartRouteImport.update({
+  id: '/api/upload/part',
+  path: '/api/upload/part',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUploadStartRoute = ApiUploadStartRouteImport.update({
+  id: '/api/upload/start',
+  path: '/api/upload/start',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/api/dev-login': typeof ApiDevLoginRoute
   '/api/dev-seed': typeof ApiDevSeedRoute
-  '/api/upload': typeof ApiUploadRoute
   '/arkiv/$workId': typeof ArkivWorkIdRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
@@ -118,13 +135,16 @@ export interface FileRoutesByFullPath {
   '/prosjekter/': typeof ProsjekterIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/upload/abort': typeof ApiUploadAbortRoute
+  '/api/upload/complete': typeof ApiUploadCompleteRoute
+  '/api/upload/part': typeof ApiUploadPartRoute
+  '/api/upload/start': typeof ApiUploadStartRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/api/dev-login': typeof ApiDevLoginRoute
   '/api/dev-seed': typeof ApiDevSeedRoute
-  '/api/upload': typeof ApiUploadRoute
   '/arkiv/$workId': typeof ArkivWorkIdRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
@@ -135,6 +155,10 @@ export interface FileRoutesByTo {
   '/prosjekter': typeof ProsjekterIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/upload/abort': typeof ApiUploadAbortRoute
+  '/api/upload/complete': typeof ApiUploadCompleteRoute
+  '/api/upload/part': typeof ApiUploadPartRoute
+  '/api/upload/start': typeof ApiUploadStartRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -142,7 +166,6 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/api/dev-login': typeof ApiDevLoginRoute
   '/api/dev-seed': typeof ApiDevSeedRoute
-  '/api/upload': typeof ApiUploadRoute
   '/arkiv/$workId': typeof ArkivWorkIdRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
@@ -153,6 +176,10 @@ export interface FileRoutesById {
   '/prosjekter/': typeof ProsjekterIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/upload/abort': typeof ApiUploadAbortRoute
+  '/api/upload/complete': typeof ApiUploadCompleteRoute
+  '/api/upload/part': typeof ApiUploadPartRoute
+  '/api/upload/start': typeof ApiUploadStartRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -161,7 +188,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/api/dev-login'
     | '/api/dev-seed'
-    | '/api/upload'
     | '/arkiv/$workId'
     | '/innstillinger/nedlastinger'
     | '/prosjekter/$projectId'
@@ -172,13 +198,16 @@ export interface FileRouteTypes {
     | '/prosjekter/'
     | '/api/auth/$'
     | '/api/files/$fileId'
+    | '/api/upload/abort'
+    | '/api/upload/complete'
+    | '/api/upload/part'
+    | '/api/upload/start'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
     | '/api/dev-login'
     | '/api/dev-seed'
-    | '/api/upload'
     | '/arkiv/$workId'
     | '/innstillinger/nedlastinger'
     | '/prosjekter/$projectId'
@@ -189,13 +218,16 @@ export interface FileRouteTypes {
     | '/prosjekter'
     | '/api/auth/$'
     | '/api/files/$fileId'
+    | '/api/upload/abort'
+    | '/api/upload/complete'
+    | '/api/upload/part'
+    | '/api/upload/start'
   id:
     | '__root__'
     | '/'
     | '/login'
     | '/api/dev-login'
     | '/api/dev-seed'
-    | '/api/upload'
     | '/arkiv/$workId'
     | '/innstillinger/nedlastinger'
     | '/prosjekter/$projectId'
@@ -206,6 +238,10 @@ export interface FileRouteTypes {
     | '/prosjekter/'
     | '/api/auth/$'
     | '/api/files/$fileId'
+    | '/api/upload/abort'
+    | '/api/upload/complete'
+    | '/api/upload/part'
+    | '/api/upload/start'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -213,7 +249,6 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ApiDevLoginRoute: typeof ApiDevLoginRoute
   ApiDevSeedRoute: typeof ApiDevSeedRoute
-  ApiUploadRoute: typeof ApiUploadRoute
   ArkivWorkIdRoute: typeof ArkivWorkIdRoute
   InnstillingerNedlastingerRoute: typeof InnstillingerNedlastingerRoute
   ProsjekterProjectIdRoute: typeof ProsjekterProjectIdRoute
@@ -224,6 +259,10 @@ export interface RootRouteChildren {
   ProsjekterIndexRoute: typeof ProsjekterIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiFilesFileIdRoute: typeof ApiFilesFileIdRoute
+  ApiUploadAbortRoute: typeof ApiUploadAbortRoute
+  ApiUploadCompleteRoute: typeof ApiUploadCompleteRoute
+  ApiUploadPartRoute: typeof ApiUploadPartRoute
+  ApiUploadStartRoute: typeof ApiUploadStartRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -254,13 +293,6 @@ declare module '@tanstack/react-router' {
       path: '/api/dev-seed'
       fullPath: '/api/dev-seed'
       preLoaderRoute: typeof ApiDevSeedRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/upload': {
-      id: '/api/upload'
-      path: '/api/upload'
-      fullPath: '/api/upload'
-      preLoaderRoute: typeof ApiUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/arkiv/': {
@@ -333,6 +365,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiFilesFileIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/upload/abort': {
+      id: '/api/upload/abort'
+      path: '/api/upload/abort'
+      fullPath: '/api/upload/abort'
+      preLoaderRoute: typeof ApiUploadAbortRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/upload/complete': {
+      id: '/api/upload/complete'
+      path: '/api/upload/complete'
+      fullPath: '/api/upload/complete'
+      preLoaderRoute: typeof ApiUploadCompleteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/upload/part': {
+      id: '/api/upload/part'
+      path: '/api/upload/part'
+      fullPath: '/api/upload/part'
+      preLoaderRoute: typeof ApiUploadPartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/upload/start': {
+      id: '/api/upload/start'
+      path: '/api/upload/start'
+      fullPath: '/api/upload/start'
+      preLoaderRoute: typeof ApiUploadStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -341,7 +401,6 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ApiDevLoginRoute: ApiDevLoginRoute,
   ApiDevSeedRoute: ApiDevSeedRoute,
-  ApiUploadRoute: ApiUploadRoute,
   ArkivWorkIdRoute: ArkivWorkIdRoute,
   InnstillingerNedlastingerRoute: InnstillingerNedlastingerRoute,
   ProsjekterProjectIdRoute: ProsjekterProjectIdRoute,
@@ -352,6 +411,10 @@ const rootRouteChildren: RootRouteChildren = {
   ProsjekterIndexRoute: ProsjekterIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiFilesFileIdRoute: ApiFilesFileIdRoute,
+  ApiUploadAbortRoute: ApiUploadAbortRoute,
+  ApiUploadCompleteRoute: ApiUploadCompleteRoute,
+  ApiUploadPartRoute: ApiUploadPartRoute,
+  ApiUploadStartRoute: ApiUploadStartRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
