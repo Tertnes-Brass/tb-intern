@@ -3,10 +3,12 @@ import { useRef, useState } from 'react'
 import { WorkFormModal } from '../../components/WorkForm'
 import { toast, toastError } from '../../components/toast'
 import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../components/ui'
+import { ZipDownloadButton } from '../../components/ZipDownload'
 import { formatBytes, formatDate, formatDuration } from '../../lib/format'
 import { SECTION_LABELS, SECTION_ORDER } from '../../lib/taxonomy'
 import { ACCEPT_ATTR, MAX_UPLOAD_BYTES, uploadRejectionReason } from '../../lib/upload'
 import { uploadWorkFile } from '../../lib/upload-client'
+import { zipEntryName } from '../../lib/zip'
 import {
   addWorkLink,
   deleteWork,
@@ -30,6 +32,13 @@ export const Route = createFileRoute('/arkiv/$workId')({
   component: WorkPage,
 })
 
+/** Stemmenavnet som brukes i ZIP-filnavnet — samme etikett som fillisten viser. */
+function zipLabelFor(file: WorkData['files'][number]): string {
+  if (file.kind === 'score') return 'Partitur'
+  if (file.kind === 'audio') return file.label ?? 'Lydfil'
+  return file.partName ?? 'Uplassert'
+}
+
 function WorkPage() {
   const data = Route.useLoaderData()
   const router = useRouter()
@@ -41,6 +50,16 @@ function WorkPage() {
   const composerLine = [w.composer, w.arranger ? `arr. ${w.arranger}` : null].filter(Boolean).join(' · ')
   const partFileCount = data.files.filter((f) => f.kind === 'part').length
   const totalParts = data.allParts.filter((p) => p.section !== 'score').length
+
+  // Hele verket som ett arkiv, i samme rekkefølge som fillisten under.
+  // Partituret tas bare med når brukeren har scores.view — fil-gaten ville
+  // ellers avvist det, og filen bare blitt hoppet over.
+  const zipFiles = data.files
+    .filter((f) => f.kind !== 'score' || data.canViewScore)
+    .map((f, i) => ({
+      fileId: f.id,
+      name: zipEntryName([String(i + 1).padStart(2, '0'), w.title, zipLabelFor(f)], f.fileName),
+    }))
 
   return (
     <div className="space-y-10">
@@ -80,6 +99,10 @@ function WorkPage() {
           <Stamp tone={partFileCount >= totalParts ? 'brass' : partFileCount > 0 ? 'neutral' : 'oxblood'}>
             {partFileCount}/{totalParts} stemmer
           </Stamp>
+        </div>
+
+        <div className="mt-5">
+          <ZipDownloadButton label="Last ned alle filer (ZIP)" zipName={w.title} files={zipFiles} />
         </div>
 
         {w.notes && (

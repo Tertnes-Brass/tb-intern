@@ -58,7 +58,7 @@ function ShareViewPage() {
     partFiles: [],
     myFiles: r.files
       .filter((f) => f.kind === 'part')
-      .map((f) => ({ id: f.id, partName: f.partName, pageCount: f.pageCount })),
+      .map((f) => ({ id: f.id, partName: f.partName, fileName: f.fileName, pageCount: f.pageCount })),
     scoreFileId: null,
     audioFiles: r.files.filter((f) => f.kind === 'audio').map((f) => ({ id: f.id, label: null, fileName: f.fileName })),
   }))
