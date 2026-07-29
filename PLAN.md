@@ -1,7 +1,12 @@
 # Tertnes Brass Notearkiv — plan (v2)
 
 > Status: juni 2026. Revidert etter avklaringsrunde — stack, auth og domene er besluttet.
-> Avklart: TanStack Start-stack ✅ · Google-innlogging + RBAC ✅ · domene tertnesbrass.no (i Cloudflare) ✅ · vikarlenker uten PIN ✅ · partitur synlig for alle, RBAC-styrbart ✅ · lytteeksempler (YouTube/lyd) inn som kjernefunksjon ✅
+> Avklart: TanStack Start-stack ✅ · Google-innlogging + RBAC ✅ · domene noter.tertnesbrass.com (i Cloudflare) ✅ · vikarlenker uten PIN ✅ · partitur synlig for alle, RBAC-styrbart ✅ · lytteeksempler (YouTube/lyd) inn som kjernefunksjon ✅
+
+> Domene-etterskrift (juli 2026): planen skrev opprinnelig `noter.tertnesbrass.no`.
+> Det ble aldri satt opp. Kanonisk produksjonsdomene er `noter.tertnesbrass.com`,
+> og avsenderdomenet for e-post er `tertnesbrass.com`. `tertnesbrass.no` er
+> korpsets offentlige nettside (e-post hos Uniweb) og eies ikke av denne appen.
 
 ## 1. Mål
 
@@ -63,17 +68,17 @@ Ingen offentlige filer. Alle nedlastinger via kortlevde signerte R2-URLer. Delin
 
 ## 5. Teknisk arkitektur (besluttet retning)
 
-**Alt på Cloudflare.** R2 har gratis egress (kjernebruken er PDF/lyd-nedlasting), D1 5 GB gratis, ingenting sovner ved inaktivitet, kommersiell bruk OK på free tier. Domenet tertnesbrass.no ligger allerede i Cloudflare → `noter.tertnesbrass.no` som custom domain og DNS-verifisert e-postavsender er friksjonsfritt.
+**Alt på Cloudflare.** R2 har gratis egress (kjernebruken er PDF/lyd-nedlasting), D1 5 GB gratis, ingenting sovner ved inaktivitet, kommersiell bruk OK på free tier. Korpsets domene ligger allerede i Cloudflare → `noter.tertnesbrass.com` som custom domain og DNS-verifisert e-postavsender er friksjonsfritt.
 
 ```
 Nettleser (medlem / arkivar / vikar)
-        │ HTTPS — noter.tertnesbrass.no
+        │ HTTPS — noter.tertnesbrass.com
         ▼
 Cloudflare Worker — TanStack Start (React, SSR + server functions)
    ├── D1 (SQLite, Drizzle): katalog, prosjekter, brukere, RBAC, delingslenker
    ├── R2 (privat bucket): PDF-er + lydfiler, signerte URLer
    ├── Cron triggers: backup-jobber, utløp av lenker
-   └── Resend: e-post (invitasjon, varsler) — verifisert via tertnesbrass.no
+   └── Resend: e-post (invitasjon, varsler) — verifisert via tertnesbrass.com
 ```
 
 - **Rammeverk: TanStack Start** + shadcn/ui + Tailwind. Matcher TanStack-erfaringen din (Start er bygget på TanStack Router), og Workers er offisielt deploy-mål via Cloudflares Vite-plugin — Cloudflare er TanStack-partner med egen starter-template. Ærlig forbehold: Start er i RC (API-stabil, produksjonsklar, men «early adopter»). Akseptabel risiko for dette prosjektet; exit til React Router 7 er overkommelig siden begge er Vite+React.
@@ -98,7 +103,7 @@ Cloudflare Worker — TanStack Start (React, SSR + server functions)
 | D1 | 5 GB, 5M reads/dag | metadata | 0 kr |
 | R2 | 10 GB, gratis egress | PDF + lydfiler; måles (rclone) | 0 kr → ~$0.015/GB/mnd over 10 GB |
 | Resend | 3 000 e-post/mnd | invitasjoner + varsler | 0 kr |
-| Domene | — | har tertnesbrass.no i CF | 0 kr ekstra |
+| Domene | — | har tertnesbrass.com i CF | 0 kr ekstra |
 
 Lydfiler er største lagringsdriver (~5–10 MB/stk) — fortsatt småpenger; 20 GB totalt ≈ 1,5 kr/mnd.
 
@@ -138,7 +143,7 @@ settings         key, value   (korpsnavn, logo, partitur-policy, …)
 ## 8. Faseplan
 
 **Fase 0 — Fundament** (en helg)
-Git-repo · TanStack Start på Workers (CF-template) · D1 + Drizzle-migrasjoner · deploy-pipeline (workers.dev først, så noter.tertnesbrass.no) · better-auth med Google + passord · seed av stemmeliste og roller.
+Git-repo · TanStack Start på Workers (CF-template) · D1 + Drizzle-migrasjoner · deploy-pipeline (workers.dev først, så noter.tertnesbrass.com) · better-auth med Google + passord · seed av stemmeliste og roller.
 
 **Fase 1 — MVP: «kjør én ekte konsert gjennom systemet»**
 - Designskisser for de tre nøkkelflatene (avsnitt 6) — diskuteres før bygging

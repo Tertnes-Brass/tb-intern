@@ -7,6 +7,8 @@ Notearkiv, publisering og deling av noter for brass band — bygget for [Tertnes
 > **Status: fase 1 — i produksjon på [noter.tertnesbrass.com](https://noter.tertnesbrass.com)** (invitasjonsbasert).
 > Kjørbar lokalt uten Cloudflare-konto. All demodata er kunstig (inkl. genererte note-PDF-er) — ingen rettighetsbelagte noter i repoet.
 
+`noter.tertnesbrass.com` er det kanoniske produksjonsdomenet — alle lenker, auth-callbacks og e-poster skal peke dit; det tidligere `noter.saynain.com` fases ut og skal ikke brukes.
+
 ## Funksjoner
 
 - **Verksarkiv** — katalog med komponist/arrangør, grad, varighet, fysisk plassering, søk
