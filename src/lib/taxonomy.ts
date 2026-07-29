@@ -109,3 +109,39 @@ export function guessPartFromFilename(
 export function isAudioFilename(fileName: string): boolean {
   return /\.(mp3|m4a|wav|ogg|flac)$/i.test(fileName)
 }
+
+/**
+ * Fjerner tegn et filnavn ikke bør inneholde, og holder lengden nede.
+ * Bindestrek blir mellomrom, så den ene bindestreken vi selv setter inn er
+ * det eneste skilletegnet i navnet.
+ */
+function cleanFileNamePart(s: string): string {
+  return s
+    .replace(/[/\\:*?"<>|-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 90)
+    .trim()
+}
+
+/**
+ * Filnavn for en PDF splitteren skriver ut (sak #17): «Verk - Stemme.pdf».
+ *
+ * Navnet må gjettes tilbake til SAMME stemme av `guessPartFromFilename`, ellers
+ * ville «Gjenkjenn på nytt» senere flyttet filen til en annen stemme enn den
+ * arkivaren valgte. Verkstittelen kan i sjeldne tilfeller inneholde ord som
+ * trekker gjettingen et annet sted («Bass Line», «Second Thoughts»), så den tas
+ * bare med når gjettingen fortsatt lander riktig — hvis ikke brukes stemmenavnet
+ * alene.
+ */
+export function splitPartFileName(
+  workTitle: string,
+  part: { id: string; nameNo: string },
+  defs: Array<{ id: string; aliases: string[] | string; nameNo?: string; nameEn?: string }>,
+): string {
+  const partName = cleanFileNamePart(part.nameNo)
+  const title = cleanFileNamePart(workTitle)
+  const withTitle = `${title} - ${partName}.pdf`
+  if (title && guessPartFromFilename(withTitle, defs) === part.id) return withTitle
+  return `${partName}.pdf`
+}

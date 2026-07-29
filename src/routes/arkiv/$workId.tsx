@@ -1,5 +1,6 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
+import { PdfSplitterLauncher } from '../../components/PdfSplitter'
 import { WorkFormModal } from '../../components/WorkForm'
 import { toast, toastError } from '../../components/toast'
 import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../components/ui'
@@ -90,6 +91,8 @@ function WorkPage() {
       </header>
 
       {data.canManage && <UploadZone workId={w.id} />}
+
+      {data.canManage && <PdfSplitterLauncher work={w} allParts={data.allParts} files={data.files} />}
 
       <FilesSection data={data} />
 

@@ -28,14 +28,19 @@ async function call<T>(url: string, init: RequestInit): Promise<T> {
  * Workers.
  *
  * `onProgress` kalles med antall byte sendt så langt, etter hver bit.
+ *
+ * `partId` settes bare av kallere som allerede VET hvilken stemme filen er —
+ * PDF-splitteren. Uten den gjetter serveren fra filnavnet, som før.
  */
 export async function uploadWorkFile({
   workId,
   file,
+  partId,
   onProgress,
 }: {
   workId: string
   file: File
+  partId?: string
   onProgress?: (loaded: number) => void
 }): Promise<UploadedFile> {
   const reason = uploadRejectionReason(file)
@@ -88,6 +93,7 @@ export async function uploadWorkFile({
         token,
         parts: uploaded,
         pageCount: streamCounter ? streamCounter.result() : pageCount,
+        partId: partId ?? null,
       }),
     })
     return saved

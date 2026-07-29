@@ -13,6 +13,9 @@ const Body = z.object({
   token: z.string().min(1),
   // Talt i nettleseren; null når filen ikke er PDF eller ikke lot seg tolke.
   pageCount: z.number().int().positive().nullable(),
+  // Eksplisitt stemme fra PDF-splitteren, som allerede vet svaret. Utelatt
+  // eller null = gjett fra filnavnet.
+  partId: z.string().min(1).nullish(),
   parts: z
     .array(z.object({ partNumber: z.number().int().positive(), etag: z.string().min(1) }))
     .min(1)
@@ -21,7 +24,7 @@ const Body = z.object({
 
 /**
  * Setter sammen delene til ett R2-objekt og registrerer filen på verket.
- * Stemmen gjettes fra filnavnet, som før.
+ * Stemmen gjettes fra filnavnet, med mindre klienten oppgir den eksplisitt.
  */
 export const Route = createFileRoute('/api/upload/complete')({
   server: {
@@ -53,14 +56,20 @@ export const Route = createFileRoute('/api/upload/complete')({
         const d = db()
         const partDefs = await d.select().from(parts).orderBy(asc(parts.sortOrder))
         const isAudio = isAudioFilename(ticket.fileName)
-        const guessed = isAudio ? null : guessPartFromFilename(ticket.fileName, partDefs)
-        const kind = isAudio ? 'audio' : guessed === 'score' ? 'score' : guessed ? 'part' : 'other'
+        // En eksplisitt stemme må finnes i besetningen. Faller vi tilbake til
+        // gjetting her, ville en skrivefeil i klienten stille gitt feil stemme.
+        const explicit = isAudio ? null : (parsed.data.partId ?? null)
+        if (explicit && !partDefs.some((p) => p.id === explicit)) {
+          return Response.json({ error: 'Ukjent stemme' }, { status: 400 })
+        }
+        const partId = explicit ?? (isAudio ? null : guessPartFromFilename(ticket.fileName, partDefs))
+        const kind = isAudio ? 'audio' : partId === 'score' ? 'score' : partId ? 'part' : 'other'
 
         await d.insert(workFiles).values({
           id: ticket.fileId,
           workId: ticket.workId,
           kind,
-          partId: guessed,
+          partId,
           label: null,
           r2Key: ticket.key,
           fileName: ticket.fileName,
@@ -77,8 +86,8 @@ export const Route = createFileRoute('/api/upload/complete')({
             id: ticket.fileId,
             fileName: ticket.fileName,
             kind,
-            partId: guessed,
-            partName: guessed ? (partDefs.find((p) => p.id === guessed)?.nameNo ?? null) : null,
+            partId,
+            partName: partId ? (partDefs.find((p) => p.id === partId)?.nameNo ?? null) : null,
             pageCount: isAudio ? null : parsed.data.pageCount,
           },
         })
