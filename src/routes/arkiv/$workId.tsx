@@ -69,6 +69,7 @@ function WorkPage() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
+          {w.status === 'archived' && <Stamp tone="oxblood">Arkivert</Stamp>}
           {w.genre && <Stamp tone="brass">{w.genre}</Stamp>}
           {w.grade && <Stamp>Grad {w.grade}</Stamp>}
           {w.durationSec ? <Stamp>{formatDuration(w.durationSec)} min</Stamp> : null}

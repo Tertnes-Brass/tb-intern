@@ -20,6 +20,7 @@ type FormState = {
   physicalLocation: string
   acquiredYear: string
   notes: string
+  status: 'active' | 'archived'
 }
 
 const empty: FormState = {
@@ -35,6 +36,7 @@ const empty: FormState = {
   physicalLocation: '',
   acquiredYear: '',
   notes: '',
+  status: 'active',
 }
 
 export function WorkFormModal({
@@ -68,6 +70,7 @@ export function WorkFormModal({
             physicalLocation: work.physicalLocation ?? '',
             acquiredYear: work.acquiredYear ? String(work.acquiredYear) : '',
             notes: work.notes ?? '',
+            status: work.status === 'archived' ? 'archived' : 'active',
           }
         : empty,
     )
@@ -102,6 +105,7 @@ export function WorkFormModal({
         physicalLocation: form.physicalLocation || undefined,
         acquiredYear: form.acquiredYear ? Number(form.acquiredYear) : null,
         notes: form.notes || undefined,
+        status: form.status,
       }
       if (work) {
         await updateWork({ data: { id: work.id, ...payload } })
@@ -168,6 +172,16 @@ export function WorkFormModal({
           </Field>
           <Field label="Anskaffet år" className="col-span-2 sm:col-span-1">
             <input className="field-input" value={form.acquiredYear} onChange={set('acquiredYear')} placeholder="2024" inputMode="numeric" enterKeyHint="done" autoComplete="off" />
+          </Field>
+          <Field label="Status" hint="Arkiverte verk er skjult i arkivlisten" className="col-span-2 sm:col-span-1">
+            <select
+              className="field-input"
+              value={form.status}
+              onChange={(e) => setForm((f) => ({ ...f, status: e.target.value === 'archived' ? 'archived' : 'active' }))}
+            >
+              <option value="active">Aktiv</option>
+              <option value="archived">Arkivert</option>
+            </select>
           </Field>
         </div>
         <Field label="Notater">

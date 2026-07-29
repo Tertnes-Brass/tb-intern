@@ -6,41 +6,77 @@ import { db } from '../db'
 import { parts, projectWorks, projects, workFiles, workLinks, works } from '../db/schema'
 import { newId } from '../lib/id'
 import { guessPartFromFilename } from '../lib/taxonomy'
+import {
+  archiveSearchInput,
+  buildFilterOptions,
+  matchesMissing,
+  resolveWorkFilter,
+  sortWorks,
+} from '../lib/work-filter'
 import { normalizeWorkMetadata, workMetadataInput } from '../lib/work-metadata'
 import { hasFullArchiveAccess, hasPermission, requireMe, requirePermission } from './access'
 
 export const listWorks = createServerFn()
-  .validator(z.object({ q: z.string().optional() }).optional())
+  .validator(archiveSearchInput.optional())
   .handler(async ({ data }) => {
     const me = await requireMe()
     if (!hasFullArchiveAccess(me)) throw new Error('Du har ikke tilgang til hele arkivet')
     const d = db()
-    const q = data?.q?.trim()
+    const filter = resolveWorkFilter(data)
 
-    const where = q
-      ? or(
-          like(works.title, `%${q}%`),
-          like(works.subtitle, `%${q}%`),
-          like(works.archiveNumber, `%${q}%`),
-          like(works.composer, `%${q}%`),
-          like(works.arranger, `%${q}%`),
-        )
-      : undefined
+    // Arkiverte verk er skjult med mindre man ber om dem. Statusen avgrenser
+    // også nedtrekksvalgene, så listen og valgene alltid ser samme arkiv.
+    const statusWhere = filter.status === 'all' ? undefined : eq(works.status, filter.status)
 
-    const workRows = await d
-      .select()
-      .from(works)
-      .where(where)
-      .orderBy(asc(works.title))
+    const conditions = [
+      statusWhere,
+      filter.q
+        ? or(
+            like(works.title, `%${filter.q}%`),
+            like(works.subtitle, `%${filter.q}%`),
+            like(works.archiveNumber, `%${filter.q}%`),
+            like(works.composer, `%${filter.q}%`),
+            like(works.arranger, `%${filter.q}%`),
+          )
+        : undefined,
+      filter.composer ? eq(works.composer, filter.composer) : undefined,
+      filter.arranger ? eq(works.arranger, filter.arranger) : undefined,
+      filter.genre ? eq(works.genre, filter.genre) : undefined,
+      filter.grade != null ? eq(works.grade, filter.grade) : undefined,
+      filter.year != null ? eq(works.acquiredYear, filter.year) : undefined,
+    ].filter((c) => c != null)
 
-    const counts = await d
-      .select({
-        workId: workFiles.workId,
-        kind: workFiles.kind,
-        n: sql<number>`count(*)`,
-      })
-      .from(workFiles)
-      .groupBy(workFiles.workId, workFiles.kind)
+    const [workRows, facetRows, counts, linkCounts] = await Promise.all([
+      d
+        .select()
+        .from(works)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(asc(works.title)),
+      // Nedtrekksvalgene bygges av hele arkivet (innenfor statusvalget), ikke av
+      // treffene — ellers ville et valgt filter tømme sine egne alternativer.
+      d
+        .select({
+          composer: works.composer,
+          arranger: works.arranger,
+          genre: works.genre,
+          grade: works.grade,
+          acquiredYear: works.acquiredYear,
+        })
+        .from(works)
+        .where(statusWhere),
+      d
+        .select({
+          workId: workFiles.workId,
+          kind: workFiles.kind,
+          n: sql<number>`count(*)`,
+        })
+        .from(workFiles)
+        .groupBy(workFiles.workId, workFiles.kind),
+      d
+        .select({ workId: workLinks.workId, n: sql<number>`count(*)` })
+        .from(workLinks)
+        .groupBy(workLinks.workId),
+    ])
 
     const countMap = new Map<string, { parts: number; score: number; audio: number }>()
     for (const c of counts) {
@@ -50,12 +86,23 @@ export const listWorks = createServerFn()
       else if (c.kind === 'audio') entry.audio = c.n
       countMap.set(c.workId, entry)
     }
+    const linkMap = new Map(linkCounts.map((l) => [l.workId, l.n]))
 
-    return {
-      works: workRows.map((wr) => ({
+    // «Mangler»-filtrene og sorteringen er avledet av aggregatene over og av
+    // norsk kollasjon/tomme verdier — det bor i work-filter.ts, ikke i SQL.
+    const rows = workRows
+      .map((wr) => ({
         ...wr,
         counts: countMap.get(wr.id) ?? { parts: 0, score: 0, audio: 0 },
-      })),
+        linkCount: linkMap.get(wr.id) ?? 0,
+      }))
+      .filter((wr) => matchesMissing(wr, filter.missing))
+
+    return {
+      works: sortWorks(rows, filter.sort, filter.dir),
+      // Antall verk i arkivet innenfor statusvalget — «12 av 84 verk».
+      total: facetRows.length,
+      options: buildFilterOptions(facetRows),
       canManage: hasPermission(me, 'works.manage'),
     }
   })
@@ -123,6 +170,7 @@ const workInput = workMetadataInput.extend({
   physicalLocation: z.string().optional(),
   acquiredYear: z.number().int().nullable().optional(),
   notes: z.string().optional(),
+  status: z.enum(['active', 'archived']).optional(),
 })
 
 export const createWork = createServerFn({ method: 'POST' })
@@ -145,6 +193,7 @@ export const createWork = createServerFn({ method: 'POST' })
       physicalLocation: data.physicalLocation?.trim() || null,
       acquiredYear: data.acquiredYear ?? null,
       notes: data.notes?.trim() || null,
+      status: data.status ?? 'active',
       createdAt: ts,
       updatedAt: ts,
     })
@@ -170,6 +219,9 @@ export const updateWork = createServerFn({ method: 'POST' })
         physicalLocation: data.physicalLocation?.trim() || null,
         acquiredYear: data.acquiredYear ?? null,
         notes: data.notes?.trim() || null,
+        // Utelatt status betyr «rør den ikke» — et kall uten feltet skal ikke
+        // kunne ta et verk ut av arkivert-tilstand.
+        ...(data.status ? { status: data.status } : {}),
         updatedAt: new Date(),
       })
       .where(eq(works.id, data.id))
