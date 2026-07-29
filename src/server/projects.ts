@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import { and, asc, desc, eq, gte, inArray, like, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, like, lt, lte, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db, type Db } from '../db'
 import { parts, projectWorks, projects, seasons, workFiles, workLinks, works } from '../db/schema'
@@ -12,6 +12,15 @@ import {
   requirePermission,
 } from './access'
 import { type AccessCtx, memberCanAccessFile, memberCanSeeFile } from './file-access'
+import {
+  DEFAULT_PROJECT_SORT,
+  PROJECT_KINDS,
+  PROJECT_SORTS,
+  PROJECT_STATUSES,
+  groupBySeason,
+  seasonForDate,
+  sortProjects,
+} from './project-list'
 
 export type ProjectWorkDetail = {
   workId: string
@@ -139,37 +148,63 @@ export const getHome = createServerFn().handler(async () => {
   }
 })
 
-export const listProjects = createServerFn().handler(async () => {
-  const me = await requireMe()
-  const d = db()
-  const canManage = hasPermission(me, 'projects.manage')
-  const canBrowseArchive = hasFullArchiveAccess(me)
-  const today = new Date().toISOString().slice(0, 10)
+export const listProjects = createServerFn()
+  .validator(
+    z
+      .object({
+        kind: z.enum(PROJECT_KINDS).optional(),
+        status: z.enum(PROJECT_STATUSES).optional(),
+        sort: z.enum(PROJECT_SORTS).optional(),
+      })
+      .optional(),
+  )
+  .handler(async ({ data }) => {
+    const me = await requireMe()
+    const d = db()
+    const canManage = hasPermission(me, 'projects.manage')
+    const canBrowseArchive = hasFullArchiveAccess(me)
+    const today = new Date().toISOString().slice(0, 10)
+    const sort = data?.sort ?? DEFAULT_PROJECT_SORT
 
-  const rows = await d
-    .select({
-      id: projects.id,
-      name: projects.name,
-      kind: projects.kind,
-      eventDate: projects.eventDate,
-      venue: projects.venue,
-      isPublished: projects.isPublished,
-      seasonName: seasons.name,
-      workCount: sql<number>`(select count(*) from project_works pw where pw.project_id = ${projects.id})`,
-    })
-    .from(projects)
-    .leftJoin(seasons, eq(projects.seasonId, seasons.id))
-    .where(
-      canManage
-        ? undefined
-        : canBrowseArchive
-          ? eq(projects.isPublished, true)
-          : and(eq(projects.isPublished, true), gte(projects.eventDate, today)),
-    )
-    .orderBy(desc(projects.eventDate))
+    // Synligheten er uendret: ledelsen ser alt, arkivtilgang ser alt publisert,
+    // øvrige kun publiserte prosjekter som ikke er avholdt.
+    const visibility = canManage
+      ? undefined
+      : canBrowseArchive
+        ? eq(projects.isPublished, true)
+        : and(eq(projects.isPublished, true), gte(projects.eventDate, today))
 
-  return { projects: rows, canManage }
-})
+    const rows = await d
+      .select({
+        id: projects.id,
+        name: projects.name,
+        kind: projects.kind,
+        eventDate: projects.eventDate,
+        venue: projects.venue,
+        isPublished: projects.isPublished,
+        seasonName: seasons.name,
+        seasonStartsOn: seasons.startsOn,
+        workCount: sql<number>`(select count(*) from project_works pw where pw.project_id = ${projects.id})`,
+      })
+      .from(projects)
+      .leftJoin(seasons, eq(projects.seasonId, seasons.id))
+      // Brukerens filtre legges PÅ TOPPEN av synligheten, aldri i stedet for.
+      .where(
+        and(
+          visibility,
+          data?.kind ? eq(projects.kind, data.kind) : undefined,
+          data?.status === 'kommende' ? gte(projects.eventDate, today) : undefined,
+          data?.status === 'tidligere' ? lt(projects.eventDate, today) : undefined,
+        ),
+      )
+      .orderBy(desc(projects.eventDate))
+
+    // Rekkefølgen avgjøres i den rene modulen (enhetstestet), ikke i SQL:
+    // sesongnavn sorterer ikke kronologisk, og «kommende først» er ikke
+    // uttrykkbart som én ORDER BY uten å duplisere dagens dato-logikk.
+    const sorted = sortProjects(rows, sort, today)
+    return { seasons: groupBySeason(sorted, sort, today), count: sorted.length, canManage }
+  })
 
 export const getProject = createServerFn()
   .validator(z.object({ id: z.string() }))
@@ -213,7 +248,7 @@ export const createProject = createServerFn({ method: 'POST' })
   .validator(
     z.object({
       name: z.string().min(1, 'Navn er påkrevd'),
-      kind: z.enum(['konsert', 'konkurranse', 'seminar', 'annet']),
+      kind: z.enum(PROJECT_KINDS),
       eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ugyldig dato'),
       venue: z.string().optional(),
       description: z.string().optional(),
@@ -237,20 +272,21 @@ export const createProject = createServerFn({ method: 'POST' })
     return { id }
   })
 
+/**
+ * Sesongen datoen hører til, opprettet ved behov. Slår opp på DATOINTERVALL og
+ * ikke på navn: en sesong som er døpt om for hånd («Jubileumshøsten 2026») skal
+ * gjenbrukes, ikke få en duplikat med standardnavnet ved siden av seg.
+ */
 async function findOrCreateSeason(d: Db, eventDate: string): Promise<string> {
-  const year = Number(eventDate.slice(0, 4))
-  const month = Number(eventDate.slice(5, 7))
-  const isSpring = month <= 7
-  const name = `${isSpring ? 'Vår' : 'Høst'} ${year}`
-  const existing = await d.select().from(seasons).where(eq(seasons.name, name)).limit(1)
+  const existing = await d
+    .select({ id: seasons.id })
+    .from(seasons)
+    .where(and(lte(seasons.startsOn, eventDate), gte(seasons.endsOn, eventDate)))
+    .orderBy(asc(seasons.startsOn))
+    .limit(1)
   if (existing[0]) return existing[0].id
   const id = newId()
-  await d.insert(seasons).values({
-    id,
-    name,
-    startsOn: isSpring ? `${year}-01-01` : `${year}-08-01`,
-    endsOn: isSpring ? `${year}-07-31` : `${year}-12-31`,
-  })
+  await d.insert(seasons).values({ id, ...seasonForDate(eventDate) })
   return id
 }
 
@@ -259,7 +295,7 @@ export const updateProject = createServerFn({ method: 'POST' })
     z.object({
       id: z.string(),
       name: z.string().min(1).optional(),
-      kind: z.enum(['konsert', 'konkurranse', 'seminar', 'annet']).optional(),
+      kind: z.enum(PROJECT_KINDS).optional(),
       eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       venue: z.string().nullable().optional(),
       description: z.string().nullable().optional(),
@@ -275,7 +311,11 @@ export const updateProject = createServerFn({ method: 'POST' })
       .set({
         ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
         ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
-        ...(patch.eventDate !== undefined ? { eventDate: patch.eventDate } : {}),
+        // Ny dato ⇒ ny sesong. Uten dette ble et prosjekt som flyttes over
+        // vår/høst-grensen stående i den gamle sesongen for godt.
+        ...(patch.eventDate !== undefined
+          ? { eventDate: patch.eventDate, seasonId: await findOrCreateSeason(d, patch.eventDate) }
+          : {}),
         ...(patch.venue !== undefined ? { venue: patch.venue?.trim() || null } : {}),
         ...(patch.description !== undefined ? { description: patch.description?.trim() || null } : {}),
         ...(patch.isPublished !== undefined ? { isPublished: patch.isPublished } : {}),
