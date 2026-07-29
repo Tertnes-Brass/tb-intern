@@ -2,6 +2,15 @@ import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { toast, toastError } from '../../components/toast'
 import { Avatar, Button, Field, Kicker, Modal, Stamp } from '../../components/ui'
+import {
+  type InviteDelivery,
+  MAX_INVITE_PARTS,
+  addInvitePart,
+  inviteDeliveryMessage,
+  invitePayloadSchema,
+  orderPartsWithPrimary,
+  removeInvitePart,
+} from '../../lib/invitation'
 import { SECTION_LABELS, SECTION_ORDER } from '../../lib/taxonomy'
 import {
   inviteMember,
@@ -110,7 +119,10 @@ function MembersPage() {
             {data.invites.map((inv) => (
               <li key={inv.email} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-3 sm:px-5">
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[0.92rem] font-semibold text-ink">{inv.email}</span>
+                  <span className="block truncate text-[0.92rem] font-semibold text-ink">{inv.name ?? inv.email}</span>
+                  {inv.name && (
+                    <span className="block truncate font-mono text-[0.64rem] text-ink-faint">{inv.email}</span>
+                  )}
                   <span className="block font-mono text-[0.64rem] uppercase tracking-[0.1em] text-ink-faint">
                     {inv.roleName}
                     {inv.partNames.length > 0 ? ` · ${inv.partNames.join(' · ')}` : ''}
@@ -432,6 +444,15 @@ function LeaderModal({
   )
 }
 
+/** Kvittering etter en lagret invitasjon — beskriver hva som FAKTISK skjedde. */
+type InviteReceipt = {
+  email: string
+  name: string | null
+  roleName: string
+  partNames: string[]
+  delivery: InviteDelivery
+}
+
 function InviteModal({
   open,
   onClose,
@@ -441,38 +462,85 @@ function InviteModal({
 }: {
   open: boolean
   onClose: () => void
-  allParts: Array<{ id: string; nameNo: string }>
-  allRoles: Array<{ id: string; name: string }>
+  allParts: Data['allParts']
+  allRoles: Data['allRoles']
   onInvited: () => void
 }) {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [roleId, setRoleId] = useState('member')
-  const [partId, setPartId] = useState('')
+  // Rekkefølgen bærer hovedstemmen: index 0 er primær, som i `user_parts`.
+  const [partIds, setPartIds] = useState<string[]>([])
+  const [sendInvite, setSendInvite] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [receipt, setReceipt] = useState<InviteReceipt | null>(null)
+
+  const partById = new Map(allParts.map((p) => [p.id, p]))
+  const chosen = partIds.flatMap((id) => {
+    const part = partById.get(id)
+    return part ? [part] : []
+  })
+  const atCap = partIds.length >= MAX_INVITE_PARTS
+
+  // Grupper stemmene i seksjoner: 21 like linjer i en <select> er uleselig på
+  // telefon, mens <optgroup> gir telefonens egen velger tydelige overskrifter.
+  const sectionLabels: Record<string, string> = { ...SECTION_LABELS }
+  const knownSections: string[] = [...SECTION_ORDER]
+  const bySection = new Map<string, Data['allParts']>()
+  for (const part of allParts) {
+    const list = bySection.get(part.section) ?? []
+    list.push(part)
+    bySection.set(part.section, list)
+  }
+  const availableGroups = [
+    ...knownSections.filter((key) => bySection.has(key)),
+    // Seksjoner som er lagt til utenfor standardbesetningen havner sist.
+    ...[...bySection.keys()].filter((key) => !knownSections.includes(key)),
+  ]
+    .map((key) => ({ key, parts: (bySection.get(key) ?? []).filter((p) => !partIds.includes(p.id)) }))
+    .filter((group) => group.parts.length > 0)
+
+  const clearForm = () => {
+    setEmail('')
+    setName('')
+    setRoleId('member')
+    setPartIds([])
+    setReceipt(null)
+  }
+
+  const close = () => {
+    clearForm()
+    onClose()
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email.trim()) {
-      toast('Skriv inn en e-post', 'error')
+    // Samme skjema som serveren bruker — feilmeldingene blir dermed identiske.
+    const parsed = invitePayloadSchema.safeParse({
+      email,
+      name,
+      roleId,
+      partIds,
+      primaryPartId: partIds[0],
+      sendEmail: sendInvite,
+    })
+    if (!parsed.success) {
+      toast(parsed.error.issues[0]?.message ?? 'Sjekk feltene', 'error')
       return
     }
     setSaving(true)
     try {
-      const res = await inviteMember({
-        data: { email: email.trim(), name: name.trim() || undefined, roleId, partIds: partId ? [partId] : [] },
+      const res = await inviteMember({ data: parsed.data })
+      const { message, kind } = inviteDeliveryMessage(res.delivery, parsed.data.email)
+      toast(message, kind)
+      setReceipt({
+        email: parsed.data.email,
+        name: parsed.data.name ?? null,
+        roleName: allRoles.find((r) => r.id === roleId)?.name ?? roleId,
+        partNames: parsed.data.partIds.map((id) => partById.get(id)?.nameNo ?? id),
+        delivery: res.delivery,
       })
-      toast(
-        res.emailSent
-          ? `Invitasjon sendt til ${email}`
-          : `${email} er invitert — be dem logge inn på noter.tertnesbrass.com`,
-      )
-      setEmail('')
-      setName('')
-      setPartId('')
-      setRoleId('member')
       onInvited()
-      onClose()
     } catch (err) {
       toastError(err)
     } finally {
@@ -480,58 +548,192 @@ function InviteModal({
     }
   }
 
+  if (receipt) {
+    const { message, kind } = inviteDeliveryMessage(receipt.delivery, receipt.email)
+    return (
+      <Modal open={open} onClose={close} title="Invitasjonen er lagret" kicker="Besetningen" mobileFull>
+        <div className="space-y-4">
+          <div
+            className={`rounded-xl border px-4 py-4 ${
+              kind === 'error' ? 'border-danger/40 bg-danger/5' : 'border-line bg-paper-sunken/50'
+            }`}
+          >
+            <p className="font-mono text-[0.62rem] uppercase tracking-[0.12em] text-ink-faint">
+              Hva skjedde med e-posten
+            </p>
+            <p className="mt-1.5 text-sm leading-relaxed text-ink">{message}</p>
+            {receipt.delivery === 'logged' && (
+              <p className="mt-2 text-xs leading-relaxed text-ink-soft">
+                Innholdet ble bare skrevet til serverloggen fordi e-postbindingen ikke er tilgjengelig i dette miljøet.
+              </p>
+            )}
+          </div>
+          <div className="rounded-xl border border-line px-4 py-3">
+            <p className="truncate text-sm font-semibold text-ink">{receipt.name ?? receipt.email}</p>
+            {receipt.name && <p className="truncate font-mono text-[0.64rem] text-ink-faint">{receipt.email}</p>}
+            <p className="mt-1.5 font-mono text-[0.64rem] uppercase tracking-[0.1em] text-ink-faint">
+              {receipt.roleName}
+              {receipt.partNames.length > 0 ? ` · ${receipt.partNames.join(' · ')}` : ' · ingen stemme'}
+            </p>
+            <p className="mt-2 text-xs leading-relaxed text-ink-soft">
+              Navn, rolle og stemmer settes på kontoen ved første innlogging. Medlemmet kan selv oppdatere navn og
+              telefon under «Min profil».
+            </p>
+          </div>
+          <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+            <Button type="button" variant="ghost" onClick={clearForm} className="min-h-[44px] w-full sm:w-auto">
+              Inviter en til
+            </Button>
+            <Button type="button" variant="primary" onClick={close} className="min-h-[44px] w-full sm:w-auto">
+              Ferdig
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    )
+  }
+
   return (
-    <Modal open={open} onClose={onClose} title="Inviter medlem" kicker="Besetningen">
+    <Modal open={open} onClose={close} title="Inviter medlem" kicker="Besetningen" mobileFull>
       <form onSubmit={submit} className="space-y-4">
         <Field label="E-post *" hint="Personen logger inn med denne adressen (e-postkode, lenke eller passord)">
           <input
             type="email"
-            className="field-input"
+            className="field-input min-h-[44px]"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="navn@example.com"
             autoComplete="email"
+            inputMode="email"
+            enterKeyHint="next"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
             autoFocus
           />
         </Field>
-        <Field label="Navn">
+        <Field label="Navn" hint="Valgfritt. Settes på kontoen ved første innlogging – medlemmet kan endre det selv.">
           <input
-            className="field-input"
+            className="field-input min-h-[44px]"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Ola Nordmann"
+            autoComplete="name"
+            autoCapitalize="words"
+            enterKeyHint="next"
           />
         </Field>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Rolle">
-            <select className="field-input" value={roleId} onChange={(e) => setRoleId(e.target.value)}>
-              {allRoles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
+        <Field label="Rolle" hint="Bestemmer tilgangene. Kan endres senere i medlemslista.">
+          <select
+            className="field-input min-h-[44px]"
+            value={roleId}
+            onChange={(e) => setRoleId(e.target.value)}
+          >
+            {allRoles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <div>
+          <div className="mb-1.5 flex items-baseline justify-between gap-2">
+            <span className="text-[0.8rem] font-medium text-ink-soft">Stemmer</span>
+            <span className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-faint">
+              {partIds.length}/{MAX_INVITE_PARTS}
+            </span>
+          </div>
+          {chosen.length > 0 ? (
+            <ul className="mb-2 divide-y divide-[var(--line)] rounded-xl border border-line">
+              {chosen.map((part, i) => (
+                <li key={part.id} className="flex items-center gap-1 px-2">
+                  <label className="flex min-h-[44px] flex-1 cursor-pointer items-center gap-2.5 py-1.5">
+                    <input
+                      type="radio"
+                      name="invite-primary-part"
+                      checked={i === 0}
+                      onChange={() => setPartIds(orderPartsWithPrimary(partIds, part.id))}
+                      className="h-4 w-4 shrink-0 cursor-pointer accent-[var(--brass)]"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-ink">{part.nameNo}</span>
+                      <span className="block font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-faint">
+                        {sectionLabels[part.section] ?? 'Annen seksjon'}
+                      </span>
+                    </span>
+                    {i === 0 && <Stamp tone="brass">Hovedstemme</Stamp>}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setPartIds(removeInvitePart(partIds, part.id))}
+                    aria-label={`Fjern ${part.nameNo}`}
+                    className="grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-lg text-ink-faint transition-colors hover:bg-paper-sunken hover:text-danger"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden>
+                      <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </li>
               ))}
-            </select>
-          </Field>
-          <Field label="Stemme">
-            <select className="field-input" value={partId} onChange={(e) => setPartId(e.target.value)}>
-              <option value="">Ingen / settes senere</option>
-              {allParts.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nameNo}
-                </option>
-              ))}
-            </select>
-          </Field>
+            </ul>
+          ) : (
+            <p className="mb-2 rounded-xl border border-dashed border-line px-4 py-3 text-xs leading-relaxed text-ink-soft">
+              Ingen stemme valgt. Det kan settes senere, men da havner medlemmet under «Stab og uten stemme» — og får
+              ingen stemmefiler.
+            </p>
+          )}
+          <select
+            className="field-input min-h-[44px]"
+            value=""
+            disabled={atCap}
+            onChange={(e) => setPartIds(addInvitePart(partIds, e.target.value))}
+          >
+            <option value="">
+              {atCap
+                ? `Maks ${MAX_INVITE_PARTS} stemmer er valgt`
+                : chosen.length > 0
+                  ? 'Legg til én stemme til…'
+                  : 'Velg stemme…'}
+            </option>
+            {availableGroups.map((group) => (
+              <optgroup key={group.key} label={sectionLabels[group.key] ?? 'Annen seksjon'}>
+                {group.parts.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.parentId ? `↳ ${p.nameNo}` : p.nameNo}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-ink-faint">
+            Seksjon velges ikke separat: hovedstemmen avgjør hvilken seksjon medlemmet vises i, og stemmene styrer
+            hvilke filer hen får.
+          </span>
         </div>
+
+        <label className="flex min-h-[44px] cursor-pointer items-start gap-3 rounded-xl border border-line px-4 py-3">
+          <input
+            type="checkbox"
+            checked={sendInvite}
+            onChange={(e) => setSendInvite(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[var(--brass)]"
+          />
+          <span>
+            <span className="block text-sm font-medium text-ink">Send invitasjon på e-post</span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-ink-soft">
+              Sender en velkomst med innloggingslenke som er gyldig i 30 minutter. Du får vite om e-posten faktisk gikk
+              ut — den er ikke aktivert i alle miljøer.
+            </span>
+          </span>
+        </label>
+
         <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
-          <Button type="button" variant="ghost" onClick={onClose} className="w-full sm:w-auto">
+          <Button type="button" variant="ghost" onClick={close} className="min-h-[44px] w-full sm:w-auto">
             Avbryt
           </Button>
-          <Button type="submit" variant="primary" loading={saving} className="w-full sm:w-auto">
-            Inviter
+          <Button type="submit" variant="primary" loading={saving} className="min-h-[44px] w-full sm:w-auto">
+            {sendInvite ? 'Inviter og send e-post' : 'Inviter uten e-post'}
           </Button>
         </div>
       </form>

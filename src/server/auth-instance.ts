@@ -9,7 +9,7 @@ import { db, schema } from '../db'
 import { invitations, memberProfiles, user, userParts } from '../db/schema'
 import { memberNameSchema, PASSWORD_MIN_LENGTH } from '../lib/profile'
 import { writeAudit } from './audit'
-import { magicLinkEmail, resetPasswordEmail, sendEmail, verificationCodeEmail } from './email'
+import { inviteEmail, magicLinkEmail, resetPasswordEmail, sendEmail, verificationCodeEmail } from './email'
 
 const MAGIC_LINK_EXPIRY = 60 * 30 // 30 min
 
@@ -20,13 +20,21 @@ const MAGIC_LINK_EXPIRY = 60 * 30 // 30 min
  *  - null → ikke tillatt (create-hooken avviser innlogging)
  * E-post normaliseres til små bokstaver begge steder.
  */
-type Access = { roleId: string; partIds: string[]; inviteEmail: string | null; name: string | null }
+type Access = {
+  roleId: string
+  partIds: string[]
+  inviteEmail: string | null
+  name: string | null
+  // Invitasjon som ennå ikke er tatt i bruk ⇒ e-posten skal ønske velkommen,
+  // ikke bare tilby innlogging. Rent kosmetisk; gaten bryr seg ikke.
+  pendingInvite: boolean
+}
 
 async function resolveAccess(email: string): Promise<Access | null> {
   const normalized = email.trim().toLowerCase()
   const adminEmail = env.ADMIN_EMAIL?.trim().toLowerCase()
   if (adminEmail && normalized === adminEmail) {
-    return { roleId: 'admin', partIds: [], inviteEmail: null, name: null }
+    return { roleId: 'admin', partIds: [], inviteEmail: null, name: null, pendingInvite: false }
   }
   const inv = await db()
     .select({
@@ -34,6 +42,7 @@ async function resolveAccess(email: string): Promise<Access | null> {
       name: invitations.name,
       roleId: invitations.roleId,
       partIds: invitations.partIds,
+      acceptedAt: invitations.acceptedAt,
     })
     .from(invitations)
     .where(eq(invitations.email, normalized))
@@ -44,6 +53,7 @@ async function resolveAccess(email: string): Promise<Access | null> {
     partIds: JSON.parse(inv[0].partIds) as string[],
     inviteEmail: inv[0].email,
     name: inv[0].name,
+    pendingInvite: inv[0].acceptedAt == null,
   }
 }
 
@@ -224,8 +234,11 @@ function buildAuth() {
         expiresIn: MAGIC_LINK_EXPIRY,
         storeToken: 'hashed',
         sendMagicLink: async ({ email, url }) => {
-          if (!(await resolveAccess(email))) return
-          const { subject, html, text } = magicLinkEmail(url)
+          const access = await resolveAccess(email)
+          if (!access) return
+          // Første lenke på en ubrukt invitasjon er en invitasjon — bruk
+          // velkomstteksten. Ellers er det en helt vanlig innloggingslenke.
+          const { subject, html, text } = access.pendingInvite ? inviteEmail(url) : magicLinkEmail(url)
           await sendEmail({ to: email, subject, html, text }).catch(() => {})
         },
       }),
