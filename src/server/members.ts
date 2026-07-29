@@ -14,10 +14,12 @@ import {
   user,
   userParts,
 } from '../db/schema'
+import { type InviteDelivery, invitePayloadSchema, orderPartsWithPrimary } from '../lib/invitation'
 import { memberNameSchema, normalizePhone, phoneSchema } from '../lib/profile'
 import { canManageMemberParts, hasPermission, requireMe, requirePermission } from './access'
 import { auditInsert } from './audit'
 import { getAuth } from './auth-instance'
+import { takeEmailOutcome } from './email'
 import { leaderCanAssign } from './parts-tree'
 
 /** Sjekker at rolle + stemmer faktisk finnes (partIds lagres uten FK i JSON). */
@@ -126,6 +128,7 @@ export const listMembers = createServerFn().handler(async () => {
     ? await d
         .select({
           email: invitations.email,
+          name: invitations.name,
           roleId: invitations.roleId,
           roleName: roles.name,
           partIds: invitations.partIds,
@@ -150,7 +153,9 @@ export const listMembers = createServerFn().handler(async () => {
       .filter((i) => !i.acceptedAt)
       .map((i) => ({
         email: i.email,
+        name: i.name,
         roleName: i.roleName,
+        // Første stemme er hovedstemmen (samme konvensjon som `user_parts`).
         partNames: (JSON.parse(i.partIds) as string[])
           .map((id) => allParts.find((p) => p.id === id)?.nameNo ?? id),
         createdAt: i.createdAt.getTime(),
@@ -341,57 +346,66 @@ export const sendMemberPasswordReset = createServerFn({ method: 'POST' })
   })
 
 export const inviteMember = createServerFn({ method: 'POST' })
-  .validator(
-    z.object({
-      email: z.string().email('Ugyldig e-post'),
-      name: z.string().optional(),
-      roleId: z.string(),
-      partIds: z.array(z.string()).max(4).default([]),
-    }),
-  )
+  .validator(invitePayloadSchema)
   .handler(async ({ data }) => {
     const me = await requirePermission('members.manage')
     await assertValidRoleAndParts(data.roleId, data.partIds)
-    const email = data.email.trim().toLowerCase()
-    const name = data.name?.trim() || null
+    // E-posten er normalisert av skjemaet (trim + små bokstaver).
+    const email = data.email
+    const name = data.name ?? null
+    // Hovedstemmen lagres som første element — databasehooken som oppretter
+    // kontoen setter `isPrimary: i === 0` på samme måte som `updateMemberParts`.
+    const partIds = orderPartsWithPrimary(data.partIds, data.primaryPartId)
     const d = db()
+
+    // En eksisterende konto plukker aldri opp invitasjonen igjen (create-hooken
+    // kjører bare én gang), så en «invitasjon» ville sett ut som den virket uten
+    // å endre rolle eller stemmer. Si det i stedet.
+    const existing = await d.select({ id: user.id }).from(user).where(eq(user.email, email)).limit(1)
+    if (existing[0]) {
+      throw new Error('Adressen har allerede en konto — endre rolle og stemmer i medlemslista i stedet')
+    }
+
     const upsert = d
       .insert(invitations)
       .values({
         email,
         name,
         roleId: data.roleId,
-        partIds: JSON.stringify(data.partIds),
+        partIds: JSON.stringify(partIds),
         invitedBy: me.id,
         createdAt: new Date(),
       })
       .onConflictDoUpdate({
         target: invitations.email,
-        set: { name, roleId: data.roleId, partIds: JSON.stringify(data.partIds), acceptedAt: null },
+        set: { name, roleId: data.roleId, partIds: JSON.stringify(partIds), acceptedAt: null },
       })
     await d.batch([
       upsert,
       auditInsert(d, {
         action: 'member.invited',
         actorUserId: me.id,
-        details: { targetEmail: email, roleId: data.roleId, partIds: data.partIds },
+        details: { targetEmail: email, roleId: data.roleId, partIds, emailRequested: data.sendEmail },
       }),
     ])
 
-    // Prøv å sende innloggingslenke (magisk lenke). Feiler stille hvis e-post
-    // ikke er aktivert ennå — invitasjonen står uansett, og medlemmet kan logge
-    // inn selv på noter.tertnesbrass.com med e-posten sin.
-    let emailSent = false
-    try {
-      await getAuth().api.signInMagicLink({
-        body: { email, callbackURL: '/' },
-        headers: getRequest().headers,
-      })
-      emailSent = true
-    } catch {
-      emailSent = false
+    // E-post er et eksplisitt valg. Invitasjonen står uansett, og medlemmet kan
+    // logge inn selv på noter.tertnesbrass.com med e-posten sin.
+    let delivery: InviteDelivery = 'skipped'
+    if (data.sendEmail) {
+      try {
+        await getAuth().api.signInMagicLink({
+          body: { email, callbackURL: '/' },
+          headers: getRequest().headers,
+        })
+        // `sendEmail` degraderer til konsoll-logg uten å kaste, så et vellykket
+        // API-kall beviser INGENTING. Hent det faktiske utfallet i stedet.
+        delivery = takeEmailOutcome(email) ?? 'failed'
+      } catch {
+        delivery = 'failed'
+      }
     }
-    return { ok: true, emailSent }
+    return { ok: true, delivery }
   })
 
 export const revokeInvitation = createServerFn({ method: 'POST' })

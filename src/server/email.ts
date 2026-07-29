@@ -16,15 +16,47 @@ const FROM = { email: 'noreply@tertnesbrass.com', name: 'Tertnes Brass Notearkiv
 
 type SendArgs = { to: string; subject: string; html: string; text: string }
 
+/** `sent` = bindingen tok imot meldingen. `logged` = den ble bare skrevet til konsollen. */
+export type EmailOutcome = 'sent' | 'logged'
+
+/**
+ * Siste leveringsutfall per adresse. Nødvendig fordi `sendEmail` bevisst
+ * degraderer til konsoll-logg uten å kaste, OG fordi better-auth eier kallet som
+ * sender magiske lenker — utfallet kan derfor ikke returneres gjennom
+ * kallkjeden. Invitasjonsflyten henter det ut med `takeEmailOutcome` rett etter
+ * sendingen, så UI-et aldri påstår at en e-post gikk ut når den ikke gjorde det.
+ */
+const outcomes = new Map<string, EmailOutcome>()
+// Ingen leser utfallet for vanlige innlogginger; hold kartet lite i en langlevd isolate.
+const MAX_TRACKED_OUTCOMES = 20
+
+function recordOutcome(to: string, outcome: EmailOutcome): void {
+  if (outcomes.size >= MAX_TRACKED_OUTCOMES) {
+    const oldest = outcomes.keys().next().value
+    if (oldest !== undefined) outcomes.delete(oldest)
+  }
+  outcomes.set(to.trim().toLowerCase(), outcome)
+}
+
+/** Leser og forbruker utfallet. `null` = ingen sending ble forsøkt for adressen. */
+export function takeEmailOutcome(to: string): EmailOutcome | null {
+  const key = to.trim().toLowerCase()
+  const outcome = outcomes.get(key) ?? null
+  outcomes.delete(key)
+  return outcome
+}
+
 export async function sendEmail({ to, subject, html, text }: SendArgs): Promise<{ ok: boolean; fallback?: boolean }> {
   const binding = (env as unknown as { EMAIL?: { send: (m: unknown) => Promise<unknown> } }).EMAIL
   if (!binding || typeof binding.send !== 'function') {
     // Binding mangler (lokal dev): logg innholdet så lenker kan testes.
     console.log(`\n[e-post:fallback] Til: ${to}\nEmne: ${subject}\n${text}\n`)
+    recordOutcome(to, 'logged')
     return { ok: false, fallback: true }
   }
   try {
     await binding.send({ to, from: FROM, subject, html, text })
+    recordOutcome(to, 'sent')
     return { ok: true }
   } catch (err) {
     // Binding finnes, men sending feilet (f.eks. domenet ikke onboardet ennå).
@@ -32,6 +64,7 @@ export async function sendEmail({ to, subject, html, text }: SendArgs): Promise<
     // for å bootstrappe første admin før e-post er ferdig satt opp.
     console.error('[e-post] sending feilet, logger innhold som nødløsning:', err)
     console.log(`\n[e-post:fallback] Til: ${to}\nEmne: ${subject}\n${text}\n`)
+    recordOutcome(to, 'logged')
     return { ok: false }
   }
 }
