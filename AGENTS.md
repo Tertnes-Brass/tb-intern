@@ -20,6 +20,23 @@ Notearkiv for brass band (Tertnes Brass). TanStack Start (React) på Cloudflare 
 - E-post: `src/server/email.ts` via Cloudflare `EMAIL`-binding; faller tilbake til konsoll-logg i dev / ved feil.
 - Demodata: `src/server/seed.ts`, kun via dev-ruten `/api/dev-seed` (gated på `import.meta.env.DEV`).
 
+## Nye features = eget app-område
+
+`docs/designprinsipper.md` er normativt: hvert større område er en liten app med
+eget inngangspunkt, én primærbruker, én primærhandling og egen oversikt — men
+felles navigasjon, auth, roller, designsystem og datamodell. Ikke samle nye
+funksjoner i én stor administrasjonsside, og ikke parker dem under
+`/innstillinger` fordi de føles administrative.
+
+Besvar disse sju punktene i saken eller PR-en **før** du skriver koden: **navn ·
+formål · primærbruker · primærhandling · plass i navigasjonen · rettigheten som
+gater det** (`PERMISSION_CATALOG` i `src/server/settings.ts`, håndhevet
+server-side) **· eget rutenavnerom?** Toppmenyen i `src/components/Shell.tsx`
+har begrenset plass (mobilstripen scroller alt ved seks oppføringer) — se §6 i
+dokumentet før du legger til en ny.
+
+Tilgangsstyring: `docs/tilgangsstyring.md`. Reglene der er ikke til forhandling.
+
 ## Konvensjoner
 
 - UI-tekst på norsk (bokmål); kodeidentifikatorer på engelsk
