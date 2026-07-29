@@ -1,15 +1,42 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { ProjectFormModal } from '../../components/ProjectForm'
-import { Button, EmptyState, Kicker, Stamp } from '../../components/ui'
+import { Button, EmptyState, Field, Kicker, Stamp } from '../../components/ui'
 import { formatDate, relativeDays } from '../../lib/format'
+import {
+  DEFAULT_PROJECT_SORT,
+  PROJECT_KINDS,
+  PROJECT_SORTS,
+  PROJECT_STATUSES,
+  type ProjectKind,
+  type ProjectSort,
+  type ProjectStatus,
+  isUpcoming,
+} from '../../server/project-list'
 import { listProjects } from '../../server/projects'
+
+type Search = { kind?: ProjectKind; status?: ProjectStatus; sort?: ProjectSort }
+
+/** Ukjent verdi i URL-en faller stille tilbake til «ingen valg» i stedet for å kaste. */
+function pick<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : undefined
+}
 
 export const Route = createFileRoute('/prosjekter/')({
   beforeLoad: ({ context }) => {
     if (!context.me) throw redirect({ to: '/login' })
   },
-  loader: () => listProjects(),
+  validateSearch: (search: Record<string, unknown>): Search => {
+    const sort = pick(search.sort, PROJECT_SORTS)
+    return {
+      kind: pick(search.kind, PROJECT_KINDS),
+      status: pick(search.status, PROJECT_STATUSES),
+      // Standardsorteringen holdes ute av URL-en, så en uendret visning har ren adresse.
+      sort: sort === DEFAULT_PROJECT_SORT ? undefined : sort,
+    }
+  },
+  loaderDeps: ({ search }) => search,
+  loader: ({ deps }) => listProjects({ data: deps }),
   component: ProjectsPage,
 })
 
@@ -20,19 +47,29 @@ const KIND_LABEL: Record<string, string> = {
   annet: 'Annet',
 }
 
+const STATUS_LABEL: Record<ProjectStatus, string> = {
+  kommende: 'Kommende',
+  tidligere: 'Tidligere',
+}
+
+const SORT_LABEL: Record<ProjectSort, string> = {
+  standard: 'Kommende først',
+  'dato-stigende': 'Dato — eldste først',
+  'dato-synkende': 'Dato — nyeste først',
+}
+
 function ProjectsPage() {
   const data = Route.useLoaderData()
+  const search = Route.useSearch()
+  const navigate = Route.useNavigate()
   const router = useRouter()
   const [creating, setCreating] = useState(false)
 
   const today = new Date().toISOString().slice(0, 10)
-  const seasons = new Map<string, typeof data.projects>()
-  for (const p of data.projects) {
-    const key = p.seasonName ?? 'Uten sesong'
-    const list = seasons.get(key) ?? []
-    list.push(p)
-    seasons.set(key, list)
-  }
+  const hasFilter = Boolean(search.kind || search.status || search.sort)
+  // Filtrene ligger i URL-en, så en visning kan deles og bokmerkes.
+  const setFilter = (patch: Partial<Search>) => navigate({ search: { ...search, ...patch }, replace: true })
+  const clearFilter = () => navigate({ search: {}, replace: true })
 
   return (
     <div className="space-y-9">
@@ -48,31 +85,104 @@ function ProjectsPage() {
         )}
       </header>
 
-      {data.projects.length === 0 ? (
+      {/* Skjules bare når arkivet faktisk er tomt — ikke når filteret er det */}
+      {(data.count > 0 || hasFilter) && (
+        <div className="rise space-y-3" style={{ animationDelay: '80ms' }}>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Field label="Prosjekttype">
+              <select
+                className="field-input"
+                value={search.kind ?? ''}
+                onChange={(e) => setFilter({ kind: pick(e.target.value, PROJECT_KINDS) })}
+              >
+                <option value="">Alle typer</option>
+                {PROJECT_KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {KIND_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Periode">
+              <select
+                className="field-input"
+                value={search.status ?? ''}
+                onChange={(e) => setFilter({ status: pick(e.target.value, PROJECT_STATUSES) })}
+              >
+                <option value="">Alle perioder</option>
+                {PROJECT_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Sortering" className="col-span-2 sm:col-span-1">
+              <select
+                className="field-input"
+                value={search.sort ?? DEFAULT_PROJECT_SORT}
+                onChange={(e) => setFilter({ sort: pick(e.target.value, PROJECT_SORTS) })}
+              >
+                {PROJECT_SORTS.map((s) => (
+                  <option key={s} value={s}>
+                    {SORT_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-mono text-[0.66rem] uppercase tracking-[0.14em] text-ink-faint">
+              {data.count === 1 ? '1 prosjekt' : `${data.count} prosjekter`}
+            </p>
+            {hasFilter && (
+              <Button size="sm" variant="ghost" onClick={clearFilter}>
+                Nullstill
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {data.count === 0 ? (
         <div className="sheet rise">
-          <EmptyState
-            title="Ingen prosjekter ennå"
-            action={
-              data.canManage ? (
-                <Button variant="primary" onClick={() => setCreating(true)}>
-                  Opprett det første
+          {hasFilter ? (
+            <EmptyState
+              title="Ingen prosjekter i dette utvalget"
+              action={
+                <Button variant="secondary" onClick={clearFilter}>
+                  Nullstill filteret
                 </Button>
-              ) : undefined
-            }
-          >
-            Prosjekter samler repertoar, noter og deling for en konsert eller konkurranse.
-          </EmptyState>
+              }
+            >
+              Prøv en annen prosjekttype eller periode.
+            </EmptyState>
+          ) : (
+            <EmptyState
+              title="Ingen prosjekter ennå"
+              action={
+                data.canManage ? (
+                  <Button variant="primary" onClick={() => setCreating(true)}>
+                    Opprett det første
+                  </Button>
+                ) : undefined
+              }
+            >
+              Prosjekter samler repertoar, noter og deling for en konsert eller konkurranse.
+            </EmptyState>
+          )}
         </div>
       ) : (
-        [...seasons.entries()].map(([seasonName, projects], si) => (
-          <section key={seasonName} className="rise" style={{ animationDelay: `${80 + si * 60}ms` }}>
+        data.seasons.map((season, si) => (
+          <section key={season.name} className="rise" style={{ animationDelay: `${140 + si * 60}ms` }}>
             <div className="mb-3 flex items-baseline gap-3">
-              <h2 className="kicker">{seasonName}</h2>
+              <h2 className="kicker">{season.name}</h2>
+              {!season.hasUpcoming && <Stamp>avholdt</Stamp>}
               <div className="staff-rule h-[10px] flex-1 opacity-30" aria-hidden />
             </div>
             <ul className="grid gap-3 sm:grid-cols-2">
-              {projects.map((p) => {
-                const isPast = (p.eventDate ?? '') < today
+              {season.projects.map((p) => {
+                const isPast = !isUpcoming(p.eventDate, today)
                 return (
                   <li key={p.id}>
                     <Link
