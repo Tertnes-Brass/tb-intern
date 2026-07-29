@@ -24,7 +24,8 @@ export type ProjectWorkDetail = {
   note: string | null
   links: Array<{ id: string; kind: string; url: string; label: string | null }>
   partFiles: Array<{ id: string; partId: string | null; partName: string | null; partSort: number; pageCount: number | null }>
-  myFiles: Array<{ id: string; partName: string | null; pageCount: number | null }>
+  // fileName er med for at ZIP-nedlastingen skal kunne beholde filendelsen.
+  myFiles: Array<{ id: string; partName: string | null; fileName: string; pageCount: number | null }>
   scoreFileId: string | null
   audioFiles: Array<{ id: string; label: string | null; fileName: string }>
 }
@@ -93,7 +94,7 @@ export async function assembleRepertoire(
             access.effectivePartIds.includes(f.partId) &&
             memberCanSeeFile(f, access),
         )
-        .map((f) => ({ id: f.id, partName: f.partName, pageCount: f.pageCount })),
+        .map((f) => ({ id: f.id, partName: f.partName, fileName: f.fileName, pageCount: f.pageCount })),
       scoreFileId: score && memberCanAccessFile(score, access) ? score.id : null,
       audioFiles: wf
         .filter((f) => f.kind === 'audio' && memberCanSeeFile(f, access))

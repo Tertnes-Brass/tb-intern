@@ -4,7 +4,9 @@ import { ProjectFormModal } from '../../components/ProjectForm'
 import { RepertoireList } from '../../components/Repertoire'
 import { toast, toastError } from '../../components/toast'
 import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../components/ui'
+import { ZipDownloadButton } from '../../components/ZipDownload'
 import { formatDate, formatDuration, formatWeekday, relativeDays } from '../../lib/format'
+import { zipEntryName } from '../../lib/zip'
 import {
   addWorkToProject,
   deleteProject,
@@ -37,6 +39,16 @@ function ProjectPage() {
   const [pickerOpen, setPickerOpen] = useState(false)
 
   const totalDuration = data.repertoire.reduce((acc, r) => acc + (r.durationSec ?? 0), 0)
+
+  // Egne stemmer for hele prosjektet, i programrekkefølge:
+  // «01 - Where Eagles Sing - 2. kornett.pdf». Serveren har allerede filtrert
+  // myFiles på det medlemmet faktisk har tilgang til.
+  const myProjectFiles = data.repertoire.flatMap((r, i) =>
+    r.myFiles.map((f) => ({
+      fileId: f.id,
+      name: zipEntryName([String(i + 1).padStart(2, '0'), r.title, f.partName], f.fileName),
+    })),
+  )
 
   const togglePublish = async () => {
     setPublishing(true)
@@ -102,11 +114,18 @@ function ProjectPage() {
       <section className="rise" style={{ animationDelay: '100ms' }}>
         <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
           <h2 className="kicker">Program</h2>
-          {data.canManage && (
-            <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
-              + Legg til verk
-            </Button>
-          )}
+          <div className="flex flex-wrap items-start gap-2">
+            <ZipDownloadButton
+              label="Last ned mine stemmer (ZIP)"
+              zipName={`${p.name} — mine stemmer`}
+              files={myProjectFiles}
+            />
+            {data.canManage && (
+              <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
+                + Legg til verk
+              </Button>
+            )}
+          </div>
         </div>
 
         {data.repertoire.length === 0 ? (
