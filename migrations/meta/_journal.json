@@ -50,6 +50,13 @@
       "when": 1785027922613,
       "tag": "0006_profile-auth-audit",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1785420000000,
+      "tag": "0007_score-under-conductor",
+      "breakpoints": true
     }
   ]
 }

@@ -229,8 +229,15 @@ function PartFormModal({
   // Kun rot-stemmer (uten egen forelder) kan være forelder — maks to nivåer.
   // En stemme som selv har understemmer kan ikke gjøres til understemme.
   const hasChildren = !!part && allParts.some((p) => p.parentId === part.id)
-  const parentOptions = allParts.filter((p) => !p.parentId && p.section !== 'score' && p.id !== part?.id)
-  const canHaveParent = !hasChildren && section !== 'score' && parentOptions.length > 0
+  const isScore = part?.id === 'score'
+  const parentOptions = allParts.filter(
+    (p) =>
+      !p.parentId &&
+      p.id !== part?.id &&
+      p.id !== 'score' &&
+      (isScore ? p.id === 'conductor' : p.section !== 'score'),
+  )
+  const canHaveParent = !hasChildren && (section !== 'score' || isScore) && parentOptions.length > 0
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()

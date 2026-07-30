@@ -67,8 +67,11 @@ export const getSettingsData = createServerFn().handler(async () => {
     permsByRole.set(p.roleId, list)
   }
 
+  const partById = new Map(allParts.map((part) => [part.id, part]))
+  const displayParts = buildDisplayOrder(allParts).map((id) => partById.get(id)!)
+
   return {
-    parts: allParts.map((p) => ({
+    parts: displayParts.map((p) => ({
       id: p.id,
       sortOrder: p.sortOrder,
       nameNo: p.nameNo,
@@ -103,8 +106,9 @@ const partInput = z.object({
 })
 
 /**
- * Håndhever stemme-tre-invariantene: maks to nivåer, ingen sykel, og 'score'
- * aldri i treet. `selfId` er null ved opprettelse.
+ * Håndhever stemme-tre-invariantene: maks to nivåer og ingen sykel.
+ * Partitur kan ligge visuelt under Dirigent, men ekskluderes fortsatt fra
+ * tilgangstreet i `parts-tree.ts`. `selfId` er null ved opprettelse.
  */
 async function assertValidParent(
   parentId: string | null | undefined,
@@ -112,7 +116,13 @@ async function assertValidParent(
   section: string,
 ): Promise<void> {
   if (!parentId) return
-  if (section === 'score') throw new Error('Partitur kan ikke ha en forelder-stemme')
+  const isScoreUnderConductor = selfId === 'score' && parentId === 'conductor'
+  if (section === 'score' && !isScoreUnderConductor) {
+    throw new Error('Bare Partitur kan ligge under Dirigent')
+  }
+  if (parentId === 'conductor' && !isScoreUnderConductor) {
+    throw new Error('Bare Partitur kan ligge under Dirigent')
+  }
   if (parentId === 'score') throw new Error('Partitur kan ikke være forelder-stemme')
   if (selfId && parentId === selfId) throw new Error('En stemme kan ikke være sin egen forelder')
   const rows = await db().select({ id: parts.id, parentId: parts.parentId }).from(parts)

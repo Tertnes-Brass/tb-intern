@@ -5,7 +5,8 @@
  * Modell: `parts.parentId` er en nullable self-FK. En forelder-stemme
  * (parentId = null, men har barn) som «Slagverk» dekker understemmene sine
  * (Slagverk 1/2/3 …). Tildeles en bruker en forelder, ekspanderes tilgangen
- * til hele subtreet. Partitur-raden ('score') er aldri del av treet.
+ * til hele subtreet. Partitur-raden ('score') kan være visuelt nøstet under
+ * Dirigent, men er aldri del av tilgangstreet.
  *
  * Brukes som ÉN sannhetskilde for ekspansjon — av effektive stemmer for et
  * medlem, ledelsesomfang for en seksjonsleder, og snapshot av vikar-deling.
@@ -17,7 +18,7 @@ export const MAX_PART_DEPTH = 3
 
 export type PartNode = { id: string; parentId?: string | null }
 
-/** parentId → direkte barn-id-er. Ekskluderer 'score' eksplisitt fra treet. */
+/** parentId → direkte barn-id-er. Ekskluderer 'score' eksplisitt fra tilgangstreet. */
 export function buildChildrenMap(rows: PartNode[]): Map<string, string[]> {
   const map = new Map<string, string[]>()
   for (const r of rows) {

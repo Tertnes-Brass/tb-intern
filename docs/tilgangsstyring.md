@@ -15,15 +15,15 @@ faktisk nedlasting), ikke bare filtrering.
 > applisert `--remote`, og `archive.viewAll` er seedet til `archivist` +
 > `conductor` i prod. Samme dag ble det besluttet å **ikke bygge stemme-treet**:
 > strukturen forblir flat — tilgang på stemme-nivå er godt nok — og
-> `parent_id`-maskineriet ligger dormant.
+> `parent_id` brukes nå til den visuelle koblingen Partitur → Dirigent, men
+> tilgangstreet er fortsatt flatt for instrumentstemmer.
 
 ## 1. Valgt modell
 
 - **Grunnstamme:** én nullable self-FK `parts.parent_id` + ekspansjon ved oppslag
-  i `currentUser()`. Ingen closure-tabell. `parent_id = NULL` på alle eksisterende
-  rader ⇒ ekspansjon = identitet = dagens flate oppførsel inntil noen aktivt
-  bygger et tre. *Besluttet 28. juni 2026: treet bygges ikke — strukturen forblir
-  flat, og maskineriet ligger dormant til et eventuelt fremtidig behov.*
+  i `currentUser()`. Ingen closure-tabell. Instrumentstemmene forblir flate.
+  Partitur kan ligge visuelt under Dirigent, men `score` ekskluderes eksplisitt
+  fra tilgangstreet og styres fortsatt av `scores.view`.
 - **Seksjonsleder:** ny scoped evne `members.manage.section` + scope-tabell
   `section_leaders` + `canManageMemberParts(me, targetUserId, partIds)` med streng
   `⊆`-validering (`.every()`) på HVER innsendt partId.

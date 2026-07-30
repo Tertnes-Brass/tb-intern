@@ -85,16 +85,19 @@ describe('expandPartIds / buildChildrenMap', () => {
     expect(out).not.toContain('e')
   })
 
-  it('partitur (score) er aldri del av treet', () => {
+  it('partitur (score) er aldri del av tilgangstreet, selv som visuelt barn', () => {
     const tree: PartNode[] = [
-      { id: 'score', parentId: null },
+      { id: 'conductor', parentId: null },
+      { id: 'score', parentId: 'conductor' },
       { id: 'percussion', parentId: null },
       { id: 'percussion-1', parentId: 'score' }, // feilkonfig: forsøk på å henge under score
     ]
     const cm = buildChildrenMap(tree)
     expect(expandPartIds(['score'], cm)).toEqual([])
+    expect(expandPartIds(['conductor'], cm)).toEqual(['conductor'])
+    expect(cm.has('conductor')).toBe(false)
     // percussion-1 med parentId='score' skal ikke dukke opp via score
-    expect(buildChildrenMap(tree).has('score')).toBe(false)
+    expect(cm.has('score')).toBe(false)
   })
 
   it('tomt input → tomt output', () => {
@@ -166,6 +169,15 @@ describe('buildDisplayOrder / reorderAfter', () => {
       { id: 'percussion-1', parentId: 'percussion', sortOrder: 30 }, // ligger etter horn i flat sortOrder
     ]
     expect(buildDisplayOrder(detached)).toEqual(['percussion', 'percussion-1', 'horn'])
+  })
+
+  it('viser Partitur rett under Dirigent', () => {
+    const withScoreChild: OrderedPart[] = [
+      { id: 'conductor', parentId: null, sortOrder: 10 },
+      { id: 'horn', parentId: null, sortOrder: 20 },
+      { id: 'score', parentId: 'conductor', sortOrder: 30 },
+    ]
+    expect(buildDisplayOrder(withScoreChild)).toEqual(['conductor', 'score', 'horn'])
   })
 
   it('rot-flytt tar med hele blokken (barna følger)', () => {
