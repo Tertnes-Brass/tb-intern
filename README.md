@@ -83,10 +83,86 @@ før første deploy.
 
 Logg så inn med `ADMIN_EMAIL`-adressen (blir admin automatisk) og inviter resten. Custom domene (`noter.tertnesbrass.com`) som ikke skal være bak Cloudflare Access må ha en egen Access-app med **Bypass / Everyone**, ellers blokkeres besøkende.
 
+## Backup og gjenoppretting
+
+Notearkivet er uerstattelig, så det sikres på flere uavhengige lag:
+
+| Lag | Hva | Hvor |
+|---|---|---|
+| D1 PITR | Innebygd point-in-time recovery, 30 dager | Cloudflare |
+| Ukentlig SQL-dump | Cron skriver hele databasen som SQL til R2 | R2 `backups/` (8 siste uker) |
+| Off-site | Kopi av notefiler + dumper til uavhengig lokasjon | Backblaze B2 / lokal disk |
+
+### Automatisk ukentlig dump (cron)
+
+En [Cron Trigger](wrangler.jsonc) (`0 4 * * 0` — søndag 04:00 UTC) kaller `scheduled()`-handleren i [src/server.ts](src/server.ts), som kjører [`runBackup()`](src/server/backup.ts). Den dumper hele D1-en (skjema + data, samme format som `sqlite3 .dump`) til R2 under `backups/tb-notearkiv-<ISO>.sql` og roterer ut alt eldre enn de 8 nyeste. Dumpen er selvstendig — den bruker kun `DB`- og `FILES`-bindingene, ingen ekstra secrets.
+
+Resultatet logges til Workers-observability: `[backup] OK trigger=… key=… tabeller=… rader=… bytes=…`.
+
+Test cron-handleren lokalt (vite-dev forwarder `/cdn-cgi/handler/*` til Worker-en):
+
+```bash
+pnpm dev                                                   # i ett terminalvindu
+curl "http://localhost:3000/cdn-cgi/handler/scheduled?cron=0+4+*+*+0"
+# → se "[backup] OK …" i dev-loggen; dumpen havner i lokal R2 (.wrangler/state)
+```
+
+### Manuell dump
+
+```bash
+pnpm backup:export        # wrangler d1 export tb-notearkiv --remote → backups/manual-<dato>.sql
+```
+
+### Off-site-kopi (rclone)
+
+[scripts/offsite-sync.sh](scripts/offsite-sync.sh) speiler R2 til en uavhengig lokasjon med [rclone](https://rclone.org): SQL-dumpene kopieres additivt (beholdes for alltid), notefilene speiles. Engangsoppsett av R2- og B2-/disk-remotes er dokumentert øverst i scriptet. Kjør manuelt eller planlagt:
+
+```bash
+brew install rclone                                        # + rclone config (se scriptet)
+OFFSITE="offsite:min-b2-bucket" pnpm backup:offsite        # eller OFFSITE=/Volumes/Backup/...
+```
+
+#### Automatisk off-site via GitHub Actions
+
+[.github/workflows/offsite-backup.yml](.github/workflows/offsite-backup.yml) kjører off-site-synken ukentlig (søndag 05:00 UTC, én time etter Worker-cron-en) og kjører **restore-test på den nyeste dumpen** etterpå — så vi får bekreftet hver uke at backupene lar seg gjenopprette. Workflowen feiler synlig hvis noe er galt.
+
+For å skru den på, legg inn disse repo-secretene (Settings → Secrets and variables → Actions):
+
+| Secret | Hva |
+|---|---|
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | R2 S3 API-token (R2 → Manage R2 API Tokens), lesetilgang til bøtta |
+| `R2_ACCOUNT_ID` | Cloudflare account-id (brukes i R2-endepunktet) |
+| `B2_KEY_ID`, `B2_APP_KEY` | Backblaze B2 application key |
+| `B2_BUCKET` | Navn på B2-bøtta dumper/filer speiles til |
+
+rclone konfigureres fra disse via miljøvariabler i selve workflowen — ingen `rclone config` trengs i CI. Kjør den manuelt fra Actions-fanen («Run workflow») for å teste oppsettet. Alternativt kan `scripts/offsite-sync.sh` planlegges via `launchd`/`cron` på en alltid-på maskin.
+
+Synken er **inkrementell** — rclone overfører kun nye/endrede filer, så den ukentlige jobben er rask uansett arkivstørrelse. Skulle arkivet en gang trenge full re-seeding av mange GB (f.eks. etter migrering av hele notearkivet), kjør `scripts/offsite-sync.sh` én gang lokalt i stedet — Actions-jobber har 6 timers grense.
+
+> **NB:** GitHub deaktiverer scheduled workflows automatisk etter 60 dager uten aktivitet i repoet. Får du e-post om «scheduled workflow disabled», re-aktiver den fra Actions-fanen.
+
+### Restore-test — *en utestet backup er bare et håp*
+
+[scripts/restore-test.sh](scripts/restore-test.sh) gjenoppretter en dump til en **fersk, tom SQLite-database**, kjører `integrity_check` + `foreign_key_check`, og skriver ut tabeller med radtall (og sjekker at kjernetabellene finnes):
+
+```bash
+scripts/restore-test.sh backups/manual-2026-06-21T0400Z.sql      # en lokal dumpfil
+scripts/restore-test.sh --r2-key backups/tb-notearkiv-2026-06-21T0400Z.sql --remote   # hent fra prod-R2
+```
+
+Faktisk gjenoppretting til en ny D1 (ved katastrofe):
+
+```bash
+wrangler d1 create tb-notearkiv                                  # ny/tom database
+wrangler r2 object get tb-notearkiv-files/backups/<dump>.sql --file restore.sql --remote
+wrangler d1 execute tb-notearkiv --remote --file restore.sql     # last inn dumpen
+# verifiser, og oppdater database_id i wrangler.jsonc om id-en endret seg
+```
+
 ## Veikart (kort)
 
-- **Fase 1 (gjort)** — better-auth (e-postkode + valgfritt passord/magisk lenke, invitasjonsbasert), e-post via Cloudflare, prod på noter.tertnesbrass.com
-- **Neste** — passkey/sterk autentisering for privilegerte roller, Google-innlogging, import fra dagens Google Sheets/Drive, backup-cron (D1-dump + rclone til off-site)
+- **Fase 1 (gjort)** — better-auth (e-postkode + valgfritt passord/magisk lenke, invitasjonsbasert), e-post via Cloudflare, prod på noter.tertnesbrass.com, ukentlig D1-dump til R2 via cron (se [Backup og gjenoppretting](#backup-og-gjenoppretting))
+- **Neste** — off-site-kopi skrudd på (krever R2-/B2-nøkler som repo-secrets), passkey/sterk autentisering for privilegerte roller, Google-innlogging, import fra dagens Google Sheets/Drive
 - **Fase 2** — PDF-splitter i nettleser (samle-PDF → stemmer), ZIP-nedlasting og e-postvarsler
 - **Fase 3** — «deploy your own»-dokumentasjon for andre korps, besetning som konfigurasjon (janitsjar m.m.), lisensvalg
 

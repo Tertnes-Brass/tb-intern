@@ -8,7 +8,10 @@
 	"account_id": "3709ec57046e3f629f737cf5b6b88a82",
 	"compatibility_date": "2025-09-02",
 	"compatibility_flags": ["nodejs_compat"],
-	"main": "@tanstack/react-start/server-entry",
+	// Egendefinert server-entry: gjenskaper TanStack Starts standard fetch-handler
+	// og legger til en scheduled()-handler for Cron Triggers (ukentlig backup).
+	// TanStack bruker samme fil som sin server-entry (src/server.{ts}-konvensjon).
+	"main": "./src/server.ts",
 	"observability": {
 		"enabled": true
 	},
@@ -44,5 +47,11 @@
 	],
 	// Cloudflare Email Sending — magisk lenke + passord-reset. Domenet onboardes
 	// med `wrangler email sending enable tertnesbrass.com` (setter opp DKIM/SPF automatisk).
-	"send_email": [{ "name": "EMAIL" }]
+	"send_email": [{ "name": "EMAIL" }],
+	// Ukentlig backup (scheduled()-handler i src/server.ts → src/server/backup.ts).
+	// Søndag 04:00 UTC (05/06 norsk tid) — lav trafikk. Test lokalt med `pnpm dev`
+	// + `curl "http://localhost:3000/cdn-cgi/handler/scheduled?cron=0+4+*+*+0"`.
+	"triggers": {
+		"crons": ["0 4 * * 0"]
+	}
 }

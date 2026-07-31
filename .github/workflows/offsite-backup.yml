@@ -1,0 +1,80 @@
+name: Off-site backup (R2 → B2)
+
+# Speiler R2 (notefiler + SQL-dumper) til Backblaze B2 og kjører deretter
+# restore-test på den nyeste dumpen — slik at vi ukentlig får bekreftet at
+# backupene faktisk lar seg gjenopprette.
+#
+# Kjører søndag 05:00 UTC, én time etter Worker-cron-en (søndag 04:00 UTC) har
+# lagt en fersk dump i R2.
+#
+# Krever følgende repo-secrets (Settings → Secrets and variables → Actions):
+#   R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ACCOUNT_ID  (R2 S3 API-token)
+#   B2_KEY_ID, B2_APP_KEY, B2_BUCKET                        (Backblaze B2)
+#
+# Sikkerhet: ingen utrygge github.event-input brukes. Hemmeligheter injiseres
+# kun via env: (aldri direkte i run:), og run:-stegene leser kun shell-variabler.
+
+on:
+  schedule:
+    - cron: '0 5 * * 0'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: offsite-backup
+  cancel-in-progress: false
+
+jobs:
+  offsite:
+    runs-on: ubuntu-latest
+    env:
+      # R2 (S3-kompatibel) som rclone-remote «r2» — konfigurert via miljøvariabler
+      # (rclone leser RCLONE_CONFIG_<NAVN>_<NØKKEL> automatisk, ingen config-fil).
+      RCLONE_CONFIG_R2_TYPE: s3
+      RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+      RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      RCLONE_CONFIG_R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      RCLONE_CONFIG_R2_ACL: private
+      # Backblaze B2 som rclone-remote «offsite».
+      RCLONE_CONFIG_OFFSITE_TYPE: b2
+      RCLONE_CONFIG_OFFSITE_ACCOUNT: ${{ secrets.B2_KEY_ID }}
+      RCLONE_CONFIG_OFFSITE_KEY: ${{ secrets.B2_APP_KEY }}
+      # Kilde + mål som scripts/offsite-sync.sh leser.
+      R2_REMOTE: r2:tb-notearkiv-files
+      OFFSITE: offsite:${{ secrets.B2_BUCKET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sjekk at nødvendige secrets er satt
+        run: |
+          : "${RCLONE_CONFIG_R2_ACCESS_KEY_ID:?Mangler repo-secret R2_ACCESS_KEY_ID}"
+          : "${RCLONE_CONFIG_R2_SECRET_ACCESS_KEY:?Mangler repo-secret R2_SECRET_ACCESS_KEY}"
+          : "${RCLONE_CONFIG_OFFSITE_ACCOUNT:?Mangler repo-secret B2_KEY_ID}"
+          : "${RCLONE_CONFIG_OFFSITE_KEY:?Mangler repo-secret B2_APP_KEY}"
+          case "$RCLONE_CONFIG_R2_ENDPOINT" in
+            https://.r2.*) echo "Mangler repo-secret R2_ACCOUNT_ID"; exit 1 ;;
+          esac
+          [ "$OFFSITE" != "offsite:" ] || { echo "Mangler repo-secret B2_BUCKET"; exit 1; }
+
+      - name: Installer rclone + sqlite3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rclone sqlite3
+          rclone version
+
+      - name: Speil R2 → off-site (B2)
+        run: scripts/offsite-sync.sh
+
+      - name: Restore-test på nyeste dump
+        run: |
+          latest="$(rclone lsf "$R2_REMOTE/backups" --include '*.sql' | sort | tail -1)"
+          if [ -z "$latest" ]; then
+            echo "❌ Fant ingen SQL-dump i $R2_REMOTE/backups — har Worker-cron-en kjørt?"
+            exit 1
+          fi
+          echo "→ Nyeste dump: $latest"
+          rclone copyto "$R2_REMOTE/backups/$latest" "/tmp/$latest"
+          scripts/restore-test.sh "/tmp/$latest"

@@ -17,3 +17,6 @@ todos.json
 !.env.example
 .seed-tmp
 .claude/worktrees/
+
+# Lokale backup-eksporter (wrangler d1 export / restore-test)
+/backups/
