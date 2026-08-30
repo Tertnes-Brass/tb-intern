@@ -19,6 +19,7 @@ Notearkiv, publisering og deling av noter for brass band — bygget for [Tertnes
 - **Innlogging** — [better-auth](https://better-auth.com): e-postkode som standard, valgfritt passord og magisk lenke, invitasjonsbasert (ingen åpen registrering). Google/passkeys kan legges til senere.
 - **RBAC** — roller (admin/arkivar/dirigent/musiker) med rettigheter i database, håndhevet server-side i alle funksjoner
 - **Tilgangsstyrte filer** — alle PDF-er streames via API med sesjons- eller token-sjekk; partitur er rettighetsstyrt (scores.view); ingen offentlige filer
+- **Kalender** — øvelser og konserter hentes fra korpsets Google-kalender (iCal) og vises på `/kalender`; Google forblir stedet man redigerer
 
 ## Innlogging og invitasjon
 
@@ -51,6 +52,40 @@ Nullstill lokalt ved å slette `.wrangler/state` og kjøre migreringen på nytt.
 ## Auth-skjema
 
 better-auth eier `user`/`session`/`account`/`verification` (generert til `src/db/auth-schema.ts` med `pnpm auth:generate`). RBAC ligger i egne tabeller: `member_profiles` (1:1 mot `user.id`, rolle + aktiv-status), `roles`, `role_permissions`, `parts`, `user_parts`, og `invitations`.
+
+## Kalender
+
+Korpset fortsetter å redigere kalenderen i Google Calendar. Internsiden leser den
+og viser den på `/kalender`, slik at medlemmene slipper å åpne Google.
+
+**Finn adressene i Google Calendar** → tannhjulet → *Innstillinger* → velg
+kalenderen i menyen til venstre:
+
+- **«Hemmelig adresse i iCal-format»** (under *Integrer kalender*) — hendelsene
+  hentes herfra. Adressen gir full lesetilgang uten innlogging, så den er en
+  **hemmelighet**: den skal aldri i git, aldri i logger og aldri til nettleseren.
+  Trykk *Tilbakestill* i Google hvis den lekker.
+- **«Offentlig URL til denne kalenderen»** / embed-koden — brukes til den
+  innebygde månedsvisningen nederst på siden. Krever at kalenderen er delt
+  offentlig. Valgfri; utelates den, vises ingen `<iframe>`.
+
+**Sett dem lokalt** i `.dev.vars`:
+
+```
+CALENDAR_ICS_URL=https://calendar.google.com/calendar/ical/.../private-.../basic.ics
+CALENDAR_EMBED_URL=https://calendar.google.com/calendar/embed?src=...
+```
+
+**Sett dem i produksjon:**
+
+```bash
+pnpm exec wrangler secret put CALENDAR_ICS_URL   # hemmelig — kun som secret
+# CALENDAR_EMBED_URL er ikke hemmelig: legg verdien i "vars" i wrangler.jsonc
+```
+
+Uten `CALENDAR_ICS_URL` er siden en rolig tomtilstand («Kalenderen er ikke koblet
+til ennå») — ingen feil. Feeden caches i ti minutter, så den hentes ikke på hver
+sidevisning.
 
 ## Stack
 

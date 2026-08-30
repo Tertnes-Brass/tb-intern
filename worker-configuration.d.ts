@@ -8,6 +8,14 @@ interface __BaseEnv_Env {
 	BETTER_AUTH_SECRET: string;
 	BETTER_AUTH_URL: string;
 	ADMIN_EMAIL: string;
+	// Kalender (sak «Kalender»). Lagt til for hånd: `wrangler types` ser bare
+	// vars fra wrangler.jsonc og nøkler i .dev.vars, og begge er valgfrie i
+	// drift — feltene er derfor `?` slik at serverkoden må sjekke dem.
+	// CALENDAR_ICS_URL er den HEMMELIGE iCal-adressen fra Google Calendar
+	// (`wrangler secret put CALENDAR_ICS_URL`), CALENDAR_EMBED_URL er den
+	// offentlige embed-adressen (vanlig var). Beholdes ved neste cf-typegen.
+	CALENDAR_ICS_URL?: string;
+	CALENDAR_EMBED_URL?: string;
 }
 declare namespace Cloudflare {
 	interface Env extends __BaseEnv_Env {}

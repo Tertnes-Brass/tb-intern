@@ -18,7 +18,13 @@
 		// `wrangler secret put` i prod og i .dev.vars lokalt.
 		"BETTER_AUTH_URL": "https://noter.tertnesbrass.com",
 		// Første bruker med denne e-posten promoteres automatisk til admin.
-		"ADMIN_EMAIL": "sindre.ryland@gmail.com"
+		"ADMIN_EMAIL": "sindre.ryland@gmail.com",
+		// Kalender: offentlig embed-URL fra Google Calendar (Innstillinger →
+		// kalenderen → «Integrer kalender» → «Bygg inn kode»/«Offentlig URL til
+		// denne kalenderen»). Tom = ingen innebygd kalender nederst på /kalender.
+		// Selve hendelseslista kommer fra den HEMMELIGE iCal-adressen, som settes
+		// som secret: `wrangler secret put CALENDAR_ICS_URL` (aldri i denne fila).
+		"CALENDAR_EMBED_URL": ""
 	},
 	"routes": [
 		{
