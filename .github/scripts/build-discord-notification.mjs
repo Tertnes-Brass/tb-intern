@@ -208,7 +208,7 @@ if (eventName === "check_run") {
 			url:
 				checkRun.details_url ||
 				checkRun.html_url ||
-				"https://noter.tertnesbrass.com",
+				"https://intern.tertnesbrass.com",
 		};
 	}
 

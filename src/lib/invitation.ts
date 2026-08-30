@@ -97,7 +97,7 @@ export function inviteDeliveryMessage(
       }
     case 'skipped':
       return {
-        message: `${email} er invitert. Ingen e-post ble sendt – be dem logge inn på noter.tertnesbrass.com.`,
+        message: `${email} er invitert. Ingen e-post ble sendt – be dem logge inn på intern.tertnesbrass.com.`,
         kind: 'ok',
       }
   }

@@ -529,7 +529,7 @@ function CreateShareModal({
       const res = await createShare({
         data: { projectId, recipientName: name.trim(), partIds: [...selected], days: Number(days) },
       })
-      setResultUrl(`${window.location.origin}/v/${res.token}`)
+      setResultUrl(res.url)
       onCreated()
     } catch (err) {
       toastError(err)

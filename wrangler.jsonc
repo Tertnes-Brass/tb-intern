@@ -16,7 +16,12 @@
 	"vars": {
 		// Ikke-hemmelige variabler. Hemmeligheter (BETTER_AUTH_SECRET) settes med
 		// `wrangler secret put` i prod og i .dev.vars lokalt.
-		"BETTER_AUTH_URL": "https://noter.tertnesbrass.com",
+		// Kanonisk origin for hele internsiden: auth-callbacks, magiske lenker,
+		// passordreset og vikarlenker bygges alle fra denne. Neste deploy er
+		// selve cutover-tidspunktet — auth-origin bytter da til intern.-domenet,
+		// og gamle magiske lenker mot noter.-domenet 301-es hit (se
+		// src/lib/host-redirect.ts). Rollback = sett verdien tilbake og deploy.
+		"BETTER_AUTH_URL": "https://intern.tertnesbrass.com",
 		// Første bruker med denne e-posten promoteres automatisk til admin.
 		"ADMIN_EMAIL": "sindre.ryland@gmail.com",
 		// Kalender: offentlig embed-URL fra Google Calendar (Innstillinger →
@@ -26,7 +31,17 @@
 		// som secret: `wrangler secret put CALENDAR_ICS_URL` (aldri i denne fila).
 		"CALENDAR_EMBED_URL": ""
 	},
+	// Sonen tertnesbrass.com ligger i Cloudflare, så `wrangler deploy` oppretter
+	// DNS-oppføringen for custom domains automatisk — ingen manuelle DNS-steg.
+	// NB: Worker-navnet over («tb-notearkiv») skal IKKE endres selv om repoet
+	// døpes om til tb-intern. Nytt navn = ny Worker uten bindinger og secrets.
 	"routes": [
+		{
+			"pattern": "intern.tertnesbrass.com",
+			"custom_domain": true
+		},
+		// Det gamle domenet må bestå: koden 301-er all trafikk herfra til
+		// intern.tertnesbrass.com, inkludert /api/* og /v/* i gamle e-poster.
 		{
 			"pattern": "noter.tertnesbrass.com",
 			"custom_domain": true

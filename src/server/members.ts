@@ -390,7 +390,7 @@ export const inviteMember = createServerFn({ method: 'POST' })
     ])
 
     // E-post er et eksplisitt valg. Invitasjonen står uansett, og medlemmet kan
-    // logge inn selv på noter.tertnesbrass.com med e-posten sin.
+    // logge inn selv på intern.tertnesbrass.com med e-posten sin.
     let delivery: InviteDelivery = 'skipped'
     if (data.sendEmail) {
       try {

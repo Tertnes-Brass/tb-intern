@@ -76,9 +76,13 @@ function buildAuth() {
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     trustedOrigins: [
-      // noter.tertnesbrass.com er det kanoniske produksjonsdomenet.
-      // workers.dev-adressen beholdes for feilsøking av en deploy uten DNS.
+      // intern.tertnesbrass.com er det kanoniske produksjonsdomenet.
+      'https://intern.tertnesbrass.com',
+      // noter.tertnesbrass.com beholdes gjennom overgangen: det gamle domenet
+      // svarer 301 (src/lib/host-redirect.ts), men en innlogging som ble startet
+      // der skal ikke avvises på origin-sjekken mens redirecten spiller ut.
       'https://noter.tertnesbrass.com',
+      // workers.dev-adressen beholdes for feilsøking av en deploy uten DNS.
       'https://tb-notearkiv.tb-370.workers.dev',
       // Vite velger neste ledige port når 3000 er opptatt. Hold wildcardet
       // strengt dev-only; localhost skal aldri være trusted origin i prod.
