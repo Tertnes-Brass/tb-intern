@@ -54,6 +54,7 @@ lesing er åpnere; håndhevelsen ligger alltid i `src/server/*.ts`, aldri bare i
 
 | Område | Rute | Primærbruker | Primærhandling | Gate |
 |---|---|---|---|---|
+| **Hjem** (hub-flaten) | `src/routes/index.tsx` (`getHub`) | Medlemmet | Se hva som skjer nå, og komme seg videre til riktig område | `requireMe()`; områdesnarveiene følger rettighetene (`areasFor` i `src/lib/hub.ts`) |
 | **Noter** / «Mine noter» | `src/routes/noter/index.tsx` (`getHome`) | Musikeren | Åpne egne stemmer + lytteeksempler til neste prosjekt | `requireMe()`; stemmefiltrering via `effectivePartIds` |
 | **Prosjekter** | `src/routes/noter/prosjekter/index.tsx`, `$projectId.tsx` | Dirigent / prosjektansvarlig | Klikke sammen et program i rekkefølge og publisere det | `projects.manage`; upublisert er usynlig ellers. Deling: `shares.manage` |
 | **Arkiv** | `src/routes/noter/arkiv/index.tsx`, `$workId.tsx` | Arkivaren | Katalogisere et verk og laste opp PDF per stemme | Innsyn: `archive.viewAll` ∨ `works.manage`; skriving: `works.manage` |
@@ -73,10 +74,12 @@ Fire observasjoner som er verdt å ta med videre:
   parkerer det i et annet områdes navnerom. Det er ikke verdt en migrering i seg
   selv, men det er mønsteret å ikke gjenta: en funksjon havnet i «Innstillinger»
   fordi den føltes administrativ.
-- **`/` er ikke lenger et område.** Etter 30. august 2026 er `/` reservert
-  hub-flaten for internsiden, og `src/routes/index.tsx` er en midlertidig
-  videresending til `/noter`. Noteområdet (Mine noter, Prosjekter, Arkiv) har
-  layout-ruten `src/routes/noter/route.tsx` som felles områdemeny.
+- **`/` er plattformflaten, ikke et område.** Hub-en har ingen egen oversikt å
+  eie og ingen egen gate: den viser *det neste* og *veien videre*, og lenker inn
+  i områdene (§7 pkt 3). Den står i tabellen fordi den er en skjerm med eget
+  datagrunnlag (`src/server/hub.ts`), ikke fordi den er en app etter §1.
+  Noteområdet (Mine noter, Prosjekter, Arkiv) har layout-ruten
+  `src/routes/noter/route.tsx` som felles områdemeny.
 - **Vikarvisningen rendres bevisst utenfor `Shell`.** `src/routes/__root.tsx` har
   en `bare`-sjekk (`pathname.startsWith('/v/')`) som dropper toppmeny, brukermeny
   og temabryter. Vikaren har ingen konto, ingen rolle og ingen andre områder å
@@ -225,8 +228,27 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 2. **Skal Filtilganger flyttes ut av `/innstillinger`-navnerommet?** Kosmetisk i
    dag, men det er presedensen andre områder kommer til å kopiere.
 3. ~~**Skal Hjem være medlemsflaten eller plattformflaten?**~~ — **avgjort
-   30. august 2026: plattformflaten.** `Hjem` (`/`) blir hub-en for internsiden,
-   og medlemsflaten «Mine noter» bor på `/noter` som en del av noteområdet. Inntil
-   hub-en finnes, sender `/` innloggede videre til `/noter`. Hva hub-en faktisk
-   viser — kunngjøringer (#28), «Mine datoer» (#26), snarveier til områdene — og
-   i hvilken rekkefølge, er fortsatt åpent.
+   30. august 2026: plattformflaten.** `Hjem` (`/`) er hub-en for internsiden, og
+   medlemsflaten «Mine noter» bor på `/noter` som en del av noteområdet.
+
+   Hub-en ble bygget 31. august 2026 (`src/routes/index.tsx`, `getHub` i
+   `src/server/hub.ts`). Rekkefølgen er avgjort, mobil først:
+
+   1. **Hero — «Neste»:** neste kalenderhendelse med ukedag, dato, klokkeslett
+      (Europe/Oslo), sted og «om N dager», med vei til `/kalender`. Er kalenderen
+      ikke konfigurert eller feiler den, tar neste publiserte prosjekt plassen.
+      Finnes ingen av delene: en rolig tomtilstand.
+   2. **Mine noter:** ett kort med neste publiserte prosjekt, antall verk i
+      programmet, brukerens stemmer som `Stamp`, og primærknappen «Åpne mine
+      noter» → `/noter`. Ikke repertoarlisten — den bor på `/noter`.
+   3. **Kommende:** de neste fire kalenderhendelsene etter hero, med lenke til
+      hele kalenderen. Uten kalender: de neste prosjektene i stedet.
+   4. **Områder:** kompakte snarveier til områdene brukeren har tilgang til,
+      med samme betingelser som toppmenyen (`areasFor` i `src/lib/hub.ts`).
+
+   **Beskjeder (#28, fase 2) skal øverst** — over hero — når funksjonen finnes.
+   Det er det eneste som skal kunne fortrenge «Neste». Plassen er markert med en
+   kommentar i `src/routes/index.tsx`; det bygges ingen tom plassholder før da.
+
+   Hub-en skal aldri bli et kontrollpanel som gjengir hvert områdes oversikt i
+   miniatyr (§4). Den viser *det neste* og *veien videre*.

@@ -19,8 +19,11 @@ eier områdemenyen (Mine noter · Prosjekter · Arkiv, sistnevnte kun ved
 `canBrowseArchive`) og gjør `me` ikke-nullbar i rutekonteksten for hele området.
 `src/routes/{prosjekter,arkiv}/*` er tomme rutefiler som kaster en 301-redirect
 til de nye stiene og tar med seg søkeparametrene — gamle lenker i e-post og chat
-skal fortsatt virke, så de skal ikke slettes. `src/routes/index.tsx` (`/`) er en
-midlertidig videresending til `/noter` og erstattes av hub-forsiden.
+skal fortsatt virke, så de skal ikke slettes. `src/routes/index.tsx` (`/`) er
+hub-forsiden: plattformflaten som viser neste hendelse, veien inn til «Mine
+noter», de neste hendelsene og snarveier til områdene brukeren har tilgang til.
+Den skal ikke gjengi områdenes oversikter i miniatyr — se
+`docs/designprinsipper.md` §4 og §7 pkt 3.
 
 ## Arkitektur
 
@@ -31,7 +34,8 @@ midlertidig videresending til `/noter` og erstattes av hub-forsiden.
 - `src/styles.css` — design-systemet («Konsertprogrammet»: papir/blekk/messing, Fraunces + Schibsted Grotesk); bruk tokens og klassene derfra, ikke nye ad-hoc-farger
 - **Auth: better-auth** — instans i `src/server/auth-instance.ts` (lat `getAuth()`), klient i `src/lib/auth-client.ts`, handler i `src/routes/api/auth/$.ts` (normaliserer e-post til små bokstaver). Invitasjonsbasert: `databaseHooks.user.create.before` avviser ikke-inviterte (gjelder både passord og magisk lenke); `ADMIN_EMAIL` bootstrapper første admin. RBAC kobles via `member_profiles`. Skjemaendring i auth: `pnpm auth:generate` → `drizzle-kit generate`. `auth.cli.ts` er KUN for skjemautledning (importerer ikke cloudflare:workers).
 - E-post: `src/server/email.ts` via Cloudflare `EMAIL`-binding; faller tilbake til konsoll-logg i dev / ved feil.
-- Kalender: `src/lib/ical.ts` er en egen iCalendar-parser (folding, TZID/UTC/heldag, RRULE+EXDATE+RECURRENCE-ID) som ekspanderer forekomster i veggklokke-tid — ingen avhengigheter, testet i `ical.test.ts`. `src/server/calendar.ts` henter Google-feeden fra secreten `CALENDAR_ICS_URL` (aldri til klienten, aldri i cache-nøkkelen) med ti minutters cache, og eksponerer `getCalendar`/`getNextEvent` bak `requireMe()`.
+- Kalender: `src/lib/ical.ts` er en egen iCalendar-parser (folding, TZID/UTC/heldag, RRULE+EXDATE+RECURRENCE-ID) som ekspanderer forekomster i veggklokke-tid — ingen avhengigheter, testet i `ical.test.ts`. `src/server/calendar-feed.ts` henter Google-feeden fra secreten `CALENDAR_ICS_URL` (aldri til klienten, aldri i cache-nøkkelen) med ti minutters cache og eksporterer `loadCalendar`; `src/server/calendar.ts` eksponerer `getCalendar`/`getNextEvent` bak `requireMe()`. Delingen er nødvendig: et *levende* eksport i en modul en rute importerer, drar `cloudflare:workers` inn i klientbygget. Serverfunksjoner kaller aldri andre serverfunksjoner — de deler `loadCalendar`.
+- Hub-forsiden: `src/server/hub.ts` (`getHub`) henter kalender, neste publiserte prosjekt (med antall verk) og `me` i parallell og returnerer en liten payload. Reglene — hvilken hendelse som blir hero, og hvilke områdesnarveier rettighetene gir — ligger i `src/lib/hub.ts` (`chooseHero`, `eventsAfter`, `areasFor`), testet i `hub.test.ts`. `areasFor` må holdes i takt med `BASE_NAV` i `Shell.tsx`.
 - Demodata: `src/server/seed.ts`, kun via dev-ruten `/api/dev-seed` (gated på `import.meta.env.DEV`).
 
 ## Nye features = eget app-område
