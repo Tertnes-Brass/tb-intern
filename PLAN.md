@@ -8,6 +8,12 @@
 > og avsenderdomenet for e-post er `tertnesbrass.com`. `tertnesbrass.no` er
 > korpsets offentlige nettside (e-post hos Uniweb) og eies ikke av denne appen.
 
+> Domene-etterskrift 2 (august 2026): notearkivet er blitt internsiden «Tertnes
+> Brass Intern», og kanonisk produksjonsdomene er nå `intern.tertnesbrass.com`.
+> `noter.tertnesbrass.com` består og svarer permanent 301 dit. Alle andre
+> `noter.tertnesbrass.com`-omtaler nedenfor er historikk. Se sjekklista for
+> cutover i README.
+
 ## 1. Mål
 
 Et notearkiv- og distribusjonssystem skreddersydd for brass band:

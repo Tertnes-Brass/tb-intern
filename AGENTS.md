@@ -9,6 +9,22 @@ Notearkiv for brass band (Tertnes Brass). TanStack Start (React) på Cloudflare 
 - `pnpm exec drizzle-kit generate --name <navn>` → `pnpm exec wrangler d1 migrations apply tb-notearkiv --local` — skjemaendringer
 - `pnpm generate-routes` — regenerer routeTree etter nye filer i `src/routes/`
 
+## Rutestruktur
+
+Appen er i ferd med å bli hele internsiden («Tertnes Brass Intern»), og noter er
+ett område i den. Notearkivet bor derfor i navnerommet `/noter`:
+`src/routes/noter/index.tsx` («Mine noter»), `noter/prosjekter/{index,$projectId}.tsx`
+og `noter/arkiv/{index,$workId}.tsx`. Layout-ruten `src/routes/noter/route.tsx`
+eier områdemenyen (Mine noter · Prosjekter · Arkiv, sistnevnte kun ved
+`canBrowseArchive`) og gjør `me` ikke-nullbar i rutekonteksten for hele området.
+`src/routes/{prosjekter,arkiv}/*` er tomme rutefiler som kaster en 301-redirect
+til de nye stiene og tar med seg søkeparametrene — gamle lenker i e-post og chat
+skal fortsatt virke, så de skal ikke slettes. `src/routes/index.tsx` (`/`) er
+hub-forsiden: plattformflaten som viser neste hendelse, veien inn til «Mine
+noter», de neste hendelsene og snarveier til områdene brukeren har tilgang til.
+Den skal ikke gjengi områdenes oversikter i miniatyr — se
+`docs/designprinsipper.md` §4 og §7 pkt 3.
+
 ## Arkitektur
 
 - `src/db/schema.ts` — hele datamodellen (Drizzle/SQLite)
@@ -17,7 +33,11 @@ Notearkiv for brass band (Tertnes Brass). TanStack Start (React) på Cloudflare 
 - `src/lib/taxonomy.ts` — brass band-besetningen + filnavn→stemme-gjetting (seedes til DB, ikke hardkod i logikk)
 - `src/styles.css` — design-systemet («Konsertprogrammet»: papir/blekk/messing, Fraunces + Schibsted Grotesk); bruk tokens og klassene derfra, ikke nye ad-hoc-farger
 - **Auth: better-auth** — instans i `src/server/auth-instance.ts` (lat `getAuth()`), klient i `src/lib/auth-client.ts`, handler i `src/routes/api/auth/$.ts` (normaliserer e-post til små bokstaver). Invitasjonsbasert: `databaseHooks.user.create.before` avviser ikke-inviterte (gjelder både passord og magisk lenke); `ADMIN_EMAIL` bootstrapper første admin. RBAC kobles via `member_profiles`. Skjemaendring i auth: `pnpm auth:generate` → `drizzle-kit generate`. `auth.cli.ts` er KUN for skjemautledning (importerer ikke cloudflare:workers).
+- **Domene: `intern.tertnesbrass.com` er kanonisk.** Alle absolutte URL-er (auth-callbacks, magiske lenker, passordreset, vikarlenker) bygges fra `BETTER_AUTH_URL` — aldri fra request-origin eller hardkodet domene. `src/lib/host-redirect.ts` (`legacyHostRedirect` + `LEGACY_HOSTS`) svarer 301 fra de gamle vertsnavnene med sti og query i behold; den er koblet inn som global request-middleware i `src/start.ts`, som derfor også må liste `createCsrfMiddleware` eksplisitt (et eget `createStart` erstatter Start sin standardliste).
 - E-post: `src/server/email.ts` via Cloudflare `EMAIL`-binding; faller tilbake til konsoll-logg i dev / ved feil.
+- Kalender: `src/lib/ical.ts` er en egen iCalendar-parser (folding, TZID/UTC/heldag, RRULE+EXDATE+RECURRENCE-ID) som ekspanderer forekomster i veggklokke-tid — ingen avhengigheter, testet i `ical.test.ts`. `src/server/calendar-feed.ts` henter Google-feeden fra secreten `CALENDAR_ICS_URL` (aldri til klienten, aldri i cache-nøkkelen) med ti minutters cache og eksporterer `loadCalendar`; `src/server/calendar.ts` eksponerer `getCalendar`/`getNextEvent` bak `requireMe()`. Delingen er nødvendig: et *levende* eksport i en modul en rute importerer, drar `cloudflare:workers` inn i klientbygget. Serverfunksjoner kaller aldri andre serverfunksjoner — de deler `loadCalendar`.
+- Hub-forsiden: `src/server/hub.ts` (`getHub`) henter kalender, neste publiserte prosjekt (med antall verk) og `me` i parallell og returnerer en liten payload. Reglene — hvilken hendelse som blir hero, og hvilke områdesnarveier rettighetene gir — ligger i `src/lib/hub.ts` (`chooseHero`, `eventsAfter`, `areasFor`), testet i `hub.test.ts`. `areasFor` må holdes i takt med `BASE_NAV` i `Shell.tsx`.
+- Roller: `SEED_ROLES` i `src/server/seed-data.ts` (`admin`, `archivist`, `conductor`, `board` «Styremedlem», `member`). Roller seedes bare i en tom database (`seedBaseConfig`), så en ny systemrolle krever også en migrasjon med `INSERT OR IGNORE` — se `migrations/0008_board-role.sql`. `board` har foreløpig samme rettigheter som `member`; egne styrerettigheter kommer med Beskjeder/Styre.
 - Demodata: `src/server/seed.ts`, kun via dev-ruten `/api/dev-seed` (gated på `import.meta.env.DEV`).
 
 ## Nye features = eget app-område
@@ -26,14 +46,17 @@ Notearkiv for brass band (Tertnes Brass). TanStack Start (React) på Cloudflare 
 eget inngangspunkt, én primærbruker, én primærhandling og egen oversikt — men
 felles navigasjon, auth, roller, designsystem og datamodell. Ikke samle nye
 funksjoner i én stor administrasjonsside, og ikke parker dem under
-`/innstillinger` fordi de føles administrative.
+`/innstillinger` fordi de føles administrative. Navigasjonsmodellen er avgjort
+(§6, alternativ (a), 30. august 2026): kort toppmeny i `Shell.tsx` + egen
+områdemeny per område, slik `src/routes/noter/route.tsx` gjør det.
 
 Besvar disse sju punktene i saken eller PR-en **før** du skriver koden: **navn ·
 formål · primærbruker · primærhandling · plass i navigasjonen · rettigheten som
 gater det** (`PERMISSION_CATALOG` i `src/server/settings.ts`, håndhevet
 server-side) **· eget rutenavnerom?** Toppmenyen i `src/components/Shell.tsx`
 har begrenset plass (mobilstripen scroller alt ved seks oppføringer) — se §6 i
-dokumentet før du legger til en ny.
+dokumentet før du legger til en ny; undernavigasjon i et eksisterende område er
+som regel riktigere.
 
 Tilgangsstyring: `docs/tilgangsstyring.md`. Reglene der er ikke til forhandling.
 

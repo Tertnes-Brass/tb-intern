@@ -3,3 +3,10 @@
 BETTER_AUTH_SECRET=minst-32-tegn-tilfeldig-hemmelighet
 BETTER_AUTH_URL=http://localhost:3000
 ADMIN_EMAIL=din@epost.no
+
+# Kalender (valgfritt lokalt). CALENDAR_ICS_URL er den hemmelige iCal-adressen
+# fra Google Calendar — i produksjon settes den med
+# `wrangler secret put CALENDAR_ICS_URL`. CALENDAR_EMBED_URL er den offentlige
+# embed-adressen og settes normalt som var i wrangler.jsonc.
+# CALENDAR_ICS_URL=https://calendar.google.com/calendar/ical/.../private-.../basic.ics
+# CALENDAR_EMBED_URL=https://calendar.google.com/calendar/embed?src=...

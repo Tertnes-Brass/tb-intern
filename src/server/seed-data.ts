@@ -9,7 +9,7 @@ export const DEMO_SHARE_TOKEN = 'demo-vikar-sommerkonsert'
 export type SeedMember = {
   name: string
   email: string
-  roleId: 'admin' | 'archivist' | 'conductor' | 'member'
+  roleId: 'admin' | 'archivist' | 'conductor' | 'board' | 'member'
   partIds: string[]
 }
 
@@ -24,11 +24,14 @@ export const SEED_MEMBERS: SeedMember[] = [
   { name: 'Ole Kristian Bø', email: 'ole@demo.tertnesbrass.no', roleId: 'archivist', partIds: ['bass-trombone'] },
 ]
 
+// `isSystem` skrives eksplisitt: rollene her er plattformens egne og skal ikke
+// kunne slettes i /innstillinger, uavhengig av kolonnens standardverdi.
 export const SEED_ROLES = [
-  { id: 'admin', name: 'Administrator' },
-  { id: 'archivist', name: 'Arkivar' },
-  { id: 'conductor', name: 'Dirigent' },
-  { id: 'member', name: 'Musiker' },
+  { id: 'admin', name: 'Administrator', isSystem: true },
+  { id: 'archivist', name: 'Arkivar', isSystem: true },
+  { id: 'conductor', name: 'Dirigent', isSystem: true },
+  { id: 'board', name: 'Styremedlem', isSystem: true },
+  { id: 'member', name: 'Musiker', isSystem: true },
 ] as const
 
 export const SEED_ROLE_PERMISSIONS: Array<{ roleId: string; permission: string }> = [
@@ -45,6 +48,10 @@ export const SEED_ROLE_PERMISSIONS: Array<{ roleId: string; permission: string }
   { roleId: 'conductor', permission: 'scores.view' },
   { roleId: 'conductor', permission: 'archive.viewAll' },
   { roleId: 'conductor', permission: 'downloads.view' },
+  // Styremedlem har foreløpig nøyaktig det en musiker har. Egne
+  // styrerettigheter kommer med Beskjeder (fase 2) og Styre (fase 3); rollen
+  // finnes allerede nå så invitasjoner og rollematrisen kan bruke den.
+  { roleId: 'board', permission: 'scores.view' },
   { roleId: 'member', permission: 'scores.view' },
 ]
 

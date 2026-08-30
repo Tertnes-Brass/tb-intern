@@ -1,4 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
+import { env } from 'cloudflare:workers'
 import { asc, desc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
@@ -68,8 +69,11 @@ export const createShare = createServerFn({ method: 'POST' })
       createdBy: me.id,
       createdAt: new Date(),
     })
-    // Klartekst-token returneres KUN her — vi lagrer bare hash.
-    return { token }
+    // Klartekst-token returneres KUN her — vi lagrer bare hash. Den delbare
+    // URL-en bygges server-side fra BETTER_AUTH_URL, ikke fra nettleserens
+    // origin: da peker lenken på det kanoniske domenet selv om den ble laget
+    // fra workers.dev-adressen eller fra det gamle noter.-domenet.
+    return { token, url: `${new URL(env.BETTER_AUTH_URL).origin}/v/${token}` }
   })
 
 export const revokeShare = createServerFn({ method: 'POST' })

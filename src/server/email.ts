@@ -161,7 +161,7 @@ export function inviteEmail(url: string, bandName = 'Tertnes Brass'): { subject:
       'Velkommen!',
       `<p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#5f5640">Du er lagt til i notearkivet til ${bandName}. Klikk under for å logge inn første gang — så finner du notene dine, kommende konserter og lytteeksempler.</p>
        <p style="margin:0 0 24px">${button(url, 'Logg inn første gang')}</p>
-       <p style="margin:0;font-size:12px;color:#8e8468">Lenken er gyldig i 30 minutter. Du kan også gå til <span style="color:#7a5f1d">noter.tertnesbrass.com</span> og logge inn med e-postadressen din når som helst.</p>`,
+       <p style="margin:0;font-size:12px;color:#8e8468">Lenken er gyldig i 30 minutter. Du kan også gå til <span style="color:#7a5f1d">intern.tertnesbrass.com</span> og logge inn med e-postadressen din når som helst.</p>`,
     ),
     text: `Du er invitert til ${bandName} Notearkiv.\n\nLogg inn første gang her (gyldig i 30 minutter):\n${url}\n`,
   }

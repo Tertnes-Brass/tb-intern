@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as GlemtPassordRouteImport } from './routes/glemt-passord'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MinProfilRouteImport } from './routes/min-profil'
+import { Route as NoterRouteRouteImport } from './routes/noter/route'
 import { Route as TilbakestillPassordRouteImport } from './routes/tilbakestill-passord'
 import { Route as ApiDevLoginRouteImport } from './routes/api/dev-login'
 import { Route as ApiDevSeedRouteImport } from './routes/api/dev-seed'
@@ -20,7 +21,9 @@ import { Route as ArkivIndexRouteImport } from './routes/arkiv/index'
 import { Route as ArkivWorkIdRouteImport } from './routes/arkiv/$workId'
 import { Route as InnstillingerIndexRouteImport } from './routes/innstillinger/index'
 import { Route as InnstillingerNedlastingerRouteImport } from './routes/innstillinger/nedlastinger'
+import { Route as KalenderIndexRouteImport } from './routes/kalender/index'
 import { Route as MedlemmerIndexRouteImport } from './routes/medlemmer/index'
+import { Route as NoterIndexRouteImport } from './routes/noter/index'
 import { Route as ProsjekterIndexRouteImport } from './routes/prosjekter/index'
 import { Route as ProsjekterProjectIdRouteImport } from './routes/prosjekter/$projectId'
 import { Route as VTokenRouteImport } from './routes/v/$token'
@@ -30,6 +33,10 @@ import { Route as ApiUploadAbortRouteImport } from './routes/api/upload/abort'
 import { Route as ApiUploadCompleteRouteImport } from './routes/api/upload/complete'
 import { Route as ApiUploadPartRouteImport } from './routes/api/upload/part'
 import { Route as ApiUploadStartRouteImport } from './routes/api/upload/start'
+import { Route as NoterArkivIndexRouteImport } from './routes/noter/arkiv/index'
+import { Route as NoterArkivWorkIdRouteImport } from './routes/noter/arkiv/$workId'
+import { Route as NoterProsjekterIndexRouteImport } from './routes/noter/prosjekter/index'
+import { Route as NoterProsjekterProjectIdRouteImport } from './routes/noter/prosjekter/$projectId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -49,6 +56,11 @@ const LoginRoute = LoginRouteImport.update({
 const MinProfilRoute = MinProfilRouteImport.update({
   id: '/min-profil',
   path: '/min-profil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NoterRouteRoute = NoterRouteRouteImport.update({
+  id: '/noter',
+  path: '/noter',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TilbakestillPassordRoute = TilbakestillPassordRouteImport.update({
@@ -87,10 +99,20 @@ const InnstillingerNedlastingerRoute =
     path: '/innstillinger/nedlastinger',
     getParentRoute: () => rootRouteImport,
   } as any)
+const KalenderIndexRoute = KalenderIndexRouteImport.update({
+  id: '/kalender/',
+  path: '/kalender/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MedlemmerIndexRoute = MedlemmerIndexRouteImport.update({
   id: '/medlemmer/',
   path: '/medlemmer/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const NoterIndexRoute = NoterIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => NoterRouteRoute,
 } as any)
 const ProsjekterIndexRoute = ProsjekterIndexRouteImport.update({
   id: '/prosjekter/',
@@ -137,9 +159,31 @@ const ApiUploadStartRoute = ApiUploadStartRouteImport.update({
   path: '/api/upload/start',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NoterArkivIndexRoute = NoterArkivIndexRouteImport.update({
+  id: '/arkiv/',
+  path: '/arkiv/',
+  getParentRoute: () => NoterRouteRoute,
+} as any)
+const NoterArkivWorkIdRoute = NoterArkivWorkIdRouteImport.update({
+  id: '/arkiv/$workId',
+  path: '/arkiv/$workId',
+  getParentRoute: () => NoterRouteRoute,
+} as any)
+const NoterProsjekterIndexRoute = NoterProsjekterIndexRouteImport.update({
+  id: '/prosjekter/',
+  path: '/prosjekter/',
+  getParentRoute: () => NoterRouteRoute,
+} as any)
+const NoterProsjekterProjectIdRoute =
+  NoterProsjekterProjectIdRouteImport.update({
+    id: '/prosjekter/$projectId',
+    path: '/prosjekter/$projectId',
+    getParentRoute: () => NoterRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/noter': typeof NoterRouteRouteWithChildren
   '/glemt-passord': typeof GlemtPassordRoute
   '/login': typeof LoginRoute
   '/min-profil': typeof MinProfilRoute
@@ -152,7 +196,9 @@ export interface FileRoutesByFullPath {
   '/v/$token': typeof VTokenRoute
   '/arkiv/': typeof ArkivIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
+  '/kalender/': typeof KalenderIndexRoute
   '/medlemmer/': typeof MedlemmerIndexRoute
+  '/noter/': typeof NoterIndexRoute
   '/prosjekter/': typeof ProsjekterIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
@@ -160,6 +206,10 @@ export interface FileRoutesByFullPath {
   '/api/upload/complete': typeof ApiUploadCompleteRoute
   '/api/upload/part': typeof ApiUploadPartRoute
   '/api/upload/start': typeof ApiUploadStartRoute
+  '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
+  '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
+  '/noter/arkiv/': typeof NoterArkivIndexRoute
+  '/noter/prosjekter/': typeof NoterProsjekterIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -175,7 +225,9 @@ export interface FileRoutesByTo {
   '/v/$token': typeof VTokenRoute
   '/arkiv': typeof ArkivIndexRoute
   '/innstillinger': typeof InnstillingerIndexRoute
+  '/kalender': typeof KalenderIndexRoute
   '/medlemmer': typeof MedlemmerIndexRoute
+  '/noter': typeof NoterIndexRoute
   '/prosjekter': typeof ProsjekterIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
@@ -183,10 +235,15 @@ export interface FileRoutesByTo {
   '/api/upload/complete': typeof ApiUploadCompleteRoute
   '/api/upload/part': typeof ApiUploadPartRoute
   '/api/upload/start': typeof ApiUploadStartRoute
+  '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
+  '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
+  '/noter/arkiv': typeof NoterArkivIndexRoute
+  '/noter/prosjekter': typeof NoterProsjekterIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/noter': typeof NoterRouteRouteWithChildren
   '/glemt-passord': typeof GlemtPassordRoute
   '/login': typeof LoginRoute
   '/min-profil': typeof MinProfilRoute
@@ -199,7 +256,9 @@ export interface FileRoutesById {
   '/v/$token': typeof VTokenRoute
   '/arkiv/': typeof ArkivIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
+  '/kalender/': typeof KalenderIndexRoute
   '/medlemmer/': typeof MedlemmerIndexRoute
+  '/noter/': typeof NoterIndexRoute
   '/prosjekter/': typeof ProsjekterIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
@@ -207,11 +266,16 @@ export interface FileRoutesById {
   '/api/upload/complete': typeof ApiUploadCompleteRoute
   '/api/upload/part': typeof ApiUploadPartRoute
   '/api/upload/start': typeof ApiUploadStartRoute
+  '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
+  '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
+  '/noter/arkiv/': typeof NoterArkivIndexRoute
+  '/noter/prosjekter/': typeof NoterProsjekterIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/noter'
     | '/glemt-passord'
     | '/login'
     | '/min-profil'
@@ -224,7 +288,9 @@ export interface FileRouteTypes {
     | '/v/$token'
     | '/arkiv/'
     | '/innstillinger/'
+    | '/kalender/'
     | '/medlemmer/'
+    | '/noter/'
     | '/prosjekter/'
     | '/api/auth/$'
     | '/api/files/$fileId'
@@ -232,6 +298,10 @@ export interface FileRouteTypes {
     | '/api/upload/complete'
     | '/api/upload/part'
     | '/api/upload/start'
+    | '/noter/arkiv/$workId'
+    | '/noter/prosjekter/$projectId'
+    | '/noter/arkiv/'
+    | '/noter/prosjekter/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -247,7 +317,9 @@ export interface FileRouteTypes {
     | '/v/$token'
     | '/arkiv'
     | '/innstillinger'
+    | '/kalender'
     | '/medlemmer'
+    | '/noter'
     | '/prosjekter'
     | '/api/auth/$'
     | '/api/files/$fileId'
@@ -255,9 +327,14 @@ export interface FileRouteTypes {
     | '/api/upload/complete'
     | '/api/upload/part'
     | '/api/upload/start'
+    | '/noter/arkiv/$workId'
+    | '/noter/prosjekter/$projectId'
+    | '/noter/arkiv'
+    | '/noter/prosjekter'
   id:
     | '__root__'
     | '/'
+    | '/noter'
     | '/glemt-passord'
     | '/login'
     | '/min-profil'
@@ -270,7 +347,9 @@ export interface FileRouteTypes {
     | '/v/$token'
     | '/arkiv/'
     | '/innstillinger/'
+    | '/kalender/'
     | '/medlemmer/'
+    | '/noter/'
     | '/prosjekter/'
     | '/api/auth/$'
     | '/api/files/$fileId'
@@ -278,10 +357,15 @@ export interface FileRouteTypes {
     | '/api/upload/complete'
     | '/api/upload/part'
     | '/api/upload/start'
+    | '/noter/arkiv/$workId'
+    | '/noter/prosjekter/$projectId'
+    | '/noter/arkiv/'
+    | '/noter/prosjekter/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  NoterRouteRoute: typeof NoterRouteRouteWithChildren
   GlemtPassordRoute: typeof GlemtPassordRoute
   LoginRoute: typeof LoginRoute
   MinProfilRoute: typeof MinProfilRoute
@@ -294,6 +378,7 @@ export interface RootRouteChildren {
   VTokenRoute: typeof VTokenRoute
   ArkivIndexRoute: typeof ArkivIndexRoute
   InnstillingerIndexRoute: typeof InnstillingerIndexRoute
+  KalenderIndexRoute: typeof KalenderIndexRoute
   MedlemmerIndexRoute: typeof MedlemmerIndexRoute
   ProsjekterIndexRoute: typeof ProsjekterIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -332,6 +417,13 @@ declare module '@tanstack/react-router' {
       path: '/min-profil'
       fullPath: '/min-profil'
       preLoaderRoute: typeof MinProfilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/noter': {
+      id: '/noter'
+      path: '/noter'
+      fullPath: '/noter'
+      preLoaderRoute: typeof NoterRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tilbakestill-passord': {
@@ -383,12 +475,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InnstillingerNedlastingerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/kalender/': {
+      id: '/kalender/'
+      path: '/kalender'
+      fullPath: '/kalender/'
+      preLoaderRoute: typeof KalenderIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/medlemmer/': {
       id: '/medlemmer/'
       path: '/medlemmer'
       fullPath: '/medlemmer/'
       preLoaderRoute: typeof MedlemmerIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/noter/': {
+      id: '/noter/'
+      path: '/'
+      fullPath: '/noter/'
+      preLoaderRoute: typeof NoterIndexRouteImport
+      parentRoute: typeof NoterRouteRoute
     }
     '/prosjekter/': {
       id: '/prosjekter/'
@@ -453,11 +559,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiUploadStartRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/noter/arkiv/': {
+      id: '/noter/arkiv/'
+      path: '/arkiv'
+      fullPath: '/noter/arkiv/'
+      preLoaderRoute: typeof NoterArkivIndexRouteImport
+      parentRoute: typeof NoterRouteRoute
+    }
+    '/noter/arkiv/$workId': {
+      id: '/noter/arkiv/$workId'
+      path: '/arkiv/$workId'
+      fullPath: '/noter/arkiv/$workId'
+      preLoaderRoute: typeof NoterArkivWorkIdRouteImport
+      parentRoute: typeof NoterRouteRoute
+    }
+    '/noter/prosjekter/': {
+      id: '/noter/prosjekter/'
+      path: '/prosjekter'
+      fullPath: '/noter/prosjekter/'
+      preLoaderRoute: typeof NoterProsjekterIndexRouteImport
+      parentRoute: typeof NoterRouteRoute
+    }
+    '/noter/prosjekter/$projectId': {
+      id: '/noter/prosjekter/$projectId'
+      path: '/prosjekter/$projectId'
+      fullPath: '/noter/prosjekter/$projectId'
+      preLoaderRoute: typeof NoterProsjekterProjectIdRouteImport
+      parentRoute: typeof NoterRouteRoute
+    }
   }
 }
 
+interface NoterRouteRouteChildren {
+  NoterIndexRoute: typeof NoterIndexRoute
+  NoterArkivWorkIdRoute: typeof NoterArkivWorkIdRoute
+  NoterProsjekterProjectIdRoute: typeof NoterProsjekterProjectIdRoute
+  NoterArkivIndexRoute: typeof NoterArkivIndexRoute
+  NoterProsjekterIndexRoute: typeof NoterProsjekterIndexRoute
+}
+
+const NoterRouteRouteChildren: NoterRouteRouteChildren = {
+  NoterIndexRoute: NoterIndexRoute,
+  NoterArkivWorkIdRoute: NoterArkivWorkIdRoute,
+  NoterProsjekterProjectIdRoute: NoterProsjekterProjectIdRoute,
+  NoterArkivIndexRoute: NoterArkivIndexRoute,
+  NoterProsjekterIndexRoute: NoterProsjekterIndexRoute,
+}
+
+const NoterRouteRouteWithChildren = NoterRouteRoute._addFileChildren(
+  NoterRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  NoterRouteRoute: NoterRouteRouteWithChildren,
   GlemtPassordRoute: GlemtPassordRoute,
   LoginRoute: LoginRoute,
   MinProfilRoute: MinProfilRoute,
@@ -470,6 +625,7 @@ const rootRouteChildren: RootRouteChildren = {
   VTokenRoute: VTokenRoute,
   ArkivIndexRoute: ArkivIndexRoute,
   InnstillingerIndexRoute: InnstillingerIndexRoute,
+  KalenderIndexRoute: KalenderIndexRoute,
   MedlemmerIndexRoute: MedlemmerIndexRoute,
   ProsjekterIndexRoute: ProsjekterIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
@@ -484,10 +640,11 @@ export const routeTree = rootRouteImport
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
+import type { startInstance } from './start.ts'
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }

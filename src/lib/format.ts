@@ -12,6 +12,19 @@ const dateTimeFmt = new Intl.DateTimeFormat('nb-NO', {
   timeZone: 'Europe/Oslo',
 })
 
+const timeFmt = new Intl.DateTimeFormat('nb-NO', {
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: 'Europe/Oslo',
+})
+// `en-CA` gir «2026-03-25» direkte, uten manuell sammensetting av delene.
+const isoDateFmt = new Intl.DateTimeFormat('en-CA', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  timeZone: 'Europe/Oslo',
+})
+
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return ''
   return dateFmt.format(new Date(`${iso}T12:00:00`))
@@ -30,6 +43,38 @@ export function formatWeekday(iso: string | null | undefined): string {
 /** Epoch-ms → «3. jul. 2026, 14:30» */
 export function formatDateTime(ms: number): string {
   return dateTimeFmt.format(new Date(ms))
+}
+
+/**
+ * Fullt tidspunkt (ISO med tidssone, eller epoch-ms) → datoen slik den ser ut i
+ * Norge, «2026-03-25». Broen mellom kalenderens UTC-tidspunkter og
+ * `formatDate`/`formatWeekday`/`relativeDays`, som tar rene datoer.
+ */
+export function toOsloDate(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === '') return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  return isoDateFmt.format(d)
+}
+
+/** Fullt tidspunkt → «19:00» i norsk tid. */
+export function formatTime(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === '') return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  return timeFmt.format(d)
+}
+
+/** «19:00–21:30», eller bare «19:00» når sluttidspunkt mangler eller er likt. */
+export function formatTimeRange(
+  start: string | number | null | undefined,
+  end?: string | number | null | undefined,
+): string {
+  const from = formatTime(start)
+  if (!from) return ''
+  const to = formatTime(end)
+  if (!to || to === from) return from
+  return `${from}–${to}`
 }
 
 /** «om 13 dager», «i dag», «for 3 dager siden» */

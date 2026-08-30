@@ -1,166 +1,252 @@
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
-import { RepertoireList } from '../components/Repertoire'
 import { EmptyState, Kicker, SectionHeading, Stamp } from '../components/ui'
-import { formatDate, formatWeekday, relativeDays } from '../lib/format'
-import { getHome } from '../server/projects'
+import { formatDate, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../lib/format'
+import { type HubEvent, chooseHero } from '../lib/hub'
+import { getHub } from '../server/hub'
 
+/**
+ * Hub-forsiden for internsiden «Tertnes Brass Intern».
+ *
+ * `/` er plattformflaten, ikke et område: primærbrukeren er medlemmet, og
+ * primærhandlingen er å se hva som skjer nå og komme seg videre til riktig
+ * område. Den gjengir derfor ikke hvert områdes oversikt i miniatyr
+ * (docs/designprinsipper.md §4) — den viser *det neste* og *veien videre*.
+ */
 export const Route = createFileRoute('/')({
   beforeLoad: ({ context }) => {
     if (!context.me) throw redirect({ to: '/login' })
   },
-  loader: () => getHome(),
-  component: HomePage,
+  loader: () => getHub(),
+  component: HubPage,
 })
 
-function HomePage() {
+/** «19:00–21:30» eller «Hele dagen» — samme regel som på /kalender. */
+function timeLabel(event: HubEvent): string {
+  if (event.allDay) return 'Hele dagen'
+  return formatTimeRange(event.start, event.end)
+}
+
+/** Dato-blokken i hero: ukedag, dagtall og måned, med et valgfritt felt ved siden av. */
+function HeroDate({ iso, aside }: { iso: string; aside: string | null }) {
+  return (
+    <div className="sheet flex shrink-0 items-stretch self-start overflow-hidden md:self-end">
+      <div className="flex flex-col items-center justify-center px-6 py-4">
+        <span className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-ink-faint">{formatWeekday(iso)}</span>
+        <span className="display-title tabular text-[2.6rem] font-semibold leading-none text-ink">
+          {Number(iso.slice(8, 10))}
+        </span>
+        <span className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-brass">
+          {formatDate(iso).split(' ').slice(1).join(' ')}
+        </span>
+      </div>
+      {aside && (
+        <div className="flex items-center border-l border-line bg-paper-sunken/60 px-5">
+          <span className="max-w-[130px] text-xs leading-snug text-ink-soft">{aside}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const heroTitleClass =
+  'display-title break-words text-[clamp(2.4rem,6.5vw,4.2rem)] font-semibold italic leading-[0.98] text-ink ' +
+  'transition-colors hover:text-brass-strong [hyphens:auto]'
+
+/** Liten dato-rute foran en rad i «Kommende». */
+function RowDate({ iso }: { iso: string }) {
+  return (
+    <div className="flex w-14 shrink-0 flex-col items-center justify-center rounded-[9px] border border-line bg-paper-sunken/60 px-2 py-2">
+      <span className="font-mono text-[0.55rem] uppercase tracking-[0.18em] text-ink-faint">
+        {formatWeekday(iso).slice(0, 3)}
+      </span>
+      <span className="display-title tabular text-xl font-semibold leading-none text-ink">{Number(iso.slice(8, 10))}</span>
+    </div>
+  )
+}
+
+function HubPage() {
   const data = Route.useLoaderData()
+  const hero = chooseHero(data)
   const next = data.nextProject
+  // Kalenderen er hovedkilden; uten den er «Kommende» prosjektene i stedet.
+  const useCalendar = data.calendar.configured && !data.calendar.error
+  const upcomingEvents = data.calendar.upcoming
 
   return (
     <div className="space-y-14">
-      {next ? (
-        <section className="rise">
+      {/*
+        Beskjeder (#28, fase 2) hører hjemme her, øverst og over hero: en melding
+        fra styret eller dirigenten er det eneste som skal kunne fortrenge
+        «Neste». Lesegrensesnittet blir en blokk her; publiseringsflyten får sitt
+        eget navnerom (docs/designprinsipper.md §5). Ingen tom plassholder før
+        funksjonen finnes.
+      */}
+
+      <section className="rise">
+        {hero.kind === 'event' ? (
           <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
             <div className="min-w-0">
-              <Kicker className="mb-3">
-                Neste prosjekt · {relativeDays(next.eventDate)}
-              </Kicker>
-              <Link
-                to="/prosjekter/$projectId"
-                params={{ projectId: next.id }}
-                className="link-quiet block"
-              >
-                <h1 className="display-title text-[clamp(2.6rem,7vw,4.6rem)] font-semibold italic leading-[0.98] text-ink transition-colors hover:text-brass-strong break-words [hyphens:auto]">
-                  {next.name}
-                </h1>
+              <Kicker className="mb-3">Neste · {relativeDays(toOsloDate(hero.event.start))}</Kicker>
+              <Link to="/kalender" className="link-quiet block">
+                <h1 className={heroTitleClass}>{hero.event.title}</h1>
               </Link>
-              <p className="mt-4 max-w-xl text-[0.95rem] leading-relaxed text-ink-soft">
-                {next.description}
+              <p className="mt-4 text-[0.95rem] leading-relaxed text-ink-soft">
+                {formatWeekday(toOsloDate(hero.event.start))} {formatDate(toOsloDate(hero.event.start))}
+                {hero.event.allDay ? '' : ` · ${timeLabel(hero.event)}`}
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                {data.me.parts.map((p) => (
+                {hero.event.location && <Stamp tone="brass">{hero.event.location}</Stamp>}
+                {hero.event.allDay && <Stamp>Hele dagen</Stamp>}
+              </div>
+            </div>
+            <HeroDate iso={toOsloDate(hero.event.start)} aside={timeLabel(hero.event)} />
+          </div>
+        ) : hero.kind === 'project' ? (
+          <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <Kicker className="mb-3">Neste prosjekt · {relativeDays(hero.project.eventDate)}</Kicker>
+              <Link to="/noter/prosjekter/$projectId" params={{ projectId: hero.project.id }} className="link-quiet block">
+                <h1 className={heroTitleClass}>{hero.project.name}</h1>
+              </Link>
+              <p className="mt-4 text-[0.95rem] leading-relaxed text-ink-soft">
+                {formatWeekday(hero.project.eventDate)} {formatDate(hero.project.eventDate)}
+              </p>
+              {hero.project.description && (
+                <p className="mt-3 max-w-xl text-sm leading-relaxed text-ink-soft">{hero.project.description}</p>
+              )}
+            </div>
+            <HeroDate iso={hero.project.eventDate} aside={hero.project.venue} />
+          </div>
+        ) : (
+          <EmptyState title="Ingenting på programmet ennå">
+            Når neste øvelse eller konsert er satt opp, står den her.
+          </EmptyState>
+        )}
+      </section>
+
+      <section className="rise" style={{ animationDelay: '120ms' }}>
+        <SectionHeading kicker="Mine noter" title="Stemmene dine" className="mb-4" />
+        <div className="sheet flex flex-col gap-5 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:gap-8 sm:px-6">
+          <div className="min-w-0">
+            {next && hero.kind !== 'project' ? (
+              <>
+                <p className="display-title text-[1.15rem] font-semibold text-ink">{next.name}</p>
+                <p className="mt-1 text-xs text-ink-soft">
+                  {formatDate(next.eventDate)}
+                  {next.venue ? ` · ${next.venue}` : ''} · {relativeDays(next.eventDate)}
+                </p>
+                <p className="mt-2 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint">
+                  {next.workCount === 1 ? '1 verk i programmet' : `${next.workCount} verk i programmet`}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm leading-relaxed text-ink-soft">
+                {next
+                  ? 'Programmet, stemmene dine og lytteeksemplene ligger klare i noteområdet.'
+                  : 'Ingen kommende prosjekter ennå — notene dine finner du likevel i noteområdet.'}
+              </p>
+            )}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {data.me.parts.length > 0 ? (
+                data.me.parts.map((p) => (
                   <Stamp key={p.id} tone="brass">
                     {p.nameNo}
                   </Stamp>
-                ))}
-                <Stamp>{data.me.roleName}</Stamp>
-              </div>
+                ))
+              ) : (
+                <Stamp>Ingen stemme registrert</Stamp>
+              )}
+              <Stamp>{data.me.roleName}</Stamp>
             </div>
-
-            {next.eventDate && (
-              <div className="sheet flex shrink-0 items-stretch self-start overflow-hidden md:self-end">
-                <div className="flex flex-col items-center justify-center px-6 py-4">
-                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-ink-faint">
-                    {formatWeekday(next.eventDate)}
-                  </span>
-                  <span className="display-title tabular text-[2.6rem] font-semibold leading-none text-ink">
-                    {Number(next.eventDate.slice(8, 10))}
-                  </span>
-                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-brass">
-                    {formatDate(next.eventDate).split(' ').slice(1).join(' ')}
-                  </span>
-                </div>
-                {next.venue && (
-                  <div className="flex items-center border-l border-line bg-paper-sunken/60 px-5">
-                    <span className="max-w-[120px] text-xs leading-snug text-ink-soft">{next.venue}</span>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
-
-          <div className="staff-rule mt-8 w-full opacity-50" aria-hidden />
-
-          <div className="mt-2">
-            <RepertoireList items={data.repertoire} />
-            {data.repertoire.length === 0 && (
-              <EmptyState title="Programmet er ikke satt ennå">
-                Repertoaret dukker opp her så snart det er publisert.
-              </EmptyState>
-            )}
-          </div>
-        </section>
-      ) : (
-        <section className="rise">
-          <EmptyState
-            title="Ingen kommende prosjekter"
-            action={
-              <Link to="/prosjekter" className="link-brass text-sm">
-                Se tidligere prosjekter
-              </Link>
-            }
+          <Link
+            to="/noter"
+            className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-[9px] bg-brass px-4 py-2 text-sm font-medium text-paper-raised shadow-[0_1px_2px_rgba(43,34,16,0.2),inset_0_1px_0_rgba(255,255,255,0.18)] transition-colors hover:bg-brass-strong dark:text-paper"
           >
-            Når neste konsert publiseres finner du programmet og notene dine her.
-          </EmptyState>
-        </section>
-      )}
+            Åpne mine noter
+          </Link>
+        </div>
+      </section>
 
-      <div className={data.archive ? 'grid gap-10 md:grid-cols-2' : 'max-w-2xl'}>
-        <section className="rise" style={{ animationDelay: '120ms' }}>
-          <SectionHeading kicker="Lenger frem" title="Kommende" className="mb-4" />
-          {data.upcoming.length === 0 ? (
-            <p className="text-sm text-ink-faint">Ingenting mer planlagt — foreløpig.</p>
+      <section className="rise" style={{ animationDelay: '200ms' }}>
+        <SectionHeading
+          kicker={useCalendar ? 'Kalenderen' : 'Lenger frem'}
+          title="Kommende"
+          className="mb-4"
+          action={
+            useCalendar ? (
+              <Link to="/kalender" className="link-brass text-sm">
+                Hele kalenderen →
+              </Link>
+            ) : (
+              <Link to="/noter/prosjekter" className="link-brass text-sm">
+                Alle prosjekter →
+              </Link>
+            )
+          }
+        />
+        {useCalendar ? (
+          upcomingEvents.length === 0 ? (
+            <p className="text-sm text-ink-faint">Ingenting mer i kalenderen de neste åtte ukene.</p>
           ) : (
-            <ul className="space-y-3">
-              {data.upcoming.map((p) => (
-                <li key={p.id}>
-                  <Link
-                    to="/prosjekter/$projectId"
-                    params={{ projectId: p.id }}
-                    className="sheet sheet-hover link-quiet flex items-center justify-between gap-4 px-5 py-4"
-                  >
-                    <span>
-                      <span className="display-title block text-lg font-semibold">{p.name}</span>
-                      <span className="mt-0.5 block text-xs text-ink-soft">
-                        {formatDate(p.eventDate)}
-                        {p.venue ? ` · ${p.venue}` : ''}
-                      </span>
-                    </span>
-                    <span className="font-mono text-[0.64rem] uppercase tracking-[0.14em] text-brass">
-                      {relativeDays(p.eventDate)}
-                    </span>
-                  </Link>
+            <ul>
+              {upcomingEvents.map((event) => (
+                <li key={event.id} className="hairline-row flex items-center gap-4 py-3">
+                  <RowDate iso={toOsloDate(event.start)} />
+                  <div className="min-w-0 flex-1">
+                    <p className="display-title truncate text-base font-semibold text-ink">{event.title}</p>
+                    <p className="mt-0.5 truncate text-xs text-ink-soft">
+                      {timeLabel(event)}
+                      {event.location ? ` · ${event.location}` : ''}
+                    </p>
+                  </div>
+                  <span className="hidden shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-brass sm:inline">
+                    {relativeDays(toOsloDate(event.start))}
+                  </span>
                 </li>
               ))}
             </ul>
-          )}
-        </section>
-
-        {data.archive && (
-          <section className="rise" style={{ animationDelay: '200ms' }}>
-            <SectionHeading
-              kicker="Arkivet"
-              title="Nytt i hyllene"
-              className="mb-4"
-              action={
-                <Link to="/arkiv" className="link-brass text-sm">
-                  Hele arkivet →
+          )
+        ) : data.upcomingProjects.length === 0 ? (
+          <p className="text-sm text-ink-faint">Ingenting mer planlagt — foreløpig.</p>
+        ) : (
+          <ul>
+            {data.upcomingProjects.map((p) => (
+              <li key={p.id} className="hairline-row">
+                <Link
+                  to="/noter/prosjekter/$projectId"
+                  params={{ projectId: p.id }}
+                  className="link-quiet flex items-center gap-4 py-3"
+                >
+                  <RowDate iso={p.eventDate} />
+                  <span className="min-w-0 flex-1">
+                    <span className="display-title block truncate text-base font-semibold text-ink">{p.name}</span>
+                    <span className="mt-0.5 block truncate text-xs text-ink-soft">
+                      {formatDate(p.eventDate)}
+                      {p.venue ? ` · ${p.venue}` : ''}
+                    </span>
+                  </span>
+                  <span className="hidden shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-brass sm:inline">
+                    {relativeDays(p.eventDate)}
+                  </span>
                 </Link>
-              }
-            />
-            <ul className="sheet divide-y divide-[var(--line)] overflow-hidden">
-              {data.archive.latestWorks.map((w) => (
-                <li key={w.id}>
-                  <Link
-                    to="/arkiv/$workId"
-                    params={{ workId: w.id }}
-                    className="link-quiet flex items-baseline justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-paper-sunken/50"
-                  >
-                    <span className="min-w-0">
-                      <span className="display-title block truncate text-[1.02rem] font-semibold">{w.title}</span>
-                      <span className="block text-xs text-ink-soft">{w.composer ?? '—'}</span>
-                    </span>
-                    {w.genre && <Stamp>{w.genre}</Stamp>}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-3 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint">
-              {data.archive.stats.works} verk · {data.archive.stats.files} filer i arkivet
-            </p>
-          </section>
+              </li>
+            ))}
+          </ul>
         )}
-      </div>
+      </section>
+
+      <section className="rise" style={{ animationDelay: '280ms' }}>
+        <SectionHeading kicker="Internsiden" title="Områder" className="mb-4" />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {data.areas.map((area) => (
+            <Link key={area.to} to={area.to} className="sheet sheet-hover link-quiet px-5 py-4">
+              <span className="display-title block text-[1.02rem] font-semibold text-ink">{area.label}</span>
+              <span className="mt-1 block text-xs leading-snug text-ink-soft">{area.description}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }
