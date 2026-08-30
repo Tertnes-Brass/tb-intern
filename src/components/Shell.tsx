@@ -111,7 +111,7 @@ function UserMenu({ me }: { me: Me }) {
 }
 
 type NavItem = {
-  to: '/' | '/noter' | '/medlemmer' | '/innstillinger' | '/innstillinger/nedlastinger'
+  to: '/' | '/noter' | '/kalender' | '/medlemmer' | '/innstillinger' | '/innstillinger/nedlastinger'
   label: string
   exact?: boolean
 }
@@ -122,6 +122,7 @@ type NavItem = {
 const BASE_NAV: NavItem[] = [
   { to: '/', label: 'Hjem', exact: true },
   { to: '/noter', label: 'Noter' },
+  { to: '/kalender', label: 'Kalender' },
   { to: '/medlemmer', label: 'Medlemmer' },
 ]
 
