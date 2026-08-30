@@ -18,7 +18,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'Notearkiv · Tertnes Brass' },
+      { title: 'Intern · Tertnes Brass' },
       { name: 'robots', content: 'noindex' },
       { name: 'theme-color', media: '(prefers-color-scheme: light)', content: '#f7f1e6' },
       { name: 'theme-color', media: '(prefers-color-scheme: dark)', content: '#171310' },

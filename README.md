@@ -7,6 +7,14 @@ Notearkiv, publisering og deling av noter for brass band — bygget for [Tertnes
 > **Status: fase 1 — i produksjon på [noter.tertnesbrass.com](https://noter.tertnesbrass.com)** (invitasjonsbasert).
 > Kjørbar lokalt uten Cloudflare-konto. All demodata er kunstig (inkl. genererte note-PDF-er) — ingen rettighetsbelagte noter i repoet.
 
+**Fra notearkiv til internside:** appen er i ferd med å bli hele internsiden for
+Tertnes Brass («Tertnes Brass Intern»), med noter som ett av flere områder.
+Notearkivet ligger derfor under `/noter` — «Mine noter» på `/noter`, prosjekter
+på `/noter/prosjekter` og arkivet på `/noter/arkiv`. Gamle lenker (`/prosjekter`,
+`/arkiv`, med detaljruter og filtre i URL-en) svarer 301 til de nye stiene, så de
+fortsetter å virke. `/` blir forsiden (hub) for internsiden; inntil den er bygget
+sendes innloggede videre til `/noter`.
+
 `noter.tertnesbrass.com` er det kanoniske produksjonsdomenet — alle lenker, auth-callbacks og e-poster skal peke dit; det tidligere `noter.saynain.com` fases ut og skal ikke brukes.
 
 ## Funksjoner
@@ -41,9 +49,9 @@ Seed besetning + roller + demoinnhold (kun i dev): `curl -X POST http://localhos
 I dev sendes ikke e-post — koder og magiske lenker skrives til serverkonsollen (og miniflares e-postmappe). Logg inn med `ADMIN_EMAIL` for admin, eller en av de seedede demo-adressene (f.eks. `jonas@demo.tertnesbrass.no`).
 
 For e-postfri nettlesertesting kan lokale agenter og utviklere åpne
-`http://localhost:3000/api/dev-login?to=/`. Ruten seeder og logger inn standard-
+`http://localhost:3000/api/dev-login?to=/noter`. Ruten seeder og logger inn standard-
 demoadministratoren. Velg en annen seedet rolle med `as`, for eksempel
-`/api/dev-login?as=jonas@demo.tertnesbrass.no&to=/arkiv`. Ruten svarer 404 i
+`/api/dev-login?as=jonas@demo.tertnesbrass.no&to=/noter/arkiv`. Ruten svarer 404 i
 produksjonsbygg og godtar bare adressene i `SEED_MEMBERS`.
 
 Nullstill lokalt ved å slette `.wrangler/state` og kjøre migreringen på nytt.

@@ -9,6 +9,19 @@ Notearkiv for brass band (Tertnes Brass). TanStack Start (React) på Cloudflare 
 - `pnpm exec drizzle-kit generate --name <navn>` → `pnpm exec wrangler d1 migrations apply tb-notearkiv --local` — skjemaendringer
 - `pnpm generate-routes` — regenerer routeTree etter nye filer i `src/routes/`
 
+## Rutestruktur
+
+Appen er i ferd med å bli hele internsiden («Tertnes Brass Intern»), og noter er
+ett område i den. Notearkivet bor derfor i navnerommet `/noter`:
+`src/routes/noter/index.tsx` («Mine noter»), `noter/prosjekter/{index,$projectId}.tsx`
+og `noter/arkiv/{index,$workId}.tsx`. Layout-ruten `src/routes/noter/route.tsx`
+eier områdemenyen (Mine noter · Prosjekter · Arkiv, sistnevnte kun ved
+`canBrowseArchive`) og gjør `me` ikke-nullbar i rutekonteksten for hele området.
+`src/routes/{prosjekter,arkiv}/*` er tomme rutefiler som kaster en 301-redirect
+til de nye stiene og tar med seg søkeparametrene — gamle lenker i e-post og chat
+skal fortsatt virke, så de skal ikke slettes. `src/routes/index.tsx` (`/`) er en
+midlertidig videresending til `/noter` og erstattes av hub-forsiden.
+
 ## Arkitektur
 
 - `src/db/schema.ts` — hele datamodellen (Drizzle/SQLite)
@@ -26,14 +39,17 @@ Notearkiv for brass band (Tertnes Brass). TanStack Start (React) på Cloudflare 
 eget inngangspunkt, én primærbruker, én primærhandling og egen oversikt — men
 felles navigasjon, auth, roller, designsystem og datamodell. Ikke samle nye
 funksjoner i én stor administrasjonsside, og ikke parker dem under
-`/innstillinger` fordi de føles administrative.
+`/innstillinger` fordi de føles administrative. Navigasjonsmodellen er avgjort
+(§6, alternativ (a), 30. august 2026): kort toppmeny i `Shell.tsx` + egen
+områdemeny per område, slik `src/routes/noter/route.tsx` gjør det.
 
 Besvar disse sju punktene i saken eller PR-en **før** du skriver koden: **navn ·
 formål · primærbruker · primærhandling · plass i navigasjonen · rettigheten som
 gater det** (`PERMISSION_CATALOG` i `src/server/settings.ts`, håndhevet
 server-side) **· eget rutenavnerom?** Toppmenyen i `src/components/Shell.tsx`
 har begrenset plass (mobilstripen scroller alt ved seks oppføringer) — se §6 i
-dokumentet før du legger til en ny.
+dokumentet før du legger til en ny; undernavigasjon i et eksisterende område er
+som regel riktigere.
 
 Tilgangsstyring: `docs/tilgangsstyring.md`. Reglene der er ikke til forhandling.
 

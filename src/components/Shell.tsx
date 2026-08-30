@@ -111,26 +111,24 @@ function UserMenu({ me }: { me: Me }) {
 }
 
 type NavItem = {
-  to: '/' | '/prosjekter' | '/arkiv' | '/medlemmer' | '/innstillinger' | '/innstillinger/nedlastinger'
+  to: '/' | '/noter' | '/medlemmer' | '/innstillinger' | '/innstillinger/nedlastinger'
   label: string
   exact?: boolean
 }
 
+// Kort toppmeny; hvert område eier sin egen undernavigasjon (navigasjonsmodell
+// (a) i docs/designprinsipper.md §6). «Noter» er aktiv for hele /noter/*, så
+// Prosjekter og Arkiv hører hjemme i områdemenyen, ikke her.
 const BASE_NAV: NavItem[] = [
   { to: '/', label: 'Hjem', exact: true },
-  { to: '/prosjekter', label: 'Prosjekter' },
+  { to: '/noter', label: 'Noter' },
   { to: '/medlemmer', label: 'Medlemmer' },
 ]
 
 export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
   const canManageSettings = me.permissions.includes('*') || me.permissions.includes('settings.manage')
   const canViewDownloads = me.permissions.includes('*') || me.permissions.includes('downloads.view')
-  const canBrowseArchive =
-    me.permissions.includes('*') ||
-    me.permissions.includes('archive.viewAll') ||
-    me.permissions.includes('works.manage')
   const NAV: NavItem[] = [...BASE_NAV]
-  if (canBrowseArchive) NAV.splice(2, 0, { to: '/arkiv', label: 'Arkiv' })
   if (canViewDownloads) NAV.push({ to: '/innstillinger/nedlastinger', label: 'Filtilganger' })
   // exact, ellers markeres Innstillinger som aktiv også på /innstillinger/nedlastinger
   if (canManageSettings) NAV.push({ to: '/innstillinger', label: 'Innstillinger', exact: true })
@@ -143,7 +141,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
               Tertnes Brass
             </span>
             <span className="display-title text-[1.05rem] italic leading-none text-brass-strong transition-colors group-hover:text-brass">
-              Notearkiv
+              Intern
             </span>
           </Link>
 
@@ -189,7 +187,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
       <footer className="border-t border-line">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 sm:px-6">
           <p className="font-mono text-[0.64rem] uppercase tracking-[0.18em] text-ink-faint">
-            Tertnes Brass · Notearkiv
+            Tertnes Brass · Intern
           </p>
           <div className="staff-rule w-28 opacity-50" aria-hidden />
         </div>

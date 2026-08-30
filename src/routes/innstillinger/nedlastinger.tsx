@@ -210,7 +210,7 @@ function DownloadsPage() {
                   </td>
                   <td className="px-4 py-3 sm:px-5">
                     <Link
-                      to="/arkiv/$workId"
+                      to="/noter/arkiv/$workId"
                       params={{ workId: r.workId }}
                       className="link-quiet font-medium text-ink transition-colors hover:text-brass-strong"
                     >

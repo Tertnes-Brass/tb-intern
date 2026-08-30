@@ -17,6 +17,10 @@ administrasjonsside. Begge ender med et grensesnitt ingen eier.
 > Det er ikke gjort UI-endringer sammen med det. Navigasjonsspørsmålet i §6 er
 > **åpent** og venter på et produktvalg — dokumentet beskriver alternativene, det
 > avgjør dem ikke.
+>
+> **Oppdatert 30. august 2026:** navigasjonsspørsmålet er avgjort — alternativ
+> **(a)** ble valgt da notearkivet ble utvidet til internsiden «Tertnes Brass
+> Intern». Se §6 og §7.
 
 ## 1. Prinsippet
 
@@ -28,8 +32,8 @@ administrasjonsside. Begge ender med et grensesnitt ingen eier.
 - Hvert område har **én primærbruker**. Er svaret «alle», er området enten for
   stort eller egentlig to områder.
 - Hvert område har **én primærhandling** som skal kunne gjøres fra første skjerm
-  uten å lete. På `/arkiv` er det «legg inn et verk», på `/` er det «åpne min
-  stemme».
+  uten å lete. På `/noter/arkiv` er det «legg inn et verk», på `/noter` er det «åpne
+  min stemme».
 - Hvert område har **egen oversikt** — sin egen liste, sin egen tomtilstand, sin
   egen tone. Områder skal ikke låne hverandres sideoppsett bare fordi det finnes.
 - Områdene deler **plattformlaget**: `Shell` (`src/components/Shell.tsx`),
@@ -50,25 +54,29 @@ lesing er åpnere; håndhevelsen ligger alltid i `src/server/*.ts`, aldri bare i
 
 | Område | Rute | Primærbruker | Primærhandling | Gate |
 |---|---|---|---|---|
-| **Hjem** / «Mine noter» | `src/routes/index.tsx` (`getHome`) | Musikeren | Åpne egne stemmer + lytteeksempler til neste prosjekt | `requireMe()`; stemmefiltrering via `effectivePartIds` |
-| **Prosjekter** | `src/routes/prosjekter/index.tsx`, `$projectId.tsx` | Dirigent / prosjektansvarlig | Klikke sammen et program i rekkefølge og publisere det | `projects.manage`; upublisert er usynlig ellers. Deling: `shares.manage` |
-| **Arkiv** | `src/routes/arkiv/index.tsx`, `$workId.tsx` | Arkivaren | Katalogisere et verk og laste opp PDF per stemme | Innsyn: `archive.viewAll` ∨ `works.manage`; skriving: `works.manage` |
+| **Noter** / «Mine noter» | `src/routes/noter/index.tsx` (`getHome`) | Musikeren | Åpne egne stemmer + lytteeksempler til neste prosjekt | `requireMe()`; stemmefiltrering via `effectivePartIds` |
+| **Prosjekter** | `src/routes/noter/prosjekter/index.tsx`, `$projectId.tsx` | Dirigent / prosjektansvarlig | Klikke sammen et program i rekkefølge og publisere det | `projects.manage`; upublisert er usynlig ellers. Deling: `shares.manage` |
+| **Arkiv** | `src/routes/noter/arkiv/index.tsx`, `$workId.tsx` | Arkivaren | Katalogisere et verk og laste opp PDF per stemme | Innsyn: `archive.viewAll` ∨ `works.manage`; skriving: `works.manage` |
 | **Medlemmer** | `src/routes/medlemmer/index.tsx` | Admin (seksjonsleder i redusert form) | Invitere et medlem og sette rolle + stemme | Lesing: `requireMe()`; skriving: `members.manage` / `members.manage.section` |
 | **Innstillinger** | `src/routes/innstillinger/index.tsx` | Admin | Forvalte besetning og rollematrisen | `settings.manage` |
 | **Filtilganger** | `src/routes/innstillinger/nedlastinger.tsx` | Admin / arkivar | Svare på «hvem har hatt denne fila?» | `downloads.view` |
 | **Vikarvisning** | `src/routes/v/$token.tsx` | Vikaren, uten konto | Åpne de stemmene hen har fått, nå | Token + `shareAllows()` mot snapshottet løvliste |
 
-Tre observasjoner som er verdt å ta med videre:
+Fire observasjoner som er verdt å ta med videre:
 
 - **Arkiv er prinsippet i praksis.** Området har eget inngangspunkt som er skjult
-  i navigasjonen for et vanlig medlem (`Shell.tsx` legger inn `/arkiv` kun ved
-  `canBrowseArchive`), og `beforeLoad` sender resten til `/`. Området finnes, men
-  bare for dem det er laget for.
+  i navigasjonen for et vanlig medlem (områdemenyen i `src/routes/noter/route.tsx`
+  legger inn `/noter/arkiv` kun ved `canBrowseArchive`), og `beforeLoad` sender
+  resten til `/noter`. Området finnes, men bare for dem det er laget for.
 - **Filtilganger er prinsippet brutt i praksis.** Det er et eget område med egen
   primærbruker og egen toppmeny-oppføring, men URL-en (`/innstillinger/nedlastinger`)
   parkerer det i et annet områdes navnerom. Det er ikke verdt en migrering i seg
   selv, men det er mønsteret å ikke gjenta: en funksjon havnet i «Innstillinger»
   fordi den føltes administrativ.
+- **`/` er ikke lenger et område.** Etter 30. august 2026 er `/` reservert
+  hub-flaten for internsiden, og `src/routes/index.tsx` er en midlertidig
+  videresending til `/noter`. Noteområdet (Mine noter, Prosjekter, Arkiv) har
+  layout-ruten `src/routes/noter/route.tsx` som felles områdemeny.
 - **Vikarvisningen rendres bevisst utenfor `Shell`.** `src/routes/__root.tsx` har
   en `bare`-sjekk (`pathname.startsWith('/v/')`) som dropper toppmeny, brukermeny
   og temabryter. Vikaren har ingen konto, ingen rolle og ingen andre områder å
@@ -104,8 +112,8 @@ lenker**, ikke med felles sider.
 
 Slik det skal se ut — og delvis gjør i dag:
 
-- **Finnes:** arkivblokken på Hjem lenker til `/arkiv/$workId` for det enkelte
-  verket (`src/routes/index.tsx`), og filtilgangsloggen lenker fra en rad til
+- **Finnes:** arkivblokken på «Mine noter» lenker til `/noter/arkiv/$workId` for
+  det enkelte verket (`src/routes/noter/index.tsx`), og filtilgangsloggen lenker fra en rad til
   verket den gjelder (`nedlastinger.tsx`).
 - **Finnes:** `nedlastinger.tsx` validerer `workId`, `projectId`, `userId` og
   `shareLinkId` i `validateSearch` — nettopp for at andre områder skal kunne
@@ -149,16 +157,17 @@ den bygges — også de som allerede har en anbefaling her.
 |---|---|---|---|
 | **#32 Mediearkiv** | Eget område, eget navnerom (`/media`) | Stab → registrere et opptak og knytte det til prosjekt/verk | Ikke en fane i Arkiv: andre filtyper, og et helt annet tilgangsbegrep (intern / styre / offentlig kandidat) enn notearkivets stemmebaserte gate. Krever egne rettigheter. |
 | **#28 Kunngjøringer** | Delt: lesing som blokk på Hjem, skriving i eget navnerom | Styre/dirigent → publisere en melding; medlem → se den | Saken sier selv at medlemmet skal se dem «på forsiden». Lesegrensesnittet er en blokk, ikke et område; publiseringsflyten med målretting og lest-status er stor nok til å fortjene eget rom. |
-| **#24 Oppmøte** | Inne i #26, som primærhandling på en aktivitet | Medlem → svare kommer / kommer ikke / usikker | RSVP uten aktivitet er meningsløst; det er ikke et selvstendig område. Bygges #24 før #26, hører det hjemme på `/prosjekter/$projectId` — og da skal det sies eksplisitt at det er midlertidig. |
+| **#24 Oppmøte** | Inne i #26, som primærhandling på en aktivitet | Medlem → svare kommer / kommer ikke / usikker | RSVP uten aktivitet er meningsløst; det er ikke et selvstendig område. Bygges #24 før #26, hører det hjemme på `/noter/prosjekter/$projectId` — og da skal det sies eksplisitt at det er midlertidig. |
 | **#26 Kalender/aktiviteter** | Eget område (`/aktiviteter`) | Alle medlemmer → se hva som skjer, og «Mine datoer» | Sterkeste kandidat til ny toppnivå-oppføring: primærbruker er *hele* korpset, ikke stab. Det er også den som først presser navigasjonen (§6). |
 | **#13 Utstyr** | Eget område (`/utstyr`) | Materialforvalter → registrere en gjenstand med bilde, eier og lånestatus | Skal ikke under Innstillinger selv om det føles administrativt. Egen rettighet; lesing kan være åpen for medlemmer. Kobles til medlem ved privat eier og til prosjekt ved bruk — krysslenker, ikke felles side. |
 
 ## 6. Ærlige begrensninger: taket i toppnavigasjonen
 
-`src/components/Shell.tsx` bygger `NAV` av `BASE_NAV` (Hjem, Prosjekter,
-Medlemmer) pluss betingede innslag: `/arkiv` ved `canBrowseArchive`,
-`/innstillinger/nedlastinger` ved `downloads.view`, `/innstillinger` ved
-`settings.manage`. En admin ser altså **seks** oppføringer i dag.
+`src/components/Shell.tsx` bygger `NAV` av `BASE_NAV` (Hjem, Noter, Medlemmer)
+pluss betingede innslag: `/innstillinger/nedlastinger` ved `downloads.view` og
+`/innstillinger` ved `settings.manage`. En admin ser altså **fem** oppføringer
+etter at (a) ble innført; før 30. august 2026 var det seks, med Prosjekter og
+Arkiv som egne toppnivåoppføringer.
 
 Det er omtrent taket:
 
@@ -171,8 +180,8 @@ Det er omtrent taket:
   ti oppføringer. Flat toppmeny knekker først på mobil, og den knekker uten at
   noen merker det.
 
-Det er en reell begrensning, ikke en smakssak. To retninger, **ingen av dem
-valgt**:
+Det er en reell begrensning, ikke en smakssak. To retninger ble vurdert
+(**(a) er valgt**, se boksen under):
 
 - **(a) Undernavigasjon per område.** Toppmenyen holdes kort, og hvert område
   eier sin egen interne navigasjon. Krever at noe demoteres — Filtilganger inn
@@ -189,8 +198,18 @@ valgt**:
   gjort dårlig blir den nøyaktig den store, utydelige administrasjonssiden §4
   advarer mot — bare med ikoner.
 
-**Anbefaling inntil eieren bestemmer:** (a). Grunnen er ikke at (b) er feil, men
-at plattformen har seks områder og ikke ti — vi har ikke smerten som gjør
+> **Valgt 30. august 2026: (a).** Som del av arbeidet med å utvide notearkivet
+> til internsiden «Tertnes Brass Intern» ble toppmenyen kortet ned til Hjem ·
+> Noter · Medlemmer (+ Filtilganger/Innstillinger betinget), og noteområdet fikk
+> sin egen områdemeny i layout-ruten `src/routes/noter/route.tsx`: «Mine noter»
+> (`/noter`) · «Prosjekter» (`/noter/prosjekter`) · «Arkiv» (`/noter/arkiv`, kun
+> ved `canBrowseArchive`). Prosjekter og Arkiv er dermed sider i noteområdet i
+> navigasjonen, men fortsatt egne app-områder etter §1 — de har eget
+> inngangspunkt, egen oversikt og egen gate. Gamle stier (`/prosjekter`,
+> `/arkiv`, med detaljruter og søkeparametre) svarer 301 til de nye.
+
+**Begrunnelsen bak valget:** Grunnen er ikke at (b) er feil, men
+at plattformen har en håndfull områder og ikke ti — vi har ikke smerten som gjør
 launcheren verdt en ny flate, og undernavigasjon er noe hvert område trenger
 uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 
@@ -200,12 +219,14 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 
 ## 7. Hva som ikke er avgjort
 
-1. **Navigasjonsmodellen** (§6): launcher-flate eller flat toppmeny med
-   undernavigasjon per område. Anbefalt: flat toppmeny + undernavigasjon nå,
-   med terskelen over som trigger for å ta det opp igjen. Venter på eier.
+1. ~~**Navigasjonsmodellen** (§6)~~ — **avgjort 30. august 2026: alternativ (a)**,
+   kort toppmeny + undernavigasjon per område. Terskelen i §6 står ved lag som
+   trigger for å ta launcheren (b) opp igjen.
 2. **Skal Filtilganger flyttes ut av `/innstillinger`-navnerommet?** Kosmetisk i
    dag, men det er presedensen andre områder kommer til å kopiere.
-3. **Skal Hjem være medlemsflaten eller plattformflaten?** #28 vil legge
-   kunngjøringer der, #26 vil legge «Mine datoer» der. Hjem tåler ikke å bli
-   alles utstillingsvindu; rekkefølgen og taket der må avklares før #28 og #26
-   bygges — ellers avgjør den som kommer først.
+3. ~~**Skal Hjem være medlemsflaten eller plattformflaten?**~~ — **avgjort
+   30. august 2026: plattformflaten.** `Hjem` (`/`) blir hub-en for internsiden,
+   og medlemsflaten «Mine noter» bor på `/noter` som en del av noteområdet. Inntil
+   hub-en finnes, sender `/` innloggede videre til `/noter`. Hva hub-en faktisk
+   viser — kunngjøringer (#28), «Mine datoer» (#26), snarveier til områdene — og
+   i hvilken rekkefølge, er fortsatt åpent.

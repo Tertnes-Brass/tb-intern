@@ -131,3 +131,25 @@ export function seasonForDate(eventDate: string): { name: string; startsOn: stri
     ? { name: `Vår ${year}`, startsOn: `${year}-01-01`, endsOn: `${year}-07-31` }
     : { name: `Høst ${year}`, startsOn: `${year}-08-01`, endsOn: `${year}-12-31` }
 }
+
+/** Ukjent verdi i URL-en faller stille tilbake til «ingen valg» i stedet for å kaste. */
+export function pickAllowed<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : undefined
+}
+
+export type ProjectSearch = { kind?: ProjectKind; status?: ProjectStatus; sort?: ProjectSort }
+
+/**
+ * Søkeparametrene på prosjektlista. Ligger her fordi både `/noter/prosjekter`
+ * og redirect-ruten fra den gamle stien `/prosjekter` må tolke dem likt —
+ * filteret skal overleve en gammel lenke.
+ */
+export function parseProjectSearch(raw: Record<string, unknown>): ProjectSearch {
+  const sort = pickAllowed(raw.sort, PROJECT_SORTS)
+  return {
+    kind: pickAllowed(raw.kind, PROJECT_KINDS),
+    status: pickAllowed(raw.status, PROJECT_STATUSES),
+    // Standardsorteringen holdes ute av URL-en, så en uendret visning har ren adresse.
+    sort: sort === DEFAULT_PROJECT_SORT ? undefined : sort,
+  }
+}
