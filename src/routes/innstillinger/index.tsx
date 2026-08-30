@@ -457,7 +457,7 @@ function RolesSection({ data }: { data: Data }) {
           }}
           className="space-y-4"
         >
-          <Field label="Navn *" hint="F.eks. «Notearkivar» eller «Styremedlem»">
+          <Field label="Navn *" hint="F.eks. «Notearkivar» eller «Materialforvalter»">
             <input className="field-input" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} autoFocus placeholder="Rollenavn" />
           </Field>
           <div className="flex justify-end gap-2">

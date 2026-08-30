@@ -58,6 +58,7 @@ lesing er åpnere; håndhevelsen ligger alltid i `src/server/*.ts`, aldri bare i
 | **Noter** / «Mine noter» | `src/routes/noter/index.tsx` (`getHome`) | Musikeren | Åpne egne stemmer + lytteeksempler til neste prosjekt | `requireMe()`; stemmefiltrering via `effectivePartIds` |
 | **Prosjekter** | `src/routes/noter/prosjekter/index.tsx`, `$projectId.tsx` | Dirigent / prosjektansvarlig | Klikke sammen et program i rekkefølge og publisere det | `projects.manage`; upublisert er usynlig ellers. Deling: `shares.manage` |
 | **Arkiv** | `src/routes/noter/arkiv/index.tsx`, `$workId.tsx` | Arkivaren | Katalogisere et verk og laste opp PDF per stemme | Innsyn: `archive.viewAll` ∨ `works.manage`; skriving: `works.manage` |
+| **Kalender** | `src/routes/kalender/index.tsx` (`getCalendar`) | Alle medlemmer | Se når neste øvelse og konsert er | `requireMe()`; feeden er en secret (`CALENDAR_ICS_URL`), aldri til klienten |
 | **Medlemmer** | `src/routes/medlemmer/index.tsx` | Admin (seksjonsleder i redusert form) | Invitere et medlem og sette rolle + stemme | Lesing: `requireMe()`; skriving: `members.manage` / `members.manage.section` |
 | **Innstillinger** | `src/routes/innstillinger/index.tsx` | Admin | Forvalte besetning og rollematrisen | `settings.manage` |
 | **Filtilganger** | `src/routes/innstillinger/nedlastinger.tsx` | Admin / arkivar | Svare på «hvem har hatt denne fila?» | `downloads.view` |
@@ -166,11 +167,11 @@ den bygges — også de som allerede har en anbefaling her.
 
 ## 6. Ærlige begrensninger: taket i toppnavigasjonen
 
-`src/components/Shell.tsx` bygger `NAV` av `BASE_NAV` (Hjem, Noter, Medlemmer)
-pluss betingede innslag: `/innstillinger/nedlastinger` ved `downloads.view` og
-`/innstillinger` ved `settings.manage`. En admin ser altså **fem** oppføringer
-etter at (a) ble innført; før 30. august 2026 var det seks, med Prosjekter og
-Arkiv som egne toppnivåoppføringer.
+`src/components/Shell.tsx` bygger `NAV` av `BASE_NAV` (Hjem, Noter, Kalender,
+Medlemmer) pluss betingede innslag: `/innstillinger/nedlastinger` ved
+`downloads.view` og `/innstillinger` ved `settings.manage`. Et vanlig medlem ser
+**fire** oppføringer; en admin ser **seks** — altså akkurat på terskelen under.
+Kalender kom til 31. august 2026; før den var admin på fem.
 
 Det er omtrent taket:
 
@@ -179,9 +180,10 @@ Det er omtrent taket:
 - Mobilstripen (`md:hidden`, `overflow-x-auto` med en fade-gradient til høyre)
   **scroller allerede** for en admin på en smal telefon. Oppføringer bak faden
   er i praksis usynlige — feilmodusen er stille, ikke ødelagt layout.
-- Legger vi til Aktiviteter, Mediearkiv, Kunngjøringer og Utstyr, er en admin på
-  ti oppføringer. Flat toppmeny knekker først på mobil, og den knekker uten at
-  noen merker det.
+- Legger vi til Mediearkiv, Kunngjøringer og Utstyr, er en admin på ni
+  oppføringer. Flat toppmeny knekker først på mobil, og den knekker uten at
+  noen merker det. Neste område som vil ha en toppnivå-oppføring, må derfor
+  enten fortrenge en av dagens seks eller ta launcher-spørsmålet opp igjen.
 
 Det er en reell begrensning, ikke en smakssak. To retninger ble vurdert
 (**(a) er valgt**, se boksen under):
