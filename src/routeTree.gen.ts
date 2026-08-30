@@ -21,6 +21,7 @@ import { Route as ArkivIndexRouteImport } from './routes/arkiv/index'
 import { Route as ArkivWorkIdRouteImport } from './routes/arkiv/$workId'
 import { Route as InnstillingerIndexRouteImport } from './routes/innstillinger/index'
 import { Route as InnstillingerNedlastingerRouteImport } from './routes/innstillinger/nedlastinger'
+import { Route as KalenderIndexRouteImport } from './routes/kalender/index'
 import { Route as MedlemmerIndexRouteImport } from './routes/medlemmer/index'
 import { Route as NoterIndexRouteImport } from './routes/noter/index'
 import { Route as ProsjekterIndexRouteImport } from './routes/prosjekter/index'
@@ -98,6 +99,11 @@ const InnstillingerNedlastingerRoute =
     path: '/innstillinger/nedlastinger',
     getParentRoute: () => rootRouteImport,
   } as any)
+const KalenderIndexRoute = KalenderIndexRouteImport.update({
+  id: '/kalender/',
+  path: '/kalender/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MedlemmerIndexRoute = MedlemmerIndexRouteImport.update({
   id: '/medlemmer/',
   path: '/medlemmer/',
@@ -190,6 +196,7 @@ export interface FileRoutesByFullPath {
   '/v/$token': typeof VTokenRoute
   '/arkiv/': typeof ArkivIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
+  '/kalender/': typeof KalenderIndexRoute
   '/medlemmer/': typeof MedlemmerIndexRoute
   '/noter/': typeof NoterIndexRoute
   '/prosjekter/': typeof ProsjekterIndexRoute
@@ -218,6 +225,7 @@ export interface FileRoutesByTo {
   '/v/$token': typeof VTokenRoute
   '/arkiv': typeof ArkivIndexRoute
   '/innstillinger': typeof InnstillingerIndexRoute
+  '/kalender': typeof KalenderIndexRoute
   '/medlemmer': typeof MedlemmerIndexRoute
   '/noter': typeof NoterIndexRoute
   '/prosjekter': typeof ProsjekterIndexRoute
@@ -248,6 +256,7 @@ export interface FileRoutesById {
   '/v/$token': typeof VTokenRoute
   '/arkiv/': typeof ArkivIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
+  '/kalender/': typeof KalenderIndexRoute
   '/medlemmer/': typeof MedlemmerIndexRoute
   '/noter/': typeof NoterIndexRoute
   '/prosjekter/': typeof ProsjekterIndexRoute
@@ -279,6 +288,7 @@ export interface FileRouteTypes {
     | '/v/$token'
     | '/arkiv/'
     | '/innstillinger/'
+    | '/kalender/'
     | '/medlemmer/'
     | '/noter/'
     | '/prosjekter/'
@@ -307,6 +317,7 @@ export interface FileRouteTypes {
     | '/v/$token'
     | '/arkiv'
     | '/innstillinger'
+    | '/kalender'
     | '/medlemmer'
     | '/noter'
     | '/prosjekter'
@@ -336,6 +347,7 @@ export interface FileRouteTypes {
     | '/v/$token'
     | '/arkiv/'
     | '/innstillinger/'
+    | '/kalender/'
     | '/medlemmer/'
     | '/noter/'
     | '/prosjekter/'
@@ -366,6 +378,7 @@ export interface RootRouteChildren {
   VTokenRoute: typeof VTokenRoute
   ArkivIndexRoute: typeof ArkivIndexRoute
   InnstillingerIndexRoute: typeof InnstillingerIndexRoute
+  KalenderIndexRoute: typeof KalenderIndexRoute
   MedlemmerIndexRoute: typeof MedlemmerIndexRoute
   ProsjekterIndexRoute: typeof ProsjekterIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -460,6 +473,13 @@ declare module '@tanstack/react-router' {
       path: '/innstillinger/nedlastinger'
       fullPath: '/innstillinger/nedlastinger'
       preLoaderRoute: typeof InnstillingerNedlastingerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kalender/': {
+      id: '/kalender/'
+      path: '/kalender'
+      fullPath: '/kalender/'
+      preLoaderRoute: typeof KalenderIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/medlemmer/': {
@@ -605,6 +625,7 @@ const rootRouteChildren: RootRouteChildren = {
   VTokenRoute: VTokenRoute,
   ArkivIndexRoute: ArkivIndexRoute,
   InnstillingerIndexRoute: InnstillingerIndexRoute,
+  KalenderIndexRoute: KalenderIndexRoute,
   MedlemmerIndexRoute: MedlemmerIndexRoute,
   ProsjekterIndexRoute: ProsjekterIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
