@@ -19,6 +19,7 @@ export const PERMISSION_CATALOG: Array<{ key: string; label: string; hint: strin
   { key: 'scores.view', label: 'Partitur', hint: 'Se og laste ned partitur' },
   { key: 'archive.viewAll', label: 'Se hele arkivet', hint: 'Se og laste ned ALLE stemmer, ikke bare egne' },
   { key: 'downloads.view', label: 'Filtilgangslogg', hint: 'Se hvem som har vist eller lastet ned filer' },
+  { key: 'board.manage', label: 'Styrearbeid', hint: 'Se og redigere styrets oppgaver, møter og dokumenter' },
   { key: SETTINGS_PERMISSION, label: 'Innstillinger', hint: 'Administrere besetning og roller' },
 ]
 

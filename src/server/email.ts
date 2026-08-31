@@ -166,3 +166,57 @@ export function inviteEmail(url: string, bandName = 'Tertnes Brass'): { subject:
     text: `Du er invitert til ${bandName} Notearkiv.\n\nLogg inn første gang her (gyldig i 30 minutter):\n${url}\n`,
   }
 }
+
+/**
+ * Varsel til den som blir satt som ansvarlig for en styreoppgave. Sendes bare
+ * når en ANNEN delegerer — man varsler ikke seg selv om noe man nettopp gjorde.
+ */
+export function taskAssignedEmail(input: {
+  title: string
+  dueDate: string | null
+  projectTitle: string | null
+  url: string
+  assignedByName: string
+}): { subject: string; html: string; text: string } {
+  const { title, dueDate, projectTitle, url, assignedByName } = input
+  const facts = [
+    projectTitle ? `Prosjekt: ${projectTitle}` : null,
+    dueDate ? `Frist: ${formatIsoDate(dueDate)}` : null,
+  ].filter((line): line is string => line !== null)
+
+  return {
+    subject: `Ny styreoppgave: ${title}`,
+    html: shell(
+      'Du har fått en oppgave',
+      `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#5f5640">${escapeHtml(assignedByName)} har satt deg som ansvarlig for en oppgave i styrearbeidet:</p>
+       <p style="margin:0 0 ${facts.length > 0 ? '8' : '24'}px;font-family:Georgia,serif;font-size:19px;color:#211b12">${escapeHtml(title)}</p>
+       ${facts.length > 0 ? `<p style="margin:0 0 24px;font-size:13px;color:#8e8468">${facts.map(escapeHtml).join('<br>')}</p>` : ''}
+       <p style="margin:0 0 24px">${button(url, 'Åpne oppgaven')}</p>
+       <p style="margin:0;font-size:12px;color:#8e8468">Eller lim inn denne lenken i nettleseren:<br><span style="color:#7a5f1d;word-break:break-all">${url}</span></p>`,
+    ),
+    text: `${assignedByName} har satt deg som ansvarlig for en oppgave i styrearbeidet.\n\n${title}\n${facts.length > 0 ? `${facts.join('\n')}\n` : ''}\nÅpne oppgaven her:\n${url}\n`,
+  }
+}
+
+/** «2026-09-15» → «15. september 2026». Egen her: e-post kjører uten klientens Intl-oppsett. */
+function formatIsoDate(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat('nb-NO', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'Europe/Oslo',
+    }).format(new Date(`${iso}T12:00:00Z`))
+  } catch {
+    return iso
+  }
+}
+
+/** Oppgavetitler er brukerskrevne og havner i HTML-malen. */
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+}

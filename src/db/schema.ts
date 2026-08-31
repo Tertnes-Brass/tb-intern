@@ -273,3 +273,140 @@ export const settings = sqliteTable('settings', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
 })
+
+// ---------- Styre ----------
+
+// Styremøter. `notes` er ren tekst med avsnitt (ingen markup) — referatet
+// skrives i en textarea og gjengis med linjeskift bevart.
+export const boardMeetings = sqliteTable(
+  'board_meetings',
+  {
+    id: text('id').primaryKey(),
+    date: text('date').notNull(), // ISO-dato
+    title: text('title').notNull(),
+    // Tre felt i møtets egen rekkefølge: agenda før, notater under, vedtak
+    // etter. Alle er ren tekst med avsnitt — ingen markup.
+    agenda: text('agenda'),
+    notes: text('notes'),
+    decisions: text('decisions'),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('board_meetings_date_idx').on(t.date)],
+)
+
+// Styreprosjekter: en arbeidspakke styret planlegger og delegerer («Jubileum
+// 2027», «Uniformer»). Egen ting fra `projects` i noteområdet — et styreprosjekt
+// kan peke på en konsert, men de fleste gjør det ikke.
+export const boardProjects = sqliteTable(
+  'board_projects',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull(),
+    goal: text('goal'),
+    ownerUserId: text('owner_user_id').references(() => user.id, { onDelete: 'set null' }),
+    dueDate: text('due_date'), // ISO-dato
+    status: text('status', { enum: ['active', 'done', 'archived'] })
+      .notNull()
+      .default('active'),
+    linkedProjectId: text('linked_project_id').references(() => projects.id, { onDelete: 'set null' }),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [index('board_projects_status_idx').on(t.status)],
+)
+
+// Styreoppgaver. Kobles valgfritt til et prosjekt i noteområdet (en konsert) og
+// til møtet oppgaven ble opprettet på. `completedAt` settes når status blir
+// 'done', og nullstilles når oppgaven åpnes igjen.
+export const boardTasks = sqliteTable(
+  'board_tasks',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull(),
+    description: text('description'),
+    status: text('status', { enum: ['open', 'in_progress', 'done'] })
+      .notNull()
+      .default('open'),
+    assigneeUserId: text('assignee_user_id').references(() => user.id, { onDelete: 'set null' }),
+    dueDate: text('due_date'), // ISO-dato
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
+    boardProjectId: text('board_project_id').references(() => boardProjects.id, { onDelete: 'set null' }),
+    meetingId: text('meeting_id').references(() => boardMeetings.id, { onDelete: 'set null' }),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [
+    index('board_tasks_status_idx').on(t.status),
+    index('board_tasks_meeting_idx').on(t.meetingId),
+  ],
+)
+
+// Kommentartråd per oppgave — enkel og kronologisk, ingen tråding i tråden.
+export const boardComments = sqliteTable(
+  'board_comments',
+  {
+    id: text('id').primaryKey(),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => boardTasks.id, { onDelete: 'cascade' }),
+    authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
+    body: text('body').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('board_comments_task_idx').on(t.taskId, t.createdAt)],
+)
+
+// Styredokumenter i R2 under nøkkelprefikset `board/`. Filene nås ALDRI via
+// note-gaten i /api/files/$fileId — de har sin egen gate på `board.manage`
+// (src/routes/api/board-files/$documentId.ts).
+export const boardDocuments = sqliteTable(
+  'board_documents',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull(),
+    r2Key: text('r2_key').notNull(),
+    fileName: text('file_name').notNull(),
+    size: integer('size').notNull().default(0),
+    contentType: text('content_type').notNull().default('application/octet-stream'),
+    meetingId: text('meeting_id').references(() => boardMeetings.id, { onDelete: 'set null' }),
+    uploadedBy: text('uploaded_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('board_documents_meeting_idx').on(t.meetingId)],
+)
+
+// Styrets interne chat. `channel` er enten 'general' (kanalen «Styret») eller
+// 'project:<boardProjectId>' — én tråd per styreprosjekt. Kanalen er en streng
+// og ikke en egen tabell: trådene finnes så lenge prosjektet finnes, og en
+// slettet tråd skal ikke etterlate en tom rad noe sted.
+export const boardMessages = sqliteTable(
+  'board_messages',
+  {
+    id: text('id').primaryKey(),
+    channel: text('channel').notNull(),
+    authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
+    body: text('body').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('board_messages_channel_idx').on(t.channel, t.createdAt)],
+)
+
+// Hvor langt hver bruker har lest i hver kanal. Uleste telles som meldinger
+// etter `lastReadAt` som brukeren ikke skrev selv.
+export const boardChannelReads = sqliteTable(
+  'board_channel_reads',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    channel: text('channel').notNull(),
+    lastReadAt: integer('last_read_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.channel] })],
+)

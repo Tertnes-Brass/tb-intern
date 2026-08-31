@@ -19,7 +19,9 @@ eier områdemenyen (Mine noter · Prosjekter · Arkiv, sistnevnte kun ved
 `canBrowseArchive`) og gjør `me` ikke-nullbar i rutekonteksten for hele området.
 `src/routes/{prosjekter,arkiv}/*` er tomme rutefiler som kaster en 301-redirect
 til de nye stiene og tar med seg søkeparametrene — gamle lenker i e-post og chat
-skal fortsatt virke, så de skal ikke slettes. `src/routes/index.tsx` (`/`) er
+skal fortsatt virke, så de skal ikke slettes. Styret har sitt eget navnerom `/styre`
+(`src/routes/styre/route.tsx` med områdemenyen Oppgaver · Prosjekter · Møter ·
+Chat · Dokumenter), gated på `board.manage`. `src/routes/index.tsx` (`/`) er
 hub-forsiden: plattformflaten som viser neste hendelse, veien inn til «Mine
 noter», de neste hendelsene og snarveier til områdene brukeren har tilgang til.
 Den skal ikke gjengi områdenes oversikter i miniatyr — se
@@ -37,7 +39,25 @@ Den skal ikke gjengi områdenes oversikter i miniatyr — se
 - E-post: `src/server/email.ts` via Cloudflare `EMAIL`-binding; faller tilbake til konsoll-logg i dev / ved feil.
 - Kalender: `src/lib/ical.ts` er en egen iCalendar-parser (folding, TZID/UTC/heldag, RRULE+EXDATE+RECURRENCE-ID) som ekspanderer forekomster i veggklokke-tid — ingen avhengigheter, testet i `ical.test.ts`. `src/server/calendar-feed.ts` henter Google-feeden fra secreten `CALENDAR_ICS_URL` (aldri til klienten, aldri i cache-nøkkelen) med ti minutters cache og eksporterer `loadCalendar`; `src/server/calendar.ts` eksponerer `getCalendar`/`getNextEvent` bak `requireMe()`. Delingen er nødvendig: et *levende* eksport i en modul en rute importerer, drar `cloudflare:workers` inn i klientbygget. Serverfunksjoner kaller aldri andre serverfunksjoner — de deler `loadCalendar`.
 - Hub-forsiden: `src/server/hub.ts` (`getHub`) henter kalender, neste publiserte prosjekt (med antall verk) og `me` i parallell og returnerer en liten payload. Reglene — hvilken hendelse som blir hero, og hvilke områdesnarveier rettighetene gir — ligger i `src/lib/hub.ts` (`chooseHero`, `eventsAfter`, `areasFor`), testet i `hub.test.ts`. `areasFor` må holdes i takt med `BASE_NAV` i `Shell.tsx`.
-- Roller: `SEED_ROLES` i `src/server/seed-data.ts` (`admin`, `archivist`, `conductor`, `board` «Styremedlem», `member`). Roller seedes bare i en tom database (`seedBaseConfig`), så en ny systemrolle krever også en migrasjon med `INSERT OR IGNORE` — se `migrations/0008_board-role.sql`. `board` har foreløpig samme rettigheter som `member`; egne styrerettigheter kommer med Beskjeder/Styre.
+- Styre: `/styre` er styrets eget område (oppgaver, styreprosjekter, møter,
+  chat, kommentarer, dokumenter), gated på `board.manage` — også for lesing.
+  `src/server/board.ts` har serverfunksjonene, `src/lib/board.ts` den rene
+  logikken (oppgavesortering, «forfalt», gruppering, prosjektfremdrift,
+  dag-gruppering og ulest-telling i chatten) med tester. Dokumenter ligger i
+  R2-bindingen `FILES` under prefikset `board/`; de lastes opp med én `PUT` mot
+  `src/routes/api/board-files/upload.ts` og kan KUN hentes gjennom den gatede
+  ruten `src/routes/api/board-files/$documentId.ts` — aldri via note-gaten i
+  `api/files/$fileId`. `src/server/board-files.ts` er R2-laget og
+  `src/server/board-notify.ts` sender delegerings-e-posten
+  (`taskAssignedEmail`); begge har levende eksport som rører
+  `cloudflare:workers` og importeres aldri fra en rutekomponent.
+- Styrechatten er kanaler som strenger: `general` eller `project:<id>` (se
+  `projectChannel`/`channelProjectId` i `src/lib/board.ts`). Ingen websockets og
+  ingen Durable Objects — `listMessages({channel, after})` pollet hvert 12. sek
+  fra `src/components/BoardChat.tsx`, kun mens `document.visibilityState` er
+  `visible`. Uleste bor i `board_channel_reads`; tellerne beregnes i SQL, mens
+  «nye meldinger»-skillet i den åpne kanalen bruker den rene `unreadCount`.
+- Roller: `SEED_ROLES` i `src/server/seed-data.ts` (`admin`, `archivist`, `conductor`, `board` «Styremedlem», `member`). `seedBaseConfig` legger inn systemroller som MANGLER og seeder standardrettighetene kun for dem den nettopp opprettet (fjernede rettigheter skal ikke komme tilbake). Prod seedes ikke av seg selv, så en ny systemrolle eller rettighet krever fortsatt en migrasjon med `INSERT OR IGNORE` — se `migrations/0008_board-role.sql` og `0009_board.sql`. `board` har `scores.view` + `board.manage` (styreområdet).
 - Demodata: `src/server/seed.ts`, kun via dev-ruten `/api/dev-seed` (gated på `import.meta.env.DEV`).
 
 ## Nye features = eget app-område

@@ -151,6 +151,37 @@ reverter `$fileId.ts` + serverfunksjons-filtre. Ingen destruktive steg.
 | Vikar (share, fått `percussion-1`) | **Nei** | Ja for 1 | Nei | **Ja** | **Nei** |
 | Uinnlogget uten token | 401 | 401 | 401 | 401 | 401 |
 
+## 5b. Styredokumenter (`board.manage`)
+
+Styreområdet (`/styre`) har sine egne filer, og de går **ikke** gjennom gaten
+over. Grunnregelen står ved lag, men den gjelder notefiler: `$fileId.ts`
+håndhever stemmer, partitur og vikarlenker — begreper som ikke finnes for et
+møtereferat. Å presse styrepapirer inn i den samme if-kjeden ville gjort den
+vanskeligere å lese, uten å gjøre noen ting tryggere.
+
+- Bytene ligger i **samme R2-bøtte** (`FILES`), under nøkkelprefikset `board/`.
+- Den ENESTE veien inn til dem er `src/routes/api/board-files/$documentId.ts`:
+  uinnlogget ⇒ 401, innlogget uten `board.manage` ⇒ 403. Ingen delingstokens,
+  ingen offentlige URL-er, ingen `archive.viewAll`-bypass.
+- Opplasting skjer i `src/routes/api/board-files/upload.ts` (samme gate, 25 MB).
+  R2-nøkkelen bygges av en fersk id, aldri av filnavnet, så ingen kan skrive
+  utenfor prefikset eller over en notefil. `deleteBoardObject` nekter å slette
+  nøkler utenfor `board/`.
+- Alt som ikke er trygt å vise inline (PDF, bilder, ren tekst) strømmes som
+  `application/octet-stream` med `attachment` + `nosniff`.
+- Metadata og all annen styredata gates i `src/server/board.ts` med
+  `requirePermission('board.manage')` — også **lesing**. `beforeLoad` i
+  `src/routes/styre/route.tsx` er kosmetikk, som ellers.
+- Det gjelder **hele** området: styreprosjekter, oppgaver, kommentarer,
+  møtereferater og chatten har ingen egen tilgangsmodell og ingen finere
+  oppdeling. Har du `board.manage`, ser du alt styret har; har du det ikke,
+  finnes ikke området for deg. Chatten har i tillegg en enkel skranke på
+  kanalnøkkelen (`assertChannelExists`), slik at ingen kan skrive i en
+  oppdiktet kanal andre ikke ser. Delegerings-e-posten
+  (`src/server/board-notify.ts`) sender aldri annet enn oppgavetittel, frist,
+  prosjektnavn og en lenke — mottakeren har uansett `board.manage` for å kunne
+  åpne den.
+
 ## 6. Produktvalg før fase 4 (avgjort — historikk)
 
 Alle valg ble avgjort før deploy, i tråd med de anbefalte alternativene (se

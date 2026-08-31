@@ -74,13 +74,25 @@ export function eventsAfter(events: HubEvent[], next: HubEvent | null, limit: nu
 }
 
 /** Rutene hub-en kan lenke til. Holdes som union så `Link to` forblir typet. */
-export type HubAreaTo = '/noter' | '/kalender' | '/medlemmer' | '/innstillinger/nedlastinger' | '/innstillinger'
+export type HubAreaTo =
+  | '/noter'
+  | '/kalender'
+  | '/medlemmer'
+  | '/styre'
+  | '/innstillinger/nedlastinger'
+  | '/innstillinger'
 
 export type HubArea = {
   to: HubAreaTo
   label: string
   /** Én linje om hva du gjør der. */
   description: string
+  /**
+   * Valgfri statuslinje med tall, f.eks. «3 åpne oppgaver, 1 forfalt».
+   * `areasFor` setter den aldri — den fylles i `getHub`, som er stedet som har
+   * databasen. Rettighetene avgjør *om* området er med; tallene er pynt oppå.
+   */
+  note?: string
 }
 
 const BASE_AREAS: HubArea[] = [
@@ -99,6 +111,13 @@ function allows(permissions: string[], permission: string): boolean {
  */
 export function areasFor(permissions: string[]): HubArea[] {
   const areas: HubArea[] = [...BASE_AREAS]
+  if (allows(permissions, 'board.manage')) {
+    areas.push({
+      to: '/styre',
+      label: 'Styre',
+      description: 'Oppgaver, møter og dokumenter for styret.',
+    })
+  }
   if (allows(permissions, 'downloads.view')) {
     areas.push({
       to: '/innstillinger/nedlastinger',

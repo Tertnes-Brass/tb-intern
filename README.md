@@ -36,6 +36,7 @@ SMS-er fortsatt lander riktig. Logikken er `legacyHostRedirect` i
 - **RBAC** — roller (admin/arkivar/dirigent/musiker) med rettigheter i database, håndhevet server-side i alle funksjoner
 - **Tilgangsstyrte filer** — alle PDF-er streames via API med sesjons- eller token-sjekk; partitur er rettighetsstyrt (scores.view); ingen offentlige filer
 - **Kalender** — øvelser og konserter hentes fra korpsets Google-kalender (iCal) og vises på `/kalender`; Google forblir stedet man redigerer
+- **Styre** — styrets eget område på `/styre`: oppgaver, styreprosjekter med fremdrift, styremøter med agenda/notater/vedtak, intern chat og styredokumenter. Synlig kun for dem som har `board.manage`
 
 ## Innlogging og invitasjon
 
@@ -102,6 +103,42 @@ pnpm exec wrangler secret put CALENDAR_ICS_URL   # hemmelig — kun som secret
 Uten `CALENDAR_ICS_URL` er siden en rolig tomtilstand («Kalenderen er ikke koblet
 til ennå») — ingen feil. Feeden caches i ti minutter, så den hentes ikke på hver
 sidevisning.
+
+## Styre
+
+`/styre` er styrets arbeidsflate — laget for å ta styrearbeidet ut av Google
+Chat og Drive:
+
+- **Oppgaver** (`/styre`) er første skjerm. Ny oppgave = tittel + Enter øverst,
+  og avkrysning skjer rett i lista. Åpne sorteres på frist med forfalte merket,
+  og ferdige samles nederst. To visninger: *Alle* og *Mine*, sistnevnte alt som
+  står på deg på tvers av prosjekter. Lista kan filtreres på styreprosjekt, og
+  både visning og filter ligger i URL-en.
+- **Prosjekter** (`/styre/prosjekter`) er styrets arbeidspakker — jubileum,
+  uniformer, en konsert styret har ansvar for. Hvert prosjekt har mål,
+  ansvarlig, frist, fremdrift («3 av 7 oppgaver ferdig»), sine egne oppgaver og
+  sin egen chat-tråd, og kan kobles til en konsert i noteområdet. Ferdige og
+  arkiverte prosjekter samles nederst.
+- **Møter** (`/styre/moter`) holder dato og tre felt i møtets egen rekkefølge:
+  **agenda** før, **notater** under og **vedtak og oppfølging** etter. Et vedtak
+  kan gjøres om til en oppgave direkte fra feltet, knyttet til møtet og
+  eventuelt et prosjekt. Møtet viser også oppgavene som ble fordelt og papirene
+  som hører til.
+- **Chat** (`/styre/chat`) erstatter Google Chat: én felles kanal («Styret») og
+  én tråd per aktivt prosjekt, med uleste-tellere. Enter sender, Shift+Enter
+  gir linjeskift. Ingen websockets — klienten spør serveren hvert 12. sekund,
+  og bare mens fanen er synlig.
+- **Dokumenter** (`/styre/dokumenter`) er referater, budsjetter og kontrakter.
+  Filene ligger i samme R2-bøtte som notene, under prefikset `board/`, og kan
+  **kun** hentes gjennom `/api/board-files/<id>` — som krever `board.manage`.
+  Uinnlogget gir 401, innlogget uten rettigheten 403. Grensen er 25 MB per fil.
+
+Når noen andre setter deg som ansvarlig for en oppgave, får du en e-post med
+tittel, frist, prosjekt og en lenke rett til oppgaven. Setter du den på deg
+selv, sendes ingenting.
+
+Hele området — også lesing — gates server-side på rettigheten `board.manage`,
+som rollen *Styremedlem* har. Andre ser hverken menyoppføringen eller sidene.
 
 ## Stack
 

@@ -78,6 +78,14 @@ describe('areasFor', () => {
     expect(areasFor(['scores.view']).map((a) => a.to)).toEqual(['/noter', '/kalender', '/medlemmer'])
   })
 
+  it('legger til Styre ved board.manage', () => {
+    expect(areasFor(['board.manage']).map((a) => a.to)).toContain('/styre')
+  })
+
+  it('gir ikke Styre til et vanlig medlem', () => {
+    expect(areasFor(['scores.view']).map((a) => a.to)).not.toContain('/styre')
+  })
+
   it('legger til Filtilganger ved downloads.view', () => {
     expect(areasFor(['downloads.view']).map((a) => a.to)).toContain('/innstillinger/nedlastinger')
   })
@@ -91,9 +99,14 @@ describe('areasFor', () => {
       '/noter',
       '/kalender',
       '/medlemmer',
+      '/styre',
       '/innstillinger/nedlastinger',
       '/innstillinger',
     ])
+  })
+
+  it('setter aldri note — tallene fylles i getHub, ikke her', () => {
+    expect(areasFor(['*']).every((a) => a.note === undefined)).toBe(true)
   })
 
   it('muterer ikke grunnlista mellom kall', () => {
