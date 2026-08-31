@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers'
-import { bodyToHtml, escapeHtml } from '../lib/posts'
+import { bodyToHtml, escapeHtml, postEmailFrom, postEmailImageNote, postEmailSubject } from '../lib/posts'
 
 /**
  * E-postsending via Cloudflare Email Sending (binding `EMAIL`) — ingen ekstern
@@ -166,6 +166,8 @@ export function postEmail({
   url,
   authorName,
   important,
+  official,
+  imageCount,
 }: {
   title: string
   /** Hele teksten i beskjeden — e-posten skal kunne leses uten å logge inn. */
@@ -173,20 +175,29 @@ export function postEmail({
   url: string
   authorName: string
   important: boolean
+  /** Merket «Fra styret». Sier hvem beskjeden kommer fra, ikke bare hvem som skrev den. */
+  official: boolean
+  /** Bilder vises ikke i e-posten; de ligger bak innlogging på internsiden. */
+  imageCount: number
 }): { subject: string; html: string; text: string } {
   const heading = escapeHtml(title)
-  const author = escapeHtml(authorName)
+  // Tekstversjonen skal ikke ha HTML-escaping i seg («Bø &amp; Co»).
+  const fromText = postEmailFrom(authorName, official)
+  const from = escapeHtml(fromText)
+  const images = postEmailImageNote(imageCount)
   return {
-    subject: important ? `Viktig: ${title}` : title,
+    subject: postEmailSubject(title, important),
     html: shell(
       heading,
-      `${important ? '<p style="margin:0 0 16px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8f2f24;font-weight:700">Viktig beskjed</p>' : ''}
-       <p style="margin:0 0 20px;font-size:12px;color:#8e8468">Fra ${author} · Tertnes Brass</p>
+      `${official ? '<p style="margin:0 0 12px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#95762a;font-weight:700">Fra styret</p>' : ''}
+       ${important ? '<p style="margin:0 0 16px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8f2f24;font-weight:700">Viktig beskjed</p>' : ''}
+       <p style="margin:0 0 20px;font-size:12px;color:#8e8468">${from} · Tertnes Brass</p>
        <div style="font-size:15px;line-height:1.6;color:#5f5640">${bodyToHtml(body, 'margin:0 0 16px')}</div>
+       ${images ? `<p style="margin:0 0 20px;font-size:13px;color:#8e8468">${escapeHtml(images)}</p>` : ''}
        <p style="margin:8px 0 24px">${button(url, 'Les på internsiden')}</p>
        <p style="margin:0;font-size:12px;color:#8e8468">Du kan velge hvilke beskjeder du vil ha på e-post under «Min profil» på internsiden.</p>`,
     ),
-    text: `${important ? 'VIKTIG BESKJED\n\n' : ''}${title}\nFra ${authorName} · Tertnes Brass\n\n${body.trim()}\n\nLes på internsiden:\n${url}\n\nVil du ha færre e-poster? Endre varslingsvalget under «Min profil».\n`,
+    text: `${official ? 'FRA STYRET\n' : ''}${important ? 'VIKTIG BESKJED\n' : ''}\n${title}\n${fromText} · Tertnes Brass\n\n${body.trim()}\n${images ? `\n${images}\n` : ''}\nLes på internsiden:\n${url}\n\nVil du ha færre e-poster? Endre varslingsvalget under «Min profil».\n`,
   }
 }
 

@@ -276,14 +276,20 @@ export const settings = sqliteTable('settings', {
 
 // ---------- Beskjeder (#28) ----------
 
-// Informasjon fra styret til korpset. `publishedAt = null` er et utkast og
-// finnes kun for dem med `posts.publish`. `audience = 'board'` er internt for
-// styret; filtreringen håndheves alltid i src/server/posts.ts, aldri i UI-et.
+// Veggen: både informasjon fra styret og vanlige medlemsinnlegg. Alle
+// innloggede kan skrive; `posts.publish` kreves for å merke innlegget «Fra
+// styret» (`official`), sette `importance = 'important'`, velge
+// `audience = 'board'`, sende e-post og moderere andres innlegg.
+// `publishedAt = null` er et utkast (kun skrivere) og finnes ikke for
+// medlemsinnlegg, som publiseres direkte. Filtreringen håndheves alltid i
+// src/server/posts.ts, aldri i UI-et.
 export const posts = sqliteTable(
   'posts',
   {
     id: text('id').primaryKey(),
-    title: text('title').notNull(),
+    // Valgfri: et medlemsinnlegg er ofte bare et par setninger. Uten tittel
+    // vises første linje av teksten (`postHeading` i src/lib/posts.ts).
+    title: text('title'),
     // Ren tekst med avsnitt. Ikke markdown — URL-er auto-lenkes ved rendring.
     body: text('body').notNull(),
     audience: text('audience', { enum: ['all', 'board'] })
@@ -292,12 +298,72 @@ export const posts = sqliteTable(
     importance: text('importance', { enum: ['normal', 'important'] })
       .notNull()
       .default('normal'),
+    // «Fra styret»: kun `posts.publish` kan sette den.
+    official: integer('official', { mode: 'boolean' }).notNull().default(false),
     authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
     publishedAt: integer('published_at', { mode: 'timestamp_ms' }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (t) => [index('posts_published_idx').on(t.publishedAt)],
+)
+
+// Kommentartråd under et innlegg. Kronologisk, ingen nøsting.
+export const postComments = sqliteTable(
+  'post_comments',
+  {
+    id: text('id').primaryKey(),
+    postId: text('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
+    body: text('body').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('post_comments_post_idx').on(t.postId, t.createdAt)],
+)
+
+// Reaksjoner. `kind` er foreløpig alltid 'like'; kolonnen finnes så flere kan
+// komme uten en ny tabell. PK (postId, userId) = én reaksjon per person.
+export const postReactions = sqliteTable(
+  'post_reactions',
+  {
+    postId: text('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: ['like'] })
+      .notNull()
+      .default('like'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.userId] })],
+)
+
+// Bilder på et innlegg. `r2Key` bygges ALLTID fra en fersk id, aldri fra
+// filnavnet. Visning skjer kun via /api/post-images/$imageId, som gjentar
+// audience-sjekken — bildene er aldri offentlige (docs/tilgangsstyring.md).
+export const postImages = sqliteTable(
+  'post_images',
+  {
+    id: text('id').primaryKey(),
+    postId: text('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    r2Key: text('r2_key').notNull(),
+    fileName: text('file_name').notNull(),
+    size: integer('size').notNull().default(0),
+    contentType: text('content_type').notNull(),
+    width: integer('width'),
+    height: integer('height'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    uploadedBy: text('uploaded_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('post_images_post_idx').on(t.postId, t.sortOrder)],
 )
 
 // Én rad per bruker som har valgt noe annet enn standarden. Ingen rad = 'all'.

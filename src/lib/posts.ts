@@ -1,9 +1,10 @@
 /**
- * Ren hjelpelogikk for Beskjeder (#28): utdrag, avsnitt/auto-lenking og
- * mottakerutvalget for e-postvarsling. Ingen server- eller DOM-avhengigheter,
- * slik at reglene kan testes uten database og e-postbinding.
+ * Ren hjelpelogikk for Beskjeder (#28) — veggen: utdrag, avsnitt/auto-lenking,
+ * hvem som får skrive hva, og mottakerutvalget for e-postvarsling. Ingen
+ * server- eller DOM-avhengigheter, slik at reglene kan testes uten database,
+ * R2 og e-postbinding.
  *
- * Teksten i en beskjed er ren tekst med avsnitt — ikke markdown. URL-er
+ * Teksten i et innlegg er ren tekst med avsnitt — ikke markdown. URL-er
  * gjenkjennes og gjøres klikkbare ved rendring; alt annet vises som skrevet.
  */
 
@@ -149,6 +150,154 @@ export function canReadPost(
 ): boolean {
   if (canPublish) return true
   return post.publishedAt !== null && post.audience === 'all'
+}
+
+// ---------- Hvem får skrive hva ----------
+
+/**
+ * Alle innloggede kan skrive på veggen. Det `posts.publish` gir, er de fire
+ * tingene som gjør et innlegg til noe mer enn en melding fra et medlem:
+ * «Fra styret»-merket, «Viktig», styre-målgruppen og e-postvarsling — pluss
+ * moderasjon av andres innlegg.
+ */
+export type PostWriterInput = {
+  title: string | null
+  body: string
+  audience: PostAudience
+  importance: PostImportance
+  official: boolean
+}
+
+/**
+ * Fjerner alt en vanlig skribent ikke har lov til å sette. Serveren kaller
+ * denne på både opprettelse og redigering, så et privilegert felt aldri kan
+ * snikes inn via et rått kall — UI-et skjuler dem bare.
+ */
+export function sanitizePostInput(input: PostWriterInput, canPublish: boolean): PostWriterInput {
+  const title = input.title?.trim() ? input.title.trim() : null
+  const body = input.body.trim()
+  if (canPublish) return { ...input, title, body }
+  return { title, body, audience: 'all', importance: 'normal', official: false }
+}
+
+/** Eieren av innlegget, eller en med `posts.publish` (moderasjon). */
+export function canEditPost(
+  me: { id: string } | null,
+  post: { authorId: string | null },
+  canPublish: boolean,
+): boolean {
+  if (!me) return false
+  if (canPublish) return true
+  return post.authorId !== null && post.authorId === me.id
+}
+
+/** Samme regel for kommentarer: egen kommentar, eller moderator. */
+export function canDeleteComment(
+  me: { id: string } | null,
+  comment: { authorId: string | null },
+  canPublish: boolean,
+): boolean {
+  if (!me) return false
+  if (canPublish) return true
+  return comment.authorId !== null && comment.authorId === me.id
+}
+
+/** Maks antall bilder per innlegg. Håndheves server-side ved opplasting. */
+export const MAX_POST_IMAGES = 10
+/** Maks størrelse per bilde. */
+export const MAX_POST_IMAGE_BYTES = 10 * 1024 * 1024
+export const ALLOWED_IMAGE_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/heic',
+] as const
+
+/** `null` = greit. Ellers en begrunnelse klienten kan vise. */
+export function imageRejectionReason(file: { type: string; size: number }): string | null {
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type.toLowerCase() as (typeof ALLOWED_IMAGE_TYPES)[number])) {
+    return 'Bare bilder (JPG, PNG, WebP, GIF eller HEIC)'
+  }
+  if (file.size > MAX_POST_IMAGE_BYTES) return 'Bildet er større enn 10 MB'
+  if (file.size <= 0) return 'Tom fil'
+  return null
+}
+
+/** Filendelsen R2-nøkkelen skal ha. Nøkkelen bygges ALDRI av filnavnet. */
+export function imageExtension(contentType: string): string {
+  switch (contentType.toLowerCase()) {
+    case 'image/png':
+      return 'png'
+    case 'image/webp':
+      return 'webp'
+    case 'image/gif':
+      return 'gif'
+    case 'image/heic':
+      return 'heic'
+    default:
+      return 'jpg'
+  }
+}
+
+// ---------- Visning ----------
+
+/**
+ * Overskriften i feed, hub og e-post: tittelen når den finnes, ellers første
+ * linje av teksten. Et medlemsinnlegg er ofte bare et par setninger, og skal
+ * ikke tvinges til å finne på en tittel.
+ */
+export function postHeading(post: { title: string | null; body: string }, n = 70): string {
+  const title = post.title?.trim()
+  if (title) return title
+  const firstLine = paragraphs(post.body)[0]?.split('\n')[0] ?? ''
+  return excerpt(firstLine, n) || 'Uten tittel'
+}
+
+/** «3 kommentarer», «1 kommentar», «Ingen kommentarer ennå». */
+export function commentCountLabel(n: number): string {
+  if (n === 0) return 'Ingen kommentarer ennå'
+  return n === 1 ? '1 kommentar' : `${n} kommentarer`
+}
+
+// ---------- Reaksjoner ----------
+
+export type ReactionState = { count: number; mine: boolean }
+
+/** Optimistisk toggle: samme regel på klienten og i testene som i databasen. */
+export function toggleReaction(state: ReactionState): ReactionState {
+  return state.mine ? { count: Math.max(0, state.count - 1), mine: false } : { count: state.count + 1, mine: true }
+}
+
+/** «Liker», «Du liker dette», «Du og 3 andre liker dette», «4 liker dette». */
+export function reactionLabel(state: ReactionState): string {
+  if (state.count === 0) return 'Ingen har likt dette ennå'
+  if (!state.mine) return state.count === 1 ? '1 liker dette' : `${state.count} liker dette`
+  if (state.count === 1) return 'Du liker dette'
+  const others = state.count - 1
+  return others === 1 ? 'Du og 1 annen liker dette' : `Du og ${others} andre liker dette`
+}
+
+// ---------- E-postkopi ----------
+
+/** Emnefeltet. «Viktig:» foran gjør at det synes i innboksen uten å åpne. */
+export function postEmailSubject(title: string, important: boolean): string {
+  return important ? `Viktig: ${title}` : title
+}
+
+/** Avsenderlinjen i e-posten: «Fra styret · Navn» eller bare navnet. */
+export function postEmailFrom(authorName: string, official: boolean): string {
+  return official ? `Fra styret · ${authorName}` : authorName
+}
+
+/**
+ * Bildene følger ikke med i e-posten — de ligger bak innlogging. Si i stedet
+ * fra at de finnes. Tom streng når innlegget ikke har bilder.
+ */
+export function postEmailImageNote(imageCount: number): string {
+  if (imageCount <= 0) return ''
+  const what = imageCount === 1 ? 'Ett bilde er lagt ved' : `${imageCount} bilder er lagt ved`
+  return `${what} — se dem på internsiden.`
 }
 
 // ---------- Kvittering etter varsling ----------

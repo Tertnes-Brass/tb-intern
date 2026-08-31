@@ -2,12 +2,24 @@ import { describe, expect, it } from 'vitest'
 import {
   type PostRecipient,
   bodyToHtml,
+  canDeleteComment,
+  canEditPost,
   canReadPost,
+  commentCountLabel,
   escapeHtml,
   excerpt,
+  imageExtension,
+  imageRejectionReason,
   notifyResultMessage,
   paragraphs,
+  postEmailFrom,
+  postEmailImageNote,
+  postEmailSubject,
+  postHeading,
+  reactionLabel,
   recipientsFor,
+  sanitizePostInput,
+  toggleReaction,
   tokenize,
 } from './posts'
 
@@ -195,5 +207,161 @@ describe('notifyResultMessage', () => {
     expect(notifyResultMessage({ sent: 0, logged: 0, failed: 0, skipped: 0 }).message).toBe(
       'Publisert. Ingen e-post ble sendt.',
     )
+  })
+})
+
+describe('sanitizePostInput', () => {
+  const raw = {
+    title: '  Viktig melding  ',
+    body: '  Hei  ',
+    audience: 'board' as const,
+    importance: 'important' as const,
+    official: true,
+  }
+
+  it('lar en skriver sette alt, men trimmer tekst', () => {
+    expect(sanitizePostInput(raw, true)).toEqual({
+      title: 'Viktig melding',
+      body: 'Hei',
+      audience: 'board',
+      importance: 'important',
+      official: true,
+    })
+  })
+
+  it('stripper privilegerte felter for et vanlig medlem', () => {
+    expect(sanitizePostInput(raw, false)).toEqual({
+      title: 'Viktig melding',
+      body: 'Hei',
+      audience: 'all',
+      importance: 'normal',
+      official: false,
+    })
+  })
+
+  it('gjør tom tittel til null', () => {
+    expect(sanitizePostInput({ ...raw, title: '   ' }, true).title).toBeNull()
+    expect(sanitizePostInput({ ...raw, title: null }, false).title).toBeNull()
+  })
+})
+
+describe('canEditPost / canDeleteComment', () => {
+  const me = { id: 'u1' }
+
+  it('lar eieren redigere sitt eget innlegg', () => {
+    expect(canEditPost(me, { authorId: 'u1' }, false)).toBe(true)
+  })
+
+  it('nekter et medlem å redigere andres innlegg', () => {
+    expect(canEditPost(me, { authorId: 'u2' }, false)).toBe(false)
+  })
+
+  it('lar en moderator redigere alt', () => {
+    expect(canEditPost(me, { authorId: 'u2' }, true)).toBe(true)
+  })
+
+  it('gir ikke tilgang til innlegg uten forfatter', () => {
+    expect(canEditPost(me, { authorId: null }, false)).toBe(false)
+  })
+
+  it('krever innlogging', () => {
+    expect(canEditPost(null, { authorId: 'u1' }, true)).toBe(false)
+  })
+
+  it('bruker samme regel for kommentarer', () => {
+    expect(canDeleteComment(me, { authorId: 'u1' }, false)).toBe(true)
+    expect(canDeleteComment(me, { authorId: 'u2' }, false)).toBe(false)
+    expect(canDeleteComment(me, { authorId: 'u2' }, true)).toBe(true)
+  })
+})
+
+describe('postHeading', () => {
+  it('bruker tittelen når den finnes', () => {
+    expect(postHeading({ title: 'Dugnad', body: 'Vi rigger' })).toBe('Dugnad')
+  })
+
+  it('faller tilbake til første linje av teksten', () => {
+    expect(postHeading({ title: null, body: 'Noen som har glemt et notestativ?\n\nDet står i gangen.' })).toBe(
+      'Noen som har glemt et notestativ?',
+    )
+  })
+
+  it('korter ned en lang førstelinje', () => {
+    const heading = postHeading({ title: '  ', body: 'a'.repeat(120) })
+    expect(heading.endsWith('…')).toBe(true)
+    expect(heading.length).toBeLessThanOrEqual(71)
+  })
+
+  it('gir en rolig fallback for tom tekst', () => {
+    expect(postHeading({ title: null, body: '   ' })).toBe('Uten tittel')
+  })
+})
+
+describe('bilder', () => {
+  it('slipper gjennom vanlige bildetyper', () => {
+    expect(imageRejectionReason({ type: 'image/jpeg', size: 1000 })).toBeNull()
+    expect(imageRejectionReason({ type: 'IMAGE/PNG', size: 1000 })).toBeNull()
+  })
+
+  it('avviser andre filtyper', () => {
+    expect(imageRejectionReason({ type: 'application/pdf', size: 10 })).toMatch(/Bare bilder/)
+  })
+
+  it('avviser for store og tomme filer', () => {
+    expect(imageRejectionReason({ type: 'image/jpeg', size: 11 * 1024 * 1024 })).toMatch(/10 MB/)
+    expect(imageRejectionReason({ type: 'image/jpeg', size: 0 })).toMatch(/Tom fil/)
+  })
+
+  it('utleder endelsen fra innholdstypen, ikke filnavnet', () => {
+    expect(imageExtension('image/png')).toBe('png')
+    expect(imageExtension('image/heic')).toBe('heic')
+    expect(imageExtension('image/jpeg')).toBe('jpg')
+    expect(imageExtension('noe/rart')).toBe('jpg')
+  })
+})
+
+describe('reaksjoner', () => {
+  it('slår på og av', () => {
+    expect(toggleReaction({ count: 3, mine: false })).toEqual({ count: 4, mine: true })
+    expect(toggleReaction({ count: 4, mine: true })).toEqual({ count: 3, mine: false })
+  })
+
+  it('går aldri under null', () => {
+    expect(toggleReaction({ count: 0, mine: true })).toEqual({ count: 0, mine: false })
+  })
+
+  it('formulerer seg riktig', () => {
+    expect(reactionLabel({ count: 0, mine: false })).toBe('Ingen har likt dette ennå')
+    expect(reactionLabel({ count: 1, mine: false })).toBe('1 liker dette')
+    expect(reactionLabel({ count: 3, mine: false })).toBe('3 liker dette')
+    expect(reactionLabel({ count: 1, mine: true })).toBe('Du liker dette')
+    expect(reactionLabel({ count: 2, mine: true })).toBe('Du og 1 annen liker dette')
+    expect(reactionLabel({ count: 4, mine: true })).toBe('Du og 3 andre liker dette')
+  })
+})
+
+describe('commentCountLabel', () => {
+  it('teller riktig', () => {
+    expect(commentCountLabel(0)).toBe('Ingen kommentarer ennå')
+    expect(commentCountLabel(1)).toBe('1 kommentar')
+    expect(commentCountLabel(5)).toBe('5 kommentarer')
+  })
+})
+
+describe('e-postkopi', () => {
+  it('markerer viktige beskjeder i emnefeltet', () => {
+    expect(postEmailSubject('Dugnad', false)).toBe('Dugnad')
+    expect(postEmailSubject('Dugnad', true)).toBe('Viktig: Dugnad')
+  })
+
+  it('sier tydelig at beskjeden er fra styret', () => {
+    expect(postEmailFrom('Sindre Ryland', true)).toBe('Fra styret · Sindre Ryland')
+    expect(postEmailFrom('Sindre Ryland', false)).toBe('Sindre Ryland')
+  })
+
+  it('nevner bildene uten å sende dem', () => {
+    expect(postEmailImageNote(0)).toBe('')
+    expect(postEmailImageNote(1)).toBe('Ett bilde er lagt ved — se dem på internsiden.')
+    expect(postEmailImageNote(3)).toBe('3 bilder er lagt ved — se dem på internsiden.')
   })
 })

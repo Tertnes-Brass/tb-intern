@@ -71,6 +71,13 @@
       "when": 1788133712267,
       "tag": "0009_posts",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788135314970,
+      "tag": "0010_wall",
+      "breakpoints": true
     }
   ]
 }
