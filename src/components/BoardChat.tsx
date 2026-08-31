@@ -137,9 +137,12 @@ export function BoardChat({
     }
   }, [channel, markRead])
 
-  // Rull til bunnen når det kommer noe nytt.
+  // Rull meldingsboksen til bunnen når det kommer noe nytt — bare boksen, ikke
+  // hele siden: scrollIntoView ville dratt vinduet ned under toppmenyen ved
+  // lasting på mobil.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: 'end' })
+    const box = bottomRef.current?.parentElement
+    if (box) box.scrollTop = box.scrollHeight
   }, [messages.length])
 
   const send = async () => {
