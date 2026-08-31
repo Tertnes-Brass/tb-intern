@@ -1,10 +1,11 @@
 import { createServerFn } from '@tanstack/react-start'
-import { and, asc, eq, gte, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, isNotNull, sql } from 'drizzle-orm'
 import { db } from '../db'
-import { projectWorks, projects } from '../db/schema'
-import { type HubArea, type HubCalendar, type HubEvent, type HubProject, areasFor, eventsAfter } from '../lib/hub'
+import { posts, projectWorks, projects } from '../db/schema'
+import { type HubArea, type HubCalendar, type HubEvent, type HubPost, type HubProject, areasFor, eventsAfter } from '../lib/hub'
 import type { CalendarEvent } from '../lib/ical'
-import { requireMe } from './access'
+import { excerpt } from '../lib/posts'
+import { hasPermission, requireMe } from './access'
 import { loadCalendar } from './calendar-feed'
 
 /**
@@ -18,8 +19,12 @@ import { loadCalendar } from './calendar-feed'
 const UPCOMING_EVENTS = 4
 /** Prosjekter under hero når kalenderen ikke er tilgjengelig. */
 const UPCOMING_PROJECTS = 4
+/** Beskjeder øverst. Tre er nok til å vise at det finnes flere uten å bli en feed. */
+const LATEST_POSTS = 3
 
 export type HubPayload = {
+  /** De siste publiserte beskjedene brukeren har lov til å se. */
+  posts: HubPost[]
   me: {
     name: string
     roleName: string
@@ -51,8 +56,12 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
   const d = db()
   const today = new Date().toISOString().slice(0, 10)
 
-  // Kalender og prosjekter er uavhengige kilder — hent dem samtidig.
-  const [calendar, upcomingRows] = await Promise.all([
+  // `posts.publish` gir også innsyn i beskjeder merket for styret. Utkast
+  // (published_at IS NULL) kommer aldri på hub-en, uansett rettighet.
+  const canSeeBoardPosts = hasPermission(me, 'posts.publish')
+
+  // Kalender, prosjekter og beskjeder er uavhengige kilder — hent dem samtidig.
+  const [calendar, upcomingRows, postRows] = await Promise.all([
     loadCalendar(Date.now()),
     d
       .select({
@@ -66,6 +75,23 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
       .where(and(eq(projects.isPublished, true), gte(projects.eventDate, today)))
       .orderBy(asc(projects.eventDate))
       .limit(UPCOMING_PROJECTS + 1),
+    d
+      .select({
+        id: posts.id,
+        title: posts.title,
+        body: posts.body,
+        importance: posts.importance,
+        publishedAt: posts.publishedAt,
+      })
+      .from(posts)
+      .where(
+        and(
+          isNotNull(posts.publishedAt),
+          canSeeBoardPosts ? undefined : eq(posts.audience, 'all'),
+        ),
+      )
+      .orderBy(desc(posts.publishedAt))
+      .limit(LATEST_POSTS),
   ])
 
   // `gte` utelukker allerede NULL-datoer i SQL; filteret gjør det sant for typen òg.
@@ -84,6 +110,13 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
   const events = calendar.events.map(toHubEvent)
 
   return {
+    posts: postRows.map((p) => ({
+      id: p.id,
+      title: p.title,
+      excerpt: excerpt(p.body, 120),
+      publishedAt: p.publishedAt!.getTime(),
+      important: p.importance === 'important',
+    })),
     me: {
       name: me.name,
       roleName: me.roleName,

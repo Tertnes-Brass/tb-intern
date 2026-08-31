@@ -3,6 +3,7 @@ import { db } from '../db'
 import {
   invitations,
   parts,
+  posts,
   projectWorks,
   projects,
   rolePermissions,
@@ -10,6 +11,7 @@ import {
   seasons,
   settings,
   shareLinks,
+  user,
   workFiles,
   workLinks,
   works,
@@ -24,6 +26,7 @@ import {
   DEMO_SHARE_RECIPIENT,
   DEMO_SHARE_TOKEN,
   SEED_MEMBERS,
+  SEED_POSTS,
   SEED_PROJECTS,
   SEED_ROLES,
   SEED_ROLE_PERMISSIONS,
@@ -206,6 +209,30 @@ export async function seedDemoData(): Promise<{ ok: boolean; alreadySeeded?: boo
   for (const batch of chunkArray(fileRows, 8)) {
     await d.insert(workFiles).values(batch)
   }
+
+  // Beskjeder: én viktig, én til styret og ett utkast, så feeden og hub-blokken
+  // har noe å vise. Forfatter-id-en settes først når demokontoen finnes (den
+  // opprettes ved første innlogging), ellers står beskjeden som «Styret».
+  const authorIds = new Map(
+    (await d.select({ id: user.id, email: user.email }).from(user)).map((u) => [u.email.toLowerCase(), u.id]),
+  )
+  await d.insert(posts).values(
+    SEED_POSTS.map((sp) => {
+      const publishedAt =
+        sp.publishedDaysAgo === null ? null : new Date(ts.getTime() - sp.publishedDaysAgo * 86_400_000)
+      return {
+        id: newId(),
+        title: sp.title,
+        body: sp.body,
+        audience: sp.audience,
+        importance: sp.importance,
+        authorId: sp.authorEmail ? (authorIds.get(sp.authorEmail) ?? null) : null,
+        publishedAt,
+        createdAt: publishedAt ?? ts,
+        updatedAt: publishedAt ?? ts,
+      }
+    }),
+  )
 
   await d.insert(settings).values([{ key: 'bandName', value: 'Tertnes Brass' }])
   return { ok: true }

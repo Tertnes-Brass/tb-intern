@@ -55,6 +55,7 @@ lesing er åpnere; håndhevelsen ligger alltid i `src/server/*.ts`, aldri bare i
 | Område | Rute | Primærbruker | Primærhandling | Gate |
 |---|---|---|---|---|
 | **Hjem** (hub-flaten) | `src/routes/index.tsx` (`getHub`) | Medlemmet | Se hva som skjer nå, og komme seg videre til riktig område | `requireMe()`; områdesnarveiene følger rettighetene (`areasFor` i `src/lib/hub.ts`) |
+| **Beskjeder** | `src/routes/beskjeder/` (`index`, `$postId`, `ny`) | Medlemmet (leser), styremedlemmet (skriver) | Lese siste beskjed fra styret; skrive og publisere en | Lesing: `requireMe()`; skriving/publisering + styre-beskjeder og utkast: `posts.publish` |
 | **Noter** / «Mine noter» | `src/routes/noter/index.tsx` (`getHome`) | Musikeren | Åpne egne stemmer + lytteeksempler til neste prosjekt | `requireMe()`; stemmefiltrering via `effectivePartIds` |
 | **Prosjekter** | `src/routes/noter/prosjekter/index.tsx`, `$projectId.tsx` | Dirigent / prosjektansvarlig | Klikke sammen et program i rekkefølge og publisere det | `projects.manage`; upublisert er usynlig ellers. Deling: `shares.manage` |
 | **Arkiv** | `src/routes/noter/arkiv/index.tsx`, `$workId.tsx` | Arkivaren | Katalogisere et verk og laste opp PDF per stemme | Innsyn: `archive.viewAll` ∨ `works.manage`; skriving: `works.manage` |
@@ -71,8 +72,10 @@ Fire observasjoner som er verdt å ta med videre:
   legger inn `/noter/arkiv` kun ved `canBrowseArchive`), og `beforeLoad` sender
   resten til `/noter`. Området finnes, men bare for dem det er laget for.
 - **Filtilganger er prinsippet brutt i praksis.** Det er et eget område med egen
-  primærbruker og egen toppmeny-oppføring, men URL-en (`/innstillinger/nedlastinger`)
-  parkerer det i et annet områdes navnerom. Det er ikke verdt en migrering i seg
+  primærbruker, men URL-en (`/innstillinger/nedlastinger`) parkerer det i et
+  annet områdes navnerom — og siden 31. august 2026 har det heller ingen
+  toppmeny-oppføring (§6), bare inngang fra `/innstillinger` og hub-ens
+  «Områder». Det er ikke verdt en migrering i seg
   selv, men det er mønsteret å ikke gjenta: en funksjon havnet i «Innstillinger»
   fordi den føltes administrativ.
 - **`/` er plattformflaten, ikke et område.** Hub-en har ingen egen oversikt å
@@ -160,18 +163,18 @@ den bygges — også de som allerede har en anbefaling her.
 | Sak | Anbefaling | Primærbruker → primærhandling | Begrunnelse |
 |---|---|---|---|
 | **#32 Mediearkiv** | Eget område, eget navnerom (`/media`) | Stab → registrere et opptak og knytte det til prosjekt/verk | Ikke en fane i Arkiv: andre filtyper, og et helt annet tilgangsbegrep (intern / styre / offentlig kandidat) enn notearkivets stemmebaserte gate. Krever egne rettigheter. |
-| **#28 Kunngjøringer** | Delt: lesing som blokk på Hjem, skriving i eget navnerom | Styre/dirigent → publisere en melding; medlem → se den | Saken sier selv at medlemmet skal se dem «på forsiden». Lesegrensesnittet er en blokk, ikke et område; publiseringsflyten med målretting og lest-status er stor nok til å fortjene eget rom. |
+| **#28 Kunngjøringer** → **bygget som «Beskjeder»** (31. august 2026) | Delt: lesing som blokk på Hjem, skriving i eget navnerom | Styre/dirigent → publisere en melding; medlem → se den | Bygget slik anbefalingen sa: de tre siste ligger øverst på hub-en, og hele området — feed, detaljside, utkast, målgruppe, viktighet og e-postvarsling — bor i `/beskjeder` bak `posts.publish`. «Lest-status» ble bevisst ikke bygget; e-postvarslingen med `notification_log` svarer på det samme behovet uten å overvåke medlemmene. |
 | **#24 Oppmøte** | Inne i #26, som primærhandling på en aktivitet | Medlem → svare kommer / kommer ikke / usikker | RSVP uten aktivitet er meningsløst; det er ikke et selvstendig område. Bygges #24 før #26, hører det hjemme på `/noter/prosjekter/$projectId` — og da skal det sies eksplisitt at det er midlertidig. |
 | **#26 Kalender/aktiviteter** | Eget område (`/aktiviteter`) | Alle medlemmer → se hva som skjer, og «Mine datoer» | Sterkeste kandidat til ny toppnivå-oppføring: primærbruker er *hele* korpset, ikke stab. Det er også den som først presser navigasjonen (§6). |
 | **#13 Utstyr** | Eget område (`/utstyr`) | Materialforvalter → registrere en gjenstand med bilde, eier og lånestatus | Skal ikke under Innstillinger selv om det føles administrativt. Egen rettighet; lesing kan være åpen for medlemmer. Kobles til medlem ved privat eier og til prosjekt ved bruk — krysslenker, ikke felles side. |
 
 ## 6. Ærlige begrensninger: taket i toppnavigasjonen
 
-`src/components/Shell.tsx` bygger `NAV` av `BASE_NAV` (Hjem, Noter, Kalender,
-Medlemmer) pluss betingede innslag: `/innstillinger/nedlastinger` ved
-`downloads.view` og `/innstillinger` ved `settings.manage`. Et vanlig medlem ser
-**fire** oppføringer; en admin ser **seks** — altså akkurat på terskelen under.
-Kalender kom til 31. august 2026; før den var admin på fem.
+`src/components/Shell.tsx` bygger `NAV` av `BASE_NAV` (Hjem, Beskjeder, Noter,
+Kalender, Medlemmer) pluss ett betinget innslag: `/innstillinger` ved
+`settings.manage`. Et vanlig medlem ser **fem** oppføringer; en admin ser
+**seks** — altså akkurat på terskelen under. Kalender kom til 31. august 2026;
+Beskjeder samme dag.
 
 Det er omtrent taket:
 
@@ -180,7 +183,8 @@ Det er omtrent taket:
 - Mobilstripen (`md:hidden`, `overflow-x-auto` med en fade-gradient til høyre)
   **scroller allerede** for en admin på en smal telefon. Oppføringer bak faden
   er i praksis usynlige — feilmodusen er stille, ikke ødelagt layout.
-- Legger vi til Mediearkiv, Kunngjøringer og Utstyr, er en admin på ni
+- Beskjeder tok den ledige plassen 31. august 2026 (og fortrengte Filtilganger,
+  se boksen under). Legger vi til Mediearkiv og Utstyr òg, er en admin på åtte
   oppføringer. Flat toppmeny knekker først på mobil, og den knekker uten at
   noen merker det. Neste område som vil ha en toppnivå-oppføring, må derfor
   enten fortrenge en av dagens seks eller ta launcher-spørsmålet opp igjen.
@@ -203,9 +207,22 @@ Det er en reell begrensning, ikke en smakssak. To retninger ble vurdert
   gjort dårlig blir den nøyaktig den store, utydelige administrasjonssiden §4
   advarer mot — bare med ikoner.
 
+> **Fulgt opp 31. august 2026 (Beskjeder, #28):** da Beskjeder fikk sin egen
+> toppnivå-oppføring, ville admin havnet på **sju** — over taket. Løsningen er
+> den §6 (a) selv peker på: **«Filtilganger» er fjernet fra toppmenyen.**
+> URL-en `/innstillinger/nedlastinger` består uendret (gamle lenker virker), og
+> området nås nå fra to steder: en tydelig knapp øverst på `/innstillinger` og
+> kortet i «Områder» på hub-en (`areasFor` beholder det ved `downloads.view`).
+> Filtilganger er dermed fortsatt et app-område etter §1 — det har eget
+> inngangspunkt, egen oversikt og egen gate — men ikke lenger en fast plass i
+> toppmenyen. Det er nøyaktig avveiningen (a) beskrev: taket flyttes, det
+> fjernes ikke, og neste område må igjen fortrenge noe eller ta launcheren (b)
+> opp til vurdering.
+
 > **Valgt 30. august 2026: (a).** Som del av arbeidet med å utvide notearkivet
 > til internsiden «Tertnes Brass Intern» ble toppmenyen kortet ned til Hjem ·
-> Noter · Medlemmer (+ Filtilganger/Innstillinger betinget), og noteområdet fikk
+> Noter · Medlemmer (+ Filtilganger/Innstillinger betinget — Filtilganger ble
+> tatt ut igjen 31. august 2026, se boksen over), og noteområdet fikk
 > sin egen områdemeny i layout-ruten `src/routes/noter/route.tsx`: «Mine noter»
 > (`/noter`) · «Prosjekter» (`/noter/prosjekter`) · «Arkiv» (`/noter/arkiv`, kun
 > ved `canBrowseArchive`). Prosjekter og Arkiv er dermed sider i noteområdet i
@@ -227,8 +244,11 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 1. ~~**Navigasjonsmodellen** (§6)~~ — **avgjort 30. august 2026: alternativ (a)**,
    kort toppmeny + undernavigasjon per område. Terskelen i §6 står ved lag som
    trigger for å ta launcheren (b) opp igjen.
-2. **Skal Filtilganger flyttes ut av `/innstillinger`-navnerommet?** Kosmetisk i
-   dag, men det er presedensen andre områder kommer til å kopiere.
+2. **Skal Filtilganger flyttes ut av `/innstillinger`-navnerommet?** Fortsatt
+   åpent — men delvis besvart 31. august 2026: oppføringen er ute av
+   toppmenyen (§6), mens URL-en står. En flytting er nå et rent URL-spørsmål med
+   redirect-kostnad, ikke et navigasjonsspørsmål. Presedensen å ikke gjenta står
+   ved lag: legg ikke nye områder under `/innstillinger`.
 3. ~~**Skal Hjem være medlemsflaten eller plattformflaten?**~~ — **avgjort
    30. august 2026: plattformflaten.** `Hjem` (`/`) er hub-en for internsiden, og
    medlemsflaten «Mine noter» bor på `/noter` som en del av noteområdet.
@@ -248,9 +268,12 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
    4. **Områder:** kompakte snarveier til områdene brukeren har tilgang til,
       med samme betingelser som toppmenyen (`areasFor` i `src/lib/hub.ts`).
 
-   **Beskjeder (#28, fase 2) skal øverst** — over hero — når funksjonen finnes.
-   Det er det eneste som skal kunne fortrenge «Neste». Plassen er markert med en
-   kommentar i `src/routes/index.tsx`; det bygges ingen tom plassholder før da.
+   **Beskjeder (#28) står øverst** — over hero — siden 31. august 2026. Det er
+   det eneste som skal kunne fortrenge «Neste». Blokken viser de tre siste
+   publiserte beskjedene brukeren har lov til å se (tittel, tidspunkt, utdrag,
+   «Viktig»-stempel) og lenker videre til `/beskjeder`. Uten beskjeder er den én
+   rolig linje, ikke en tom boks. Hele teksten, utkastene og publiseringsflyten
+   bor i området — hub-en er fortsatt ikke et kontrollpanel (§4).
 
    Hub-en skal aldri bli et kontrollpanel som gjengir hvert områdes oversikt i
    miniatyr (§4). Den viser *det neste* og *veien videre*.

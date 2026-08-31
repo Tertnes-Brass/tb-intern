@@ -30,6 +30,16 @@ export type HubProject = {
   workCount: number
 }
 
+/** Publisert beskjed, redusert til det hub-en viser. Hele teksten bor på /beskjeder. */
+export type HubPost = {
+  id: string
+  title: string
+  excerpt: string
+  /** Epoch-ms. Utkast kommer aldri hit. */
+  publishedAt: number
+  important: boolean
+}
+
 export type HubCalendar = {
   /** `CALENDAR_ICS_URL` er satt. */
   configured: boolean
@@ -74,7 +84,13 @@ export function eventsAfter(events: HubEvent[], next: HubEvent | null, limit: nu
 }
 
 /** Rutene hub-en kan lenke til. Holdes som union så `Link to` forblir typet. */
-export type HubAreaTo = '/noter' | '/kalender' | '/medlemmer' | '/innstillinger/nedlastinger' | '/innstillinger'
+export type HubAreaTo =
+  | '/beskjeder'
+  | '/noter'
+  | '/kalender'
+  | '/medlemmer'
+  | '/innstillinger/nedlastinger'
+  | '/innstillinger'
 
 export type HubArea = {
   to: HubAreaTo
@@ -84,6 +100,7 @@ export type HubArea = {
 }
 
 const BASE_AREAS: HubArea[] = [
+  { to: '/beskjeder', label: 'Beskjeder', description: 'Informasjon fra styret — og hele historikken.' },
   { to: '/noter', label: 'Noter', description: 'Åpne stemmene dine, se programmet og bla i arkivet.' },
   { to: '/kalender', label: 'Kalender', description: 'Øvelser, konserter og oppmøtetider fremover.' },
   { to: '/medlemmer', label: 'Medlemmer', description: 'Se hvem som spiller hvilken stemme.' },
@@ -96,6 +113,10 @@ function allows(permissions: string[], permission: string): boolean {
 /**
  * Samme betingelser som toppmenyen i `Shell.tsx` — snarveiene og menyen skal
  * ikke kunne komme i utakt. UI-et er uansett kosmetikk; serveren avviser selv.
+ *
+ * Ett unntak, bevisst: Filtilganger ble tatt ut av toppmenyen da Beskjeder kom
+ * (docs/designprinsipper.md §6), men beholder kortet her — hub-en har plass, og
+ * området må fortsatt ha en vei inn (§4).
  */
 export function areasFor(permissions: string[]): HubArea[] {
   const areas: HubArea[] = [...BASE_AREAS]

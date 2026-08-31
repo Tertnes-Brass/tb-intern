@@ -36,6 +36,7 @@ SMS-er fortsatt lander riktig. Logikken er `legacyHostRedirect` i
 - **RBAC** — roller (admin/arkivar/dirigent/musiker) med rettigheter i database, håndhevet server-side i alle funksjoner
 - **Tilgangsstyrte filer** — alle PDF-er streames via API med sesjons- eller token-sjekk; partitur er rettighetsstyrt (scores.view); ingen offentlige filer
 - **Kalender** — øvelser og konserter hentes fra korpsets Google-kalender (iCal) og vises på `/kalender`; Google forblir stedet man redigerer
+- **Beskjeder** — styret publiserer informasjon ett sted (`/beskjeder`), og medlemmene får den på e-post; hver enkelt velger selv hvor mye varsling hen vil ha
 
 ## Innlogging og invitasjon
 
@@ -102,6 +103,46 @@ pnpm exec wrangler secret put CALENDAR_ICS_URL   # hemmelig — kun som secret
 Uten `CALENDAR_ICS_URL` er siden en rolig tomtilstand («Kalenderen er ikke koblet
 til ennå») — ingen feil. Feeden caches i ti minutter, så den hentes ikke på hver
 sidevisning.
+
+## Beskjeder og e-postvarsling
+
+Korpset skal slippe å ha en Facebook-gruppe for å få vite når øvelsen flyttes.
+Styret skriver beskjeden **ett sted** — `/beskjeder` — og alle får den både på
+internsiden og på e-post.
+
+**Slik virker det**
+
+- Alle innloggede kan lese. Å skrive og publisere krever rettigheten
+  `posts.publish` (Styremedlem, Dirigent og Administrator har den; den kan gis
+  til flere roller i *Innstillinger → Roller*).
+- En beskjed er ren tekst med avsnitt. Tomme linjer blir avsnitt, og URL-er
+  gjøres klikkbare automatisk — ingen markdown, ingen HTML fra skrivefeltet.
+- **Utkast** (`Lagre utkast`) er kun synlig for dem som selv kan publisere.
+  Publisering kan når som helst gjøres om (`Avpubliser`).
+- **Målgruppe**: «Hele korpset» eller «Bare styret». Styre-beskjeder er usynlige
+  for alle andre — også via direkte lenke, fordi filtreringen skjer server-side.
+- **Viktighet**: en beskjed merket «Viktig» får et stempel og når også dem som
+  har valgt å bare få viktige e-poster.
+- De tre siste beskjedene ligger øverst på forsiden, over «Neste».
+
+**E-post**
+
+- Ved publisering velger skriveren om medlemmene skal varsles. E-posten går til
+  aktive medlemmer med e-postadresse, filtrert på målgruppe og den enkeltes
+  varslingsvalg, i små puljer. Feiler én adresse, fortsetter resten.
+- Hver sending skrives til `notification_log` (én rad per beskjed og mottaker).
+  Derfor får ingen den samme beskjeden to ganger, og «Send e-post på nytt» på
+  detaljsiden går kun til dem som mangler varselet.
+- E-post krever `EMAIL`-bindingen (Cloudflare Email Sending), som allerede er
+  satt opp i produksjon (`send_email` i `wrangler.jsonc`). Mangler bindingen
+  eller feiler sendingen, logges innholdet i stedet — og grensesnittet sier
+  «loggført lokalt», aldri «sendt».
+
+**Varslingsvalg (medlemmet)**
+
+Under *Min profil* → «E-post om beskjeder»: **Alle** (standard), **Bare viktige**
+(kun det styret har merket som viktig) eller **Av**. Valget gjelder bare e-post;
+beskjedene ligger uansett på `/beskjeder`.
 
 ## Stack
 

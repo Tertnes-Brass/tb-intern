@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
+import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { toast, toastError } from '../../components/toast'
 import { Button, Field, Kicker, Modal, Stamp } from '../../components/ui'
@@ -31,6 +31,10 @@ type Part = Data['parts'][number]
 
 function SettingsPage() {
   const data = Route.useLoaderData()
+  const me = Route.useRouteContext().me
+  // Vis aldri en krysslenke brukeren mangler rettighet til (§4). Serveren
+  // avviser uansett; dette er kosmetikk.
+  const canViewDownloads = !!me && (me.permissions.includes('*') || me.permissions.includes('downloads.view'))
 
   return (
     <div className="space-y-12">
@@ -38,6 +42,16 @@ function SettingsPage() {
         <Kicker className="mb-2">Administrasjon</Kicker>
         <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Innstillinger</h1>
         <p className="mt-2 text-sm text-ink-soft">Besetning og roller for korpset. Endringer gjelder umiddelbart.</p>
+        {/*
+          Filtilganger er ikke lenger i toppmenyen (docs/designprinsipper.md §6).
+          Området har fortsatt eget inngangspunkt — herfra og fra «Områder» på
+          hub-en. URL-en er uendret, så gamle lenker virker.
+        */}
+        {canViewDownloads && (
+          <Link to="/innstillinger/nedlastinger" className="mt-5 inline-block">
+            <Button variant="secondary">Filtilganger — hvem har åpnet en fil? →</Button>
+          </Link>
+        )}
       </header>
 
       <PartsSection data={data} />
