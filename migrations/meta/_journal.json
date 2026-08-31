@@ -71,6 +71,13 @@
       "when": 1788133662015,
       "tag": "0009_board",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788135003485,
+      "tag": "0010_board-projects-chat",
+      "breakpoints": true
     }
   ]
 }

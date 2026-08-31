@@ -154,7 +154,9 @@ export type SeedBoardMeeting = {
   title: string
   /** Dager fra i dag; negativt = allerede avholdt. */
   dayOffset: number
-  notes: string
+  agenda: string | null
+  notes: string | null
+  decisions: string | null
 }
 
 /** To møter: ett avholdt med referat, ett som kommer med saksliste. */
@@ -162,14 +164,19 @@ export const SEED_BOARD_MEETINGS: SeedBoardMeeting[] = [
   {
     title: 'Styremøte september',
     dayOffset: -12,
+    agenda: '1. Økonomi og kontingent\n2. Evaluering av sommerkonserten\n3. Rekruttering\n4. Eventuelt',
     notes:
       'Til stede: hele styret.\n\nØkonomi: regnskapet er ajour, og kontingenten for høsten er sendt ut. To purringer gjenstår.\n\nSommerkonserten: godt oppmøte, men lydanlegget må leies inn neste gang.\n\nRekruttering: vi tar kontakt med kulturskolen før jul.',
+    decisions:
+      'Vedtak: vi leier inn lydanlegg til neste sommerkonsert.\nPurre på utestående kontingent innen to uker.\nHente inn tilbud på nye uniformsjakker fra minst to leverandører.',
   },
   {
     title: 'Styremøte oktober',
     dayOffset: 9,
-    notes:
-      'Saksliste:\n\n1. Regnskap per 30. september\n2. Budsjett for vårsemesteret\n3. Uniformer — tilbud fra to leverandører\n4. Dugnad på julemarkedet\n5. Eventuelt',
+    agenda:
+      '1. Regnskap per 30. september\n2. Budsjett for vårsemesteret\n3. Uniformer — tilbud fra to leverandører\n4. Dugnad på julemarkedet\n5. Eventuelt',
+    notes: null,
+    decisions: null,
   },
 ]
 
@@ -181,8 +188,10 @@ export type SeedBoardTask = {
   dueDayOffset: number | null
   /** Møtet oppgaven kom fra, matchet på tittel. */
   meetingTitle: string | null
-  /** Prosjektet oppgaven hører til, matchet på navn. */
+  /** Prosjektet i noteområdet, matchet på navn. */
   projectName: string | null
+  /** Styreprosjektet oppgaven hører til, matchet på tittel. */
+  boardProjectTitle: string | null
   comments: string[]
 }
 
@@ -194,6 +203,7 @@ export const SEED_BOARD_TASKS: SeedBoardTask[] = [
     dueDayOffset: -4,
     meetingTitle: 'Styremøte september',
     projectName: null,
+    boardProjectTitle: null,
     comments: ['Første purring er sendt, venter til over helgen før jeg ringer.'],
   },
   {
@@ -203,6 +213,7 @@ export const SEED_BOARD_TASKS: SeedBoardTask[] = [
     dueDayOffset: 6,
     meetingTitle: 'Styremøte september',
     projectName: null,
+    boardProjectTitle: 'Nye uniformer',
     comments: ['Ett tilbud er inne. Venter på det andre.', 'Husk å spørre om broderi av logo.'],
   },
   {
@@ -212,6 +223,7 @@ export const SEED_BOARD_TASKS: SeedBoardTask[] = [
     dueDayOffset: 21,
     meetingTitle: null,
     projectName: 'Sommerkonsert',
+    boardProjectTitle: 'Sommerkonsert 2027',
     comments: [],
   },
   {
@@ -221,6 +233,7 @@ export const SEED_BOARD_TASKS: SeedBoardTask[] = [
     dueDayOffset: -2,
     meetingTitle: 'Styremøte oktober',
     projectName: null,
+    boardProjectTitle: null,
     comments: [],
   },
   {
@@ -230,6 +243,57 @@ export const SEED_BOARD_TASKS: SeedBoardTask[] = [
     dueDayOffset: null,
     meetingTitle: null,
     projectName: null,
+    boardProjectTitle: null,
     comments: [],
   },
+]
+
+export type SeedBoardProject = {
+  title: string
+  goal: string
+  /** Dager fra i dag; null = ingen frist. */
+  dueDayOffset: number | null
+  /** Konserten i noteområdet, matchet på navn. */
+  linkedProjectName: string | null
+  /** Ekstra oppgaver som bare finnes i dette prosjektet. */
+  tasks: Array<{ title: string; status: 'open' | 'in_progress' | 'done'; dueDayOffset: number | null }>
+  /** Meldinger i prosjektets egen chat-tråd. */
+  messages: string[]
+}
+
+export const SEED_BOARD_PROJECTS: SeedBoardProject[] = [
+  {
+    title: 'Nye uniformer',
+    goal: 'Hele korpset i nye jakker før NM. Innenfor budsjett, og med logo brodert på brystet.',
+    dueDayOffset: 45,
+    linkedProjectName: null,
+    tasks: [
+      { title: 'Måltaking av alle medlemmer', status: 'open', dueDayOffset: 14 },
+      { title: 'Legge fram tilbudene for styret', status: 'open', dueDayOffset: 20 },
+      { title: 'Kartlegge hvor mange jakker vi trenger', status: 'done', dueDayOffset: -8 },
+    ],
+    messages: [
+      'Leverandør A svarte i dag: 2 900 per jakke, seks ukers leveringstid.',
+      'Har vi sjekket om broderiet kommer i tillegg? Det gjorde det sist.',
+      'Ja, 180 per jakke. Tar det med i oversikten til styremøtet.',
+    ],
+  },
+  {
+    title: 'Sommerkonsert 2027',
+    goal: 'Fylle Åsane kulturhus, med eget lydanlegg og kaffesalg i pausen.',
+    dueDayOffset: 120,
+    linkedProjectName: 'Sommerkonsert',
+    tasks: [
+      { title: 'Avtale lydleverandør', status: 'in_progress', dueDayOffset: 30 },
+      { title: 'Lage plakat og legge ut på Facebook', status: 'open', dueDayOffset: 60 },
+    ],
+    messages: ['Kulturhuset har holdt av datoen. Kontrakt kommer på e-post.'],
+  },
+]
+
+/** Meldinger i fellesekanalen «Styret». */
+export const SEED_BOARD_MESSAGES: string[] = [
+  'Da er den nye internsiden i gang — vi tar styrearbeidet her fra nå.',
+  'Fint. Da slipper vi å lete i Google Chat etter hva vi ble enige om.',
+  'Husk at oktobermøtet er flyttet en uke. Agendaen ligger på møtesiden.',
 ]

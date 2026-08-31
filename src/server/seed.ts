@@ -4,6 +4,8 @@ import { db } from '../db'
 import {
   boardComments,
   boardMeetings,
+  boardMessages,
+  boardProjects,
   boardTasks,
   invitations,
   parts,
@@ -28,6 +30,8 @@ import {
   DEMO_SHARE_RECIPIENT,
   DEMO_SHARE_TOKEN,
   SEED_BOARD_MEETINGS,
+  SEED_BOARD_MESSAGES,
+  SEED_BOARD_PROJECTS,
   SEED_BOARD_TASKS,
   SEED_MEMBERS,
   SEED_PROJECTS,
@@ -253,32 +257,101 @@ function isoDayFromToday(offset: number): string {
 }
 
 /**
- * Demoinnhold for styreområdet: to møter med notater, fem oppgaver (én forfalt,
- * én ferdig) og et par kommentarer. Datoene er relative til i dag, så «forfalt»
- * faktisk er forfalt uansett når demoen kjøres. Ingen dokumenter — de ville
- * krevd R2-objekter uten å vise noe seeding ikke allerede viser.
+ * Demoinnhold for styreområdet: to møter (ett med agenda, notater og vedtak),
+ * to styreprosjekter med egne oppgaver og chat-tråder, fem løse oppgaver (én
+ * forfalt, én ferdig), et par kommentarer og noen meldinger i fellesekanalen.
+ * Datoene er relative til i dag, så «forfalt» faktisk er forfalt uansett når
+ * demoen kjøres. Ingen dokumenter — de ville krevd R2-objekter uten å vise noe
+ * seeding ikke allerede viser.
  */
 async function seedBoardDemoData(): Promise<void> {
   const d = db()
-  if ((await d.select({ id: boardMeetings.id }).from(boardMeetings).limit(1)).length > 0) return
-
   const ts = now()
+  // Hver bolk har sin egen vakt. Da får en lokal database som ble seedet før
+  // prosjektene og chatten fantes også dem, uten at møtene dupliseres.
+  const hasMeetings = (await d.select({ id: boardMeetings.id }).from(boardMeetings).limit(1)).length > 0
+  const hasProjects = (await d.select({ id: boardProjects.id }).from(boardProjects).limit(1)).length > 0
+  const hasGeneralChat =
+    (await d.select({ id: boardMessages.id }).from(boardMessages).where(eq(boardMessages.channel, 'general')).limit(1))
+      .length > 0
+
   const meetingIdByTitle = new Map<string, string>()
-  for (const m of SEED_BOARD_MEETINGS) {
+  for (const m of hasMeetings ? [] : SEED_BOARD_MEETINGS) {
     const id = newId()
     meetingIdByTitle.set(m.title, id)
     await d.insert(boardMeetings).values({
       id,
       date: isoDayFromToday(m.dayOffset),
       title: m.title,
+      agenda: m.agenda,
       notes: m.notes,
+      decisions: m.decisions,
       createdBy: null,
       createdAt: ts,
       updatedAt: ts,
     })
   }
 
-  for (const t of SEED_BOARD_TASKS) {
+  // Styreprosjekter med egne oppgaver og en chat-tråd hver.
+  const boardProjectIdByTitle = new Map<string, string>()
+  for (const bp of hasProjects ? [] : SEED_BOARD_PROJECTS) {
+    const linked = bp.linkedProjectName
+      ? (await d.select({ id: projects.id }).from(projects).where(eq(projects.name, bp.linkedProjectName)).limit(1))[0]
+      : undefined
+    const id = newId()
+    boardProjectIdByTitle.set(bp.title, id)
+    await d.insert(boardProjects).values({
+      id,
+      title: bp.title,
+      goal: bp.goal,
+      status: 'active',
+      dueDate: bp.dueDayOffset === null ? null : isoDayFromToday(bp.dueDayOffset),
+      ownerUserId: null,
+      linkedProjectId: linked?.id ?? null,
+      createdBy: null,
+      createdAt: ts,
+      updatedAt: ts,
+    })
+    for (const t of bp.tasks) {
+      await d.insert(boardTasks).values({
+        id: newId(),
+        title: t.title,
+        description: null,
+        status: t.status,
+        assigneeUserId: null,
+        dueDate: t.dueDayOffset === null ? null : isoDayFromToday(t.dueDayOffset),
+        projectId: null,
+        boardProjectId: id,
+        meetingId: null,
+        createdBy: null,
+        createdAt: ts,
+        updatedAt: ts,
+        completedAt: t.status === 'done' ? ts : null,
+      })
+    }
+    // Meldingene får hvert sitt minutt, ellers står de i tilfeldig rekkefølge.
+    for (const [i, body] of bp.messages.entries()) {
+      await d.insert(boardMessages).values({
+        id: newId(),
+        channel: `project:${id}`,
+        authorId: null,
+        body,
+        createdAt: new Date(ts.getTime() - (bp.messages.length - i) * 60_000),
+      })
+    }
+  }
+
+  for (const [i, body] of hasGeneralChat ? [] : SEED_BOARD_MESSAGES.entries()) {
+    await d.insert(boardMessages).values({
+      id: newId(),
+      channel: 'general',
+      authorId: null,
+      body,
+      createdAt: new Date(ts.getTime() - (SEED_BOARD_MESSAGES.length - i) * 3_600_000),
+    })
+  }
+
+  for (const t of hasMeetings ? [] : SEED_BOARD_TASKS) {
     const project = t.projectName
       ? (await d.select({ id: projects.id }).from(projects).where(eq(projects.name, t.projectName)).limit(1))[0]
       : undefined
@@ -293,6 +366,7 @@ async function seedBoardDemoData(): Promise<void> {
       assigneeUserId: null,
       dueDate: t.dueDayOffset === null ? null : isoDayFromToday(t.dueDayOffset),
       projectId: project?.id ?? null,
+      boardProjectId: t.boardProjectTitle ? (boardProjectIdByTitle.get(t.boardProjectTitle) ?? null) : null,
       meetingId: t.meetingTitle ? (meetingIdByTitle.get(t.meetingTitle) ?? null) : null,
       createdBy: null,
       createdAt: ts,
