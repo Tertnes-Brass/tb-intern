@@ -36,7 +36,7 @@ SMS-er fortsatt lander riktig. Logikken er `legacyHostRedirect` i
 - **RBAC** — roller (admin/arkivar/dirigent/musiker) med rettigheter i database, håndhevet server-side i alle funksjoner
 - **Tilgangsstyrte filer** — alle PDF-er streames via API med sesjons- eller token-sjekk; partitur er rettighetsstyrt (scores.view); ingen offentlige filer
 - **Kalender** — øvelser og konserter hentes fra korpsets Google-kalender (iCal) og vises på `/kalender`; Google forblir stedet man redigerer
-- **Beskjeder** — styret publiserer informasjon ett sted (`/beskjeder`), og medlemmene får den på e-post; hver enkelt velger selv hvor mye varsling hen vil ha
+- **Beskjeder / veggen** — korpsets egen vegg (`/beskjeder`): alle medlemmer kan skrive, kommentere, like og legge ved bilder, mens styret merker sine innlegg «Fra styret» og sender dem på e-post
 
 ## Innlogging og invitasjon
 
@@ -104,35 +104,51 @@ Uten `CALENDAR_ICS_URL` er siden en rolig tomtilstand («Kalenderen er ikke kobl
 til ennå») — ingen feil. Feeden caches i ti minutter, så den hentes ikke på hver
 sidevisning.
 
-## Beskjeder og e-postvarsling
+## Beskjeder: veggen
 
-Korpset skal slippe å ha en Facebook-gruppe for å få vite når øvelsen flyttes.
-Styret skriver beskjeden **ett sted** — `/beskjeder` — og alle får den både på
-internsiden og på e-post.
+Korpset skal slippe å ha en Facebook-gruppe. `/beskjeder` er derfor en **vegg**
+man går inn og ser på — ikke bare en utboks for styret.
 
-**Slik virker det**
+**Hvem kan hva**
 
-- Alle innloggede kan lese. Å skrive og publisere krever rettigheten
-  `posts.publish` (Styremedlem, Dirigent og Administrator har den; den kan gis
-  til flere roller i *Innstillinger → Roller*).
-- En beskjed er ren tekst med avsnitt. Tomme linjer blir avsnitt, og URL-er
-  gjøres klikkbare automatisk — ingen markdown, ingen HTML fra skrivefeltet.
-- **Utkast** (`Lagre utkast`) er kun synlig for dem som selv kan publisere.
-  Publisering kan når som helst gjøres om (`Avpubliser`).
-- **Målgruppe**: «Hele korpset» eller «Bare styret». Styre-beskjeder er usynlige
-  for alle andre — også via direkte lenke, fordi filtreringen skjer server-side.
-- **Viktighet**: en beskjed merket «Viktig» får et stempel og når også dem som
-  har valgt å bare få viktige e-poster.
-- De tre siste beskjedene ligger øverst på forsiden, over «Neste».
+| | Alle innloggede | Med `posts.publish` (styret, dirigent, admin) |
+|---|---|---|
+| Skrive innlegg, med bilder | ✅ | ✅ |
+| Kommentere og like | ✅ | ✅ |
+| Redigere/slette | eget innhold | alt (moderasjon) |
+| Merke «Fra styret», «Viktig» | — | ✅ |
+| Målgruppe «Bare styret» | — | ✅ |
+| Sende e-post ved publisering | — | ✅ |
+| Utkast før publisering | (kun hvis noe stopper opp) | ✅ |
+
+Et vanlig medlemsinnlegg er alltid `official = false`, `importance = normal` og
+synlig for hele korpset — serveren stripper resten uansett hva klienten sender.
+
+**Innlegget**
+
+- Tittel er valgfri; uten tittel vises første linje av teksten.
+- Teksten er ren tekst med avsnitt. Tomme linjer blir avsnitt, og URL-er gjøres
+  klikkbare automatisk — ingen markdown, ingen HTML fra skrivefeltet.
+- Inntil 10 bilder per innlegg, maks 10 MB hver (JPG, PNG, WebP, GIF, HEIC).
+  Bildene lagres i R2 og vises **kun** gjennom `/api/post-images/$imageId`, som
+  krever innlogging og gjentar innleggets synlighetsregel. Ingen offentlige URL-er.
+- Kommentarer er en kronologisk tråd; likes er én knapp per innlegg.
+- Filteret øverst («Alt · Fra styret · Viktig») ligger i URL-en, så en visning
+  kan lenkes til.
+- Beskjeder merket «Bare styret» er usynlige for alle andre — også via direkte
+  lenke og for bildene deres — fordi filtreringen skjer server-side.
+- De tre siste innleggene ligger øverst på forsiden, med «Hele veggen →».
 
 **E-post**
 
-- Ved publisering velger skriveren om medlemmene skal varsles. E-posten går til
-  aktive medlemmer med e-postadresse, filtrert på målgruppe og den enkeltes
-  varslingsvalg, i små puljer. Feiler én adresse, fortsetter resten.
-- Hver sending skrives til `notification_log` (én rad per beskjed og mottaker).
-  Derfor får ingen den samme beskjeden to ganger, og «Send e-post på nytt» på
-  detaljsiden går kun til dem som mangler varselet.
+- Kun styrets innlegg kan varsles på e-post, og kun når skriveren krysser av.
+  E-posten går til aktive medlemmer med e-postadresse, filtrert på målgruppe og
+  den enkeltes varslingsvalg, i små puljer. Feiler én adresse, fortsetter resten.
+- Hver sending skrives til `notification_log` (én rad per innlegg og mottaker).
+  Derfor får ingen den samme beskjeden to ganger, og «Send e-post på nytt» går
+  kun til dem som mangler varselet.
+- Bildene følger ikke med i e-posten; den sier «N bilder er lagt ved — se dem på
+  internsiden».
 - E-post krever `EMAIL`-bindingen (Cloudflare Email Sending), som allerede er
   satt opp i produksjon (`send_email` i `wrangler.jsonc`). Mangler bindingen
   eller feiler sendingen, logges innholdet i stedet — og grensesnittet sier
@@ -142,7 +158,7 @@ internsiden og på e-post.
 
 Under *Min profil* → «E-post om beskjeder»: **Alle** (standard), **Bare viktige**
 (kun det styret har merket som viktig) eller **Av**. Valget gjelder bare e-post;
-beskjedene ligger uansett på `/beskjeder`.
+alt ligger uansett på veggen. Kommentarer gir ingen e-post i dag.
 
 ## Stack
 

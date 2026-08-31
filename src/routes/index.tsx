@@ -83,28 +83,33 @@ function HubPage() {
       */}
       <section className="rise">
         <SectionHeading
-          kicker="Fra styret"
+          kicker="Veggen"
           title="Siste beskjeder"
           className="mb-4"
           action={
             <Link to="/beskjeder" className="link-brass text-sm">
-              Alle beskjeder →
+              Hele veggen →
             </Link>
           }
         />
         {data.posts.length === 0 ? (
-          <p className="text-sm text-ink-faint">Ingen beskjeder ennå — det kommer.</p>
+          <p className="text-sm text-ink-faint">Ingenting på veggen ennå — det kommer.</p>
         ) : (
           <ul>
             {data.posts.map((post) => (
               <li key={post.id} className="hairline-row">
                 <Link to="/beskjeder/$postId" params={{ postId: post.id }} className="link-quiet block py-3">
                   <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                    <span className="display-title text-base font-semibold text-ink">{post.title}</span>
+                    <span className="display-title text-base font-semibold text-ink">{post.heading}</span>
+                    {post.official && <Stamp tone="brass">Fra styret</Stamp>}
                     {post.important && <Stamp tone="oxblood">Viktig</Stamp>}
                   </span>
                   <span className="mt-0.5 block font-mono text-[0.6rem] uppercase tracking-[0.14em] text-ink-faint">
-                    {formatDateTime(post.publishedAt)}
+                    {post.official ? 'Styret' : post.authorName} · {formatDateTime(post.publishedAt)}
+                    {post.likeCount > 0 ? ` · ${post.likeCount} liker` : ''}
+                    {post.commentCount > 0
+                      ? ` · ${post.commentCount} ${post.commentCount === 1 ? 'kommentar' : 'kommentarer'}`
+                      : ''}
                   </span>
                   <span className="mt-1 block max-w-2xl text-sm leading-relaxed text-ink-soft">{post.excerpt}</span>
                 </Link>

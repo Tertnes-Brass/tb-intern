@@ -1,10 +1,10 @@
 import { createServerFn } from '@tanstack/react-start'
-import { and, asc, desc, eq, gte, isNotNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, isNotNull, sql } from 'drizzle-orm'
 import { db } from '../db'
-import { posts, projectWorks, projects } from '../db/schema'
+import { postComments, postReactions, posts, projectWorks, projects, user } from '../db/schema'
 import { type HubArea, type HubCalendar, type HubEvent, type HubPost, type HubProject, areasFor, eventsAfter } from '../lib/hub'
 import type { CalendarEvent } from '../lib/ical'
-import { excerpt } from '../lib/posts'
+import { excerpt, postHeading } from '../lib/posts'
 import { hasPermission, requireMe } from './access'
 import { loadCalendar } from './calendar-feed'
 
@@ -19,7 +19,7 @@ import { loadCalendar } from './calendar-feed'
 const UPCOMING_EVENTS = 4
 /** Prosjekter under hero når kalenderen ikke er tilgjengelig. */
 const UPCOMING_PROJECTS = 4
-/** Beskjeder øverst. Tre er nok til å vise at det finnes flere uten å bli en feed. */
+/** Veggen øverst. Tre er nok til å vise at det finnes flere uten å bli en feed. */
 const LATEST_POSTS = 3
 
 export type HubPayload = {
@@ -81,9 +81,12 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
         title: posts.title,
         body: posts.body,
         importance: posts.importance,
+        official: posts.official,
+        authorName: user.name,
         publishedAt: posts.publishedAt,
       })
       .from(posts)
+      .leftJoin(user, eq(posts.authorId, user.id))
       .where(
         and(
           isNotNull(posts.publishedAt),
@@ -93,6 +96,25 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
       .orderBy(desc(posts.publishedAt))
       .limit(LATEST_POSTS),
   ])
+
+  // Tellerne hentes for de tre innleggene som faktisk vises — ikke for hele veggen.
+  const postIds = postRows.map((p) => p.id)
+  const [commentRows, reactionRows] = postIds.length
+    ? await Promise.all([
+        d
+          .select({ postId: postComments.postId, n: sql<number>`count(*)` })
+          .from(postComments)
+          .where(inArray(postComments.postId, postIds))
+          .groupBy(postComments.postId),
+        d
+          .select({ postId: postReactions.postId, n: sql<number>`count(*)` })
+          .from(postReactions)
+          .where(inArray(postReactions.postId, postIds))
+          .groupBy(postReactions.postId),
+      ])
+    : [[], []]
+  const commentCounts = new Map(commentRows.map((r) => [r.postId, r.n]))
+  const likeCounts = new Map(reactionRows.map((r) => [r.postId, r.n]))
 
   // `gte` utelukker allerede NULL-datoer i SQL; filteret gjør det sant for typen òg.
   const upcoming = upcomingRows.filter((p): p is DatedProject => p.eventDate !== null)
@@ -112,10 +134,14 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
   return {
     posts: postRows.map((p) => ({
       id: p.id,
-      title: p.title,
+      heading: postHeading(p),
       excerpt: excerpt(p.body, 120),
       publishedAt: p.publishedAt!.getTime(),
       important: p.importance === 'important',
+      official: p.official,
+      authorName: p.authorName ?? (p.official ? 'Styret' : 'Ukjent'),
+      commentCount: commentCounts.get(p.id) ?? 0,
+      likeCount: likeCounts.get(p.id) ?? 0,
     })),
     me: {
       name: me.name,

@@ -55,7 +55,7 @@ lesing er åpnere; håndhevelsen ligger alltid i `src/server/*.ts`, aldri bare i
 | Område | Rute | Primærbruker | Primærhandling | Gate |
 |---|---|---|---|---|
 | **Hjem** (hub-flaten) | `src/routes/index.tsx` (`getHub`) | Medlemmet | Se hva som skjer nå, og komme seg videre til riktig område | `requireMe()`; områdesnarveiene følger rettighetene (`areasFor` i `src/lib/hub.ts`) |
-| **Beskjeder** | `src/routes/beskjeder/` (`index`, `$postId`, `ny`) | Medlemmet (leser), styremedlemmet (skriver) | Lese siste beskjed fra styret; skrive og publisere en | Lesing: `requireMe()`; skriving/publisering + styre-beskjeder og utkast: `posts.publish` |
+| **Beskjeder** (veggen) | `src/routes/beskjeder/` (`index`, `ny`, `$postId/`) | Medlemmet | Se hva som er nytt i korpset — og selv legge ut noe | Lesing og skriving: `requireMe()`. `posts.publish` gir «Fra styret», «Viktig», styre-målgruppen, e-post og moderasjon. Bilder: `/api/post-images/$imageId` bak samme regel |
 | **Noter** / «Mine noter» | `src/routes/noter/index.tsx` (`getHome`) | Musikeren | Åpne egne stemmer + lytteeksempler til neste prosjekt | `requireMe()`; stemmefiltrering via `effectivePartIds` |
 | **Prosjekter** | `src/routes/noter/prosjekter/index.tsx`, `$projectId.tsx` | Dirigent / prosjektansvarlig | Klikke sammen et program i rekkefølge og publisere det | `projects.manage`; upublisert er usynlig ellers. Deling: `shares.manage` |
 | **Arkiv** | `src/routes/noter/arkiv/index.tsx`, `$workId.tsx` | Arkivaren | Katalogisere et verk og laste opp PDF per stemme | Innsyn: `archive.viewAll` ∨ `works.manage`; skriving: `works.manage` |
@@ -78,6 +78,14 @@ Fire observasjoner som er verdt å ta med videre:
   «Områder». Det er ikke verdt en migrering i seg
   selv, men det er mønsteret å ikke gjenta: en funksjon havnet i «Innstillinger»
   fordi den føltes administrativ.
+- **Veggen er unntaket som prøver §1 punkt 3.** «Én primærbruker» er medlemmet,
+  men medlemmet er her både leser og skriver, og styret er en *rolle* i samme rom
+  snarere enn et eget område. Det ble vurdert å skille «Beskjeder fra styret» og
+  «Veggen» i to områder; det ville gitt to inngangspunkt for det samme sosiale
+  rommet og tvunget medlemmene til å velge riktig sted å spørre om notestativet.
+  I stedet er skillet gjort *inne* i området: «Fra styret»-innlegg har eget
+  stempel, egen kortstil og eget filter.
+
 - **`/` er plattformflaten, ikke et område.** Hub-en har ingen egen oversikt å
   eie og ingen egen gate: den viser *det neste* og *veien videre*, og lenker inn
   i områdene (§7 pkt 3). Den står i tabellen fordi den er en skjerm med eget
@@ -163,7 +171,7 @@ den bygges — også de som allerede har en anbefaling her.
 | Sak | Anbefaling | Primærbruker → primærhandling | Begrunnelse |
 |---|---|---|---|
 | **#32 Mediearkiv** | Eget område, eget navnerom (`/media`) | Stab → registrere et opptak og knytte det til prosjekt/verk | Ikke en fane i Arkiv: andre filtyper, og et helt annet tilgangsbegrep (intern / styre / offentlig kandidat) enn notearkivets stemmebaserte gate. Krever egne rettigheter. |
-| **#28 Kunngjøringer** → **bygget som «Beskjeder»** (31. august 2026) | Delt: lesing som blokk på Hjem, skriving i eget navnerom | Styre/dirigent → publisere en melding; medlem → se den | Bygget slik anbefalingen sa: de tre siste ligger øverst på hub-en, og hele området — feed, detaljside, utkast, målgruppe, viktighet og e-postvarsling — bor i `/beskjeder` bak `posts.publish`. «Lest-status» ble bevisst ikke bygget; e-postvarslingen med `notification_log` svarer på det samme behovet uten å overvåke medlemmene. |
+| **#28 Kunngjøringer** → **bygget som «Beskjeder»/veggen** (31. august 2026) | Delt: lesing som blokk på Hjem, skriving i eget navnerom | Opprinnelig: styre/dirigent → publisere; medlem → se den. **Utvidet samme dag:** medlemmet → se hva som er nytt, og selv legge ut noe | Bygget slik anbefalingen sa — de tre siste ligger øverst på hub-en, resten i `/beskjeder` — men med ett bevisst brudd på premisset: skriving er ikke lenger reservert for styret. Skal veggen erstatte Facebook-gruppen, må den tåle et notestativ som er kommet bort, ikke bare vedtak. `posts.publish` gjelder derfor de fire tingene som gjør et innlegg til en *beskjed fra styret* («Fra styret», «Viktig», styre-målgruppen, e-post) pluss moderasjon. «Lest-status» ble bevisst ikke bygget: kommentarer og likes viser at noen har sett den, uten å overvåke medlemmene. |
 | **#24 Oppmøte** | Inne i #26, som primærhandling på en aktivitet | Medlem → svare kommer / kommer ikke / usikker | RSVP uten aktivitet er meningsløst; det er ikke et selvstendig område. Bygges #24 før #26, hører det hjemme på `/noter/prosjekter/$projectId` — og da skal det sies eksplisitt at det er midlertidig. |
 | **#26 Kalender/aktiviteter** | Eget område (`/aktiviteter`) | Alle medlemmer → se hva som skjer, og «Mine datoer» | Sterkeste kandidat til ny toppnivå-oppføring: primærbruker er *hele* korpset, ikke stab. Det er også den som først presser navigasjonen (§6). |
 | **#13 Utstyr** | Eget område (`/utstyr`) | Materialforvalter → registrere en gjenstand med bilde, eier og lånestatus | Skal ikke under Innstillinger selv om det føles administrativt. Egen rettighet; lesing kan være åpen for medlemmer. Kobles til medlem ved privat eier og til prosjekt ved bruk — krysslenker, ikke felles side. |

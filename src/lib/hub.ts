@@ -30,14 +30,20 @@ export type HubProject = {
   workCount: number
 }
 
-/** Publisert beskjed, redusert til det hub-en viser. Hele teksten bor på /beskjeder. */
+/** Publisert innlegg fra veggen, redusert til det hub-en viser. */
 export type HubPost = {
   id: string
-  title: string
+  /** Tittel når den finnes, ellers første linje av teksten (`postHeading`). */
+  heading: string
   excerpt: string
   /** Epoch-ms. Utkast kommer aldri hit. */
   publishedAt: number
   important: boolean
+  /** Merket «Fra styret». */
+  official: boolean
+  authorName: string
+  commentCount: number
+  likeCount: number
 }
 
 export type HubCalendar = {
@@ -100,7 +106,7 @@ export type HubArea = {
 }
 
 const BASE_AREAS: HubArea[] = [
-  { to: '/beskjeder', label: 'Beskjeder', description: 'Informasjon fra styret — og hele historikken.' },
+  { to: '/beskjeder', label: 'Beskjeder', description: 'Veggen: beskjeder fra styret og alt korpset deler.' },
   { to: '/noter', label: 'Noter', description: 'Åpne stemmene dine, se programmet og bla i arkivet.' },
   { to: '/kalender', label: 'Kalender', description: 'Øvelser, konserter og oppmøtetider fremover.' },
   { to: '/medlemmer', label: 'Medlemmer', description: 'Se hvem som spiller hvilken stemme.' },

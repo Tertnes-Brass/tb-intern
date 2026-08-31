@@ -149,55 +149,159 @@ export const DEMO_SHARE_EXPIRES = '2026-07-24T12:00:00Z'
 export const DEMO_SHARE_RECIPIENT = 'Ola Vikar'
 export const DEMO_SHARE_PART_IDS = ['solo-cornet']
 
-// ---------- Beskjeder (demo) ----------
+// ---------- Veggen (demo) ----------
 
 export type SeedPostData = {
-  title: string
+  /** Fast id, så demodata kan fylles på idempotent ved hver dev-innlogging. */
+  id: string
+  title: string | null
   body: string
   audience: 'all' | 'board'
   importance: 'normal' | 'important'
-  /** E-posten til forfatteren blant SEED_MEMBERS. Null = ingen konto ennå. */
-  authorEmail: string | null
+  official: boolean
+  /** E-posten til forfatteren blant SEED_MEMBERS. */
+  authorEmail: string
   /** Dager tilbake i tid. `null` = utkast (aldri publisert). */
   publishedDaysAgo: number | null
 }
 
 /**
- * Demo-beskjeder for lokal utvikling: én viktig, én bare for styret og ett
- * utkast, så feeden, hub-blokken og rettighetsfiltrene kan sees uten å skrive
- * noe først. Forfatteren knyttes til demobrukeren først når kontoen finnes.
+ * Demoinnhold for veggen i lokal utvikling: beskjeder fra styret (én viktig,
+ * én kun for styret, ett utkast) og vanlige medlemsinnlegg, så feeden,
+ * filtrene og hub-blokken kan sees uten å skrive noe først. Forfatterne kobles
+ * til demobrukerne etter hvert som kontoene finnes — de opprettes ved første
+ * innlogging.
  */
 export const SEED_POSTS: SeedPostData[] = [
   {
+    id: 'demo-post-ovelse',
     title: 'Øvelsen flyttes til tirsdag i uke 36',
     body: 'Hei alle sammen!\n\nPå grunn av et arrangement i Tertneshallen flytter vi øvelsen den uken til tirsdag, samme tid og sted. Vi bruker kvelden på Cry of the Celts og Benedictus.\n\nSi fra til stemmegruppa di om noen ikke leser dette.',
     audience: 'all',
     importance: 'normal',
+    official: true,
     authorEmail: 'sindre@demo.tertnesbrass.no',
     publishedDaysAgo: 2,
   },
   {
+    id: 'demo-post-sommertur',
     title: 'Påmelding til sommerturen — frist søndag',
     body: 'Vi trenger endelig antall til bussen og hotellet, og fristen er søndag kveld.\n\nMeld deg på i skjemaet her: https://tertnesbrass.no/sommertur\n\nHar du spørsmål om egenandel eller reise, ta kontakt med styret.',
     audience: 'all',
     importance: 'important',
+    official: true,
     authorEmail: 'sindre@demo.tertnesbrass.no',
     publishedDaysAgo: 9,
   },
   {
+    id: 'demo-post-styremote',
     title: 'Styremøte torsdag: budsjett og dirigentavtale',
     body: 'Sakslisten er kort denne gangen: budsjettet for høsten, dirigentavtalen og en oppsummering av vårkonserten.\n\nMøtet er i møterommet klokken 19.',
     audience: 'board',
     importance: 'normal',
+    official: true,
     authorEmail: 'sindre@demo.tertnesbrass.no',
     publishedDaysAgo: 4,
   },
   {
+    id: 'demo-post-uniform',
     title: 'Utkast: uniformsregler til julekonserten',
     body: 'Foreløpig tekst — må avklares i styret før den går ut.\n\nSvart bukse/skjørt, korpsjakke og hvit skjorte. Nye medlemmer får jakke utlevert på øvelsen før konserten.',
     audience: 'all',
     importance: 'normal',
+    official: true,
     authorEmail: 'sindre@demo.tertnesbrass.no',
     publishedDaysAgo: null,
   },
+  {
+    id: 'demo-post-notestativ',
+    title: null,
+    body: 'Er det noen som har tatt med seg feil notestativ hjem etter øvelsen? Mitt har et grønt bånd rundt foten.',
+    audience: 'all',
+    importance: 'normal',
+    official: false,
+    authorEmail: 'jonas@demo.tertnesbrass.no',
+    publishedDaysAgo: 1,
+  },
+  {
+    id: 'demo-post-takk',
+    title: 'Takk for en fin konsert!',
+    body: 'Tusen takk til alle som stilte i går — og til dem som ble igjen og ryddet.\n\nJeg har noen bilder fra generalprøven som jeg legger ut her senere.',
+    audience: 'all',
+    importance: 'normal',
+    official: false,
+    authorEmail: 'ingrid@demo.tertnesbrass.no',
+    publishedDaysAgo: 3,
+  },
+  {
+    id: 'demo-post-samspill',
+    title: null,
+    body: 'Noen som har lyst på ekstra samspill før NM? Tenker en søndag formiddag i mars, kanskje kvintett.',
+    audience: 'all',
+    importance: 'normal',
+    official: false,
+    authorEmail: 'astrid@demo.tertnesbrass.no',
+    publishedDaysAgo: 6,
+  },
+  {
+    id: 'demo-post-kaffe',
+    title: null,
+    body: 'Kaffemaskinen på øvingslokalet er fikset. Bare å bruke den igjen — husk å skylle kannen.',
+    audience: 'all',
+    importance: 'normal',
+    official: false,
+    authorEmail: 'karim@demo.tertnesbrass.no',
+    publishedDaysAgo: 8,
+  },
+]
+
+export type SeedCommentData = {
+  id: string
+  postId: string
+  authorEmail: string
+  body: string
+  /** Timer etter at innlegget ble publisert. */
+  hoursAfter: number
+}
+
+export const SEED_POST_COMMENTS: SeedCommentData[] = [
+  {
+    id: 'demo-comment-1',
+    postId: 'demo-post-notestativ',
+    authorEmail: 'silje@demo.tertnesbrass.no',
+    body: 'Jeg tror jeg har det! Tar det med på neste øvelse.',
+    hoursAfter: 2,
+  },
+  {
+    id: 'demo-comment-2',
+    postId: 'demo-post-notestativ',
+    authorEmail: 'jonas@demo.tertnesbrass.no',
+    body: 'Perfekt, tusen takk!',
+    hoursAfter: 3,
+  },
+  {
+    id: 'demo-comment-3',
+    postId: 'demo-post-ovelse',
+    authorEmail: 'astrid@demo.tertnesbrass.no',
+    body: 'Noteres. Kommer litt sent den tirsdagen, men rekker andre halvdel.',
+    hoursAfter: 5,
+  },
+  {
+    id: 'demo-comment-4',
+    postId: 'demo-post-takk',
+    authorEmail: 'karim@demo.tertnesbrass.no',
+    body: 'Enig — og god stemning i bassrekka hele veien.',
+    hoursAfter: 8,
+  },
+]
+
+/** Likes på tvers, så tellerne i feeden viser noe realistisk. */
+export const SEED_POST_REACTIONS: Array<{ postId: string; authorEmail: string }> = [
+  { postId: 'demo-post-takk', authorEmail: 'jonas@demo.tertnesbrass.no' },
+  { postId: 'demo-post-takk', authorEmail: 'astrid@demo.tertnesbrass.no' },
+  { postId: 'demo-post-takk', authorEmail: 'sindre@demo.tertnesbrass.no' },
+  { postId: 'demo-post-ovelse', authorEmail: 'ingrid@demo.tertnesbrass.no' },
+  { postId: 'demo-post-kaffe', authorEmail: 'silje@demo.tertnesbrass.no' },
+  { postId: 'demo-post-kaffe', authorEmail: 'jonas@demo.tertnesbrass.no' },
+  { postId: 'demo-post-samspill', authorEmail: 'ingrid@demo.tertnesbrass.no' },
 ]
