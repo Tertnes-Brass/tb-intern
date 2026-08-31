@@ -245,6 +245,43 @@ export function taskAssignedEmail(input: {
   }
 }
 
+/**
+ * Den daglige påminnelsen om forfalte styreoppgaver. Én e-post per ansvarlig
+ * med ALT som ligger på overtid — ikke én per oppgave. Sendes av
+ * `runOverdueReminders` i `board-notify.ts` (cron, 07:00 UTC).
+ */
+export function overdueTasksEmail(input: {
+  tasks: Array<{ title: string; dueDate: string; url: string; projectTitle: string | null }>
+  count: number
+}): { subject: string; html: string; text: string } {
+  const { tasks, count } = input
+  const heading = count === 1 ? 'Én oppgave har gått over fristen' : `${count} oppgaver har gått over fristen`
+  const rows = tasks
+    .map((t) => {
+      const meta = [`Frist ${formatIsoDate(t.dueDate)}`, t.projectTitle].filter(Boolean).join(' · ')
+      return `<li style="margin:0 0 14px">
+         <a href="${t.url}" style="color:#7a5f1d;font-family:Georgia,serif;font-size:17px;text-decoration:none">${escapeHtml(t.title)}</a>
+         <br><span style="font-size:12px;color:#8e8468">${escapeHtml(meta)}</span>
+       </li>`
+    })
+    .join('')
+
+  return {
+    subject: count === 1 ? 'Forfalt styreoppgave' : `${count} forfalte styreoppgaver`,
+    html: shell(
+      heading,
+      `<p style="margin:0 0 18px;font-size:15px;line-height:1.6;color:#5f5640">Du står som ansvarlig for ${
+        count === 1 ? 'denne oppgaven' : 'disse oppgavene'
+      } i styrearbeidet, og fristen er passert:</p>
+       <ul style="margin:0 0 24px;padding:0 0 0 18px">${rows}</ul>
+       <p style="margin:0;font-size:12px;color:#8e8468">Du får denne e-posten én gang per dag så lenge noe ligger på overtid. Vil du slippe den, skru av «E-post om styreoppgaver» under «Min profil».</p>`,
+    ),
+    text: `${heading}.\n\nDu står som ansvarlig for ${count === 1 ? 'denne oppgaven' : 'disse oppgavene'} i styrearbeidet:\n\n${tasks
+      .map((t) => `- ${t.title} (frist ${formatIsoDate(t.dueDate)}${t.projectTitle ? `, ${t.projectTitle}` : ''})\n  ${t.url}`)
+      .join('\n')}\n\nDu får denne e-posten én gang per dag så lenge noe ligger på overtid. Vil du slippe den, skru av «E-post om styreoppgaver» under «Min profil».\n`,
+  }
+}
+
 /** «2026-09-15» → «15. september 2026». Egen her: e-post kjører uten klientens Intl-oppsett. */
 function formatIsoDate(iso: string): string {
   try {

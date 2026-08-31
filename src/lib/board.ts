@@ -258,3 +258,55 @@ export function boardAreaNote(input: { openTasks: number; overdue: number }): st
   const tasks = openTasks === 1 ? '1 åpen oppgave' : `${openTasks} åpne oppgaver`
   return overdue > 0 ? `${tasks}, ${overdue} forfalt` : tasks
 }
+
+// ---------- Varsling om styreoppgaver ----------
+
+/**
+ * Varslingsvalget for styreoppgaver: e-post om delegering OG den daglige
+ * påminnelsen om forfalte oppgaver, ett valg for begge. Ingen rad i
+ * `notification_preferences` = `all`, som er standarden.
+ */
+export const BOARD_TASK_NOTIFICATION_CHOICES = ['all', 'off'] as const
+export type BoardTaskNotificationChoice = (typeof BOARD_TASK_NOTIFICATION_CHOICES)[number]
+
+/** Vil mottakeren ha e-post om styreoppgaver? Manglende valg = ja. */
+export function wantsTaskEmail(pref: BoardTaskNotificationChoice | string | null | undefined): boolean {
+  return pref !== 'off'
+}
+
+/** Én ansvarlig og de forfalte oppgavene hens, i fristrekkefølge. */
+export type OverdueGroup<T> = {
+  assigneeUserId: string
+  tasks: T[]
+}
+
+/**
+ * Grupperer forfalte oppgaver per ansvarlig — grunnlaget for at hver person får
+ * ÉN e-post med alt sitt, ikke én e-post per oppgave. Oppgaver uten ansvarlig
+ * faller ut: en påminnelse må ha noen å gå til. «Forfalt» er samme regel som i
+ * lista (`isOverdue`), slik at e-posten og skjermen aldri er uenige.
+ */
+export function overdueByAssignee<T extends SortableTask & { assigneeUserId: string | null }>(
+  tasks: T[],
+  today: string,
+): Array<OverdueGroup<T>> {
+  const groups = new Map<string, T[]>()
+  for (const task of sortTasks(tasks)) {
+    if (!task.assigneeUserId) continue
+    if (!isOverdue(task, today)) continue
+    const list = groups.get(task.assigneeUserId)
+    if (list) list.push(task)
+    else groups.set(task.assigneeUserId, [task])
+  }
+  return [...groups].map(([assigneeUserId, list]) => ({ assigneeUserId, tasks: list }))
+}
+
+/**
+ * Skal påminnelsene kjøre nå? Maks én gang per kalenderdag (norsk tid).
+ * `lastRunDate` er ISO-datoen fra `settings`-raden `board.reminders.lastRunDate`;
+ * null = aldri kjørt. En dato fra framtiden (klokken flyttet, eller en rad satt
+ * for hånd) blokkerer ikke i det uendelige — vi kjører når datoen er ulik dagens.
+ */
+export function shouldRunReminders(lastRunDate: string | null | undefined, today: string): boolean {
+  return (lastRunDate ?? '') !== today
+}

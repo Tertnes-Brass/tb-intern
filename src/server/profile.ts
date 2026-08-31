@@ -3,9 +3,10 @@ import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
 import { account, memberProfiles, notificationPreferences } from '../db/schema'
+import { BOARD_TASK_NOTIFICATION_CHOICES, type BoardTaskNotificationChoice } from '../lib/board'
 import { type PostNotificationChoice } from '../lib/posts'
 import { normalizePhone, phoneSchema } from '../lib/profile'
-import { requireMe } from './access'
+import { hasPermission, requireMe } from './access'
 import { auditInsert } from './audit'
 
 export const getMyProfile = createServerFn().handler(async () => {
@@ -23,7 +24,7 @@ export const getMyProfile = createServerFn().handler(async () => {
       .where(and(eq(account.userId, me.id), eq(account.providerId, 'credential')))
       .limit(1),
     d
-      .select({ posts: notificationPreferences.posts })
+      .select({ posts: notificationPreferences.posts, boardTasks: notificationPreferences.boardTasks })
       .from(notificationPreferences)
       .where(eq(notificationPreferences.userId, me.id))
       .limit(1),
@@ -38,6 +39,10 @@ export const getMyProfile = createServerFn().handler(async () => {
     hasPassword: credentialRows.length > 0,
     // Ingen rad = alle beskjeder. Standarden er å bli varslet.
     notifyPosts: (notificationRows[0]?.posts ?? 'all') as PostNotificationChoice,
+    notifyBoardTasks: (notificationRows[0]?.boardTasks ?? 'all') as BoardTaskNotificationChoice,
+    // Valget for styreoppgaver angår bare dem som faktisk får slike oppgaver.
+    // Avgjøres her, server-side — UI-et skal aldri utlede rettigheter selv.
+    canManageBoard: hasPermission(me, 'board.manage'),
   }
 })
 
@@ -53,6 +58,25 @@ export const updateMyPostNotifications = createServerFn({ method: 'POST' })
       .insert(notificationPreferences)
       .values({ userId: me.id, posts: data.posts })
       .onConflictDoUpdate({ target: notificationPreferences.userId, set: { posts: data.posts } })
+    return { ok: true }
+  })
+
+/**
+ * Varslingsvalget for styreoppgaver: dekker BÅDE e-posten når noen delegerer en
+ * oppgave til deg og den daglige påminnelsen om forfalte frister. Ingen egen
+ * rettighetssjekk: har du ikke styreoppgaver, betyr valget ingenting for deg.
+ */
+export const updateMyBoardTaskNotifications = createServerFn({ method: 'POST' })
+  .validator(z.object({ boardTasks: z.enum(BOARD_TASK_NOTIFICATION_CHOICES) }))
+  .handler(async ({ data }) => {
+    const me = await requireMe()
+    await db()
+      .insert(notificationPreferences)
+      .values({ userId: me.id, boardTasks: data.boardTasks })
+      .onConflictDoUpdate({
+        target: notificationPreferences.userId,
+        set: { boardTasks: data.boardTasks },
+      })
     return { ok: true }
   })
 

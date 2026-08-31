@@ -1,0 +1,1 @@
+ALTER TABLE `notification_preferences` ADD `board_tasks` text DEFAULT 'all' NOT NULL;
