@@ -67,7 +67,11 @@ function MeetingsPage() {
                   </span>
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1.5">
-                  {!m.hasNotes && <Stamp tone="oxblood">Uten notater</Stamp>}
+                  {/* Et møte som kommer trenger en agenda; et som er holdt
+                      trenger et referat. Samme plass, to spørsmål. */}
+                  {m.date >= data.today
+                    ? !m.hasAgenda && <Stamp tone="oxblood">Uten agenda</Stamp>
+                    : !m.hasNotes && !m.hasDecisions && <Stamp tone="oxblood">Uten referat</Stamp>}
                   {m.openTaskCount > 0 && (
                     <span className="font-mono text-[0.62rem] uppercase tracking-[0.12em] text-brass">
                       {m.openTaskCount} åpne

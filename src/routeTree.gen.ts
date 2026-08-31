@@ -42,9 +42,12 @@ import { Route as NoterArkivIndexRouteImport } from './routes/noter/arkiv/index'
 import { Route as NoterArkivWorkIdRouteImport } from './routes/noter/arkiv/$workId'
 import { Route as NoterProsjekterIndexRouteImport } from './routes/noter/prosjekter/index'
 import { Route as NoterProsjekterProjectIdRouteImport } from './routes/noter/prosjekter/$projectId'
+import { Route as StyreChatIndexRouteImport } from './routes/styre/chat/index'
 import { Route as StyreDokumenterIndexRouteImport } from './routes/styre/dokumenter/index'
 import { Route as StyreMoterIndexRouteImport } from './routes/styre/moter/index'
 import { Route as StyreMoterMeetingIdRouteImport } from './routes/styre/moter/$meetingId'
+import { Route as StyreProsjekterIndexRouteImport } from './routes/styre/prosjekter/index'
+import { Route as StyreProsjekterBoardProjectIdRouteImport } from './routes/styre/prosjekter/$boardProjectId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -213,6 +216,11 @@ const NoterProsjekterProjectIdRoute =
     path: '/prosjekter/$projectId',
     getParentRoute: () => NoterRouteRoute,
   } as any)
+const StyreChatIndexRoute = StyreChatIndexRouteImport.update({
+  id: '/chat/',
+  path: '/chat/',
+  getParentRoute: () => StyreRouteRoute,
+} as any)
 const StyreDokumenterIndexRoute = StyreDokumenterIndexRouteImport.update({
   id: '/dokumenter/',
   path: '/dokumenter/',
@@ -228,6 +236,17 @@ const StyreMoterMeetingIdRoute = StyreMoterMeetingIdRouteImport.update({
   path: '/moter/$meetingId',
   getParentRoute: () => StyreRouteRoute,
 } as any)
+const StyreProsjekterIndexRoute = StyreProsjekterIndexRouteImport.update({
+  id: '/prosjekter/',
+  path: '/prosjekter/',
+  getParentRoute: () => StyreRouteRoute,
+} as any)
+const StyreProsjekterBoardProjectIdRoute =
+  StyreProsjekterBoardProjectIdRouteImport.update({
+    id: '/prosjekter/$boardProjectId',
+    path: '/prosjekter/$boardProjectId',
+    getParentRoute: () => StyreRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -262,10 +281,13 @@ export interface FileRoutesByFullPath {
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
+  '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
   '/noter/arkiv/': typeof NoterArkivIndexRoute
   '/noter/prosjekter/': typeof NoterProsjekterIndexRoute
+  '/styre/chat/': typeof StyreChatIndexRoute
   '/styre/dokumenter/': typeof StyreDokumenterIndexRoute
   '/styre/moter/': typeof StyreMoterIndexRoute
+  '/styre/prosjekter/': typeof StyreProsjekterIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -298,10 +320,13 @@ export interface FileRoutesByTo {
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
+  '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
   '/noter/arkiv': typeof NoterArkivIndexRoute
   '/noter/prosjekter': typeof NoterProsjekterIndexRoute
+  '/styre/chat': typeof StyreChatIndexRoute
   '/styre/dokumenter': typeof StyreDokumenterIndexRoute
   '/styre/moter': typeof StyreMoterIndexRoute
+  '/styre/prosjekter': typeof StyreProsjekterIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -337,10 +362,13 @@ export interface FileRoutesById {
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
+  '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
   '/noter/arkiv/': typeof NoterArkivIndexRoute
   '/noter/prosjekter/': typeof NoterProsjekterIndexRoute
+  '/styre/chat/': typeof StyreChatIndexRoute
   '/styre/dokumenter/': typeof StyreDokumenterIndexRoute
   '/styre/moter/': typeof StyreMoterIndexRoute
+  '/styre/prosjekter/': typeof StyreProsjekterIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -377,10 +405,13 @@ export interface FileRouteTypes {
     | '/noter/arkiv/$workId'
     | '/noter/prosjekter/$projectId'
     | '/styre/moter/$meetingId'
+    | '/styre/prosjekter/$boardProjectId'
     | '/noter/arkiv/'
     | '/noter/prosjekter/'
+    | '/styre/chat/'
     | '/styre/dokumenter/'
     | '/styre/moter/'
+    | '/styre/prosjekter/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -413,10 +444,13 @@ export interface FileRouteTypes {
     | '/noter/arkiv/$workId'
     | '/noter/prosjekter/$projectId'
     | '/styre/moter/$meetingId'
+    | '/styre/prosjekter/$boardProjectId'
     | '/noter/arkiv'
     | '/noter/prosjekter'
+    | '/styre/chat'
     | '/styre/dokumenter'
     | '/styre/moter'
+    | '/styre/prosjekter'
   id:
     | '__root__'
     | '/'
@@ -451,10 +485,13 @@ export interface FileRouteTypes {
     | '/noter/arkiv/$workId'
     | '/noter/prosjekter/$projectId'
     | '/styre/moter/$meetingId'
+    | '/styre/prosjekter/$boardProjectId'
     | '/noter/arkiv/'
     | '/noter/prosjekter/'
+    | '/styre/chat/'
     | '/styre/dokumenter/'
     | '/styre/moter/'
+    | '/styre/prosjekter/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -719,6 +756,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NoterProsjekterProjectIdRouteImport
       parentRoute: typeof NoterRouteRoute
     }
+    '/styre/chat/': {
+      id: '/styre/chat/'
+      path: '/chat'
+      fullPath: '/styre/chat/'
+      preLoaderRoute: typeof StyreChatIndexRouteImport
+      parentRoute: typeof StyreRouteRoute
+    }
     '/styre/dokumenter/': {
       id: '/styre/dokumenter/'
       path: '/dokumenter'
@@ -738,6 +782,20 @@ declare module '@tanstack/react-router' {
       path: '/moter/$meetingId'
       fullPath: '/styre/moter/$meetingId'
       preLoaderRoute: typeof StyreMoterMeetingIdRouteImport
+      parentRoute: typeof StyreRouteRoute
+    }
+    '/styre/prosjekter/': {
+      id: '/styre/prosjekter/'
+      path: '/prosjekter'
+      fullPath: '/styre/prosjekter/'
+      preLoaderRoute: typeof StyreProsjekterIndexRouteImport
+      parentRoute: typeof StyreRouteRoute
+    }
+    '/styre/prosjekter/$boardProjectId': {
+      id: '/styre/prosjekter/$boardProjectId'
+      path: '/prosjekter/$boardProjectId'
+      fullPath: '/styre/prosjekter/$boardProjectId'
+      preLoaderRoute: typeof StyreProsjekterBoardProjectIdRouteImport
       parentRoute: typeof StyreRouteRoute
     }
   }
@@ -767,16 +825,22 @@ interface StyreRouteRouteChildren {
   StyreTaskIdRoute: typeof StyreTaskIdRoute
   StyreIndexRoute: typeof StyreIndexRoute
   StyreMoterMeetingIdRoute: typeof StyreMoterMeetingIdRoute
+  StyreProsjekterBoardProjectIdRoute: typeof StyreProsjekterBoardProjectIdRoute
+  StyreChatIndexRoute: typeof StyreChatIndexRoute
   StyreDokumenterIndexRoute: typeof StyreDokumenterIndexRoute
   StyreMoterIndexRoute: typeof StyreMoterIndexRoute
+  StyreProsjekterIndexRoute: typeof StyreProsjekterIndexRoute
 }
 
 const StyreRouteRouteChildren: StyreRouteRouteChildren = {
   StyreTaskIdRoute: StyreTaskIdRoute,
   StyreIndexRoute: StyreIndexRoute,
   StyreMoterMeetingIdRoute: StyreMoterMeetingIdRoute,
+  StyreProsjekterBoardProjectIdRoute: StyreProsjekterBoardProjectIdRoute,
+  StyreChatIndexRoute: StyreChatIndexRoute,
   StyreDokumenterIndexRoute: StyreDokumenterIndexRoute,
   StyreMoterIndexRoute: StyreMoterIndexRoute,
+  StyreProsjekterIndexRoute: StyreProsjekterIndexRoute,
 }
 
 const StyreRouteRouteWithChildren = StyreRouteRoute._addFileChildren(

@@ -243,6 +243,11 @@ function HubPage() {
             <Link key={area.to} to={area.to} className="sheet sheet-hover link-quiet px-5 py-4">
               <span className="display-title block text-[1.02rem] font-semibold text-ink">{area.label}</span>
               <span className="mt-1 block text-xs leading-snug text-ink-soft">{area.description}</span>
+              {area.note && (
+                <span className="mt-2 block font-mono text-[0.62rem] uppercase tracking-[0.12em] text-brass">
+                  {area.note}
+                </span>
+              )}
             </Link>
           ))}
         </div>

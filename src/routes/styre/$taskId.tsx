@@ -30,6 +30,7 @@ function BoardTaskPage() {
   const [assignee, setAssignee] = useState(task.assigneeUserId ?? '')
   const [due, setDue] = useState(task.dueDate ?? '')
   const [meetingId, setMeetingId] = useState(task.meetingId ?? '')
+  const [boardProjectId, setBoardProjectId] = useState(task.boardProjectId ?? '')
   const [projectId, setProjectId] = useState(task.projectId)
   const [projectName, setProjectName] = useState(task.projectName)
   const [saving, setSaving] = useState(false)
@@ -45,6 +46,7 @@ function BoardTaskPage() {
     setAssignee(task.assigneeUserId ?? '')
     setDue(task.dueDate ?? '')
     setMeetingId(task.meetingId ?? '')
+    setBoardProjectId(task.boardProjectId ?? '')
     setProjectId(task.projectId)
     setProjectName(task.projectName)
   }, [task])
@@ -62,6 +64,7 @@ function BoardTaskPage() {
           assigneeUserId: assignee || null,
           dueDate: due || null,
           meetingId: meetingId || null,
+          boardProjectId: boardProjectId || null,
           projectId,
         },
       })
@@ -109,6 +112,15 @@ function BoardTaskPage() {
         </Link>
         <div className="flex flex-wrap items-center gap-2">
           <Kicker>Oppgave</Kicker>
+          {task.boardProjectId && task.boardProjectTitle && (
+            <Link
+              to="/styre/prosjekter/$boardProjectId"
+              params={{ boardProjectId: task.boardProjectId }}
+              className="link-quiet"
+            >
+              <Stamp tone="brass">{task.boardProjectTitle}</Stamp>
+            </Link>
+          )}
           {overdue && <Stamp tone="oxblood">Forfalt · {dueLabel(task.dueDate, data.today)}</Stamp>}
           {task.status === 'done' && task.completedAt && (
             <Stamp>Ferdig {formatDateTime(task.completedAt)}</Stamp>
@@ -160,6 +172,20 @@ function BoardTaskPage() {
           </Field>
           <Field label="Frist">
             <input type="date" className="field-input" value={due} onChange={(e) => setDue(e.target.value)} />
+          </Field>
+          <Field label="Styreprosjekt" hint="Samler oppgaven med resten av saken">
+            <select
+              className="field-input"
+              value={boardProjectId}
+              onChange={(e) => setBoardProjectId(e.target.value)}
+            >
+              <option value="">Uten prosjekt</option>
+              {data.boardProjects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
+            </select>
           </Field>
           <Field label="Møte">
             <select className="field-input" value={meetingId} onChange={(e) => setMeetingId(e.target.value)}>

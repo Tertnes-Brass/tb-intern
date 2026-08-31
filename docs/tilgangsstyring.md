@@ -172,6 +172,15 @@ vanskeligere å lese, uten å gjøre noen ting tryggere.
 - Metadata og all annen styredata gates i `src/server/board.ts` med
   `requirePermission('board.manage')` — også **lesing**. `beforeLoad` i
   `src/routes/styre/route.tsx` er kosmetikk, som ellers.
+- Det gjelder **hele** området: styreprosjekter, oppgaver, kommentarer,
+  møtereferater og chatten har ingen egen tilgangsmodell og ingen finere
+  oppdeling. Har du `board.manage`, ser du alt styret har; har du det ikke,
+  finnes ikke området for deg. Chatten har i tillegg en enkel skranke på
+  kanalnøkkelen (`assertChannelExists`), slik at ingen kan skrive i en
+  oppdiktet kanal andre ikke ser. Delegerings-e-posten
+  (`src/server/board-notify.ts`) sender aldri annet enn oppgavetittel, frist,
+  prosjektnavn og en lenke — mottakeren har uansett `board.manage` for å kunne
+  åpne den.
 
 ## 6. Produktvalg før fase 4 (avgjort — historikk)
 

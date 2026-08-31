@@ -1,5 +1,5 @@
 import { Link, createFileRoute, useRouter } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BoardDocumentRow, BoardUploadButton } from '../../../components/BoardDocuments'
 import { BoardTaskRowItem, QuickAddTask } from '../../../components/BoardTasks'
 import { toast, toastError } from '../../../components/toast'
@@ -25,20 +25,30 @@ function MeetingPage() {
   const router = useRouter()
   const meeting = data.meeting
 
+  const [agenda, setAgenda] = useState(meeting.agenda ?? '')
   const [notes, setNotes] = useState(meeting.notes ?? '')
+  const [decisions, setDecisions] = useState(meeting.decisions ?? '')
   const [savingNotes, setSavingNotes] = useState(false)
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const decisionsRef = useRef<HTMLTextAreaElement>(null)
 
-  useEffect(() => setNotes(meeting.notes ?? ''), [meeting])
+  useEffect(() => {
+    setAgenda(meeting.agenda ?? '')
+    setNotes(meeting.notes ?? '')
+    setDecisions(meeting.decisions ?? '')
+  }, [meeting])
 
-  const notesChanged = notes !== (meeting.notes ?? '')
+  const changed =
+    agenda !== (meeting.agenda ?? '') ||
+    notes !== (meeting.notes ?? '') ||
+    decisions !== (meeting.decisions ?? '')
 
   const saveNotes = async () => {
     setSavingNotes(true)
     try {
-      await updateMeeting({ data: { id: meeting.id, notes } })
-      toast('Notatene er lagret')
+      await updateMeeting({ data: { id: meeting.id, agenda, notes, decisions } })
+      toast('Møtet er lagret')
       await router.invalidate()
     } catch (err) {
       toastError(err)
@@ -85,22 +95,70 @@ function MeetingPage() {
         <div className="staff-rule mt-7 w-full opacity-50" aria-hidden />
       </header>
 
-      <section className="rise" style={{ animationDelay: '80ms' }}>
-        <h2 className="kicker mb-3">Notater</h2>
-        <div className="sheet space-y-3 p-4 sm:p-5">
-          <textarea
-            className="field-input min-h-56 leading-relaxed"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder={'Saksliste, vedtak og hva som ble avtalt.\n\nTom linje gir et nytt avsnitt.'}
-            aria-label="Møtenotater"
-          />
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs text-ink-faint">Avsnitt og linjeskift bevares slik du skriver dem.</p>
-            <Button variant="primary" size="sm" onClick={saveNotes} loading={savingNotes} disabled={!notesChanged}>
-              Lagre notater
-            </Button>
+      {/* Møtets egen rekkefølge: agenda før, notater under, vedtak etter. */}
+      <section className="rise space-y-5" style={{ animationDelay: '80ms' }}>
+        <div>
+          <h2 className="kicker mb-3">Agenda</h2>
+          <div className="sheet p-4 sm:p-5">
+            <textarea
+              className="field-input min-h-32 leading-relaxed"
+              value={agenda}
+              onChange={(e) => setAgenda(e.target.value)}
+              placeholder={'1. Regnskap\n2. Uniformer\n3. Eventuelt'}
+              aria-label="Agenda"
+            />
           </div>
+        </div>
+
+        <div>
+          <h2 className="kicker mb-3">Notater</h2>
+          <div className="sheet p-4 sm:p-5">
+            <textarea
+              className="field-input min-h-48 leading-relaxed"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder={'Hva ble sagt og drøftet.\n\nTom linje gir et nytt avsnitt.'}
+              aria-label="Møtenotater"
+            />
+          </div>
+        </div>
+
+        <div>
+          <h2 className="kicker mb-3">Vedtak og oppfølging</h2>
+          <div className="sheet space-y-3 p-4 sm:p-5">
+            <textarea
+              ref={decisionsRef}
+              className="field-input min-h-32 leading-relaxed"
+              value={decisions}
+              onChange={(e) => setDecisions(e.target.value)}
+              placeholder={'Vedtak: vi går for tilbud B.\nHilde følger opp med leverandøren.'}
+              aria-label="Vedtak og oppfølging"
+            />
+            <DecisionToTask
+              meetingId={meeting.id}
+              boardProjects={data.boardProjects}
+              getSelection={() => {
+                const el = decisionsRef.current
+                if (!el) return ''
+                const picked = el.value.slice(el.selectionStart, el.selectionEnd).trim()
+                // Uten markering: ta linja markøren står på. «Lag oppgave av
+                // dette» skal virke uten at man først må dra over teksten.
+                if (picked) return picked.split('\n')[0]!.trim()
+                const before = el.value.slice(0, el.selectionStart)
+                const start = before.lastIndexOf('\n') + 1
+                const end = el.value.indexOf('\n', el.selectionStart)
+                return el.value.slice(start, end === -1 ? undefined : end).trim()
+              }}
+              onCreated={() => router.invalidate()}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-ink-faint">Avsnitt og linjeskift bevares slik du skriver dem.</p>
+          <Button variant="primary" size="sm" onClick={saveNotes} loading={savingNotes} disabled={!changed}>
+            Lagre møtet
+          </Button>
         </div>
       </section>
 
@@ -260,5 +318,82 @@ function EditMeetingModal({
         </div>
       </form>
     </Modal>
+  )
+}
+
+/**
+ * «Lag oppgave av dette»: henter en linje fra vedtaksfeltet, og lager en
+ * oppgave knyttet til møtet (og eventuelt et styreprosjekt). Poenget er at et
+ * vedtak ikke skal bli liggende som en setning ingen eier.
+ */
+function DecisionToTask({
+  meetingId,
+  boardProjects,
+  getSelection,
+  onCreated,
+}: {
+  meetingId: string
+  boardProjects: Array<{ id: string; title: string }>
+  getSelection: () => string
+  onCreated: () => Promise<void> | void
+}) {
+  const [title, setTitle] = useState('')
+  const [boardProjectId, setBoardProjectId] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const value = title.trim()
+    if (!value || saving) return
+    setSaving(true)
+    try {
+      await createTask({ data: { title: value, meetingId, boardProjectId: boardProjectId || null } })
+      toast('Oppgaven er lagt til')
+      setTitle('')
+      await onCreated()
+    } catch (err) {
+      toastError(err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-2 border-t border-line pt-3">
+      <p className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint">Lag oppgave av dette</p>
+      <div className="flex flex-wrap gap-2">
+        <input
+          className="field-input min-w-0 flex-1"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Hva skal gjøres?"
+          aria-label="Oppgave fra vedtak"
+          maxLength={200}
+        />
+        <Button type="button" size="sm" onClick={() => setTitle(getSelection())}>
+          Hent fra vedtak
+        </Button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {boardProjects.length > 0 && (
+          <select
+            className="field-input min-w-0 flex-1"
+            value={boardProjectId}
+            onChange={(e) => setBoardProjectId(e.target.value)}
+            aria-label="Styreprosjekt for oppgaven"
+          >
+            <option value="">Uten prosjekt</option>
+            {boardProjects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title}
+              </option>
+            ))}
+          </select>
+        )}
+        <Button type="submit" variant="primary" size="sm" loading={saving} disabled={!title.trim()}>
+          Lag oppgave
+        </Button>
+      </div>
+    </form>
   )
 }

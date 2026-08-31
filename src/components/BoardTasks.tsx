@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { type BoardTaskStatus, dueLabel, isOverdue } from '../lib/board'
 import { formatDateShort } from '../lib/format'
-import { Button } from './ui'
+import { Button, Stamp } from './ui'
 
 /** Feltene lista trenger — samme form som `BoardTaskRow` i `server/board.ts`. */
 export type BoardTaskListItem = {
@@ -15,6 +15,8 @@ export type BoardTaskListItem = {
   meetingTitle: string | null
   projectId: string | null
   projectName: string | null
+  boardProjectId: string | null
+  boardProjectTitle: string | null
   commentCount: number
 }
 
@@ -63,12 +65,15 @@ export function BoardTaskRowItem({
   today,
   onToggle,
   hideMeeting,
+  hideBoardProject,
 }: {
   task: BoardTaskListItem
   today: string
   onToggle: (status: BoardTaskStatus) => Promise<void>
   /** På møtesiden er møtenavnet allerede overskriften. */
   hideMeeting?: boolean
+  /** På prosjektsiden er prosjektnavnet allerede overskriften. */
+  hideBoardProject?: boolean
 }) {
   const [busy, setBusy] = useState(false)
   const overdue = isOverdue(task, today)
@@ -99,8 +104,13 @@ export function BoardTaskRowItem({
         params={{ taskId: task.id }}
         className="link-quiet min-w-0 flex-1"
       >
-        <span className={`block text-[0.95rem] font-medium leading-snug ${done ? 'text-ink-faint line-through' : 'text-ink'}`}>
-          {task.title}
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className={`text-[0.95rem] font-medium leading-snug ${done ? 'text-ink-faint line-through' : 'text-ink'}`}>
+            {task.title}
+          </span>
+          {!hideBoardProject && task.boardProjectTitle && (
+            <Stamp tone="brass">{task.boardProjectTitle}</Stamp>
+          )}
         </span>
         {meta.length > 0 && (
           <span className="mt-0.5 block truncate text-xs text-ink-soft">{meta.join(' · ')}</span>
