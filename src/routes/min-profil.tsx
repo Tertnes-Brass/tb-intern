@@ -9,8 +9,14 @@ import {
   passwordSchema,
   phoneSchema,
 } from '../lib/profile'
+import type { BoardTaskNotificationChoice } from '../lib/board'
 import type { PostNotificationChoice } from '../lib/posts'
-import { getMyProfile, updateMyPhone, updateMyPostNotifications } from '../server/profile'
+import {
+  getMyProfile,
+  updateMyBoardTaskNotifications,
+  updateMyPhone,
+  updateMyPostNotifications,
+} from '../server/profile'
 
 export const Route = createFileRoute('/min-profil')({
   beforeLoad: ({ context }) => {
@@ -115,6 +121,9 @@ function MyProfilePage() {
 
         <div className="space-y-6">
           <NotificationsCard current={profile.notifyPosts} />
+          {/* Styreoppgaver angår bare styret — valget vises derfor kun for dem
+              som har `board.manage` (avgjort server-side i `getMyProfile`). */}
+          {profile.canManageBoard && <BoardTaskNotificationsCard current={profile.notifyBoardTasks} />}
           <PasswordCard hasPassword={profile.hasPassword} email={profile.email} />
         </div>
       </div>
@@ -177,6 +186,70 @@ function NotificationsCard({ current }: { current: PostNotificationChoice }) {
         <p className="mt-3 text-xs leading-relaxed text-ink-faint">
           «Bare viktige» betyr de beskjedene styret selv har merket som viktige. «Av» slår av all e-post om beskjeder —
           du finner dem fortsatt under Beskjeder.
+        </p>
+      </div>
+    </section>
+  )
+}
+
+const BOARD_TASK_CHOICES: Array<{ value: BoardTaskNotificationChoice; label: string }> = [
+  { value: 'all', label: 'På' },
+  { value: 'off', label: 'Av' },
+]
+
+/**
+ * Ett valg for begge e-postene om styreoppgaver: den du får når noen delegerer
+ * en oppgave til deg, og den daglige påminnelsen om forfalte frister. To brytere
+ * for to e-poster fra samme sted ville vært én for mye.
+ */
+function BoardTaskNotificationsCard({ current }: { current: BoardTaskNotificationChoice }) {
+  const router = useRouter()
+  const [choice, setChoice] = useState<BoardTaskNotificationChoice>(current)
+  const [busy, setBusy] = useState(false)
+
+  const save = async (next: BoardTaskNotificationChoice) => {
+    const previous = choice
+    setChoice(next)
+    setBusy(true)
+    try {
+      await updateMyBoardTaskNotifications({ data: { boardTasks: next } })
+      toast('Varslingsvalget er lagret')
+      await router.invalidate()
+    } catch (err) {
+      setChoice(previous)
+      toastError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="sheet rise overflow-hidden" style={{ animationDelay: '115ms' }}>
+      <div className="border-b border-line bg-paper-sunken/50 px-5 py-5 sm:px-6">
+        <Kicker className="mb-2">Varsler</Kicker>
+        <h2 className="display-title text-2xl font-semibold text-ink">E-post om styreoppgaver</h2>
+        <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+          Gjelder både når noen setter deg som ansvarlig for en oppgave, og den daglige påminnelsen om oppgaver du står
+          som ansvarlig for som har gått over fristen.
+        </p>
+      </div>
+      <div className="p-5 sm:p-6">
+        <div className="flex flex-wrap gap-2">
+          {BOARD_TASK_CHOICES.map((option) => (
+            <Button
+              key={option.value}
+              type="button"
+              variant={choice === option.value ? 'primary' : 'secondary'}
+              size="sm"
+              disabled={busy}
+              onClick={() => void save(option.value)}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+        <p className="mt-3 text-xs leading-relaxed text-ink-faint">
+          «Av» slår av all e-post om styreoppgaver. Oppgavene ligger fortsatt under Styre.
         </p>
       </div>
     </section>

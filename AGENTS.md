@@ -52,9 +52,27 @@ Den skal ikke gjengi områdenes oversikter i miniatyr — se
   `src/routes/api/board-files/upload.ts` og kan KUN hentes gjennom den gatede
   ruten `src/routes/api/board-files/$documentId.ts` — aldri via note-gaten i
   `api/files/$fileId`. `src/server/board-files.ts` er R2-laget og
-  `src/server/board-notify.ts` sender delegerings-e-posten
-  (`taskAssignedEmail`); begge har levende eksport som rører
-  `cloudflare:workers` og importeres aldri fra en rutekomponent.
+  `src/server/board-notify.ts` sender begge e-postene om oppgaver
+  (`taskAssignedEmail` ved delegering, `overdueTasksEmail` ved forfalt frist);
+  begge har levende eksport som rører `cloudflare:workers` og importeres aldri
+  fra en rutekomponent.
+- **Cron og worker-entry:** `wrangler.jsonc` peker `main` på `src/worker.ts` i
+  stedet for `@tanstack/react-start/server-entry`, fordi Start sin entry bare
+  eksporterer `fetch` og vi trenger en `scheduled`-handler ved siden av.
+  Cloudflare-pluginen pakker `main` inn og setter den som input for
+  `ssr`-miljøet; Start-pluginen respekterer en input som allerede er satt, så
+  SSR-oppsettet er uendret. `triggers.crons: ["0 7 * * *"]` (07:00 UTC ≈ 09:00
+  norsk tid) kaller `runOverdueReminders()`, som sender ÉN e-post per ansvarlig
+  med alle hens forfalte oppgaver. Idempotens uten kø: `settings`-raden
+  `board.reminders.lastRunDate` settes til dagens dato (norsk tid) FØR
+  utsendingen, som compare-and-set (`UPDATE … WHERE value <> today`) — to
+  samtidige kjøringer kan aldri begge vinne. Lokalt trigges cron-en med
+  `curl "http://localhost:<port>/cdn-cgi/handler/scheduled?cron=0+7+*+*+*"`
+  (`pnpm dev`); den kjører aldri av seg selv i dev.
+- Varslingsvalget for styreoppgaver er `notification_preferences.board_tasks`
+  (`'all' | 'off'`, ingen rad = `'all'`) og dekker BÅDE delegering og den
+  daglige påminnelsen. Regelen er `wantsTaskEmail` i `src/lib/board.ts`, og
+  valget vises på `/min-profil` kun for dem som har `board.manage`.
 - Styrechatten er kanaler som strenger: `general` eller `project:<id>` (se
   `projectChannel`/`channelProjectId` i `src/lib/board.ts`). Ingen websockets og
   ingen Durable Objects — `listMessages({channel, after})` pollet hvert 12. sek

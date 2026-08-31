@@ -10,11 +10,14 @@ import {
   groupTasks,
   isOverdue,
   isProjectOverdue,
+  overdueByAssignee,
   projectChannel,
   projectProgress,
   sortBoardProjects,
+  shouldRunReminders,
   sortTasks,
   unreadCount,
+  wantsTaskEmail,
 } from './board'
 
 const TODAY = '2026-09-01'
@@ -288,5 +291,55 @@ describe('boardAreaNote', () => {
 
   it('er tom når det ikke er noe å melde', () => {
     expect(boardAreaNote({ openTasks: 0, overdue: 0 })).toBeNull()
+  })
+})
+
+describe('wantsTaskEmail', () => {
+  it('sender når medlemmet ikke har valgt noe', () => {
+    expect(wantsTaskEmail(undefined)).toBe(true)
+    expect(wantsTaskEmail(null)).toBe(true)
+    expect(wantsTaskEmail('all')).toBe(true)
+  })
+
+  it('respekterer «Av»', () => {
+    expect(wantsTaskEmail('off')).toBe(false)
+  })
+})
+
+describe('overdueByAssignee', () => {
+  const tasks = [
+    { ...task('sen', { dueDate: '2026-08-01' }), assigneeUserId: 'hilde' },
+    { ...task('senere', { dueDate: '2026-08-20' }), assigneeUserId: 'hilde' },
+    { ...task('i-tide', { dueDate: '2026-09-30' }), assigneeUserId: 'hilde' },
+    { ...task('ferdig', { dueDate: '2026-08-01', status: 'done', completedAt: 2_000 }), assigneeUserId: 'hilde' },
+    { ...task('herrelos', { dueDate: '2026-08-01' }), assigneeUserId: null },
+    { ...task('anders', { dueDate: '2026-08-10' }), assigneeUserId: 'anders' },
+  ]
+
+  it('gir én bolk per ansvarlig, med kun forfalte oppgaver', () => {
+    const groups = overdueByAssignee(tasks, TODAY)
+    expect(groups.map((g) => g.assigneeUserId).sort()).toEqual(['anders', 'hilde'])
+    const hilde = groups.find((g) => g.assigneeUserId === 'hilde')!
+    expect(hilde.tasks.map((t) => t.id)).toEqual(['sen', 'senere'])
+  })
+
+  it('hopper over oppgaver uten ansvarlig', () => {
+    const groups = overdueByAssignee(tasks, TODAY)
+    expect(groups.flatMap((g) => g.tasks).map((t) => t.id)).not.toContain('herrelos')
+  })
+
+  it('er tom når ingenting er forfalt', () => {
+    expect(overdueByAssignee(tasks, '2026-07-01')).toEqual([])
+  })
+})
+
+describe('shouldRunReminders', () => {
+  it('kjører når den ikke har kjørt i dag', () => {
+    expect(shouldRunReminders(null, TODAY)).toBe(true)
+    expect(shouldRunReminders('2026-08-31', TODAY)).toBe(true)
+  })
+
+  it('kjører ikke to ganger samme dag', () => {
+    expect(shouldRunReminders(TODAY, TODAY)).toBe(false)
   })
 })

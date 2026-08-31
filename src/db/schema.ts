@@ -509,12 +509,18 @@ export const postImages = sqliteTable(
   (t) => [index('post_images_post_idx').on(t.postId, t.sortOrder)],
 )
 
-// Én rad per bruker som har valgt noe annet enn standarden. Ingen rad = 'all'.
+// Én rad per bruker som har valgt noe annet enn standarden. Ingen rad = 'all'
+// for begge kolonnene: fravær av rad skal aldri bety «ingen varsler».
 export const notificationPreferences = sqliteTable('notification_preferences', {
   userId: text('user_id')
     .primaryKey()
     .references(() => user.id, { onDelete: 'cascade' }),
   posts: text('posts', { enum: ['all', 'important', 'off'] })
+    .notNull()
+    .default('all'),
+  // E-post om styreoppgaver: både delegering og den daglige påminnelsen om
+  // forfalte oppgaver. Valget vises bare for dem som har `board.manage`.
+  boardTasks: text('board_tasks', { enum: ['all', 'off'] })
     .notNull()
     .default('all'),
 })

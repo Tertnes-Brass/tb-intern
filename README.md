@@ -139,6 +139,17 @@ Når noen andre setter deg som ansvarlig for en oppgave, får du en e-post med
 tittel, frist, prosjekt og en lenke rett til oppgaven. Setter du den på deg
 selv, sendes ingenting.
 
+Går fristen ut uten at oppgaven er ferdig, kommer det i tillegg én påminnelse
+per dag (09:00 norsk tid) til den som står som ansvarlig — én e-post med *alle*
+oppgavene hens som ligger på overtid, ikke én per oppgave. Påminnelsen sendes av
+en cron-jobb i Workeren og maks én gang i døgnet, uansett hvor mange som er
+innom siden.
+
+Begge e-postene styres av ett valg på **Min profil** → «E-post om
+styreoppgaver: På / Av». Valget vises bare for dem som har `board.manage`, og
+«Av» slår av både delegeringsvarselet og den daglige påminnelsen. Oppgavene
+ligger uansett under Styre.
+
 Hele området — også lesing — gates server-side på rettigheten `board.manage`,
 som rollen *Styremedlem* har. Andre ser hverken menyoppføringen eller sidene.
 ## Beskjeder: veggen
@@ -195,7 +206,8 @@ synlig for hele korpset — serveren stripper resten uansett hva klienten sender
 
 Under *Min profil* → «E-post om beskjeder»: **Alle** (standard), **Bare viktige**
 (kun det styret har merket som viktig) eller **Av**. Valget gjelder bare e-post;
-alt ligger uansett på veggen. Kommentarer gir ingen e-post i dag.
+alt ligger uansett på veggen. Kommentarer gir ingen e-post i dag. Styremedlemmer
+har i tillegg «E-post om styreoppgaver: På / Av» samme sted — se «Styre» over.
 
 ## Stack
 
