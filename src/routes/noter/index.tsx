@@ -2,6 +2,7 @@ import { Link, createFileRoute, redirect } from '@tanstack/react-router'
 import { RepertoireList } from '../../components/Repertoire'
 import { EmptyState, Kicker, SectionHeading, Stamp } from '../../components/ui'
 import { formatDate, formatWeekday, relativeDays } from '../../lib/format'
+import { percussionLines } from '../../lib/percussion'
 import { getHome } from '../../server/projects'
 
 export const Route = createFileRoute('/noter/')({
@@ -70,6 +71,19 @@ function HomePage() {
           </div>
 
           <div className="staff-rule mt-8 w-full opacity-50" aria-hidden />
+
+          {next.percussionNotes && (
+            <div className="mt-6 rounded-2xl border border-line bg-paper-raised px-5 py-4">
+              <p className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-brass">Slagverksnotater</p>
+              <div className="mt-1.5 space-y-1">
+                {percussionLines(next.percussionNotes).map((line, i) => (
+                  <p key={i} className="text-sm leading-relaxed text-ink-soft">
+                    {line}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="mt-2">
             <RepertoireList items={data.repertoire} />

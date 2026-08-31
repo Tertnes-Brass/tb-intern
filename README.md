@@ -30,6 +30,7 @@ SMS-er fortsatt lander riktig. Logikken er `legacyHostRedirect` i
 - **Verksarkiv** — katalog med komponist/arrangør, grad, varighet, fysisk plassering, søk
 - **Stemme-gjenkjenning** — slipp 20 PDF-er på et verk; stemmen gjettes fra filnavnet («Gaelforce – 2nd Cornet.pdf» → 2. kornett, norske og engelske navn)
 - **Prosjekter** — sesonger, program i rekkefølge, publisering (utkast er kun synlig for stab)
+- **Slagverksoppsett** — hvilke slagverksinstrumenter hvert stykke krever og hvem som spiller hva, per konsert, med felles notater og en utskriftsvennlig samleside — erstatter regnearket
 - **Mine noter** — medlemmet ser neste konsert med direktelenker til egne stemmer, partitur og lytteeksempler (YouTube/lyd)
 - **Vikarlenker** — del valgte stemmer for ett prosjekt; lenken utløper automatisk og kan trekkes tilbake; kun hash av tokenet lagres
 - **Innlogging** — [better-auth](https://better-auth.com): e-postkode som standard, valgfritt passord og magisk lenke, invitasjonsbasert (ingen åpen registrering). Google/passkeys kan legges til senere.

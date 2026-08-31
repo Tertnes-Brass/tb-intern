@@ -93,8 +93,10 @@ export type SeedProjectData = {
   description: string
   isPublished: boolean
   seasonName: 'Vår 2026' | 'Vår 2027'
-  /** [verkstittel, posisjon, merknad] */
-  repertoire: Array<[title: string, position: number, note: string | null]>
+  /** Slagverksnotater for hele konserten (transport, lån, rigging). */
+  percussionNotes?: string
+  /** [verkstittel, posisjon, merknad, slagverksoppsett] */
+  repertoire: Array<[title: string, position: number, note: string | null, percussionSetup?: string]>
 }
 
 export const SEED_SEASONS = [
@@ -111,13 +113,15 @@ export const SEED_PROJECTS: SeedProjectData[] = [
     description: 'Sesongavslutning med sommerlig program. Oppmøte kl. 17:30, antrekk: sort med sommersløyfe.',
     isPublished: true,
     seasonName: 'Vår 2026',
+    percussionNotes:
+      'Pauker lånes av Åsane musikklag — hentes fredag kl. 18.\nRigging fra kl. 16:00: pauker bakerst til venstre, mallets til høyre for dirigenten.\nKøller, triangel og tamburin tas med fra korpsrommet.',
     repertoire: [
-      ['Where Eagles Sing', 1, null],
+      ['Where Eagles Sing', 1, null, 'Timpani – Silje\nCymbaler + tamburin – Ole\nKlokkespill – Karim'],
       ['I Dovregubbens hall', 2, null],
-      ['Benedictus', 3, 'Solist: eufonium'],
-      ['Cry of the Celts', 4, null],
+      ['Benedictus', 3, 'Solist: eufonium', 'Timpani – Silje\nSuspended cymbal – Ole'],
+      ['Cry of the Celts', 4, null, 'Trommesett – Karim\nBodhrán + tamburin – Ole\nTimpani – Silje'],
       ['Sætergjentens søndag', 5, null],
-      ['Tico-Tico no Fubá', 6, 'Ekstranummer'],
+      ['Tico-Tico no Fubá', 6, 'Ekstranummer', 'Congas – Karim\nGüiro + claves – Ole\nSkarptromme – Silje'],
     ],
   },
   {

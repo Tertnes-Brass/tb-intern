@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { db } from '../db'
 import { parts, projects, shareLinks, workFiles, workLinks, works, projectWorks } from '../db/schema'
 import { newId, newShareToken, sha256Hex } from '../lib/id'
+import { sharedPartsSeePercussion } from '../lib/percussion'
 import { requirePermission } from './access'
 import { shareAllows } from './file-access'
 import { buildChildrenMap, expandPartIds } from './parts-tree'
@@ -113,6 +114,7 @@ export const getShareView = createServerFn()
         durationSec: works.durationSec,
         position: projectWorks.position,
         note: projectWorks.note,
+        percussionSetup: projectWorks.percussionSetup,
       })
       .from(projectWorks)
       .innerJoin(works, eq(projectWorks.workId, works.id))
@@ -139,7 +141,14 @@ export const getShareView = createServerFn()
     const links =
       workIds.length > 0 ? await d.select().from(workLinks).where(inArray(workLinks.workId, workIds)) : []
 
-    const partNames = await d.select({ id: parts.id, nameNo: parts.nameNo }).from(parts).where(inArray(parts.id, partIds))
+    const sharedParts = await d
+      .select({ id: parts.id, nameNo: parts.nameNo, section: parts.section })
+      .from(parts)
+      .where(inArray(parts.id, partIds))
+
+    // Vikaren har ingen rolle og ingen rettigheter — de tildelte stemmene er
+    // alt vi kan gate på. Er en av dem en slagverksstemme, får hen oppsettet.
+    const showPercussion = sharedPartsSeePercussion(sharedParts)
 
     // Oppdaterer sist brukt (best effort)
     await d.update(shareLinks).set({ lastUsedAt: new Date() }).where(eq(shareLinks.id, share.id))
@@ -147,7 +156,7 @@ export const getShareView = createServerFn()
     return {
       status: 'ok' as const,
       recipientName: share.recipientName,
-      partNames: partNames.map((p) => p.nameNo),
+      partNames: sharedParts.map((p) => p.nameNo),
       expiresAt: share.expiresAt.getTime(),
       project: {
         name: project.name,
@@ -155,9 +164,11 @@ export const getShareView = createServerFn()
         eventDate: project.eventDate,
         venue: project.venue,
         description: project.description,
+        percussionNotes: showPercussion ? project.percussionNotes : null,
       },
       repertoire: repertoire.map((r) => ({
         ...r,
+        percussionSetup: showPercussion ? r.percussionSetup : null,
         files: files
           .filter((f) => f.workId === r.workId && shareAllows({ kind: f.kind, partId: f.partId }, partIds))
           .map((f) => ({ id: f.id, kind: f.kind, partName: f.partName, fileName: f.fileName, pageCount: f.pageCount })),

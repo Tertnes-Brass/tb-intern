@@ -71,6 +71,13 @@
       "when": 1788136741360,
       "tag": "0009_styre-og-vegg",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788176756068,
+      "tag": "0010_percussion-setup",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { db, type Db } from '../db'
 import { parts, projectWorks, projects, seasons, workFiles, workLinks, works } from '../db/schema'
 import { newId } from '../lib/id'
+import { PERCUSSION_MAX_LENGTH, parsePercussionSetup, showPercussionFor } from '../lib/percussion'
 import {
   hasFullArchiveAccess,
   hasPermission,
@@ -31,6 +32,8 @@ export type ProjectWorkDetail = {
   durationSec: number | null
   position: number
   note: string | null
+  /** Slagverksoppsettet for dette stykket i dette prosjektet (fri tekst). */
+  percussionSetup: string | null
   links: Array<{ id: string; kind: string; url: string; label: string | null }>
   partFiles: Array<{ id: string; partId: string | null; partName: string | null; partSort: number; pageCount: number | null }>
   // fileName er med for at ZIP-nedlastingen skal kunne beholde filendelsen.
@@ -54,6 +57,7 @@ export async function assembleRepertoire(
       durationSec: works.durationSec,
       position: projectWorks.position,
       note: projectWorks.note,
+      percussionSetup: projectWorks.percussionSetup,
     })
     .from(projectWorks)
     .innerJoin(works, eq(projectWorks.workId, works.id))
@@ -140,10 +144,16 @@ export const getHome = createServerFn().handler(async () => {
       }))
     : null
 
+  // «Mine noter» er musikerens egen side, og et slagverksoppsett er ren støy
+  // for en kornettist. Feltene fjernes derfor server-side for alle andre enn
+  // slagverkerne og staben — UI-et skal ikke måtte huske regelen.
+  const showPercussion = showPercussionFor(me)
+
   return {
     me: { name: me.name, parts: me.parts, roleName: me.roleName },
-    nextProject: next,
-    repertoire,
+    nextProject: next ? { ...next, percussionNotes: showPercussion ? next.percussionNotes : null } : null,
+    repertoire: showPercussion ? repertoire : repertoire.map((r) => ({ ...r, percussionSetup: null })),
+    showPercussion,
     upcoming: upcoming.slice(1),
     archive,
   }
@@ -300,6 +310,7 @@ export const updateProject = createServerFn({ method: 'POST' })
       eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       venue: z.string().nullable().optional(),
       description: z.string().nullable().optional(),
+      percussionNotes: z.string().max(PERCUSSION_MAX_LENGTH * 4).nullable().optional(),
       isPublished: z.boolean().optional(),
     }),
   )
@@ -319,6 +330,9 @@ export const updateProject = createServerFn({ method: 'POST' })
           : {}),
         ...(patch.venue !== undefined ? { venue: patch.venue?.trim() || null } : {}),
         ...(patch.description !== undefined ? { description: patch.description?.trim() || null } : {}),
+        ...(patch.percussionNotes !== undefined
+          ? { percussionNotes: parsePercussionSetup(patch.percussionNotes) }
+          : {}),
         ...(patch.isPublished !== undefined ? { isPublished: patch.isPublished } : {}),
       })
       .where(eq(projects.id, id))
@@ -373,6 +387,28 @@ export const addWorkToProject = createServerFn({ method: 'POST' })
       position: (max[0]?.m ?? 0) + 1,
       note: data.note?.trim() || null,
     })
+    return { ok: true }
+  })
+
+/**
+ * Slagverksoppsettet for ett stykke i ett prosjektet — «Timpani – Silje /
+ * Trommesett – Karim». Skrivingen er gated på `projects.manage`; lesingen er
+ * åpen for alle som ser prosjektet (`assembleRepertoire`).
+ */
+export const updateProjectWorkPercussion = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      projectId: z.string(),
+      workId: z.string(),
+      percussionSetup: z.string().max(PERCUSSION_MAX_LENGTH * 4).nullable(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    await requirePermission('projects.manage')
+    await db()
+      .update(projectWorks)
+      .set({ percussionSetup: parsePercussionSetup(data.percussionSetup) })
+      .where(and(eq(projectWorks.projectId, data.projectId), eq(projectWorks.workId, data.workId)))
     return { ok: true }
   })
 

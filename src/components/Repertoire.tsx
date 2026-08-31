@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import type { ProjectWorkDetail } from '../server/projects'
 import { formatDuration, toRoman } from '../lib/format'
 import { youTubeEmbedUrl, youTubeVideoId } from '../lib/youtube'
+import { PercussionLine } from './Percussion'
 import { Modal, Stamp } from './ui'
 
 function FileChip({ fileId, label, accent }: { fileId: string; label: string; accent?: boolean }) {
@@ -115,11 +116,18 @@ export function RepertoireRow({
   item,
   index,
   manage,
+  percussion,
   shareToken,
 }: {
   item: ProjectWorkDetail
   index: number
   manage?: ReactNode
+  /**
+   * Slagverkslinjen. Uten denne rendres oppsettet skrivebeskyttet fra
+   * `item.percussionSetup` — serveren har allerede fjernet feltet for dem som
+   * ikke skal se det. Prosjektsiden sender inn den redigerbare varianten.
+   */
+  percussion?: ReactNode
   shareToken?: string
 }) {
   const tokenSuffix = shareToken ? `?t=${shareToken}` : ''
@@ -147,6 +155,7 @@ export function RepertoireRow({
             <Stamp tone="oxblood">{item.note}</Stamp>
           </p>
         )}
+        {percussion ?? (item.percussionSetup ? <PercussionLine text={item.percussionSetup} /> : null)}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {item.myFiles.map((f) => (
@@ -194,11 +203,13 @@ function AllPartsDisclosure({ item }: { item: ProjectWorkDetail }) {
 export function RepertoireList({
   items,
   manage,
+  percussion,
   shareToken,
   className = '',
 }: {
   items: ProjectWorkDetail[]
   manage?: (item: ProjectWorkDetail, index: number) => ReactNode
+  percussion?: (item: ProjectWorkDetail, index: number) => ReactNode
   shareToken?: string
   className?: string
 }) {
@@ -210,6 +221,7 @@ export function RepertoireList({
           item={item}
           index={i + 1}
           manage={manage?.(item, i)}
+          percussion={percussion?.(item, i)}
           shareToken={shareToken}
         />
       ))}
