@@ -39,7 +39,7 @@
 		// denne kalenderen»). Tom = ingen innebygd kalender nederst på /kalender.
 		// Selve hendelseslista kommer fra den HEMMELIGE iCal-adressen, som settes
 		// som secret: `wrangler secret put CALENDAR_ICS_URL` (aldri i denne fila).
-		"CALENDAR_EMBED_URL": "https://calendar.google.com/calendar/embed?src=0ieontn6bgp0f9loh031ba9hgc%40group.calendar.google.com&ctz=Europe%2FOslo"
+		"CALENDAR_EMBED_URL": "https://calendar.google.com/calendar/embed?src=0ieontn6bgp0f9loh031ba9hgc%40group.calendar.google.com&ctz=Europe%2FOslo&wkst=2&hl=no"
 	},
 	// Sonen tertnesbrass.com ligger i Cloudflare, så `wrangler deploy` oppretter
 	// DNS-oppføringen for custom domains automatisk — ingen manuelle DNS-steg.
