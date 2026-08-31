@@ -1,6 +1,6 @@
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
 import { EmptyState, Kicker, SectionHeading, Stamp } from '../components/ui'
-import { formatDate, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../lib/format'
+import { formatDate, formatDateTime, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../lib/format'
 import { type HubEvent, chooseHero } from '../lib/hub'
 import { getHub } from '../server/hub'
 
@@ -75,14 +75,51 @@ function HubPage() {
   return (
     <div className="space-y-14">
       {/*
-        Beskjeder (#28, fase 2) hører hjemme her, øverst og over hero: en melding
-        fra styret eller dirigenten er det eneste som skal kunne fortrenge
-        «Neste». Lesegrensesnittet blir en blokk her; publiseringsflyten får sitt
-        eget navnerom (docs/designprinsipper.md §5). Ingen tom plassholder før
-        funksjonen finnes.
+        Beskjeder (#28) står øverst, over hero: en melding fra styret er det
+        eneste som skal kunne fortrenge «Neste» (docs/designprinsipper.md §7
+        pkt 3). Blokken er lesegrensesnittet; publiseringsflyten bor i sitt eget
+        navnerom, /beskjeder. Serveren har allerede filtrert bort utkast og
+        beskjeder som ikke er for denne brukeren.
       */}
-
       <section className="rise">
+        <SectionHeading
+          kicker="Veggen"
+          title="Siste beskjeder"
+          className="mb-4"
+          action={
+            <Link to="/beskjeder" className="link-brass text-sm">
+              Hele veggen →
+            </Link>
+          }
+        />
+        {data.posts.length === 0 ? (
+          <p className="text-sm text-ink-faint">Ingenting på veggen ennå — det kommer.</p>
+        ) : (
+          <ul>
+            {data.posts.map((post) => (
+              <li key={post.id} className="hairline-row">
+                <Link to="/beskjeder/$postId" params={{ postId: post.id }} className="link-quiet block py-3">
+                  <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className="display-title text-base font-semibold text-ink">{post.heading}</span>
+                    {post.official && <Stamp tone="brass">Fra styret</Stamp>}
+                    {post.important && <Stamp tone="oxblood">Viktig</Stamp>}
+                  </span>
+                  <span className="mt-0.5 block font-mono text-[0.6rem] uppercase tracking-[0.14em] text-ink-faint">
+                    {post.official ? 'Styret' : post.authorName} · {formatDateTime(post.publishedAt)}
+                    {post.likeCount > 0 ? ` · ${post.likeCount} liker` : ''}
+                    {post.commentCount > 0
+                      ? ` · ${post.commentCount} ${post.commentCount === 1 ? 'kommentar' : 'kommentarer'}`
+                      : ''}
+                  </span>
+                  <span className="mt-1 block max-w-2xl text-sm leading-relaxed text-ink-soft">{post.excerpt}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="rise" style={{ animationDelay: '60ms' }}>
         {hero.kind === 'event' ? (
           <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
             <div className="min-w-0">

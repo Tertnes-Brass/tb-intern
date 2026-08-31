@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers'
+import { bodyToHtml, escapeHtml, postEmailFrom, postEmailImageNote, postEmailSubject } from '../lib/posts'
 
 /**
  * E-postsending via Cloudflare Email Sending (binding `EMAIL`) — ingen ekstern
@@ -154,6 +155,52 @@ export function verificationCodeEmail(
   }
 }
 
+/**
+ * Varsel om en ny beskjed (#28). Teksten er skrevet av et menneske i en
+ * textarea og escapes med `bodyToHtml` — den er aldri betrodd som HTML.
+ * `url` bygges server-side fra `BETTER_AUTH_URL`, aldri fra request-origin.
+ */
+export function postEmail({
+  title,
+  body,
+  url,
+  authorName,
+  important,
+  official,
+  imageCount,
+}: {
+  title: string
+  /** Hele teksten i beskjeden — e-posten skal kunne leses uten å logge inn. */
+  body: string
+  url: string
+  authorName: string
+  important: boolean
+  /** Merket «Fra styret». Sier hvem beskjeden kommer fra, ikke bare hvem som skrev den. */
+  official: boolean
+  /** Bilder vises ikke i e-posten; de ligger bak innlogging på internsiden. */
+  imageCount: number
+}): { subject: string; html: string; text: string } {
+  const heading = escapeHtml(title)
+  // Tekstversjonen skal ikke ha HTML-escaping i seg («Bø &amp; Co»).
+  const fromText = postEmailFrom(authorName, official)
+  const from = escapeHtml(fromText)
+  const images = postEmailImageNote(imageCount)
+  return {
+    subject: postEmailSubject(title, important),
+    html: shell(
+      heading,
+      `${official ? '<p style="margin:0 0 12px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#95762a;font-weight:700">Fra styret</p>' : ''}
+       ${important ? '<p style="margin:0 0 16px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8f2f24;font-weight:700">Viktig beskjed</p>' : ''}
+       <p style="margin:0 0 20px;font-size:12px;color:#8e8468">${from} · Tertnes Brass</p>
+       <div style="font-size:15px;line-height:1.6;color:#5f5640">${bodyToHtml(body, 'margin:0 0 16px')}</div>
+       ${images ? `<p style="margin:0 0 20px;font-size:13px;color:#8e8468">${escapeHtml(images)}</p>` : ''}
+       <p style="margin:8px 0 24px">${button(url, 'Les på internsiden')}</p>
+       <p style="margin:0;font-size:12px;color:#8e8468">Du kan velge hvilke beskjeder du vil ha på e-post under «Min profil» på internsiden.</p>`,
+    ),
+    text: `${official ? 'FRA STYRET\n' : ''}${important ? 'VIKTIG BESKJED\n' : ''}\n${title}\n${fromText} · Tertnes Brass\n\n${body.trim()}\n${images ? `\n${images}\n` : ''}\nLes på internsiden:\n${url}\n\nVil du ha færre e-poster? Endre varslingsvalget under «Min profil».\n`,
+  }
+}
+
 export function inviteEmail(url: string, bandName = 'Tertnes Brass'): { subject: string; html: string; text: string } {
   return {
     subject: `Du er invitert til ${bandName} Notearkiv`,
@@ -210,13 +257,4 @@ function formatIsoDate(iso: string): string {
   } catch {
     return iso
   }
-}
-
-/** Oppgavetitler er brukerskrevne og havner i HTML-malen. */
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
 }

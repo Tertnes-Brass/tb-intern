@@ -198,3 +198,40 @@ besluttet 28. juni 2026 å ikke bygge treet i det hele tatt (flat struktur).
    levende ekspansjon vs. skjul forelder fra delemodal.
 6. **Utrulling:** bygg tre + `archive.viewAll` + varsle FØRST, hard gate som
    separat senere deploy (*anbefalt*); vurder feature-flag på gaten.
+
+## 7. Bilder på veggen (#28, 31. august 2026)
+
+Beskjeder/veggen har egne filer, og de følger **ikke** notearkivets regler.
+Grunnregelen over gjelder likevel uendret: det finnes én server-gate, og den er
+den eneste reelle skranken.
+
+- **Egen rute, aldri `$fileId`.** Veggbilder ligger i R2 under
+  `posts/<fersk id>.<ext>` og strømmes kun fra
+  `src/routes/api/post-images/$imageId.ts`. De er ikke `work_files`, har ingen
+  stemme, og skal aldri kunne nås gjennom `src/routes/api/files/$fileId.ts` —
+  gaten der handler om stemmetilgang og ville vært feil spørsmål å stille.
+- **Gaten:** innlogging (`currentUser()`) **pluss** samme synlighetsregel som
+  innlegget selv (`canReadPost` — utkast og `audience: 'board'`), med ett
+  tillegg: forfatteren ser sine egne bilder mens innlegget fortsatt er et
+  utkast. Logikken ligger i `src/server/post-images.ts` (`postImageAccess`), i
+  en egen modul fordi levende eksporter i `posts.ts` ville dratt
+  `cloudflare:workers` inn i klientbygget.
+- **Ingen tokens.** Veggen er intern; det finnes ingen vikar- eller delelenke
+  til et veggbilde. Uinnlogget gir 401.
+- **«Finnes ikke» og «ikke for deg» svarer likt** (404), slik at en id ikke kan
+  brukes til å bekrefte at et styre-innlegg finnes.
+- **Opplasting** (`api/post-images/upload.ts`, PUT) krever innlogging og at du
+  eier innlegget — eller har `posts.publish` (moderasjon). Kun
+  `image/jpeg|png|webp|gif|heic`, maks 10 MB per bilde og 10 bilder per
+  innlegg, håndhevet på de faktiske bytene, ikke på `Content-Length` alene.
+  R2-nøkkelen bygges alltid av en fersk id, aldri av det brukerstyrte filnavnet.
+- **Svarhoder:** `nosniff`, `private, max-age=300`, `X-Robots-Tag: noindex`,
+  `Referrer-Policy: no-referrer`. Bildene er aldri offentlige.
+- **Sletting:** R2-objektet slettes før databaseraden (`deletePost`,
+  `deletePostImage`) — raden er den eneste veien tilbake til nøkkelen.
+
+| Aktør | Bilde på åpent innlegg | Bilde på `audience: 'board'` | Bilde på andres utkast | Opplasting til eget innlegg | Opplasting til andres |
+|---|---|---|---|---|---|
+| Medlem | Ja | **404** | **404** | Ja | **403** |
+| `posts.publish` | Ja | Ja | Ja | Ja | Ja (moderasjon) |
+| Uinnlogget | **401** | 401 | 401 | 401 | 401 |

@@ -9,7 +9,8 @@ import {
   passwordSchema,
   phoneSchema,
 } from '../lib/profile'
-import { getMyProfile, updateMyPhone } from '../server/profile'
+import type { PostNotificationChoice } from '../lib/posts'
+import { getMyProfile, updateMyPhone, updateMyPostNotifications } from '../server/profile'
 
 export const Route = createFileRoute('/min-profil')({
   beforeLoad: ({ context }) => {
@@ -112,9 +113,73 @@ function MyProfilePage() {
           </form>
         </section>
 
-        <PasswordCard hasPassword={profile.hasPassword} email={profile.email} />
+        <div className="space-y-6">
+          <NotificationsCard current={profile.notifyPosts} />
+          <PasswordCard hasPassword={profile.hasPassword} email={profile.email} />
+        </div>
       </div>
     </div>
+  )
+}
+
+const NOTIFY_CHOICES: Array<{ value: PostNotificationChoice; label: string }> = [
+  { value: 'all', label: 'Alle' },
+  { value: 'important', label: 'Bare viktige' },
+  { value: 'off', label: 'Av' },
+]
+
+/** Varslingsvalget for Beskjeder (#28). Standarden er «Alle» — ingen rad i databasen. */
+function NotificationsCard({ current }: { current: PostNotificationChoice }) {
+  const router = useRouter()
+  const [choice, setChoice] = useState<PostNotificationChoice>(current)
+  const [busy, setBusy] = useState(false)
+
+  const save = async (next: PostNotificationChoice) => {
+    const previous = choice
+    setChoice(next)
+    setBusy(true)
+    try {
+      await updateMyPostNotifications({ data: { posts: next } })
+      toast('Varslingsvalget er lagret')
+      await router.invalidate()
+    } catch (err) {
+      setChoice(previous)
+      toastError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="sheet rise overflow-hidden" style={{ animationDelay: '100ms' }}>
+      <div className="border-b border-line bg-paper-sunken/50 px-5 py-5 sm:px-6">
+        <Kicker className="mb-2">Varsler</Kicker>
+        <h2 className="display-title text-2xl font-semibold text-ink">E-post om beskjeder</h2>
+        <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+          Beskjeder fra styret ligger alltid på internsiden. Her velger du hvor mye av det du vil ha på e-post.
+        </p>
+      </div>
+      <div className="p-5 sm:p-6">
+        <div className="flex flex-wrap gap-2">
+          {NOTIFY_CHOICES.map((option) => (
+            <Button
+              key={option.value}
+              type="button"
+              variant={choice === option.value ? 'primary' : 'secondary'}
+              size="sm"
+              disabled={busy}
+              onClick={() => void save(option.value)}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+        <p className="mt-3 text-xs leading-relaxed text-ink-faint">
+          «Bare viktige» betyr de beskjedene styret selv har merket som viktige. «Av» slår av all e-post om beskjeder —
+          du finner dem fortsatt under Beskjeder.
+        </p>
+      </div>
+    </section>
   )
 }
 

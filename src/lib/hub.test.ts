@@ -74,8 +74,13 @@ describe('eventsAfter', () => {
 })
 
 describe('areasFor', () => {
-  it('gir et vanlig medlem de tre åpne områdene', () => {
-    expect(areasFor(['scores.view']).map((a) => a.to)).toEqual(['/noter', '/kalender', '/medlemmer'])
+  it('gir et vanlig medlem de fire åpne områdene', () => {
+    expect(areasFor(['scores.view']).map((a) => a.to)).toEqual([
+      '/beskjeder',
+      '/noter',
+      '/kalender',
+      '/medlemmer',
+    ])
   })
 
   it('legger til Styre ved board.manage', () => {
@@ -86,6 +91,7 @@ describe('areasFor', () => {
     expect(areasFor(['scores.view']).map((a) => a.to)).not.toContain('/styre')
   })
 
+  // Filtilganger er ikke lenger i toppmenyen (§6), men skal fortsatt ha en vei inn.
   it('legger til Filtilganger ved downloads.view', () => {
     expect(areasFor(['downloads.view']).map((a) => a.to)).toContain('/innstillinger/nedlastinger')
   })
@@ -96,6 +102,7 @@ describe('areasFor', () => {
 
   it('gir admin (*) alle områdene, i rekkefølgen fra toppmenyen', () => {
     expect(areasFor(['*']).map((a) => a.to)).toEqual([
+      '/beskjeder',
       '/noter',
       '/kalender',
       '/medlemmer',
@@ -111,6 +118,6 @@ describe('areasFor', () => {
 
   it('muterer ikke grunnlista mellom kall', () => {
     areasFor(['*'])
-    expect(areasFor([]).map((a) => a.to)).toEqual(['/noter', '/kalender', '/medlemmer'])
+    expect(areasFor([]).map((a) => a.to)).toEqual(['/beskjeder', '/noter', '/kalender', '/medlemmer'])
   })
 })

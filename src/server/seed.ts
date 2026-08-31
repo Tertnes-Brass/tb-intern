@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers'
-import { eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { db } from '../db'
 import {
   boardComments,
@@ -9,6 +9,9 @@ import {
   boardTasks,
   invitations,
   parts,
+  postComments,
+  postReactions,
+  posts,
   projectWorks,
   projects,
   rolePermissions,
@@ -16,6 +19,7 @@ import {
   seasons,
   settings,
   shareLinks,
+  user,
   workFiles,
   workLinks,
   works,
@@ -34,6 +38,9 @@ import {
   SEED_BOARD_PROJECTS,
   SEED_BOARD_TASKS,
   SEED_MEMBERS,
+  SEED_POSTS,
+  SEED_POST_COMMENTS,
+  SEED_POST_REACTIONS,
   SEED_PROJECTS,
   SEED_ROLES,
   SEED_ROLE_PERMISSIONS,
@@ -120,6 +127,11 @@ export async function seedDemoData(): Promise<{ ok: boolean; alreadySeeded?: boo
       })
       .onConflictDoNothing()
   }
+
+  // Veggen fylles på hver gang: demobrukerne opprettes først ved innlogging,
+  // så forfattere, kommentarer og likes kobles på etter hvert som kontoene
+  // finnes. Funksjonen er idempotent.
+  await seedWallDemo()
 
   if (await isSeeded()) {
     // Styredemoen fyller sine egne tabeller, så lokale databaser som ble seedet
@@ -241,6 +253,76 @@ export async function seedDemoData(): Promise<{ ok: boolean; alreadySeeded?: boo
 
   await d.insert(settings).values([{ key: 'bandName', value: 'Tertnes Brass' }])
   return { ok: true }
+}
+
+/**
+ * Demoinnhold for veggen (#28), kun i dev. Idempotent: innlegg, kommentarer og
+ * likes har faste id-er, og forfatterne kobles på når demobrukeren finnes.
+ * Likes krever en faktisk bruker (PK-en er (post, bruker)), så de hoppes over
+ * til kontoen er opprettet ved første innlogging.
+ */
+export async function seedWallDemo(): Promise<void> {
+  const d = db()
+  const ts = now()
+  const userIdByEmail = new Map(
+    (await d.select({ id: user.id, email: user.email }).from(user)).map((u) => [u.email.toLowerCase(), u.id]),
+  )
+  const at = (daysAgo: number | null, hoursAfter = 0) =>
+    daysAgo === null ? null : new Date(ts.getTime() - daysAgo * 86_400_000 + hoursAfter * 3_600_000)
+
+  for (const sp of SEED_POSTS) {
+    const publishedAt = at(sp.publishedDaysAgo)
+    const authorId = userIdByEmail.get(sp.authorEmail) ?? null
+    await d
+      .insert(posts)
+      .values({
+        id: sp.id,
+        title: sp.title,
+        body: sp.body,
+        audience: sp.audience,
+        importance: sp.importance,
+        official: sp.official,
+        authorId,
+        publishedAt,
+        createdAt: publishedAt ?? ts,
+        updatedAt: publishedAt ?? ts,
+      })
+      .onConflictDoNothing()
+    // Forfatteren kobles på ved en senere kjøring hvis kontoen ikke fantes da
+    // innlegget ble seedet.
+    if (authorId) {
+      await d
+        .update(posts)
+        .set({ authorId })
+        .where(and(eq(posts.id, sp.id), isNull(posts.authorId)))
+    }
+  }
+
+  const postById = new Map(SEED_POSTS.map((sp) => [sp.id, sp]))
+  for (const sc of SEED_POST_COMMENTS) {
+    const authorId = userIdByEmail.get(sc.authorEmail) ?? null
+    const parent = postById.get(sc.postId)
+    const createdAt = at(parent?.publishedDaysAgo ?? 1, sc.hoursAfter) ?? ts
+    await d
+      .insert(postComments)
+      .values({ id: sc.id, postId: sc.postId, authorId, body: sc.body, createdAt, updatedAt: createdAt })
+      .onConflictDoNothing()
+    if (authorId) {
+      await d
+        .update(postComments)
+        .set({ authorId })
+        .where(and(eq(postComments.id, sc.id), isNull(postComments.authorId)))
+    }
+  }
+
+  for (const sr of SEED_POST_REACTIONS) {
+    const userId = userIdByEmail.get(sr.authorEmail)
+    if (!userId) continue
+    await d
+      .insert(postReactions)
+      .values({ postId: sr.postId, userId, kind: 'like', createdAt: ts })
+      .onConflictDoNothing()
+  }
 }
 
 function chunkArray<T>(arr: T[], size: number): T[][] {

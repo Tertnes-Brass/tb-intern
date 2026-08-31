@@ -20,6 +20,8 @@ import { Route as ApiDevLoginRouteImport } from './routes/api/dev-login'
 import { Route as ApiDevSeedRouteImport } from './routes/api/dev-seed'
 import { Route as ArkivIndexRouteImport } from './routes/arkiv/index'
 import { Route as ArkivWorkIdRouteImport } from './routes/arkiv/$workId'
+import { Route as BeskjederIndexRouteImport } from './routes/beskjeder/index'
+import { Route as BeskjederNyRouteImport } from './routes/beskjeder/ny'
 import { Route as InnstillingerIndexRouteImport } from './routes/innstillinger/index'
 import { Route as InnstillingerNedlastingerRouteImport } from './routes/innstillinger/nedlastinger'
 import { Route as KalenderIndexRouteImport } from './routes/kalender/index'
@@ -34,10 +36,14 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiBoardFilesDocumentIdRouteImport } from './routes/api/board-files/$documentId'
 import { Route as ApiBoardFilesUploadRouteImport } from './routes/api/board-files/upload'
 import { Route as ApiFilesFileIdRouteImport } from './routes/api/files/$fileId'
+import { Route as ApiPostImagesImageIdRouteImport } from './routes/api/post-images/$imageId'
+import { Route as ApiPostImagesUploadRouteImport } from './routes/api/post-images/upload'
 import { Route as ApiUploadAbortRouteImport } from './routes/api/upload/abort'
 import { Route as ApiUploadCompleteRouteImport } from './routes/api/upload/complete'
 import { Route as ApiUploadPartRouteImport } from './routes/api/upload/part'
 import { Route as ApiUploadStartRouteImport } from './routes/api/upload/start'
+import { Route as BeskjederPostIdIndexRouteImport } from './routes/beskjeder/$postId/index'
+import { Route as BeskjederPostIdRedigerRouteImport } from './routes/beskjeder/$postId/rediger'
 import { Route as NoterArkivIndexRouteImport } from './routes/noter/arkiv/index'
 import { Route as NoterArkivWorkIdRouteImport } from './routes/noter/arkiv/$workId'
 import { Route as NoterProsjekterIndexRouteImport } from './routes/noter/prosjekter/index'
@@ -102,6 +108,16 @@ const ArkivIndexRoute = ArkivIndexRouteImport.update({
 const ArkivWorkIdRoute = ArkivWorkIdRouteImport.update({
   id: '/arkiv/$workId',
   path: '/arkiv/$workId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BeskjederIndexRoute = BeskjederIndexRouteImport.update({
+  id: '/beskjeder/',
+  path: '/beskjeder/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BeskjederNyRoute = BeskjederNyRouteImport.update({
+  id: '/beskjeder/ny',
+  path: '/beskjeder/ny',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InnstillingerIndexRoute = InnstillingerIndexRouteImport.update({
@@ -175,6 +191,16 @@ const ApiFilesFileIdRoute = ApiFilesFileIdRouteImport.update({
   path: '/api/files/$fileId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPostImagesImageIdRoute = ApiPostImagesImageIdRouteImport.update({
+  id: '/api/post-images/$imageId',
+  path: '/api/post-images/$imageId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPostImagesUploadRoute = ApiPostImagesUploadRouteImport.update({
+  id: '/api/post-images/upload',
+  path: '/api/post-images/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiUploadAbortRoute = ApiUploadAbortRouteImport.update({
   id: '/api/upload/abort',
   path: '/api/upload/abort',
@@ -193,6 +219,16 @@ const ApiUploadPartRoute = ApiUploadPartRouteImport.update({
 const ApiUploadStartRoute = ApiUploadStartRouteImport.update({
   id: '/api/upload/start',
   path: '/api/upload/start',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BeskjederPostIdIndexRoute = BeskjederPostIdIndexRouteImport.update({
+  id: '/beskjeder/$postId/',
+  path: '/beskjeder/$postId/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BeskjederPostIdRedigerRoute = BeskjederPostIdRedigerRouteImport.update({
+  id: '/beskjeder/$postId/rediger',
+  path: '/beskjeder/$postId/rediger',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NoterArkivIndexRoute = NoterArkivIndexRouteImport.update({
@@ -259,11 +295,13 @@ export interface FileRoutesByFullPath {
   '/api/dev-login': typeof ApiDevLoginRoute
   '/api/dev-seed': typeof ApiDevSeedRoute
   '/arkiv/$workId': typeof ArkivWorkIdRoute
+  '/beskjeder/ny': typeof BeskjederNyRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
   '/styre/$taskId': typeof StyreTaskIdRoute
   '/v/$token': typeof VTokenRoute
   '/arkiv/': typeof ArkivIndexRoute
+  '/beskjeder/': typeof BeskjederIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
   '/kalender/': typeof KalenderIndexRoute
   '/medlemmer/': typeof MedlemmerIndexRoute
@@ -274,14 +312,18 @@ export interface FileRoutesByFullPath {
   '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
   '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/post-images/$imageId': typeof ApiPostImagesImageIdRoute
+  '/api/post-images/upload': typeof ApiPostImagesUploadRoute
   '/api/upload/abort': typeof ApiUploadAbortRoute
   '/api/upload/complete': typeof ApiUploadCompleteRoute
   '/api/upload/part': typeof ApiUploadPartRoute
   '/api/upload/start': typeof ApiUploadStartRoute
+  '/beskjeder/$postId/rediger': typeof BeskjederPostIdRedigerRoute
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
+  '/beskjeder/$postId/': typeof BeskjederPostIdIndexRoute
   '/noter/arkiv/': typeof NoterArkivIndexRoute
   '/noter/prosjekter/': typeof NoterProsjekterIndexRoute
   '/styre/chat/': typeof StyreChatIndexRoute
@@ -298,11 +340,13 @@ export interface FileRoutesByTo {
   '/api/dev-login': typeof ApiDevLoginRoute
   '/api/dev-seed': typeof ApiDevSeedRoute
   '/arkiv/$workId': typeof ArkivWorkIdRoute
+  '/beskjeder/ny': typeof BeskjederNyRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
   '/styre/$taskId': typeof StyreTaskIdRoute
   '/v/$token': typeof VTokenRoute
   '/arkiv': typeof ArkivIndexRoute
+  '/beskjeder': typeof BeskjederIndexRoute
   '/innstillinger': typeof InnstillingerIndexRoute
   '/kalender': typeof KalenderIndexRoute
   '/medlemmer': typeof MedlemmerIndexRoute
@@ -313,14 +357,18 @@ export interface FileRoutesByTo {
   '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
   '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/post-images/$imageId': typeof ApiPostImagesImageIdRoute
+  '/api/post-images/upload': typeof ApiPostImagesUploadRoute
   '/api/upload/abort': typeof ApiUploadAbortRoute
   '/api/upload/complete': typeof ApiUploadCompleteRoute
   '/api/upload/part': typeof ApiUploadPartRoute
   '/api/upload/start': typeof ApiUploadStartRoute
+  '/beskjeder/$postId/rediger': typeof BeskjederPostIdRedigerRoute
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
+  '/beskjeder/$postId': typeof BeskjederPostIdIndexRoute
   '/noter/arkiv': typeof NoterArkivIndexRoute
   '/noter/prosjekter': typeof NoterProsjekterIndexRoute
   '/styre/chat': typeof StyreChatIndexRoute
@@ -340,11 +388,13 @@ export interface FileRoutesById {
   '/api/dev-login': typeof ApiDevLoginRoute
   '/api/dev-seed': typeof ApiDevSeedRoute
   '/arkiv/$workId': typeof ArkivWorkIdRoute
+  '/beskjeder/ny': typeof BeskjederNyRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
   '/styre/$taskId': typeof StyreTaskIdRoute
   '/v/$token': typeof VTokenRoute
   '/arkiv/': typeof ArkivIndexRoute
+  '/beskjeder/': typeof BeskjederIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
   '/kalender/': typeof KalenderIndexRoute
   '/medlemmer/': typeof MedlemmerIndexRoute
@@ -355,14 +405,18 @@ export interface FileRoutesById {
   '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
   '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/post-images/$imageId': typeof ApiPostImagesImageIdRoute
+  '/api/post-images/upload': typeof ApiPostImagesUploadRoute
   '/api/upload/abort': typeof ApiUploadAbortRoute
   '/api/upload/complete': typeof ApiUploadCompleteRoute
   '/api/upload/part': typeof ApiUploadPartRoute
   '/api/upload/start': typeof ApiUploadStartRoute
+  '/beskjeder/$postId/rediger': typeof BeskjederPostIdRedigerRoute
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
+  '/beskjeder/$postId/': typeof BeskjederPostIdIndexRoute
   '/noter/arkiv/': typeof NoterArkivIndexRoute
   '/noter/prosjekter/': typeof NoterProsjekterIndexRoute
   '/styre/chat/': typeof StyreChatIndexRoute
@@ -383,11 +437,13 @@ export interface FileRouteTypes {
     | '/api/dev-login'
     | '/api/dev-seed'
     | '/arkiv/$workId'
+    | '/beskjeder/ny'
     | '/innstillinger/nedlastinger'
     | '/prosjekter/$projectId'
     | '/styre/$taskId'
     | '/v/$token'
     | '/arkiv/'
+    | '/beskjeder/'
     | '/innstillinger/'
     | '/kalender/'
     | '/medlemmer/'
@@ -398,14 +454,18 @@ export interface FileRouteTypes {
     | '/api/board-files/$documentId'
     | '/api/board-files/upload'
     | '/api/files/$fileId'
+    | '/api/post-images/$imageId'
+    | '/api/post-images/upload'
     | '/api/upload/abort'
     | '/api/upload/complete'
     | '/api/upload/part'
     | '/api/upload/start'
+    | '/beskjeder/$postId/rediger'
     | '/noter/arkiv/$workId'
     | '/noter/prosjekter/$projectId'
     | '/styre/moter/$meetingId'
     | '/styre/prosjekter/$boardProjectId'
+    | '/beskjeder/$postId/'
     | '/noter/arkiv/'
     | '/noter/prosjekter/'
     | '/styre/chat/'
@@ -422,11 +482,13 @@ export interface FileRouteTypes {
     | '/api/dev-login'
     | '/api/dev-seed'
     | '/arkiv/$workId'
+    | '/beskjeder/ny'
     | '/innstillinger/nedlastinger'
     | '/prosjekter/$projectId'
     | '/styre/$taskId'
     | '/v/$token'
     | '/arkiv'
+    | '/beskjeder'
     | '/innstillinger'
     | '/kalender'
     | '/medlemmer'
@@ -437,14 +499,18 @@ export interface FileRouteTypes {
     | '/api/board-files/$documentId'
     | '/api/board-files/upload'
     | '/api/files/$fileId'
+    | '/api/post-images/$imageId'
+    | '/api/post-images/upload'
     | '/api/upload/abort'
     | '/api/upload/complete'
     | '/api/upload/part'
     | '/api/upload/start'
+    | '/beskjeder/$postId/rediger'
     | '/noter/arkiv/$workId'
     | '/noter/prosjekter/$projectId'
     | '/styre/moter/$meetingId'
     | '/styre/prosjekter/$boardProjectId'
+    | '/beskjeder/$postId'
     | '/noter/arkiv'
     | '/noter/prosjekter'
     | '/styre/chat'
@@ -463,11 +529,13 @@ export interface FileRouteTypes {
     | '/api/dev-login'
     | '/api/dev-seed'
     | '/arkiv/$workId'
+    | '/beskjeder/ny'
     | '/innstillinger/nedlastinger'
     | '/prosjekter/$projectId'
     | '/styre/$taskId'
     | '/v/$token'
     | '/arkiv/'
+    | '/beskjeder/'
     | '/innstillinger/'
     | '/kalender/'
     | '/medlemmer/'
@@ -478,14 +546,18 @@ export interface FileRouteTypes {
     | '/api/board-files/$documentId'
     | '/api/board-files/upload'
     | '/api/files/$fileId'
+    | '/api/post-images/$imageId'
+    | '/api/post-images/upload'
     | '/api/upload/abort'
     | '/api/upload/complete'
     | '/api/upload/part'
     | '/api/upload/start'
+    | '/beskjeder/$postId/rediger'
     | '/noter/arkiv/$workId'
     | '/noter/prosjekter/$projectId'
     | '/styre/moter/$meetingId'
     | '/styre/prosjekter/$boardProjectId'
+    | '/beskjeder/$postId/'
     | '/noter/arkiv/'
     | '/noter/prosjekter/'
     | '/styre/chat/'
@@ -505,10 +577,12 @@ export interface RootRouteChildren {
   ApiDevLoginRoute: typeof ApiDevLoginRoute
   ApiDevSeedRoute: typeof ApiDevSeedRoute
   ArkivWorkIdRoute: typeof ArkivWorkIdRoute
+  BeskjederNyRoute: typeof BeskjederNyRoute
   InnstillingerNedlastingerRoute: typeof InnstillingerNedlastingerRoute
   ProsjekterProjectIdRoute: typeof ProsjekterProjectIdRoute
   VTokenRoute: typeof VTokenRoute
   ArkivIndexRoute: typeof ArkivIndexRoute
+  BeskjederIndexRoute: typeof BeskjederIndexRoute
   InnstillingerIndexRoute: typeof InnstillingerIndexRoute
   KalenderIndexRoute: typeof KalenderIndexRoute
   MedlemmerIndexRoute: typeof MedlemmerIndexRoute
@@ -517,10 +591,14 @@ export interface RootRouteChildren {
   ApiBoardFilesDocumentIdRoute: typeof ApiBoardFilesDocumentIdRoute
   ApiBoardFilesUploadRoute: typeof ApiBoardFilesUploadRoute
   ApiFilesFileIdRoute: typeof ApiFilesFileIdRoute
+  ApiPostImagesImageIdRoute: typeof ApiPostImagesImageIdRoute
+  ApiPostImagesUploadRoute: typeof ApiPostImagesUploadRoute
   ApiUploadAbortRoute: typeof ApiUploadAbortRoute
   ApiUploadCompleteRoute: typeof ApiUploadCompleteRoute
   ApiUploadPartRoute: typeof ApiUploadPartRoute
   ApiUploadStartRoute: typeof ApiUploadStartRoute
+  BeskjederPostIdRedigerRoute: typeof BeskjederPostIdRedigerRoute
+  BeskjederPostIdIndexRoute: typeof BeskjederPostIdIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -600,6 +678,20 @@ declare module '@tanstack/react-router' {
       path: '/arkiv/$workId'
       fullPath: '/arkiv/$workId'
       preLoaderRoute: typeof ArkivWorkIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/beskjeder/': {
+      id: '/beskjeder/'
+      path: '/beskjeder'
+      fullPath: '/beskjeder/'
+      preLoaderRoute: typeof BeskjederIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/beskjeder/ny': {
+      id: '/beskjeder/ny'
+      path: '/beskjeder/ny'
+      fullPath: '/beskjeder/ny'
+      preLoaderRoute: typeof BeskjederNyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/innstillinger/': {
@@ -700,6 +792,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiFilesFileIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/post-images/$imageId': {
+      id: '/api/post-images/$imageId'
+      path: '/api/post-images/$imageId'
+      fullPath: '/api/post-images/$imageId'
+      preLoaderRoute: typeof ApiPostImagesImageIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/post-images/upload': {
+      id: '/api/post-images/upload'
+      path: '/api/post-images/upload'
+      fullPath: '/api/post-images/upload'
+      preLoaderRoute: typeof ApiPostImagesUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/upload/abort': {
       id: '/api/upload/abort'
       path: '/api/upload/abort'
@@ -726,6 +832,20 @@ declare module '@tanstack/react-router' {
       path: '/api/upload/start'
       fullPath: '/api/upload/start'
       preLoaderRoute: typeof ApiUploadStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/beskjeder/$postId/': {
+      id: '/beskjeder/$postId/'
+      path: '/beskjeder/$postId'
+      fullPath: '/beskjeder/$postId/'
+      preLoaderRoute: typeof BeskjederPostIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/beskjeder/$postId/rediger': {
+      id: '/beskjeder/$postId/rediger'
+      path: '/beskjeder/$postId/rediger'
+      fullPath: '/beskjeder/$postId/rediger'
+      preLoaderRoute: typeof BeskjederPostIdRedigerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/noter/arkiv/': {
@@ -858,10 +978,12 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDevLoginRoute: ApiDevLoginRoute,
   ApiDevSeedRoute: ApiDevSeedRoute,
   ArkivWorkIdRoute: ArkivWorkIdRoute,
+  BeskjederNyRoute: BeskjederNyRoute,
   InnstillingerNedlastingerRoute: InnstillingerNedlastingerRoute,
   ProsjekterProjectIdRoute: ProsjekterProjectIdRoute,
   VTokenRoute: VTokenRoute,
   ArkivIndexRoute: ArkivIndexRoute,
+  BeskjederIndexRoute: BeskjederIndexRoute,
   InnstillingerIndexRoute: InnstillingerIndexRoute,
   KalenderIndexRoute: KalenderIndexRoute,
   MedlemmerIndexRoute: MedlemmerIndexRoute,
@@ -870,10 +992,14 @@ const rootRouteChildren: RootRouteChildren = {
   ApiBoardFilesDocumentIdRoute: ApiBoardFilesDocumentIdRoute,
   ApiBoardFilesUploadRoute: ApiBoardFilesUploadRoute,
   ApiFilesFileIdRoute: ApiFilesFileIdRoute,
+  ApiPostImagesImageIdRoute: ApiPostImagesImageIdRoute,
+  ApiPostImagesUploadRoute: ApiPostImagesUploadRoute,
   ApiUploadAbortRoute: ApiUploadAbortRoute,
   ApiUploadCompleteRoute: ApiUploadCompleteRoute,
   ApiUploadPartRoute: ApiUploadPartRoute,
   ApiUploadStartRoute: ApiUploadStartRoute,
+  BeskjederPostIdRedigerRoute: BeskjederPostIdRedigerRoute,
+  BeskjederPostIdIndexRoute: BeskjederPostIdIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

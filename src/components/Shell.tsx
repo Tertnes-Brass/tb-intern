@@ -111,7 +111,7 @@ function UserMenu({ me }: { me: Me }) {
 }
 
 type NavItem = {
-  to: '/' | '/noter' | '/kalender' | '/medlemmer' | '/styre' | '/innstillinger' | '/innstillinger/nedlastinger'
+  to: '/' | '/beskjeder' | '/noter' | '/kalender' | '/medlemmer' | '/styre' | '/innstillinger'
   label: string
   exact?: boolean
 }
@@ -119,8 +119,15 @@ type NavItem = {
 // Kort toppmeny; hvert område eier sin egen undernavigasjon (navigasjonsmodell
 // (a) i docs/designprinsipper.md §6). «Noter» er aktiv for hele /noter/*, så
 // Prosjekter og Arkiv hører hjemme i områdemenyen, ikke her.
+//
+// Filtilganger ble tatt UT av toppmenyen da Beskjeder kom (§6): fem faste
+// oppføringer + Innstillinger er taket, og en sjuende ville forsvunnet bak
+// fade-gradienten på mobil uten at noen merket det. URL-en
+// `/innstillinger/nedlastinger` består, og området nås fra /innstillinger og
+// fra «Områder» på hub-en (`areasFor` i src/lib/hub.ts).
 const BASE_NAV: NavItem[] = [
   { to: '/', label: 'Hjem', exact: true },
+  { to: '/beskjeder', label: 'Beskjeder' },
   { to: '/noter', label: 'Noter' },
   { to: '/kalender', label: 'Kalender' },
   { to: '/medlemmer', label: 'Medlemmer' },
@@ -128,13 +135,11 @@ const BASE_NAV: NavItem[] = [
 
 export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
   const canManageSettings = me.permissions.includes('*') || me.permissions.includes('settings.manage')
-  const canViewDownloads = me.permissions.includes('*') || me.permissions.includes('downloads.view')
   const canManageBoard = me.permissions.includes('*') || me.permissions.includes('board.manage')
   const NAV: NavItem[] = [...BASE_NAV]
   // Styret er et eget område, ikke en fane i noe annet — men det vises bare for
   // dem det gjelder, slik Arkiv gjør i noteområdet.
   if (canManageBoard) NAV.push({ to: '/styre', label: 'Styre' })
-  if (canViewDownloads) NAV.push({ to: '/innstillinger/nedlastinger', label: 'Filtilganger' })
   // exact, ellers markeres Innstillinger som aktiv også på /innstillinger/nedlastinger
   if (canManageSettings) NAV.push({ to: '/innstillinger', label: 'Innstillinger', exact: true })
   return (
