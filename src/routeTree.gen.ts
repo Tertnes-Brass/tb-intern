@@ -31,6 +31,8 @@ import { Route as ProsjekterProjectIdRouteImport } from './routes/prosjekter/$pr
 import { Route as VTokenRouteImport } from './routes/v/$token'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiFilesFileIdRouteImport } from './routes/api/files/$fileId'
+import { Route as ApiPostImagesImageIdRouteImport } from './routes/api/post-images/$imageId'
+import { Route as ApiPostImagesUploadRouteImport } from './routes/api/post-images/upload'
 import { Route as ApiUploadAbortRouteImport } from './routes/api/upload/abort'
 import { Route as ApiUploadCompleteRouteImport } from './routes/api/upload/complete'
 import { Route as ApiUploadPartRouteImport } from './routes/api/upload/part'
@@ -153,6 +155,16 @@ const ApiFilesFileIdRoute = ApiFilesFileIdRouteImport.update({
   path: '/api/files/$fileId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPostImagesImageIdRoute = ApiPostImagesImageIdRouteImport.update({
+  id: '/api/post-images/$imageId',
+  path: '/api/post-images/$imageId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPostImagesUploadRoute = ApiPostImagesUploadRouteImport.update({
+  id: '/api/post-images/upload',
+  path: '/api/post-images/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiUploadAbortRoute = ApiUploadAbortRouteImport.update({
   id: '/api/upload/abort',
   path: '/api/upload/abort',
@@ -228,6 +240,8 @@ export interface FileRoutesByFullPath {
   '/prosjekter/': typeof ProsjekterIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/post-images/$imageId': typeof ApiPostImagesImageIdRoute
+  '/api/post-images/upload': typeof ApiPostImagesUploadRoute
   '/api/upload/abort': typeof ApiUploadAbortRoute
   '/api/upload/complete': typeof ApiUploadCompleteRoute
   '/api/upload/part': typeof ApiUploadPartRoute
@@ -261,6 +275,8 @@ export interface FileRoutesByTo {
   '/prosjekter': typeof ProsjekterIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/post-images/$imageId': typeof ApiPostImagesImageIdRoute
+  '/api/post-images/upload': typeof ApiPostImagesUploadRoute
   '/api/upload/abort': typeof ApiUploadAbortRoute
   '/api/upload/complete': typeof ApiUploadCompleteRoute
   '/api/upload/part': typeof ApiUploadPartRoute
@@ -296,6 +312,8 @@ export interface FileRoutesById {
   '/prosjekter/': typeof ProsjekterIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/post-images/$imageId': typeof ApiPostImagesImageIdRoute
+  '/api/post-images/upload': typeof ApiPostImagesUploadRoute
   '/api/upload/abort': typeof ApiUploadAbortRoute
   '/api/upload/complete': typeof ApiUploadCompleteRoute
   '/api/upload/part': typeof ApiUploadPartRoute
@@ -332,6 +350,8 @@ export interface FileRouteTypes {
     | '/prosjekter/'
     | '/api/auth/$'
     | '/api/files/$fileId'
+    | '/api/post-images/$imageId'
+    | '/api/post-images/upload'
     | '/api/upload/abort'
     | '/api/upload/complete'
     | '/api/upload/part'
@@ -365,6 +385,8 @@ export interface FileRouteTypes {
     | '/prosjekter'
     | '/api/auth/$'
     | '/api/files/$fileId'
+    | '/api/post-images/$imageId'
+    | '/api/post-images/upload'
     | '/api/upload/abort'
     | '/api/upload/complete'
     | '/api/upload/part'
@@ -399,6 +421,8 @@ export interface FileRouteTypes {
     | '/prosjekter/'
     | '/api/auth/$'
     | '/api/files/$fileId'
+    | '/api/post-images/$imageId'
+    | '/api/post-images/upload'
     | '/api/upload/abort'
     | '/api/upload/complete'
     | '/api/upload/part'
@@ -433,6 +457,8 @@ export interface RootRouteChildren {
   ProsjekterIndexRoute: typeof ProsjekterIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiFilesFileIdRoute: typeof ApiFilesFileIdRoute
+  ApiPostImagesImageIdRoute: typeof ApiPostImagesImageIdRoute
+  ApiPostImagesUploadRoute: typeof ApiPostImagesUploadRoute
   ApiUploadAbortRoute: typeof ApiUploadAbortRoute
   ApiUploadCompleteRoute: typeof ApiUploadCompleteRoute
   ApiUploadPartRoute: typeof ApiUploadPartRoute
@@ -597,6 +623,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiFilesFileIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/post-images/$imageId': {
+      id: '/api/post-images/$imageId'
+      path: '/api/post-images/$imageId'
+      fullPath: '/api/post-images/$imageId'
+      preLoaderRoute: typeof ApiPostImagesImageIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/post-images/upload': {
+      id: '/api/post-images/upload'
+      path: '/api/post-images/upload'
+      fullPath: '/api/post-images/upload'
+      preLoaderRoute: typeof ApiPostImagesUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/upload/abort': {
       id: '/api/upload/abort'
       path: '/api/upload/abort'
@@ -712,6 +752,8 @@ const rootRouteChildren: RootRouteChildren = {
   ProsjekterIndexRoute: ProsjekterIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiFilesFileIdRoute: ApiFilesFileIdRoute,
+  ApiPostImagesImageIdRoute: ApiPostImagesImageIdRoute,
+  ApiPostImagesUploadRoute: ApiPostImagesUploadRoute,
   ApiUploadAbortRoute: ApiUploadAbortRoute,
   ApiUploadCompleteRoute: ApiUploadCompleteRoute,
   ApiUploadPartRoute: ApiUploadPartRoute,
