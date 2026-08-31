@@ -8,7 +8,17 @@
 	"account_id": "3709ec57046e3f629f737cf5b6b88a82",
 	"compatibility_date": "2025-09-02",
 	"compatibility_flags": ["nodejs_compat"],
-	"main": "@tanstack/react-start/server-entry",
+	// Egen worker-entry (src/worker.ts) i stedet for Start sin
+	// "@tanstack/react-start/server-entry": vi trenger en `scheduled`-handler
+	// ved siden av `fetch`. Entryen sender `fetch` rett videre til Start.
+	"main": "src/worker.ts",
+	// Daglig påminnelse om forfalte styreoppgaver. 07:00 UTC ≈ 09:00 norsk tid
+	// (08:00 om vinteren). Handleren ligger i src/worker.ts og kaller
+	// `runOverdueReminders` i src/server/board-notify.ts, som selv sørger for at
+	// den kjører maks én gang per kalenderdag.
+	"triggers": {
+		"crons": ["0 7 * * *"]
+	},
 	"observability": {
 		"enabled": true
 	},

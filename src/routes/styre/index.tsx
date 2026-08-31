@@ -1,4 +1,4 @@
-import { createFileRoute, useRouter } from '@tanstack/react-router'
+import { Link, createFileRoute, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { BoardTaskRowItem, QuickAddTask } from '../../components/BoardTasks'
 import { toast, toastError } from '../../components/toast'
@@ -72,6 +72,18 @@ function BoardTasksPage() {
             </Stamp>
           )}
         </div>
+
+        {mine && (
+          // Én linje, ikke et varselkort: påminnelsen er en opplysning om
+          // hvordan området oppfører seg, ikke noe man skal gjøre noe med.
+          <p className="mt-3 text-xs leading-relaxed text-ink-faint">
+            Er noe av dette forfalt, får du én e-post om dagen med påminnelse.{' '}
+            <Link to="/min-profil" className="underline decoration-line underline-offset-2 hover:text-ink-soft">
+              Skru av under Min profil
+            </Link>
+            .
+          </p>
+        )}
 
         {/* To visninger, ikke et filter blant flere: «alt styret skal gjøre» og
             «det som står på meg» er to forskjellige spørsmål. */}
