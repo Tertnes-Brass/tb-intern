@@ -48,10 +48,11 @@ export const SEED_ROLE_PERMISSIONS: Array<{ roleId: string; permission: string }
   { roleId: 'conductor', permission: 'scores.view' },
   { roleId: 'conductor', permission: 'archive.viewAll' },
   { roleId: 'conductor', permission: 'downloads.view' },
-  // Styremedlem har foreløpig nøyaktig det en musiker har. Egne
-  // styrerettigheter kommer med Beskjeder (fase 2) og Styre (fase 3); rollen
-  // finnes allerede nå så invitasjoner og rollematrisen kan bruke den.
+  { roleId: 'conductor', permission: 'posts.publish' },
+  // Styremedlem har ellers nøyaktig det en musiker har; det som skiller rollen
+  // er Beskjeder (fase 2). Flere styrerettigheter kommer med Styre (fase 3).
   { roleId: 'board', permission: 'scores.view' },
+  { roleId: 'board', permission: 'posts.publish' },
   { roleId: 'member', permission: 'scores.view' },
 ]
 
@@ -147,3 +148,56 @@ export const SEED_PROJECTS: SeedProjectData[] = [
 export const DEMO_SHARE_EXPIRES = '2026-07-24T12:00:00Z'
 export const DEMO_SHARE_RECIPIENT = 'Ola Vikar'
 export const DEMO_SHARE_PART_IDS = ['solo-cornet']
+
+// ---------- Beskjeder (demo) ----------
+
+export type SeedPostData = {
+  title: string
+  body: string
+  audience: 'all' | 'board'
+  importance: 'normal' | 'important'
+  /** E-posten til forfatteren blant SEED_MEMBERS. Null = ingen konto ennå. */
+  authorEmail: string | null
+  /** Dager tilbake i tid. `null` = utkast (aldri publisert). */
+  publishedDaysAgo: number | null
+}
+
+/**
+ * Demo-beskjeder for lokal utvikling: én viktig, én bare for styret og ett
+ * utkast, så feeden, hub-blokken og rettighetsfiltrene kan sees uten å skrive
+ * noe først. Forfatteren knyttes til demobrukeren først når kontoen finnes.
+ */
+export const SEED_POSTS: SeedPostData[] = [
+  {
+    title: 'Øvelsen flyttes til tirsdag i uke 36',
+    body: 'Hei alle sammen!\n\nPå grunn av et arrangement i Tertneshallen flytter vi øvelsen den uken til tirsdag, samme tid og sted. Vi bruker kvelden på Cry of the Celts og Benedictus.\n\nSi fra til stemmegruppa di om noen ikke leser dette.',
+    audience: 'all',
+    importance: 'normal',
+    authorEmail: 'sindre@demo.tertnesbrass.no',
+    publishedDaysAgo: 2,
+  },
+  {
+    title: 'Påmelding til sommerturen — frist søndag',
+    body: 'Vi trenger endelig antall til bussen og hotellet, og fristen er søndag kveld.\n\nMeld deg på i skjemaet her: https://tertnesbrass.no/sommertur\n\nHar du spørsmål om egenandel eller reise, ta kontakt med styret.',
+    audience: 'all',
+    importance: 'important',
+    authorEmail: 'sindre@demo.tertnesbrass.no',
+    publishedDaysAgo: 9,
+  },
+  {
+    title: 'Styremøte torsdag: budsjett og dirigentavtale',
+    body: 'Sakslisten er kort denne gangen: budsjettet for høsten, dirigentavtalen og en oppsummering av vårkonserten.\n\nMøtet er i møterommet klokken 19.',
+    audience: 'board',
+    importance: 'normal',
+    authorEmail: 'sindre@demo.tertnesbrass.no',
+    publishedDaysAgo: 4,
+  },
+  {
+    title: 'Utkast: uniformsregler til julekonserten',
+    body: 'Foreløpig tekst — må avklares i styret før den går ut.\n\nSvart bukse/skjørt, korpsjakke og hvit skjorte. Nye medlemmer får jakke utlevert på øvelsen før konserten.',
+    audience: 'all',
+    importance: 'normal',
+    authorEmail: 'sindre@demo.tertnesbrass.no',
+    publishedDaysAgo: null,
+  },
+]

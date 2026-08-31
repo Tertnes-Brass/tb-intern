@@ -273,3 +273,56 @@ export const settings = sqliteTable('settings', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
 })
+
+// ---------- Beskjeder (#28) ----------
+
+// Informasjon fra styret til korpset. `publishedAt = null` er et utkast og
+// finnes kun for dem med `posts.publish`. `audience = 'board'` er internt for
+// styret; filtreringen håndheves alltid i src/server/posts.ts, aldri i UI-et.
+export const posts = sqliteTable(
+  'posts',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull(),
+    // Ren tekst med avsnitt. Ikke markdown — URL-er auto-lenkes ved rendring.
+    body: text('body').notNull(),
+    audience: text('audience', { enum: ['all', 'board'] })
+      .notNull()
+      .default('all'),
+    importance: text('importance', { enum: ['normal', 'important'] })
+      .notNull()
+      .default('normal'),
+    authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
+    publishedAt: integer('published_at', { mode: 'timestamp_ms' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('posts_published_idx').on(t.publishedAt)],
+)
+
+// Én rad per bruker som har valgt noe annet enn standarden. Ingen rad = 'all'.
+export const notificationPreferences = sqliteTable('notification_preferences', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  posts: text('posts', { enum: ['all', 'important', 'off'] })
+    .notNull()
+    .default('all'),
+})
+
+// Idempotens for varsling: en beskjed sendes aldri to ganger til samme person.
+// «Send på nytt» sender kun til dem som mangler en rad her.
+export const notificationLog = sqliteTable(
+  'notification_log',
+  {
+    postId: text('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    sentAt: integer('sent_at', { mode: 'timestamp_ms' }).notNull(),
+    outcome: text('outcome', { enum: ['sent', 'logged', 'failed'] }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.userId] })],
+)

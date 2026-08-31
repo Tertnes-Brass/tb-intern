@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers'
+import { bodyToHtml, escapeHtml } from '../lib/posts'
 
 /**
  * E-postsending via Cloudflare Email Sending (binding `EMAIL`) — ingen ekstern
@@ -151,6 +152,41 @@ export function verificationCodeEmail(
        <p style="margin:0;font-size:12px;color:#8e8468">Koden kan bare brukes én gang. Del den aldri med andre.</p>`,
     ),
     text: `${copy.heading} i Tertnes Brass Notearkiv.\n\n${copy.lead}\n\nKode: ${otp}\n\nKoden kan bare brukes én gang. Del den aldri med andre.\n`,
+  }
+}
+
+/**
+ * Varsel om en ny beskjed (#28). Teksten er skrevet av et menneske i en
+ * textarea og escapes med `bodyToHtml` — den er aldri betrodd som HTML.
+ * `url` bygges server-side fra `BETTER_AUTH_URL`, aldri fra request-origin.
+ */
+export function postEmail({
+  title,
+  body,
+  url,
+  authorName,
+  important,
+}: {
+  title: string
+  /** Hele teksten i beskjeden — e-posten skal kunne leses uten å logge inn. */
+  body: string
+  url: string
+  authorName: string
+  important: boolean
+}): { subject: string; html: string; text: string } {
+  const heading = escapeHtml(title)
+  const author = escapeHtml(authorName)
+  return {
+    subject: important ? `Viktig: ${title}` : title,
+    html: shell(
+      heading,
+      `${important ? '<p style="margin:0 0 16px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8f2f24;font-weight:700">Viktig beskjed</p>' : ''}
+       <p style="margin:0 0 20px;font-size:12px;color:#8e8468">Fra ${author} · Tertnes Brass</p>
+       <div style="font-size:15px;line-height:1.6;color:#5f5640">${bodyToHtml(body, 'margin:0 0 16px')}</div>
+       <p style="margin:8px 0 24px">${button(url, 'Les på internsiden')}</p>
+       <p style="margin:0;font-size:12px;color:#8e8468">Du kan velge hvilke beskjeder du vil ha på e-post under «Min profil» på internsiden.</p>`,
+    ),
+    text: `${important ? 'VIKTIG BESKJED\n\n' : ''}${title}\nFra ${authorName} · Tertnes Brass\n\n${body.trim()}\n\nLes på internsiden:\n${url}\n\nVil du ha færre e-poster? Endre varslingsvalget under «Min profil».\n`,
   }
 }
 
