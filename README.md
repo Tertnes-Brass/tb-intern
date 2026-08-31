@@ -36,6 +36,7 @@ SMS-er fortsatt lander riktig. Logikken er `legacyHostRedirect` i
 - **RBAC** — roller (admin/arkivar/dirigent/musiker) med rettigheter i database, håndhevet server-side i alle funksjoner
 - **Tilgangsstyrte filer** — alle PDF-er streames via API med sesjons- eller token-sjekk; partitur er rettighetsstyrt (scores.view); ingen offentlige filer
 - **Kalender** — øvelser og konserter hentes fra korpsets Google-kalender (iCal) og vises på `/kalender`; Google forblir stedet man redigerer
+- **Styre** — styrets eget område på `/styre`: oppgaver med frist og ansvarlig, styremøter med notater, kommentartråd per oppgave og styredokumenter. Synlig kun for dem som har `board.manage`
 
 ## Innlogging og invitasjon
 
@@ -102,6 +103,24 @@ pnpm exec wrangler secret put CALENDAR_ICS_URL   # hemmelig — kun som secret
 Uten `CALENDAR_ICS_URL` er siden en rolig tomtilstand («Kalenderen er ikke koblet
 til ennå») — ingen feil. Feeden caches i ti minutter, så den hentes ikke på hver
 sidevisning.
+
+## Styre
+
+`/styre` er styrets arbeidsflate — laget for å ta styrearbeidet ut av Google
+Chat og Drive:
+
+- **Oppgaver** (`/styre`) er første skjerm. Ny oppgave = tittel + Enter øverst,
+  og avkrysning skjer rett i lista. Åpne sorteres på frist med forfalte merket,
+  «Mine» filtrerer på ansvarlig, og ferdige samles nederst.
+- **Møter** (`/styre/moter`) holder dato, notater (ren tekst, avsnitt bevares),
+  oppgavene som ble fordelt og papirene som hører til møtet.
+- **Dokumenter** (`/styre/dokumenter`) er referater, budsjetter og kontrakter.
+  Filene ligger i samme R2-bøtte som notene, under prefikset `board/`, og kan
+  **kun** hentes gjennom `/api/board-files/<id>` — som krever `board.manage`.
+  Uinnlogget gir 401, innlogget uten rettigheten 403. Grensen er 25 MB per fil.
+
+Hele området — også lesing — gates server-side på rettigheten `board.manage`,
+som rollen *Styremedlem* har. Andre ser hverken menyoppføringen eller sidene.
 
 ## Stack
 

@@ -111,7 +111,7 @@ function UserMenu({ me }: { me: Me }) {
 }
 
 type NavItem = {
-  to: '/' | '/noter' | '/kalender' | '/medlemmer' | '/innstillinger' | '/innstillinger/nedlastinger'
+  to: '/' | '/noter' | '/kalender' | '/medlemmer' | '/styre' | '/innstillinger' | '/innstillinger/nedlastinger'
   label: string
   exact?: boolean
 }
@@ -129,7 +129,11 @@ const BASE_NAV: NavItem[] = [
 export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
   const canManageSettings = me.permissions.includes('*') || me.permissions.includes('settings.manage')
   const canViewDownloads = me.permissions.includes('*') || me.permissions.includes('downloads.view')
+  const canManageBoard = me.permissions.includes('*') || me.permissions.includes('board.manage')
   const NAV: NavItem[] = [...BASE_NAV]
+  // Styret er et eget område, ikke en fane i noe annet — men det vises bare for
+  // dem det gjelder, slik Arkiv gjør i noteområdet.
+  if (canManageBoard) NAV.push({ to: '/styre', label: 'Styre' })
   if (canViewDownloads) NAV.push({ to: '/innstillinger/nedlastinger', label: 'Filtilganger' })
   // exact, ellers markeres Innstillinger som aktiv også på /innstillinger/nedlastinger
   if (canManageSettings) NAV.push({ to: '/innstillinger', label: 'Innstillinger', exact: true })

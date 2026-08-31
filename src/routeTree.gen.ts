@@ -14,6 +14,7 @@ import { Route as GlemtPassordRouteImport } from './routes/glemt-passord'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MinProfilRouteImport } from './routes/min-profil'
 import { Route as NoterRouteRouteImport } from './routes/noter/route'
+import { Route as StyreRouteRouteImport } from './routes/styre/route'
 import { Route as TilbakestillPassordRouteImport } from './routes/tilbakestill-passord'
 import { Route as ApiDevLoginRouteImport } from './routes/api/dev-login'
 import { Route as ApiDevSeedRouteImport } from './routes/api/dev-seed'
@@ -26,8 +27,12 @@ import { Route as MedlemmerIndexRouteImport } from './routes/medlemmer/index'
 import { Route as NoterIndexRouteImport } from './routes/noter/index'
 import { Route as ProsjekterIndexRouteImport } from './routes/prosjekter/index'
 import { Route as ProsjekterProjectIdRouteImport } from './routes/prosjekter/$projectId'
+import { Route as StyreIndexRouteImport } from './routes/styre/index'
+import { Route as StyreTaskIdRouteImport } from './routes/styre/$taskId'
 import { Route as VTokenRouteImport } from './routes/v/$token'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiBoardFilesDocumentIdRouteImport } from './routes/api/board-files/$documentId'
+import { Route as ApiBoardFilesUploadRouteImport } from './routes/api/board-files/upload'
 import { Route as ApiFilesFileIdRouteImport } from './routes/api/files/$fileId'
 import { Route as ApiUploadAbortRouteImport } from './routes/api/upload/abort'
 import { Route as ApiUploadCompleteRouteImport } from './routes/api/upload/complete'
@@ -37,6 +42,9 @@ import { Route as NoterArkivIndexRouteImport } from './routes/noter/arkiv/index'
 import { Route as NoterArkivWorkIdRouteImport } from './routes/noter/arkiv/$workId'
 import { Route as NoterProsjekterIndexRouteImport } from './routes/noter/prosjekter/index'
 import { Route as NoterProsjekterProjectIdRouteImport } from './routes/noter/prosjekter/$projectId'
+import { Route as StyreDokumenterIndexRouteImport } from './routes/styre/dokumenter/index'
+import { Route as StyreMoterIndexRouteImport } from './routes/styre/moter/index'
+import { Route as StyreMoterMeetingIdRouteImport } from './routes/styre/moter/$meetingId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -61,6 +69,11 @@ const MinProfilRoute = MinProfilRouteImport.update({
 const NoterRouteRoute = NoterRouteRouteImport.update({
   id: '/noter',
   path: '/noter',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StyreRouteRoute = StyreRouteRouteImport.update({
+  id: '/styre',
+  path: '/styre',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TilbakestillPassordRoute = TilbakestillPassordRouteImport.update({
@@ -124,6 +137,16 @@ const ProsjekterProjectIdRoute = ProsjekterProjectIdRouteImport.update({
   path: '/prosjekter/$projectId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StyreIndexRoute = StyreIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => StyreRouteRoute,
+} as any)
+const StyreTaskIdRoute = StyreTaskIdRouteImport.update({
+  id: '/$taskId',
+  path: '/$taskId',
+  getParentRoute: () => StyreRouteRoute,
+} as any)
 const VTokenRoute = VTokenRouteImport.update({
   id: '/v/$token',
   path: '/v/$token',
@@ -132,6 +155,16 @@ const VTokenRoute = VTokenRouteImport.update({
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBoardFilesDocumentIdRoute = ApiBoardFilesDocumentIdRouteImport.update({
+  id: '/api/board-files/$documentId',
+  path: '/api/board-files/$documentId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBoardFilesUploadRoute = ApiBoardFilesUploadRouteImport.update({
+  id: '/api/board-files/upload',
+  path: '/api/board-files/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiFilesFileIdRoute = ApiFilesFileIdRouteImport.update({
@@ -180,10 +213,26 @@ const NoterProsjekterProjectIdRoute =
     path: '/prosjekter/$projectId',
     getParentRoute: () => NoterRouteRoute,
   } as any)
+const StyreDokumenterIndexRoute = StyreDokumenterIndexRouteImport.update({
+  id: '/dokumenter/',
+  path: '/dokumenter/',
+  getParentRoute: () => StyreRouteRoute,
+} as any)
+const StyreMoterIndexRoute = StyreMoterIndexRouteImport.update({
+  id: '/moter/',
+  path: '/moter/',
+  getParentRoute: () => StyreRouteRoute,
+} as any)
+const StyreMoterMeetingIdRoute = StyreMoterMeetingIdRouteImport.update({
+  id: '/moter/$meetingId',
+  path: '/moter/$meetingId',
+  getParentRoute: () => StyreRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/noter': typeof NoterRouteRouteWithChildren
+  '/styre': typeof StyreRouteRouteWithChildren
   '/glemt-passord': typeof GlemtPassordRoute
   '/login': typeof LoginRoute
   '/min-profil': typeof MinProfilRoute
@@ -193,6 +242,7 @@ export interface FileRoutesByFullPath {
   '/arkiv/$workId': typeof ArkivWorkIdRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
+  '/styre/$taskId': typeof StyreTaskIdRoute
   '/v/$token': typeof VTokenRoute
   '/arkiv/': typeof ArkivIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
@@ -200,7 +250,10 @@ export interface FileRoutesByFullPath {
   '/medlemmer/': typeof MedlemmerIndexRoute
   '/noter/': typeof NoterIndexRoute
   '/prosjekter/': typeof ProsjekterIndexRoute
+  '/styre/': typeof StyreIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
+  '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
   '/api/upload/abort': typeof ApiUploadAbortRoute
   '/api/upload/complete': typeof ApiUploadCompleteRoute
@@ -208,8 +261,11 @@ export interface FileRoutesByFullPath {
   '/api/upload/start': typeof ApiUploadStartRoute
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
+  '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/noter/arkiv/': typeof NoterArkivIndexRoute
   '/noter/prosjekter/': typeof NoterProsjekterIndexRoute
+  '/styre/dokumenter/': typeof StyreDokumenterIndexRoute
+  '/styre/moter/': typeof StyreMoterIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -222,6 +278,7 @@ export interface FileRoutesByTo {
   '/arkiv/$workId': typeof ArkivWorkIdRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
+  '/styre/$taskId': typeof StyreTaskIdRoute
   '/v/$token': typeof VTokenRoute
   '/arkiv': typeof ArkivIndexRoute
   '/innstillinger': typeof InnstillingerIndexRoute
@@ -229,7 +286,10 @@ export interface FileRoutesByTo {
   '/medlemmer': typeof MedlemmerIndexRoute
   '/noter': typeof NoterIndexRoute
   '/prosjekter': typeof ProsjekterIndexRoute
+  '/styre': typeof StyreIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
+  '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
   '/api/upload/abort': typeof ApiUploadAbortRoute
   '/api/upload/complete': typeof ApiUploadCompleteRoute
@@ -237,13 +297,17 @@ export interface FileRoutesByTo {
   '/api/upload/start': typeof ApiUploadStartRoute
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
+  '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/noter/arkiv': typeof NoterArkivIndexRoute
   '/noter/prosjekter': typeof NoterProsjekterIndexRoute
+  '/styre/dokumenter': typeof StyreDokumenterIndexRoute
+  '/styre/moter': typeof StyreMoterIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/noter': typeof NoterRouteRouteWithChildren
+  '/styre': typeof StyreRouteRouteWithChildren
   '/glemt-passord': typeof GlemtPassordRoute
   '/login': typeof LoginRoute
   '/min-profil': typeof MinProfilRoute
@@ -253,6 +317,7 @@ export interface FileRoutesById {
   '/arkiv/$workId': typeof ArkivWorkIdRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
+  '/styre/$taskId': typeof StyreTaskIdRoute
   '/v/$token': typeof VTokenRoute
   '/arkiv/': typeof ArkivIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
@@ -260,7 +325,10 @@ export interface FileRoutesById {
   '/medlemmer/': typeof MedlemmerIndexRoute
   '/noter/': typeof NoterIndexRoute
   '/prosjekter/': typeof ProsjekterIndexRoute
+  '/styre/': typeof StyreIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
+  '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
   '/api/upload/abort': typeof ApiUploadAbortRoute
   '/api/upload/complete': typeof ApiUploadCompleteRoute
@@ -268,14 +336,18 @@ export interface FileRoutesById {
   '/api/upload/start': typeof ApiUploadStartRoute
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
+  '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/noter/arkiv/': typeof NoterArkivIndexRoute
   '/noter/prosjekter/': typeof NoterProsjekterIndexRoute
+  '/styre/dokumenter/': typeof StyreDokumenterIndexRoute
+  '/styre/moter/': typeof StyreMoterIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/noter'
+    | '/styre'
     | '/glemt-passord'
     | '/login'
     | '/min-profil'
@@ -285,6 +357,7 @@ export interface FileRouteTypes {
     | '/arkiv/$workId'
     | '/innstillinger/nedlastinger'
     | '/prosjekter/$projectId'
+    | '/styre/$taskId'
     | '/v/$token'
     | '/arkiv/'
     | '/innstillinger/'
@@ -292,7 +365,10 @@ export interface FileRouteTypes {
     | '/medlemmer/'
     | '/noter/'
     | '/prosjekter/'
+    | '/styre/'
     | '/api/auth/$'
+    | '/api/board-files/$documentId'
+    | '/api/board-files/upload'
     | '/api/files/$fileId'
     | '/api/upload/abort'
     | '/api/upload/complete'
@@ -300,8 +376,11 @@ export interface FileRouteTypes {
     | '/api/upload/start'
     | '/noter/arkiv/$workId'
     | '/noter/prosjekter/$projectId'
+    | '/styre/moter/$meetingId'
     | '/noter/arkiv/'
     | '/noter/prosjekter/'
+    | '/styre/dokumenter/'
+    | '/styre/moter/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -314,6 +393,7 @@ export interface FileRouteTypes {
     | '/arkiv/$workId'
     | '/innstillinger/nedlastinger'
     | '/prosjekter/$projectId'
+    | '/styre/$taskId'
     | '/v/$token'
     | '/arkiv'
     | '/innstillinger'
@@ -321,7 +401,10 @@ export interface FileRouteTypes {
     | '/medlemmer'
     | '/noter'
     | '/prosjekter'
+    | '/styre'
     | '/api/auth/$'
+    | '/api/board-files/$documentId'
+    | '/api/board-files/upload'
     | '/api/files/$fileId'
     | '/api/upload/abort'
     | '/api/upload/complete'
@@ -329,12 +412,16 @@ export interface FileRouteTypes {
     | '/api/upload/start'
     | '/noter/arkiv/$workId'
     | '/noter/prosjekter/$projectId'
+    | '/styre/moter/$meetingId'
     | '/noter/arkiv'
     | '/noter/prosjekter'
+    | '/styre/dokumenter'
+    | '/styre/moter'
   id:
     | '__root__'
     | '/'
     | '/noter'
+    | '/styre'
     | '/glemt-passord'
     | '/login'
     | '/min-profil'
@@ -344,6 +431,7 @@ export interface FileRouteTypes {
     | '/arkiv/$workId'
     | '/innstillinger/nedlastinger'
     | '/prosjekter/$projectId'
+    | '/styre/$taskId'
     | '/v/$token'
     | '/arkiv/'
     | '/innstillinger/'
@@ -351,7 +439,10 @@ export interface FileRouteTypes {
     | '/medlemmer/'
     | '/noter/'
     | '/prosjekter/'
+    | '/styre/'
     | '/api/auth/$'
+    | '/api/board-files/$documentId'
+    | '/api/board-files/upload'
     | '/api/files/$fileId'
     | '/api/upload/abort'
     | '/api/upload/complete'
@@ -359,13 +450,17 @@ export interface FileRouteTypes {
     | '/api/upload/start'
     | '/noter/arkiv/$workId'
     | '/noter/prosjekter/$projectId'
+    | '/styre/moter/$meetingId'
     | '/noter/arkiv/'
     | '/noter/prosjekter/'
+    | '/styre/dokumenter/'
+    | '/styre/moter/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   NoterRouteRoute: typeof NoterRouteRouteWithChildren
+  StyreRouteRoute: typeof StyreRouteRouteWithChildren
   GlemtPassordRoute: typeof GlemtPassordRoute
   LoginRoute: typeof LoginRoute
   MinProfilRoute: typeof MinProfilRoute
@@ -382,6 +477,8 @@ export interface RootRouteChildren {
   MedlemmerIndexRoute: typeof MedlemmerIndexRoute
   ProsjekterIndexRoute: typeof ProsjekterIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiBoardFilesDocumentIdRoute: typeof ApiBoardFilesDocumentIdRoute
+  ApiBoardFilesUploadRoute: typeof ApiBoardFilesUploadRoute
   ApiFilesFileIdRoute: typeof ApiFilesFileIdRoute
   ApiUploadAbortRoute: typeof ApiUploadAbortRoute
   ApiUploadCompleteRoute: typeof ApiUploadCompleteRoute
@@ -424,6 +521,13 @@ declare module '@tanstack/react-router' {
       path: '/noter'
       fullPath: '/noter'
       preLoaderRoute: typeof NoterRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/styre': {
+      id: '/styre'
+      path: '/styre'
+      fullPath: '/styre'
+      preLoaderRoute: typeof StyreRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tilbakestill-passord': {
@@ -510,6 +614,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProsjekterProjectIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/styre/': {
+      id: '/styre/'
+      path: '/'
+      fullPath: '/styre/'
+      preLoaderRoute: typeof StyreIndexRouteImport
+      parentRoute: typeof StyreRouteRoute
+    }
+    '/styre/$taskId': {
+      id: '/styre/$taskId'
+      path: '/$taskId'
+      fullPath: '/styre/$taskId'
+      preLoaderRoute: typeof StyreTaskIdRouteImport
+      parentRoute: typeof StyreRouteRoute
+    }
     '/v/$token': {
       id: '/v/$token'
       path: '/v/$token'
@@ -522,6 +640,20 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/board-files/$documentId': {
+      id: '/api/board-files/$documentId'
+      path: '/api/board-files/$documentId'
+      fullPath: '/api/board-files/$documentId'
+      preLoaderRoute: typeof ApiBoardFilesDocumentIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/board-files/upload': {
+      id: '/api/board-files/upload'
+      path: '/api/board-files/upload'
+      fullPath: '/api/board-files/upload'
+      preLoaderRoute: typeof ApiBoardFilesUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/files/$fileId': {
@@ -587,6 +719,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NoterProsjekterProjectIdRouteImport
       parentRoute: typeof NoterRouteRoute
     }
+    '/styre/dokumenter/': {
+      id: '/styre/dokumenter/'
+      path: '/dokumenter'
+      fullPath: '/styre/dokumenter/'
+      preLoaderRoute: typeof StyreDokumenterIndexRouteImport
+      parentRoute: typeof StyreRouteRoute
+    }
+    '/styre/moter/': {
+      id: '/styre/moter/'
+      path: '/moter'
+      fullPath: '/styre/moter/'
+      preLoaderRoute: typeof StyreMoterIndexRouteImport
+      parentRoute: typeof StyreRouteRoute
+    }
+    '/styre/moter/$meetingId': {
+      id: '/styre/moter/$meetingId'
+      path: '/moter/$meetingId'
+      fullPath: '/styre/moter/$meetingId'
+      preLoaderRoute: typeof StyreMoterMeetingIdRouteImport
+      parentRoute: typeof StyreRouteRoute
+    }
   }
 }
 
@@ -610,9 +763,30 @@ const NoterRouteRouteWithChildren = NoterRouteRoute._addFileChildren(
   NoterRouteRouteChildren,
 )
 
+interface StyreRouteRouteChildren {
+  StyreTaskIdRoute: typeof StyreTaskIdRoute
+  StyreIndexRoute: typeof StyreIndexRoute
+  StyreMoterMeetingIdRoute: typeof StyreMoterMeetingIdRoute
+  StyreDokumenterIndexRoute: typeof StyreDokumenterIndexRoute
+  StyreMoterIndexRoute: typeof StyreMoterIndexRoute
+}
+
+const StyreRouteRouteChildren: StyreRouteRouteChildren = {
+  StyreTaskIdRoute: StyreTaskIdRoute,
+  StyreIndexRoute: StyreIndexRoute,
+  StyreMoterMeetingIdRoute: StyreMoterMeetingIdRoute,
+  StyreDokumenterIndexRoute: StyreDokumenterIndexRoute,
+  StyreMoterIndexRoute: StyreMoterIndexRoute,
+}
+
+const StyreRouteRouteWithChildren = StyreRouteRoute._addFileChildren(
+  StyreRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   NoterRouteRoute: NoterRouteRouteWithChildren,
+  StyreRouteRoute: StyreRouteRouteWithChildren,
   GlemtPassordRoute: GlemtPassordRoute,
   LoginRoute: LoginRoute,
   MinProfilRoute: MinProfilRoute,
@@ -629,6 +803,8 @@ const rootRouteChildren: RootRouteChildren = {
   MedlemmerIndexRoute: MedlemmerIndexRoute,
   ProsjekterIndexRoute: ProsjekterIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiBoardFilesDocumentIdRoute: ApiBoardFilesDocumentIdRoute,
+  ApiBoardFilesUploadRoute: ApiBoardFilesUploadRoute,
   ApiFilesFileIdRoute: ApiFilesFileIdRoute,
   ApiUploadAbortRoute: ApiUploadAbortRoute,
   ApiUploadCompleteRoute: ApiUploadCompleteRoute,

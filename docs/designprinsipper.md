@@ -60,6 +60,7 @@ lesing er åpnere; håndhevelsen ligger alltid i `src/server/*.ts`, aldri bare i
 | **Arkiv** | `src/routes/noter/arkiv/index.tsx`, `$workId.tsx` | Arkivaren | Katalogisere et verk og laste opp PDF per stemme | Innsyn: `archive.viewAll` ∨ `works.manage`; skriving: `works.manage` |
 | **Kalender** | `src/routes/kalender/index.tsx` (`getCalendar`) | Alle medlemmer | Se når neste øvelse og konsert er | `requireMe()`; feeden er en secret (`CALENDAR_ICS_URL`), aldri til klienten |
 | **Medlemmer** | `src/routes/medlemmer/index.tsx` | Admin (seksjonsleder i redusert form) | Invitere et medlem og sette rolle + stemme | Lesing: `requireMe()`; skriving: `members.manage` / `members.manage.section` |
+| **Styre** | `src/routes/styre/{index,$taskId}.tsx`, `styre/moter/*`, `styre/dokumenter/index.tsx` | Styremedlemmet | Se åpne oppgaver og hake av / opprette en ny | `board.manage` — også for **lesing**; hele området er usynlig ellers. Dokumentbytene gates i `src/routes/api/board-files/$documentId.ts` |
 | **Innstillinger** | `src/routes/innstillinger/index.tsx` | Admin | Forvalte besetning og rollematrisen | `settings.manage` |
 | **Filtilganger** | `src/routes/innstillinger/nedlastinger.tsx` | Admin / arkivar | Svare på «hvem har hatt denne fila?» | `downloads.view` |
 | **Vikarvisning** | `src/routes/v/$token.tsx` | Vikaren, uten konto | Åpne de stemmene hen har fått, nå | Token + `shareAllows()` mot snapshottet løvliste |
@@ -221,6 +222,16 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 > Vurder launcher når `NAV` passerer seks oppføringer for én og samme rolle,
 > eller når mobilstripen må scrolle for et **vanlig medlem** — ikke bare for
 > admin.
+
+> **Terskelen er nådd (31. august 2026).** «Styre» (`board.manage`) ble lagt til
+> som toppnivå-oppføring da styreområdet ble bygget, og en admin ser nå **sju**
+> oppføringer: Hjem · Noter · Kalender · Medlemmer · Styre · Filtilganger ·
+> Innstillinger. Et vanlig medlem ser fortsatt fire, så mobilstripen scroller
+> ikke for dem — men første betingelse over er passert, og launcher-spørsmålet
+> (b) skal opp igjen før neste område tar en toppnivå-oppføring. Det mest
+> nærliggende grepet er å demotere Filtilganger og Innstillinger til
+> brukermenyen; det er ikke gjort her fordi det er et eget produktvalg, ikke en
+> detalj i styrearbeidet.
 
 ## 7. Hva som ikke er avgjort
 
