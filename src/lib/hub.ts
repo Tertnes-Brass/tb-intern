@@ -87,6 +87,12 @@ export type HubArea = {
   label: string
   /** Én linje om hva du gjør der. */
   description: string
+  /**
+   * Valgfri statuslinje med tall, f.eks. «3 åpne oppgaver, 1 forfalt».
+   * `areasFor` setter den aldri — den fylles i `getHub`, som er stedet som har
+   * databasen. Rettighetene avgjør *om* området er med; tallene er pynt oppå.
+   */
+  note?: string
 }
 
 const BASE_AREAS: HubArea[] = [

@@ -105,6 +105,10 @@ describe('areasFor', () => {
     ])
   })
 
+  it('setter aldri note — tallene fylles i getHub, ikke her', () => {
+    expect(areasFor(['*']).every((a) => a.note === undefined)).toBe(true)
+  })
+
   it('muterer ikke grunnlista mellom kall', () => {
     areasFor(['*'])
     expect(areasFor([]).map((a) => a.to)).toEqual(['/noter', '/kalender', '/medlemmer'])

@@ -1,10 +1,11 @@
 import { createServerFn } from '@tanstack/react-start'
 import { and, asc, eq, gte, sql } from 'drizzle-orm'
 import { db } from '../db'
-import { projectWorks, projects } from '../db/schema'
+import { boardTasks, projectWorks, projects } from '../db/schema'
+import { boardAreaNote } from '../lib/board'
 import { type HubArea, type HubCalendar, type HubEvent, type HubProject, areasFor, eventsAfter } from '../lib/hub'
 import type { CalendarEvent } from '../lib/ical'
-import { requireMe } from './access'
+import { hasPermission, requireMe } from './access'
 import { loadCalendar } from './calendar-feed'
 
 /**
@@ -83,13 +84,22 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
   const nextEvent = calendar.next ? toHubEvent(calendar.next) : null
   const events = calendar.events.map(toHubEvent)
 
+  // Tallene på Styre-kortet hentes bare når rettigheten finnes — et vanlig
+  // medlem skal ikke koste en spørring for et område det ikke ser.
+  const areas = areasFor(me.permissions)
+  const withBoardNote = hasPermission(me, 'board.manage')
+    ? await boardCounts(today).then((counts) =>
+        areas.map((area) => (area.to === '/styre' ? { ...area, note: boardAreaNote(counts) ?? undefined } : area)),
+      )
+    : areas
+
   return {
     me: {
       name: me.name,
       roleName: me.roleName,
       parts: me.parts.map((p) => ({ id: p.id, nameNo: p.nameNo })),
     },
-    areas: areasFor(me.permissions),
+    areas: withBoardNote,
     calendar: {
       configured: calendar.configured,
       error: calendar.error,
@@ -100,3 +110,15 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
     upcomingProjects: upcoming.slice(1, 1 + UPCOMING_PROJECTS),
   }
 })
+
+/** Åpne og forfalte styreoppgaver. Én spørring, to tall. */
+async function boardCounts(today: string): Promise<{ openTasks: number; overdue: number }> {
+  const rows = await db()
+    .select({
+      openTasks: sql<number>`count(*)`,
+      overdue: sql<number>`sum(case when ${boardTasks.dueDate} is not null and ${boardTasks.dueDate} < ${today} then 1 else 0 end)`,
+    })
+    .from(boardTasks)
+    .where(sql`${boardTasks.status} <> 'done'`)
+  return { openTasks: rows[0]?.openTasks ?? 0, overdue: rows[0]?.overdue ?? 0 }
+}
