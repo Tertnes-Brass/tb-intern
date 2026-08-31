@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { RepertoireList } from '../../components/Repertoire'
 import { Kicker, Stamp } from '../../components/ui'
 import { formatDate, formatWeekday, relativeDays } from '../../lib/format'
+import { percussionLines } from '../../lib/percussion'
 import type { ProjectWorkDetail } from '../../server/projects'
 import { getShareView } from '../../server/shares'
 
@@ -54,6 +55,9 @@ function ShareViewPage() {
     durationSec: r.durationSec,
     position: r.position,
     note: r.note,
+    // Serveren har allerede avgjort om vikaren skal se oppsettet: er ingen av
+    // de delte stemmene en slagverksstemme, er feltet null.
+    percussionSetup: r.percussionSetup,
     links: r.links,
     partFiles: [],
     myFiles: r.files
@@ -94,6 +98,18 @@ function ShareViewPage() {
         </div>
         {p.description && (
           <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-ink-soft">{p.description}</p>
+        )}
+        {p.percussionNotes && (
+          <div className="mx-auto mt-4 max-w-md rounded-2xl border border-line bg-paper-raised px-5 py-4 text-left">
+            <p className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-brass">Slagverksnotater</p>
+            <div className="mt-1.5 space-y-1">
+              {percussionLines(p.percussionNotes).map((line, i) => (
+                <p key={i} className="text-sm leading-relaxed text-ink-soft">
+                  {line}
+                </p>
+              ))}
+            </div>
+          </div>
         )}
       </header>
 

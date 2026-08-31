@@ -144,7 +144,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
   if (canManageSettings) NAV.push({ to: '/innstillinger', label: 'Innstillinger', exact: true })
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur-md">
+      <header className="print-hidden sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur-md">
         <div className="mx-auto flex h-[60px] w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <Link to="/" className="link-quiet group flex items-baseline gap-2.5">
             <span className="font-mono text-[0.66rem] font-semibold uppercase tracking-[0.24em] text-ink">
@@ -194,7 +194,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-20 pt-8 sm:px-6 sm:pt-10">{children}</main>
 
-      <footer className="border-t border-line">
+      <footer className="print-hidden border-t border-line">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 sm:px-6">
           <p className="font-mono text-[0.64rem] uppercase tracking-[0.18em] text-ink-faint">
             Tertnes Brass · Intern

@@ -183,6 +183,9 @@ export const projects = sqliteTable(
     venue: text('venue'),
     description: text('description'),
     isPublished: integer('is_published', { mode: 'boolean' }).notNull().default(false),
+    // Slagverksnotater for hele konserten: transport, hva som må lånes,
+    // oppriggingsrekkefølge. Ren tekst med linjer.
+    percussionNotes: text('percussion_notes'),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (t) => [index('projects_date_idx').on(t.eventDate)],
@@ -199,6 +202,9 @@ export const projectWorks = sqliteTable(
       .references(() => works.id, { onDelete: 'cascade' }),
     position: integer('position').notNull(),
     note: text('note'),
+    // Slagverksoppsettet for DETTE stykket i DETTE prosjektet — hvilke
+    // instrumenter som trengs og hvem som spiller hva. Én linje per instrument.
+    percussionSetup: text('percussion_setup'),
   },
   (t) => [primaryKey({ columns: [t.projectId, t.workId] })],
 )

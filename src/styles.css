@@ -395,3 +395,67 @@ select.field-input {
 .nav-link[data-status='active']::after {
   right: 0;
 }
+
+/* ---------- Utskrift ----------
+   Én felles regel for alle sider som skal kunne skrives ut — i praksis
+   slagverksoppsettet (`/noter/prosjekter/$projectId/slagverk`). Skjermkromet
+   merkes med `.print-hidden` der det står, og fargene tvinges til sort på hvitt
+   uansett tema: et mørkt tema skal ikke tømme en blekkpatron. */
+@page {
+  margin: 16mm;
+}
+
+@media print {
+  .print-hidden {
+    display: none !important;
+  }
+
+  html,
+  html.dark,
+  .dark {
+    --paper: #ffffff;
+    --paper-raised: #ffffff;
+    --paper-sunken: #ffffff;
+    --ink: #000000;
+    --ink-soft: #333333;
+    --ink-faint: #555555;
+    --line: #bbbbbb;
+    --line-strong: #999999;
+    --brass: #5a4712;
+    --brass-strong: #3d3009;
+    --brass-soft: transparent;
+    --oxblood: #5a2418;
+    --shadow-soft: none;
+    --shadow-lift: none;
+  }
+
+  html {
+    background: #ffffff;
+    color: #000000;
+    color-scheme: light;
+  }
+
+  /* Papirkornet er en skjermeffekt — på papir er det bare toner. */
+  .paper-grain::before {
+    display: none;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .sheet {
+    box-shadow: none;
+  }
+
+  .rise {
+    animation: none !important;
+  }
+
+  /* Et verk med oppsettet sitt skal ikke deles over to sider. */
+  .print-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

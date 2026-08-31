@@ -189,14 +189,16 @@ export async function seedDemoData(): Promise<{ ok: boolean; alreadySeeded?: boo
       venue: sp.venue,
       description: sp.description,
       isPublished: sp.isPublished,
+      percussionNotes: sp.percussionNotes ?? null,
       createdAt: ts,
     })
     await d.insert(projectWorks).values(
-      sp.repertoire.map(([title, position, note]) => ({
+      sp.repertoire.map(([title, position, note, percussionSetup]) => ({
         projectId,
         workId: workIdByTitle.get(title)!,
         position,
         note,
+        percussionSetup: percussionSetup ?? null,
       })),
     )
     if (sp.name === 'Sommerkonsert') {

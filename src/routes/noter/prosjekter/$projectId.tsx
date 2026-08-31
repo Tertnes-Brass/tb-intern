@@ -1,5 +1,6 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
+import { PercussionNotesField, PercussionSetupField } from '../../../components/Percussion'
 import { ProjectFormModal } from '../../../components/ProjectForm'
 import { RepertoireList } from '../../../components/Repertoire'
 import { toast, toastError } from '../../../components/toast'
@@ -39,6 +40,9 @@ function ProjectPage() {
   const [pickerOpen, setPickerOpen] = useState(false)
 
   const totalDuration = data.repertoire.reduce((acc, r) => acc + (r.durationSec ?? 0), 0)
+  // Slagverksseksjonen vises når det finnes noe å vise — eller når den som ser
+  // siden er den som skal fylle den ut.
+  const hasPercussion = !!p.percussionNotes || data.repertoire.some((r) => r.percussionSetup)
 
   // Egne stemmer for hele prosjektet, i programrekkefølge:
   // «01 - Where Eagles Sing - 2. kornett.pdf». Serveren har allerede filtrert
@@ -148,6 +152,18 @@ function ProjectPage() {
         ) : (
           <RepertoireList
             items={data.repertoire}
+            percussion={
+              data.canManage
+                ? (item) => (
+                    <PercussionSetupField
+                      projectId={p.id}
+                      workId={item.workId}
+                      value={item.percussionSetup}
+                      canEdit
+                    />
+                  )
+                : undefined
+            }
             manage={
               data.canManage
                 ? (item, i) => (
@@ -163,6 +179,32 @@ function ProjectPage() {
           />
         )}
       </section>
+
+      {(hasPercussion || data.canManage) && (
+        <section className="rise" style={{ animationDelay: '130ms' }}>
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="kicker">Slagverksnotater</h2>
+            <Link
+              to="/noter/prosjekter/$projectId/slagverk"
+              params={{ projectId: p.id }}
+              className="link-brass font-mono text-[0.66rem] uppercase tracking-[0.14em]"
+            >
+              Hele oppsettet →
+            </Link>
+          </div>
+          <div className="sheet px-5 py-4">
+            <PercussionNotesField projectId={p.id} value={p.percussionNotes} canEdit={data.canManage} />
+            {!p.percussionNotes && !data.canManage && (
+              <p className="text-sm text-ink-faint">Ingen notater ennå.</p>
+            )}
+            {data.canManage && (
+              <p className="mt-3 text-[0.78rem] leading-snug text-ink-faint">
+                Transport, hva som må lånes og oppriggingsrekkefølge — det som før sto nederst i regnearket.
+              </p>
+            )}
+          </div>
+        </section>
+      )}
 
       {data.canShare && <SharesSection projectId={p.id} myParts={data.myParts} repertoire={data.repertoire} />}
 

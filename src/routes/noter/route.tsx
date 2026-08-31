@@ -34,7 +34,7 @@ function NoterLayout() {
 
   return (
     <div>
-      <div className="-mt-2 mb-9 border-b border-line">
+      <div className="print-hidden -mt-2 mb-9 border-b border-line">
         <nav
           className="flex items-center gap-6 overflow-x-auto overscroll-x-contain pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           aria-label="Noter"
