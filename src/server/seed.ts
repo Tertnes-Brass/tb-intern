@@ -1,6 +1,10 @@
 import { env } from 'cloudflare:workers'
+import { eq } from 'drizzle-orm'
 import { db } from '../db'
 import {
+  boardComments,
+  boardMeetings,
+  boardTasks,
   invitations,
   parts,
   projectWorks,
@@ -23,6 +27,8 @@ import {
   DEMO_SHARE_PART_IDS,
   DEMO_SHARE_RECIPIENT,
   DEMO_SHARE_TOKEN,
+  SEED_BOARD_MEETINGS,
+  SEED_BOARD_TASKS,
   SEED_MEMBERS,
   SEED_PROJECTS,
   SEED_ROLES,
@@ -43,10 +49,24 @@ export async function isSeeded(): Promise<boolean> {
 /** Seeder besetning + roller (alltid), og — kun i dev — demoinnhold + invitasjoner. */
 export async function seedBaseConfig(): Promise<void> {
   const d = db()
-  // Roller + rettigheter
-  if ((await d.select({ id: roles.id }).from(roles).limit(1)).length === 0) {
-    await d.insert(roles).values(SEED_ROLES.map((r) => ({ ...r })))
-    await d.insert(rolePermissions).values(SEED_ROLE_PERMISSIONS)
+  // Roller + rettigheter. Migrasjonene setter inn enkeltroller (0008 la inn
+  // «Styremedlem»), så «er tabellen tom?» er ikke lenger et gyldig spørsmål —
+  // en fersk installasjon ville da fått board og ingenting annet. Vi legger
+  // derfor inn hver systemrolle som mangler, og seeder standardrettighetene
+  // KUN for roller vi nettopp opprettet: rettigheter en admin har fjernet i
+  // rollematrisen skal aldri komme tilbake av seg selv.
+  const existingRoleIds = new Set((await d.select({ id: roles.id }).from(roles)).map((r) => r.id))
+  const missingRoles = SEED_ROLES.filter((r) => !existingRoleIds.has(r.id))
+  if (missingRoles.length > 0) {
+    await d
+      .insert(roles)
+      .values(missingRoles.map((r) => ({ ...r })))
+      .onConflictDoNothing()
+    const newRoleIds = new Set<string>(missingRoles.map((r) => r.id))
+    const newPermissions = SEED_ROLE_PERMISSIONS.filter((p) => newRoleIds.has(p.roleId))
+    if (newPermissions.length > 0) {
+      await d.insert(rolePermissions).values(newPermissions).onConflictDoNothing()
+    }
   }
   // Besetning: legg til manglende standardstemmer og synkroniser bare feltene
   // taxonomy eier. Behold eventuelle lokalt redigerte navn og aliaser.
@@ -97,7 +117,12 @@ export async function seedDemoData(): Promise<{ ok: boolean; alreadySeeded?: boo
       .onConflictDoNothing()
   }
 
-  if (await isSeeded()) return { ok: true, alreadySeeded: true }
+  if (await isSeeded()) {
+    // Styredemoen fyller sine egne tabeller, så lokale databaser som ble seedet
+    // før /styre fantes skal også få innhold.
+    await seedBoardDemoData()
+    return { ok: true, alreadySeeded: true }
+  }
 
   // Verk
   const seedWorks = SEED_WORKS.map((sw) => ({ ...sw, id: newId() }))
@@ -207,6 +232,9 @@ export async function seedDemoData(): Promise<{ ok: boolean; alreadySeeded?: boo
     await d.insert(workFiles).values(batch)
   }
 
+  // Etter prosjektene: en styreoppgave kobles til Sommerkonserten.
+  await seedBoardDemoData()
+
   await d.insert(settings).values([{ key: 'bandName', value: 'Tertnes Brass' }])
   return { ok: true }
 }
@@ -215,4 +243,64 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   const out: T[][] = []
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
   return out
+}
+
+/** ISO-dato N dager fra i dag, i lokal tid. */
+function isoDayFromToday(offset: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + offset)
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * Demoinnhold for styreområdet: to møter med notater, fem oppgaver (én forfalt,
+ * én ferdig) og et par kommentarer. Datoene er relative til i dag, så «forfalt»
+ * faktisk er forfalt uansett når demoen kjøres. Ingen dokumenter — de ville
+ * krevd R2-objekter uten å vise noe seeding ikke allerede viser.
+ */
+async function seedBoardDemoData(): Promise<void> {
+  const d = db()
+  if ((await d.select({ id: boardMeetings.id }).from(boardMeetings).limit(1)).length > 0) return
+
+  const ts = now()
+  const meetingIdByTitle = new Map<string, string>()
+  for (const m of SEED_BOARD_MEETINGS) {
+    const id = newId()
+    meetingIdByTitle.set(m.title, id)
+    await d.insert(boardMeetings).values({
+      id,
+      date: isoDayFromToday(m.dayOffset),
+      title: m.title,
+      notes: m.notes,
+      createdBy: null,
+      createdAt: ts,
+      updatedAt: ts,
+    })
+  }
+
+  for (const t of SEED_BOARD_TASKS) {
+    const project = t.projectName
+      ? (await d.select({ id: projects.id }).from(projects).where(eq(projects.name, t.projectName)).limit(1))[0]
+      : undefined
+    const id = newId()
+    await d.insert(boardTasks).values({
+      id,
+      title: t.title,
+      description: t.description,
+      status: t.status,
+      // Demomedlemmene er ikke opprettet som brukere før de logger inn, så
+      // oppgavene står uten ansvarlig til noen tar dem.
+      assigneeUserId: null,
+      dueDate: t.dueDayOffset === null ? null : isoDayFromToday(t.dueDayOffset),
+      projectId: project?.id ?? null,
+      meetingId: t.meetingTitle ? (meetingIdByTitle.get(t.meetingTitle) ?? null) : null,
+      createdBy: null,
+      createdAt: ts,
+      updatedAt: ts,
+      completedAt: t.status === 'done' ? ts : null,
+    })
+    for (const body of t.comments) {
+      await d.insert(boardComments).values({ id: newId(), taskId: id, authorId: null, body, createdAt: ts })
+    }
+  }
 }
