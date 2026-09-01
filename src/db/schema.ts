@@ -503,6 +503,25 @@ export const postComments = sqliteTable(
   (t) => [index('post_comments_post_idx').on(t.postId, t.createdAt)],
 )
 
+// Medlemsomtaler i en kommentar (#83). Teksten inneholder markøren
+// `@[u:<brukerId>]`; denne tabellen er den SPØRRBARE koblingen — «hvem er
+// omtalt» skal ikke kreve at man leser gjennom kommentarteksten. Begge
+// fremmednøklene cascader: slettes kommentaren, forsvinner omtalene med den, og
+// slettes en bruker, forsvinner koblingen (markøren i teksten blir da
+// «Ukjent medlem» ved visning). Ingen bruker slettes noen gang herfra.
+export const postCommentMentions = sqliteTable(
+  'post_comment_mentions',
+  {
+    commentId: text('comment_id')
+      .notNull()
+      .references(() => postComments.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.commentId, t.userId] }), index('post_comment_mentions_user_idx').on(t.userId)],
+)
+
 // Reaksjoner. `kind` er foreløpig alltid 'like'; kolonnen finnes så flere kan
 // komme uten en ny tabell. PK (postId, userId) = én reaksjon per person.
 export const postReactions = sqliteTable(
@@ -557,6 +576,12 @@ export const notificationPreferences = sqliteTable('notification_preferences', {
   // E-post om styreoppgaver: både delegering og den daglige påminnelsen om
   // forfalte oppgaver. Valget vises bare for dem som har `board.manage`.
   boardTasks: text('board_tasks', { enum: ['all', 'off'] })
+    .notNull()
+    .default('all'),
+  // E-post når noen omtaler deg i en kommentar (#83). Eget valg, fordi en
+  // direkte omtale er noe annet enn en beskjed til hele korpset — den som har
+  // slått av beskjedvarslene vil som regel fortsatt vite at hen er spurt om noe.
+  mentions: text('mentions', { enum: ['all', 'off'] })
     .notNull()
     .default('all'),
 })

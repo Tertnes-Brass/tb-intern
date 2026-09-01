@@ -92,6 +92,13 @@
       "when": 1788280314631,
       "tag": "0012_markdown-og-chatkanaler",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1788300478409,
+      "tag": "0013_comment-mentions",
+      "breakpoints": true
     }
   ]
 }
