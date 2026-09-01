@@ -48,6 +48,16 @@ const SCHEMA_BEFORE = `
     body TEXT NOT NULL,
     created_at INTEGER NOT NULL
   );
+  -- Fra #83, samme sammenslåtte migrasjon: tabellene må finnes for at
+  -- CREATE/ALTER-setningene deres skal gå gjennom.
+  CREATE TABLE post_comments (
+    id TEXT PRIMARY KEY NOT NULL,
+    body TEXT NOT NULL
+  );
+  CREATE TABLE notification_preferences (
+    user_id TEXT PRIMARY KEY NOT NULL,
+    posts TEXT DEFAULT 'all' NOT NULL
+  );
 `
 
 function migratedDb(): DatabaseSync {
@@ -72,7 +82,9 @@ describe('migrasjon 0013 (gruppelederområdet)', () => {
   it('bare legger til — den bygger ingen tabell på nytt', () => {
     expect(MIGRATION).not.toMatch(/DROP TABLE/i)
     expect(MIGRATION).not.toMatch(/__new_/)
-    expect(MIGRATION).not.toMatch(/ALTER TABLE/i)
+    // Migrasjonen ble slått sammen med #83 (omtaler) ved fletting; additive
+    // ALTER ... ADD COLUMN er greit — det er rebuilds som er farlige i D1.
+    expect(MIGRATION).not.toMatch(/ALTER TABLE(?!.*ADD)/i)
   })
 
   it('lager tre egne tabeller og rører ingen styretabell', () => {
