@@ -2,6 +2,7 @@ import { Link, useRouter } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import type { Me } from '../server/access'
 import { authClient } from '../lib/auth-client'
+import { isGroupLeader } from '../lib/gruppeledere'
 import { Avatar } from './ui'
 
 function ThemeToggle() {
@@ -111,7 +112,7 @@ function UserMenu({ me }: { me: Me }) {
 }
 
 type NavItem = {
-  to: '/' | '/beskjeder' | '/noter' | '/kalender' | '/medlemmer' | '/styre' | '/innstillinger'
+  to: '/' | '/beskjeder' | '/noter' | '/kalender' | '/medlemmer' | '/gruppeledere' | '/styre' | '/innstillinger'
   label: string
   exact?: boolean
 }
@@ -137,6 +138,10 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
   const canManageSettings = me.permissions.includes('*') || me.permissions.includes('settings.manage')
   const canManageBoard = me.permissions.includes('*') || me.permissions.includes('board.manage')
   const NAV: NavItem[] = [...BASE_NAV]
+  // Gruppeledere (#81): rettighet OG aktiv leiarbinding, samme rene regel som
+  // guarden på serveren og `areasFor` på hub-en. En admin uten binding ser den
+  // altså ikke — oppføringen skal si noe om hva du gjør, ikke hva du kan.
+  if (isGroupLeader(me)) NAV.push({ to: '/gruppeledere', label: 'Gruppeledere' })
   // Styret er et eget område, ikke en fane i noe annet — men det vises bare for
   // dem det gjelder, slik Arkiv gjør i noteområdet.
   if (canManageBoard) NAV.push({ to: '/styre', label: 'Styre' })

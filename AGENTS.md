@@ -25,7 +25,9 @@ eier områdemenyen (Mine noter · Prosjekter · Arkiv, sistnevnte kun ved
 til de nye stiene og tar med seg søkeparametrene — gamle lenker i e-post og chat
 skal fortsatt virke, så de skal ikke slettes. Styret har sitt eget navnerom `/styre`
 (`src/routes/styre/route.tsx` med områdemenyen Oppgaver · Prosjekter · Møter ·
-Chat · Dokumenter), gated på `board.manage`. `src/routes/index.tsx` (`/`) er
+Chat · Dokumenter), gated på `board.manage`. Gruppelederne har `/gruppeledere`
+(`src/routes/gruppeledere/route.tsx`, områdemenyen Oversikt · Chat), gated på
+rettighet + aktiv leiarbinding. `src/routes/index.tsx` (`/`) er
 hub-forsiden: plattformflaten som viser neste hendelse, veien inn til «Mine
 noter», de neste hendelsene og snarveier til områdene brukeren har tilgang til.
 Den skal ikke gjengi områdenes oversikter i miniatyr — se
@@ -97,6 +99,32 @@ Den skal ikke gjengi områdenes oversikter i miniatyr — se
   at meldingen VAR et svar, så `deleteMessage` merker svarene før originalen
   forsvinner, og `replyReference` i `src/lib/board.ts` gjør raden om til enten
   en klikkbar referanse eller «Meldingen er slettet». Ett nivå, aldri nøstet.
+- **Gruppeledere (#81):** `/gruppeledere` er stemmegruppeledernes eget område
+  (oversikt + chat), og det første som **ikke** gates på en rettighet alene.
+  `requireGroupLeader()` i `src/server/gruppeledere.ts` krever
+  `members.manage.section` (eller `*`) OG minst én aktiv rad i `section_leaders`
+  (`me.leadsPartIds.length > 0`) — en admin uten leiarbinding kommer ikke inn.
+  Regelen er den rene `isGroupLeader` i `src/lib/gruppeledere.ts`, delt av
+  guarden, `beforeLoad`, `Shell.tsx` og `areasFor` (som derfor tar
+  `{ leadsPartIds }` som andre argument). Siden `leadsPartIds` beregnes i
+  `currentUser()` ved hvert kall, forsvinner tilgangen straks bindingen fjernes.
+  Guarden er bevisst **ikke eksportert**: en levende eksport i den modulen ville
+  holdt modulkroppen i live i klientbygget og dratt `./access` +
+  `@tanstack/react-start/server` med seg (samme felle som `post-images.ts`).
+  **Datamodellen er egen:** `leader_channels`/`leader_messages`/
+  `leader_channel_reads` (migrasjon `0013_leader-area.sql`, kun CREATE TABLE)
+  speiler styrets tabeller, men ingen spørring her rører `board_*` — én tabell
+  med en `area`-kolonne ville gjort én glemt WHERE til en lekkasje. Ingen
+  prosjekttråder: `assertChannelExists` godtar bare `general` og `custom:<id>`.
+- **ChatPanel:** chat-UI-et bor i `src/components/ChatPanel.tsx` og deles av
+  `/styre/chat`, `/gruppeledere/chat` og prosjekttråden. `ChatThread` er tråden
+  (det `BoardChat` var), `ChatPanel` er kanallista + tråden + navnedialogen.
+  Begge tar serverfunksjonene inn som `api`/`channelApi` — komponenten kjenner
+  ingen tabell, og tilgangskontrollen ligger i modulen funksjonene kom fra.
+  `BoardChat.tsx` er nå bare skallet som binder `ChatThread` til
+  `src/server/board.ts`, så kallstedene i styreområdet er uendret. `api` og
+  `onRead` bor i refs inne i `ChatThread`: begge er objektliteraler hos
+  kalleren, og ville ellers restartet polling og lest-markering ved hver render.
 - **Chat-format:** `src/lib/chat-format.ts` er en egen liten tokenizer for
   backticks (inline, doble backticks når koden selv har en backtick, og fenced
   blokker med valgfri språkmarkør) — IKKE en markdown-rendrer. Alt annet er ren
@@ -107,7 +135,7 @@ Den skal ikke gjengi områdenes oversikter i miniatyr — se
 - Roller: `SEED_ROLES` i `src/server/seed-data.ts` (`admin`, `archivist`, `conductor`, `board` «Styremedlem», `member`). `seedBaseConfig` legger inn systemroller som MANGLER og seeder standardrettighetene kun for dem den nettopp opprettet (fjernede rettigheter skal ikke komme tilbake). Prod seedes ikke av seg selv, så en ny systemrolle eller rettighet krever fortsatt en migrasjon — se `migrations/0008_board-role.sql` og `0009_styre-og-vegg.sql`. NB: `INSERT OR IGNORE` dekker ikke fremmednøkler — skriv `INSERT ... SELECT id, '<rettighet>' FROM roles WHERE id IN (…)` så migrasjonen også går gjennom i en database uten roller. `board` har `scores.view` + `board.manage` (styreområdet) + `posts.publish` (veggen); `conductor` har også `posts.publish`.
 - **Tabell-rebuild i D1:** drizzle-kit genererer `PRAGMA foreign_keys=OFF` + `CREATE __new_x` / `DROP TABLE x` / `RENAME` når en kolonne endres. D1 kjører migrasjonen i en transaksjon, der PRAGMA-en er en **no-op** — `DROP TABLE` cascader altså til barnetabellene og sletter data i stillhet. Sjekk alltid hvem som peker på tabellen før du lar en generert rebuild passere — sikre barnetabellenes rader i en midlertidig tabell og legg dem tilbake etterpå, eller unngå rebuilden helt ved å gjøre skjemaendringen additiv.
 - Slagverksoppsett (regnearkets siste rest): `project_works.percussion_setup` (oppsettet for ETT stykke i ETT prosjekt) og `projects.percussion_notes` (transport/lån/rigging for hele konserten) — begge nullbar fri tekst. Skriving gates på `projects.manage` (`updateProjectWorkPercussion` + `percussionNotes` i `updateProject`), lesing er åpen for alle som ser prosjektet. Reglene er rene funksjoner i `src/lib/percussion.ts` (`showPercussionFor`, `sharedPartsSeePercussion`, `parsePercussionSetup`) med tester: på «Mine noter» og i vikarvisningen fjernes feltene SERVER-side for alle som ikke har en stemme i seksjonen `perc` (eller `archive.viewAll`/`works.manage`/`projects.manage`) — UI-et skal ikke måtte huske regelen. Samlesiden `/noter/prosjekter/$projectId/slagverk` (`$projectId_.slagverk.tsx` — understrek fordi `$projectId.tsx` er en bladrute uten `Outlet`) er utskriftsvennlig via `@media print` i `src/styles.css`; skjermkrom merkes `.print-hidden`.
-- Demodata: `src/server/seed.ts`, kun via dev-ruten `/api/dev-seed` (gated på `import.meta.env.DEV`). `seedWallDemo()` kjører i tillegg ved hver dev-innlogging og er idempotent (faste demo-id-er): forfattere, kommentarer og likes kobles på etter hvert som demobrukerne faktisk opprettes ved første innlogging.
+- Demodata: `src/server/seed.ts`, kun via dev-ruten `/api/dev-seed` (gated på `import.meta.env.DEV`). `seedWallDemo()` og `seedLeaderDemo()` kjører i tillegg ved hver dev-innlogging og er idempotente (faste demo-id-er / vakter per bolk): forfattere, kommentarer, likes og leiarbindinger kobles på etter hvert som demobrukerne faktisk opprettes ved første innlogging — så den FØRSTE innloggingen som ny demobruker gir ennå ikke bindingen, den andre gjør det. `seedLeaderDemo()` gir dessuten «Musiker»-rollen `members.manage.section` **kun i dev**, siden ingen seedet rolle har den: Ingrid og Karim blir gruppeledere fordi de har en `section_leaders`-rad, mens Jonas (samme rolle, ingen rad) fortsatt avvises — nettopp poenget i #81.
 
 ## Nye features = eget app-område
 

@@ -182,6 +182,41 @@ vanskeligere å lese, uten å gjøre noen ting tryggere.
   prosjektnavn og en lenke — mottakeren har uansett `board.manage` for å kunne
   åpne den.
 
+## 5c. Gruppelederområdet (`/gruppeledere`, #81, 2. september 2026)
+
+Gruppelederne fikk sitt eget område. Det er det første som **ikke** gates på en
+rettighet alene:
+
+- **Guarden er rettighet OG binding.** `requireGroupLeader()` i
+  `src/server/gruppeledere.ts` krever `members.manage.section` (eller `*`) **og**
+  minst én aktiv rad i `section_leaders` — `me.leadsPartIds.length > 0`. Regelen
+  er den rene `isGroupLeader` i `src/lib/gruppeledere.ts`, delt av guarden,
+  `beforeLoad`, toppmenyen i `Shell.tsx` og `areasFor` på hub-en, slik at de
+  fire ikke kan komme i utakt. Testene i `gruppeledere.test.ts` dekker vanlig
+  medlem, styremedlem uten binding, binding uten rettighet, og admin med og uten
+  binding.
+- **En admin uten leiarbinding får ikke tilgang.** Det er ikke en forglemmelse:
+  `*` betyr «kan alt», og området handler om hva du *gjør*. Vil en admin inn,
+  binder hen seg selv i `/medlemmer` — en handling som logges
+  (`member.section_leadership_changed`).
+- **Tilgangen faller bort umiddelbart.** `leadsPartIds` beregnes i
+  `currentUser()` ved hvert kall, aldri fra en cache eller et token, så en
+  fjernet binding stenger området ved neste forespørsel.
+  `setSectionLeaderParts` sletter dessuten brukerens sesjoner.
+- **Egne tabeller, aldri styredata.** `leader_channels`, `leader_messages` og
+  `leader_channel_reads` speiler styrets chat-modell, men deler ingen rad med
+  den. Ingen spørring i `src/server/gruppeledere.ts` rører en `board_`-tabell,
+  og ingen serverfunksjon der aksepterer en `project:`-kanalnøkkel. Alternativet
+  — én tabell med en `area`-kolonne — ville gjort én glemt `WHERE` til en
+  lekkasje av styrets samtaler.
+- **Delt komponent, delte data er noe annet.** `src/components/ChatPanel.tsx` og
+  den rene logikken i `src/lib/board.ts` brukes av begge områdene. De kjenner
+  ingen tabell: serverfunksjonene sendes inn som props, og hver av dem gater seg
+  selv. Ingen filer, ingen R2, ingen e-post i området — det er ren tekst.
+- **Historikken består.** `leader_messages.author_id` er `ON DELETE SET NULL`
+  mot `user`, ikke mot `section_leaders`: mister noen leiarbindingen, står
+  meldingene igjen med navnet på den som skrev dem.
+
 ## 6. Produktvalg før fase 4 (avgjort — historikk)
 
 Alle valg ble avgjort før deploy, i tråd med de anbefalte alternativene (se

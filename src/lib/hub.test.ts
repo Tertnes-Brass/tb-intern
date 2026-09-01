@@ -112,6 +112,44 @@ describe('areasFor', () => {
     ])
   })
 
+  // Gruppeledere (#81): rettighet OG aktiv leiarbinding — samme regel som
+  // guarden på serveren og toppmenyen i Shell.tsx.
+  it('legger til Gruppeledere ved members.manage.section OG en leiarbinding', () => {
+    expect(areasFor(['members.manage.section'], { leadsPartIds: ['solo-cornet'] }).map((a) => a.to)).toContain(
+      '/gruppeledere',
+    )
+  })
+
+  it('gir ikke Gruppeledere uten leiarbinding', () => {
+    expect(areasFor(['members.manage.section']).map((a) => a.to)).not.toContain('/gruppeledere')
+    expect(areasFor(['members.manage.section'], { leadsPartIds: [] }).map((a) => a.to)).not.toContain('/gruppeledere')
+  })
+
+  it('gir ikke Gruppeledere til en admin uten leiarbinding', () => {
+    expect(areasFor(['*']).map((a) => a.to)).not.toContain('/gruppeledere')
+  })
+
+  it('gir Gruppeledere til en admin som faktisk leder en gruppe', () => {
+    expect(areasFor(['*'], { leadsPartIds: ['eb-bass'] }).map((a) => a.to)).toContain('/gruppeledere')
+  })
+
+  it('gir ikke Gruppeledere til en med binding, men uten rettigheten', () => {
+    expect(areasFor(['scores.view'], { leadsPartIds: ['flugel'] }).map((a) => a.to)).not.toContain('/gruppeledere')
+  })
+
+  it('plasserer Gruppeledere mellom Medlemmer og Styre, som i toppmenyen', () => {
+    expect(areasFor(['*'], { leadsPartIds: ['flugel'] }).map((a) => a.to)).toEqual([
+      '/beskjeder',
+      '/noter',
+      '/kalender',
+      '/medlemmer',
+      '/gruppeledere',
+      '/styre',
+      '/innstillinger/nedlastinger',
+      '/innstillinger',
+    ])
+  })
+
   it('setter aldri note — tallene fylles i getHub, ikke her', () => {
     expect(areasFor(['*']).every((a) => a.note === undefined)).toBe(true)
   })
