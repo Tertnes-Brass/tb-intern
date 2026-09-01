@@ -229,6 +229,44 @@ export function postEmail({
   }
 }
 
+/**
+ * Varsel om at noen har omtalt deg i en kommentar på veggen (#83). Én e-post per
+ * omtalt person per kommentar — dedupe og «aldri til deg selv» avgjøres i
+ * `mentionRecipients` (src/lib/mentions.ts), ikke her.
+ *
+ * `excerpt` er ren tekst der markørene allerede er byttet ut med navn; ingen
+ * skal lese `@[u:kd9…]` i innboksen. Hele kommentaren følger ikke med: den kan
+ * være et svar i en tråd som ikke gir mening uten resten, og innlegget kan være
+ * `audience: 'board'`. Lenken gjentar tilgangskontrollen på internsiden.
+ */
+export function mentionEmail({
+  commenterName,
+  postHeading,
+  excerpt,
+  url,
+}: {
+  commenterName: string
+  /** Overskriften på innlegget kommentaren står under. */
+  postHeading: string
+  /** Kort utdrag av kommentaren, som ren tekst med navn i stedet for markører. */
+  excerpt: string
+  url: string
+}): { subject: string; html: string; text: string } {
+  return {
+    subject: `${commenterName} nevnte deg i en kommentar`,
+    html: shell(
+      'Du er nevnt i en kommentar',
+      `<p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#5f5640">${escapeHtml(commenterName)} nevnte deg i en kommentar under:</p>
+       <p style="margin:0 0 16px;font-family:Georgia,serif;font-size:19px;color:#211b12">${escapeHtml(postHeading)}</p>
+       <p style="margin:0 0 24px;padding:0.1em 0 0.1em 1em;border-left:2px solid #95762a;font-size:15px;line-height:1.6;color:#5f5640;font-style:italic">${escapeHtml(excerpt)}</p>
+       <p style="margin:0 0 24px">${button(url, 'Les kommentaren')}</p>
+       <p style="margin:0;font-size:12px;color:#8e8468">Vil du slippe denne e-posten, skru av «E-post når noen nevner deg» under «Min profil».</p>`,
+      MEMBER_FOOTER,
+    ),
+    text: `${commenterName} nevnte deg i en kommentar under «${postHeading}».\n\n${excerpt}\n\nLes kommentaren her:\n${url}\n\nVil du slippe denne e-posten, skru av «E-post når noen nevner deg» under «Min profil».\n`,
+  }
+}
+
 export function inviteEmail(url: string, bandName = 'Tertnes Brass'): { subject: string; html: string; text: string } {
   return {
     subject: `Du er invitert til internsiden til ${bandName}`,

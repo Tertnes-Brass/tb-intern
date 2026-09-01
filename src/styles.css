@@ -178,6 +178,26 @@ body {
   background: color-mix(in srgb, var(--oxblood) 8%, transparent);
 }
 
+/* ---------- Omtale av medlem (#83) ---------- */
+/* Chip i en kommentar. Messing-tone som resten av «det er noe her»-språket,
+   men rundere enn `.stamp` — en omtale er et navn i en setning, ikke et merke
+   på et innlegg. Ingen lenke: medlemsprofiler finnes ikke som egen side. */
+.mention {
+  display: inline;
+  border-radius: 4px;
+  padding: 0.05em 0.3em;
+  background: var(--brass-soft);
+  color: var(--brass-strong);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.mention-unknown {
+  background: transparent;
+  color: var(--ink-faint);
+  font-weight: 500;
+  font-style: italic;
+}
+
 /* ---------- Kort og flater ---------- */
 .sheet {
   background: var(--paper-raised);

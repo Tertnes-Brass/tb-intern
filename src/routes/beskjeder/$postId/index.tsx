@@ -1,10 +1,12 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
+import { CommentComposer } from '../../../components/CommentComposer'
 import { LikeButton } from '../../../components/PostCard'
 import { toast, toastError } from '../../../components/toast'
 import { Avatar, Button, EmptyState, Kicker, Modal, Stamp } from '../../../components/ui'
 import { formatDateTime } from '../../../lib/format'
 import { markdownToHtml } from '../../../lib/markdown'
+import { renderCommentHtml } from '../../../lib/mentions'
 import { postImageUrl } from '../../../lib/post-images-client'
 import {
   DEFAULT_NOTIFY,
@@ -92,21 +94,16 @@ function CommentThread({
   canComment: boolean
 }) {
   const router = useRouter()
-  const [body, setBody] = useState('')
-  const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
 
-  const submit = async () => {
-    if (!body.trim()) return
-    setBusy(true)
+  const submit = async (body: string) => {
     try {
       await addComment({ data: { postId, body } })
-      setBody('')
       await router.invalidate()
     } catch (err) {
       toastError(err)
-    } finally {
-      setBusy(false)
+      // Videre til skrivefeltet, som beholder teksten så den ikke går tapt.
+      throw err
     }
   }
 
@@ -149,42 +146,19 @@ function CommentThread({
                   )}
                 </div>
               </div>
-              <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink-soft">
-                {comment.body}
-              </p>
+              {/* Omtaler blir chips; alt annet escapes av `renderCommentHtml`
+                  (allowlist ved konstruksjon, som i markdown.ts). Linjeskift
+                  beholdes av `whitespace-pre-wrap`, akkurat som før. */}
+              <p
+                className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink-soft"
+                dangerouslySetInnerHTML={{ __html: renderCommentHtml(comment.body, comment.mentions) }}
+              />
             </div>
           </li>
         ))}
       </ul>
 
-      {canComment && (
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
-          <textarea
-            className="field-input min-h-16 flex-1 resize-y text-sm"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="Skriv en kommentar …"
-            onKeyDown={(e) => {
-              // Enter sender på desktop; skift+enter gir linjeskift. På mobil
-              // gjør tastaturets enter linjeskift, og knappen under sender.
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault()
-                void submit()
-              }
-            }}
-          />
-          <Button
-            type="button"
-            variant="primary"
-            loading={busy}
-            disabled={!body.trim()}
-            onClick={() => void submit()}
-            className="w-full sm:w-auto"
-          >
-            Kommenter
-          </Button>
-        </div>
-      )}
+      {canComment && <CommentComposer postId={postId} onSubmit={submit} />}
     </section>
   )
 }

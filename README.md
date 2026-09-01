@@ -227,6 +227,11 @@ synlig for hele korpset — serveren stripper resten uansett hva klienten sender
   Bildene lagres i R2 og vises **kun** gjennom `/api/post-images/$imageId`, som
   krever innlogging og gjentar innleggets synlighetsregel. Ingen offentlige URL-er.
 - Kommentarer er en kronologisk tråd; likes er én knapp per innlegg.
+- **Skriv `@` i en kommentar for å nevne noen.** Lista viser bare aktive
+  medlemmer som selv kan lese innlegget, og den omtalte får én e-post med lenke
+  hit (skru av under «Min profil»). Omtalen lagres mot brukerens id, så den
+  følger med om vedkommende bytter navn — og `@` i e-postadresser og kode blir
+  aldri en omtale.
 - Filteret øverst («Alt · Fra styret · Viktig») ligger i URL-en, så en visning
   kan lenkes til.
 - Beskjeder merket «Bare styret» er usynlige for alle andre — også via direkte

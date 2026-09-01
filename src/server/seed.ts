@@ -12,6 +12,7 @@ import {
   leaderChannels,
   leaderMessages,
   parts,
+  postCommentMentions,
   postComments,
   postReactions,
   posts,
@@ -60,6 +61,9 @@ import {
 export { DEMO_SHARE_TOKEN }
 
 const now = () => new Date()
+
+/** Plassholder for en omtale i demodata: `@[demo:<e-post>]` → `@[u:<brukerId>]`. */
+const DEMO_MENTION = /@\[demo:([^\]]+)\]/g
 
 export async function isSeeded(): Promise<boolean> {
   const row = await db().select({ id: works.id }).from(works).limit(1)
@@ -332,15 +336,33 @@ export async function seedWallDemo(): Promise<void> {
     const authorId = userIdByEmail.get(sc.authorEmail) ?? null
     const parent = postById.get(sc.postId)
     const createdAt = at(parent?.publishedDaysAgo ?? 1, sc.hoursAfter) ?? ts
+    // Omtaler (#83) kan ikke stå ferdig i seed-dataene: markøren peker på en
+    // bruker-id som først finnes når demobrukeren har logget inn. Plassholderen
+    // `@[demo:<e-post>]` byttes ut når kontoen dukker opp — også på en senere
+    // kjøring, slik at en database som ble seedet før dette fantes også får den.
+    const mentionUserIds: string[] = []
+    const body = sc.body.replace(DEMO_MENTION, (raw, email: string) => {
+      const id = userIdByEmail.get(email.toLowerCase())
+      if (!id) return raw
+      mentionUserIds.push(id)
+      return `@[u:${id}]`
+    })
     await d
       .insert(postComments)
-      .values({ id: sc.id, postId: sc.postId, authorId, body: sc.body, createdAt, updatedAt: createdAt })
+      .values({ id: sc.id, postId: sc.postId, authorId, body, createdAt, updatedAt: createdAt })
       .onConflictDoNothing()
     if (authorId) {
       await d
         .update(postComments)
         .set({ authorId })
         .where(and(eq(postComments.id, sc.id), isNull(postComments.authorId)))
+    }
+    if (mentionUserIds.length > 0) {
+      await d.update(postComments).set({ body }).where(eq(postComments.id, sc.id))
+      await d
+        .insert(postCommentMentions)
+        .values(mentionUserIds.map((userId) => ({ commentId: sc.id, userId })))
+        .onConflictDoNothing()
     }
   }
 

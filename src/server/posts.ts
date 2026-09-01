@@ -7,6 +7,7 @@ import {
   memberProfiles,
   notificationLog,
   notificationPreferences,
+  postCommentMentions,
   postComments,
   postImages,
   postReactions,
@@ -16,6 +17,17 @@ import {
 } from '../db/schema'
 import { newId } from '../lib/id'
 import { postPlainText } from '../lib/markdown'
+import {
+  MAX_MENTIONS,
+  type MentionCandidate,
+  type MentionNotificationChoice,
+  type MentionUser,
+  commentPlainText,
+  mentionRecipients,
+  mentionableMembers,
+  parseMentions,
+  rankMentionCandidates,
+} from '../lib/mentions'
 import {
   type PostAudience,
   type PostFormat,
@@ -32,7 +44,7 @@ import {
 } from '../lib/posts'
 import { type Me, hasPermission, requireMe, requirePermission } from './access'
 import { canAttachImages } from './post-images'
-import { postEmail, sendEmail } from './email'
+import { mentionEmail, postEmail, sendEmail } from './email'
 
 /**
  * Beskjeder (#28) — veggen. Alle innloggede kan skrive, kommentere og like;
@@ -102,10 +114,17 @@ export type PostListItem = {
 
 export type PostComment = {
   id: string
+  /** Rå tekst med omtale-markører (`@[u:…]`). Rendres av `renderCommentHtml`. */
   body: string
   author: PostAuthor
   createdAt: number
   canDelete: boolean
+  /**
+   * Dagens navn på de omtalte, slått opp server-side (#83). En markør uten
+   * treff her er en slettet bruker og vises som «Ukjent medlem» — aldri som et
+   * gammelt navn og aldri som markørtekst.
+   */
+  mentions: MentionUser[]
 }
 
 export type PostDetail = Omit<PostListItem, 'images'> & { body: string; images: PostImage[] }
@@ -310,6 +329,9 @@ export const getPost = createServerFn()
 
     const item = toListItem(row, me, canPublish, extra, Number.MAX_SAFE_INTEGER)
     const detail: PostDetail = { ...item, body: row.body }
+    // Omtalene løses til DAGENS navn her, ikke ved lagring: bytter noen navn,
+    // følger omtalen med av seg selv (#83).
+    const mentionsByComment = await mentionsFor(commentRows.map((c) => c.id))
 
     return {
       post: detail,
@@ -322,6 +344,7 @@ export const getPost = createServerFn()
           author: { id: c.authorId, name: c.authorName ?? 'Ukjent' },
           createdAt: c.createdAt.getTime(),
           canDelete: canDeleteComment(me, c, canPublish),
+          mentions: mentionsByComment.get(c.id) ?? [],
         }),
       ),
       // Leveringsstatus er et skriveverktøy; medlemmer skal ikke se hvem som fikk e-post.
@@ -453,6 +476,97 @@ export const deletePost = createServerFn({ method: 'POST' })
 
 // ---------- Kommentarer ----------
 
+/**
+ * Alle medlemmer med det en omtale trenger å vite: navn (til forslagslista og
+ * chip-en), aktiv-status, e-post (kun for varslingen, aldri til klienten) og om
+ * rollen deres har `posts.publish`. Samme grunnlag brukes til forslagslista og
+ * til valideringen, så de to kan ikke komme i utakt.
+ */
+async function mentionCandidates(): Promise<{
+  members: MentionCandidate[]
+  prefs: Map<string, MentionNotificationChoice>
+}> {
+  const d = db()
+  const [memberRows, permRows, prefRows] = await Promise.all([
+    d
+      .select({
+        userId: memberProfiles.authUserId,
+        name: user.name,
+        email: user.email,
+        roleId: memberProfiles.roleId,
+        isActive: memberProfiles.isActive,
+      })
+      .from(memberProfiles)
+      .innerJoin(user, eq(memberProfiles.authUserId, user.id))
+      .orderBy(asc(user.name)),
+    d.select({ roleId: rolePermissions.roleId, permission: rolePermissions.permission }).from(rolePermissions),
+    d
+      .select({ userId: notificationPreferences.userId, mentions: notificationPreferences.mentions })
+      .from(notificationPreferences),
+  ])
+
+  const publishingRoles = new Set(
+    permRows.filter((p) => p.permission === '*' || p.permission === PUBLISH_PERMISSION).map((p) => p.roleId),
+  )
+  return {
+    members: memberRows.map((m) => ({
+      userId: m.userId,
+      name: m.name,
+      email: m.email,
+      isActive: m.isActive,
+      canPublish: publishingRoles.has(m.roleId),
+    })),
+    prefs: new Map(prefRows.map((p) => [p.userId, p.mentions])),
+  }
+}
+
+/** Dagens navn på de omtalte i en håndfull kommentarer. Én spørring. */
+async function mentionsFor(commentIds: string[]): Promise<Map<string, MentionUser[]>> {
+  const out = new Map<string, MentionUser[]>()
+  if (commentIds.length === 0) return out
+  const rows = await db()
+    .select({ commentId: postCommentMentions.commentId, id: user.id, name: user.name })
+    .from(postCommentMentions)
+    .innerJoin(user, eq(postCommentMentions.userId, user.id))
+    .where(inArray(postCommentMentions.commentId, commentIds))
+  for (const r of rows) {
+    const list = out.get(r.commentId) ?? []
+    list.push({ id: r.id, name: r.name })
+    out.set(r.commentId, list)
+  }
+  return out
+}
+
+/** Antall forslag lista viser om gangen. Nok til å velge, kort nok til mobil. */
+const MENTION_SUGGESTIONS = 8
+
+/**
+ * Forslagslista bak `@` (#83). Gated på `requireMe()` OG på at innlegget faktisk
+ * er lesbart for den som spør — deretter filtreres kandidatene med NØYAKTIG
+ * samme audience-regel: kun aktive medlemmer som selv kan lese innlegget. På et
+ * `audience: 'board'`-innlegg betyr det kun dem med `posts.publish`.
+ *
+ * Returnerer KUN `{ id, name }`. E-post, telefon, rolle og stemme hører ikke
+ * hjemme i en autofullføring, og skal ikke kunne hentes ut gjennom den.
+ */
+export const searchMentionableMembers = createServerFn({ method: 'POST' })
+  .validator(z.object({ postId: z.string().min(1), query: z.string().max(60).default('') }))
+  .handler(async ({ data }): Promise<MentionUser[]> => {
+    const me = await requireMe()
+    const canPublish = hasPermission(me, PUBLISH_PERMISSION)
+    const row = await readablePost(data.postId, canPublish, me)
+    const { members } = await mentionCandidates()
+    const allowed = mentionableMembers(
+      { audience: row.audience, publishedAt: row.publishedAt?.getTime() ?? null },
+      members,
+    )
+    return rankMentionCandidates(
+      allowed.map((m) => ({ id: m.userId, name: m.name })),
+      data.query,
+      MENTION_SUGGESTIONS,
+    )
+  })
+
 export const addComment = createServerFn({ method: 'POST' })
   .validator(
     z.object({
@@ -465,14 +579,88 @@ export const addComment = createServerFn({ method: 'POST' })
     const canPublish = hasPermission(me, PUBLISH_PERMISSION)
     const row = await readablePost(data.postId, canPublish, me)
     if (!row.publishedAt) throw new Error('Utkast kan ikke kommenteres')
+
+    // Omtalene valideres FØR kommentaren lagres. Klienten setter markørene, så
+    // de er akkurat like betrodde som alt annet fra en nettleser: ingenting.
+    const mentionIds = parseMentions(data.body)
+    if (mentionIds.length > MAX_MENTIONS) {
+      throw new Error(`Du kan omtale maks ${MAX_MENTIONS} medlemmer i én kommentar`)
+    }
+    let recipients: MentionCandidate[] = []
+    let mentioned: MentionUser[] = []
+    if (mentionIds.length > 0) {
+      const { members, prefs } = await mentionCandidates()
+      const allowed = new Map(
+        mentionableMembers({ audience: row.audience, publishedAt: row.publishedAt.getTime() }, members).map((m) => [
+          m.userId,
+          m,
+        ]),
+      )
+      // ÉN feilmelding for alle avslag. «Finnes ikke», «er deaktivert» og «kan
+      // ikke lese dette innlegget» skal ikke kunne skilles fra hverandre — ellers
+      // ville et rått kall med gjettede id-er blitt et oppslagsverk over skjulte
+      // medlemmer.
+      if (mentionIds.some((id) => !allowed.has(id))) {
+        throw new Error('Du kan bare omtale aktive medlemmer som har tilgang til innlegget')
+      }
+      mentioned = mentionIds.map((id) => ({ id, name: allowed.get(id)!.name }))
+      recipients = mentionRecipients(mentionIds, [...allowed.values()], { commenterId: me.id, prefs })
+    }
+
     const ts = new Date()
     const id = newId()
     await db()
       .insert(postComments)
       .values({ id, postId: row.id, authorId: me.id, body: data.body, createdAt: ts, updatedAt: ts })
+    if (mentionIds.length > 0) {
+      // Den spørrbare koblingen. Cascader med kommentaren ved sletting.
+      await db()
+        .insert(postCommentMentions)
+        .values(mentionIds.map((userId) => ({ commentId: id, userId })))
+        .onConflictDoNothing()
+    }
+
+    // En feilende e-post skal aldri velte kommentaren — den er allerede lagret,
+    // og teksten er det viktigste. Loggen er varselet om at noe er galt.
+    try {
+      await notifyMentions({ post: row, commenterName: me.name, body: data.body, mentioned, recipients })
+    } catch (err) {
+      console.error('[omtaler] kunne ikke varsle om omtale:', err)
+    }
     // TODO(varsling): svar på eget innlegg bør kunne gi e-post/varsel senere.
     return { id }
   })
+
+/**
+ * Én e-post per omtalt person per kommentar. Dedupe og «aldri til deg selv»
+ * ligger i `mentionRecipients`; her er det bare selve sendingen. Ingen
+ * `notification_log`-rad: en kommentar kan verken redigeres eller sendes på
+ * nytt, så markørene skrives én gang og e-posten går én gang.
+ */
+async function notifyMentions(input: {
+  post: Row
+  commenterName: string
+  body: string
+  /** Alle validerte omtaler — brukes til å skrive navn i stedet for markører. */
+  mentioned: MentionUser[]
+  recipients: MentionCandidate[]
+}): Promise<void> {
+  if (input.recipients.length === 0) return
+  // URL-en bygges fra BETTER_AUTH_URL, aldri fra request-origin (AGENTS.md).
+  const url = `${new URL(env.BETTER_AUTH_URL).origin}/beskjeder/${input.post.id}`
+  const mail = mentionEmail({
+    commenterName: input.commenterName,
+    postHeading: postHeading({ title: input.post.title, body: postPlainText(input.post.body, input.post.format) }, 160),
+    // Utdraget viser navn, ikke markører — ingen skal lese `@[u:kd9…]` i innboksen.
+    excerpt: excerpt(commentPlainText(input.body, input.mentioned)),
+    url,
+  })
+  for (const batch of chunk(input.recipients, EMAIL_BATCH)) {
+    await Promise.allSettled(
+      batch.map((r) => sendEmail({ to: r.email!, subject: mail.subject, html: mail.html, text: mail.text })),
+    )
+  }
+}
 
 export const deleteComment = createServerFn({ method: 'POST' })
   .validator(idInput)
@@ -490,6 +678,8 @@ export const deleteComment = createServerFn({ method: 'POST' })
     // Innlegget må være synlig for deg før du kan gjøre noe med tråden.
     await readablePost(comment.postId, canPublish, me)
     if (!canDeleteComment(me, comment, canPublish)) throw new Error('Du kan bare slette dine egne kommentarer')
+    // Omtalene i `post_comment_mentions` forsvinner med kommentaren (cascade).
+    // Brukerne står selvsagt urørt — det er koblingen som slettes, ikke folk.
     await db().delete(postComments).where(eq(postComments.id, data.id))
     return { ok: true }
   })

@@ -10,10 +10,12 @@ import {
   phoneSchema,
 } from '../lib/profile'
 import type { BoardTaskNotificationChoice } from '../lib/board'
+import type { MentionNotificationChoice } from '../lib/mentions'
 import type { PostNotificationChoice } from '../lib/posts'
 import {
   getMyProfile,
   updateMyBoardTaskNotifications,
+  updateMyMentionNotifications,
   updateMyPhone,
   updateMyPostNotifications,
 } from '../server/profile'
@@ -121,6 +123,7 @@ function MyProfilePage() {
 
         <div className="space-y-6">
           <NotificationsCard current={profile.notifyPosts} />
+          <MentionNotificationsCard current={profile.notifyMentions} />
           {/* Styreoppgaver angår bare styret — valget vises derfor kun for dem
               som har `board.manage` (avgjort server-side i `getMyProfile`). */}
           {profile.canManageBoard && <BoardTaskNotificationsCard current={profile.notifyBoardTasks} />}
@@ -186,6 +189,70 @@ function NotificationsCard({ current }: { current: PostNotificationChoice }) {
         <p className="mt-3 text-xs leading-relaxed text-ink-faint">
           «Bare viktige» betyr de beskjedene styret selv har merket som viktige. «Av» slår av all e-post om beskjeder —
           du finner dem fortsatt under Beskjeder.
+        </p>
+      </div>
+    </section>
+  )
+}
+
+const MENTION_CHOICES: Array<{ value: MentionNotificationChoice; label: string }> = [
+  { value: 'all', label: 'På' },
+  { value: 'off', label: 'Av' },
+]
+
+/**
+ * Varslingsvalget for omtaler (#83). Eget valg, ikke en del av «E-post om
+ * beskjeder»: en direkte omtale er et spørsmål til deg, ikke en kunngjøring til
+ * korpset, og de to valgene skal kunne stå ulikt.
+ */
+function MentionNotificationsCard({ current }: { current: MentionNotificationChoice }) {
+  const router = useRouter()
+  const [choice, setChoice] = useState<MentionNotificationChoice>(current)
+  const [busy, setBusy] = useState(false)
+
+  const save = async (next: MentionNotificationChoice) => {
+    const previous = choice
+    setChoice(next)
+    setBusy(true)
+    try {
+      await updateMyMentionNotifications({ data: { mentions: next } })
+      toast('Varslingsvalget er lagret')
+      await router.invalidate()
+    } catch (err) {
+      setChoice(previous)
+      toastError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="sheet rise overflow-hidden" style={{ animationDelay: '108ms' }}>
+      <div className="border-b border-line bg-paper-sunken/50 px-5 py-5 sm:px-6">
+        <Kicker className="mb-2">Varsler</Kicker>
+        <h2 className="display-title text-2xl font-semibold text-ink">E-post når noen nevner deg</h2>
+        <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+          Skriver noen «@» og navnet ditt i en kommentar på veggen, får du én e-post med lenke til innlegget.
+        </p>
+      </div>
+      <div className="p-5 sm:p-6">
+        <div className="flex flex-wrap gap-2">
+          {MENTION_CHOICES.map((option) => (
+            <Button
+              key={option.value}
+              type="button"
+              variant={choice === option.value ? 'primary' : 'secondary'}
+              size="sm"
+              disabled={busy}
+              onClick={() => void save(option.value)}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+        <p className="mt-3 text-xs leading-relaxed text-ink-faint">
+          Du får aldri e-post når du nevner deg selv, og aldri mer enn én per kommentar. «Av» slår den av helt —
+          omtalen står fortsatt i kommentaren.
         </p>
       </div>
     </section>

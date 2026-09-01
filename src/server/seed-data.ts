@@ -506,6 +506,11 @@ export type SeedCommentData = {
   id: string
   postId: string
   authorEmail: string
+  /**
+   * Teksten. `@[demo:<e-post>]` er en plassholder for en omtale (#83) og
+   * erstattes med markøren `@[u:<brukerId>]` i `seedWallDemo` når demobrukeren
+   * faktisk finnes — id-en kan ikke stå her.
+   */
   body: string
   /** Timer etter at innlegget ble publisert. */
   hoursAfter: number
@@ -520,10 +525,12 @@ export const SEED_POST_COMMENTS: SeedCommentData[] = [
     hoursAfter: 2,
   },
   {
+    // Demo av omtaler (#83). `@[demo:<e-post>]` byttes ut med en ekte markør i
+    // `seedWallDemo` når demobrukeren finnes — se kommentaren der.
     id: 'demo-comment-2',
     postId: 'demo-post-notestativ',
     authorEmail: 'jonas@demo.tertnesbrass.no',
-    body: 'Perfekt, tusen takk!',
+    body: '@[demo:silje@demo.tertnesbrass.no] perfekt, tusen takk! Legg det gjerne ved siden av slagverket.',
     hoursAfter: 3,
   },
   {
