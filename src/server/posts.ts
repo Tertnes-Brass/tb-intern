@@ -10,6 +10,7 @@ import {
   postCommentMentions,
   postComments,
   postImages,
+  postMentions,
   postReactions,
   posts,
   rolePermissions,
@@ -18,14 +19,16 @@ import {
 import { newId } from '../lib/id'
 import { postPlainText } from '../lib/markdown'
 import {
-  MAX_MENTIONS,
   type MentionCandidate,
   type MentionNotificationChoice,
   type MentionUser,
-  commentPlainText,
+  mentionPlainText,
   mentionRecipients,
+  mentionRejection,
+  mentionableForAudience,
   mentionableMembers,
   parseMentions,
+  postMentionRecipients,
   rankMentionCandidates,
 } from '../lib/mentions'
 import {
@@ -44,7 +47,7 @@ import {
 } from '../lib/posts'
 import { type Me, hasPermission, requireMe, requirePermission } from './access'
 import { canAttachImages } from './post-images'
-import { mentionEmail, postEmail, sendEmail } from './email'
+import { mentionEmail, postEmail, postMentionEmail, sendEmail } from './email'
 
 /**
  * Beskjeder (#28) — veggen. Alle innloggede kan skrive, kommentere og like;
@@ -58,6 +61,14 @@ import { mentionEmail, postEmail, sendEmail } from './email'
  */
 
 const PUBLISH_PERMISSION = 'posts.publish'
+
+/**
+ * ÉN feilmelding for alle avslag på en omtale — «finnes ikke», «er deaktivert»
+ * og «kan ikke lese dette innlegget» skal ikke kunne skilles fra hverandre.
+ * Ellers ville et rått kall med gjettede id-er blitt et oppslagsverk over
+ * skjulte medlemmer. Samme tekst i kommentarer og innlegg.
+ */
+const MENTION_DENIED = 'Du kan bare omtale aktive medlemmer som har tilgang til innlegget'
 
 /** Cloudflare Email Sending tar imot én melding om gangen; ~40 medlemmer i puljer på fem. */
 const EMAIL_BATCH = 5
@@ -110,6 +121,12 @@ export type PostListItem = {
   images: PostImage[]
   imageCount: number
   canEdit: boolean
+  /**
+   * Dagens navn på de omtalte i teksten, slått opp server-side. Utdraget over
+   * har allerede fått navnene inn; denne lista er for rendringen av `body` på
+   * detaljsiden (og for redigeringsskjemaet, som må vise `@Navn`).
+   */
+  mentions: MentionUser[]
 }
 
 export type PostComment = {
@@ -206,13 +223,14 @@ async function decorate(
   likes: Map<string, number>
   mine: Set<string>
   images: Map<string, PostImage[]>
+  mentions: Map<string, MentionUser[]>
 }> {
   const ids = rows.map((r) => r.id)
   if (ids.length === 0) {
-    return { comments: new Map(), likes: new Map(), mine: new Set(), images: new Map() }
+    return { comments: new Map(), likes: new Map(), mine: new Set(), images: new Map(), mentions: new Map() }
   }
   const d = db()
-  const [commentRows, reactionRows, imageRows] = await Promise.all([
+  const [commentRows, reactionRows, imageRows, mentions] = await Promise.all([
     d
       .select({ postId: postComments.postId, n: sql<number>`count(*)` })
       .from(postComments)
@@ -233,6 +251,7 @@ async function decorate(
       .from(postImages)
       .where(inArray(postImages.postId, ids))
       .orderBy(asc(postImages.sortOrder), asc(postImages.createdAt)),
+    postMentionsFor(ids),
   ])
 
   const likes = new Map<string, number>()
@@ -247,7 +266,24 @@ async function decorate(
     list.push({ id: img.id, fileName: img.fileName, width: img.width, height: img.height })
     images.set(img.postId, list)
   }
-  return { comments: new Map(commentRows.map((r) => [r.postId, r.n])), likes, mine, images }
+  return { comments: new Map(commentRows.map((r) => [r.postId, r.n])), likes, mine, images, mentions }
+}
+
+/** Dagens navn på de omtalte i en håndfull innlegg. Én spørring. */
+async function postMentionsFor(postIds: string[]): Promise<Map<string, MentionUser[]>> {
+  const out = new Map<string, MentionUser[]>()
+  if (postIds.length === 0) return out
+  const rows = await db()
+    .select({ postId: postMentions.postId, id: user.id, name: user.name })
+    .from(postMentions)
+    .innerJoin(user, eq(postMentions.userId, user.id))
+    .where(inArray(postMentions.postId, postIds))
+  for (const r of rows) {
+    const list = out.get(r.postId) ?? []
+    list.push({ id: r.id, name: r.name })
+    out.set(r.postId, list)
+  }
+  return out
 }
 
 function toListItem(
@@ -258,9 +294,11 @@ function toListItem(
   imageLimit: number,
 ): PostListItem {
   const all = extra.images.get(row.id) ?? []
+  const mentions = extra.mentions.get(row.id) ?? []
   // Overskrift og utdrag lages ALLTID av den rene teksten: feeden, hub-en og
-  // e-postemnet skal aldri vise «#» eller «**».
-  const plain = postPlainText(row.body, row.format)
+  // e-postemnet skal aldri vise «#» eller «**» — og aldri en omtale-markør.
+  // Rekkefølgen er nødvendig: markdown strippes først, så settes navnene inn.
+  const plain = mentionPlainText(postPlainText(row.body, row.format), mentions)
   return {
     id: row.id,
     heading: postHeading({ title: row.title, body: plain }),
@@ -280,6 +318,7 @@ function toListItem(
     images: all.slice(0, imageLimit),
     imageCount: all.length,
     canEdit: canEditPost(me, row, canPublish),
+    mentions,
   }
 }
 
@@ -363,6 +402,9 @@ export const createPost = createServerFn({ method: 'POST' })
     const me = await requireMe()
     const canPublish = hasPermission(me, PUBLISH_PERMISSION)
     const safe = sanitizePostInput({ ...data, title: data.title ?? null }, canPublish)
+    // Omtalene valideres FØR innlegget lagres — mot målgruppen `sanitizePostInput`
+    // faktisk endte på, ikke den klienten påstod at den valgte.
+    const mentionIds = await checkedPostMentions(safe.body, safe.audience)
     const ts = new Date()
     const id = newId()
     await db()
@@ -380,6 +422,9 @@ export const createPost = createServerFn({ method: 'POST' })
         createdAt: ts,
         updatedAt: ts,
       })
+    // Utkast varsler aldri: radene får `notified_at = null` og e-posten går
+    // først når innlegget publiseres.
+    await syncPostMentions(id, mentionIds)
     return { id }
   })
 
@@ -393,6 +438,13 @@ export const updatePost = createServerFn({ method: 'POST' })
     if (!canEditPost(me, existing, canPublish)) throw new Error('Du kan bare endre dine egne innlegg')
 
     const safe = sanitizePostInput({ ...data, title: data.title ?? null }, canPublish)
+    // Målgruppen som faktisk kommer til å gjelde etter lagringen — uten
+    // `posts.publish` skrives den ikke, og da er det den gamle som teller.
+    // Omtalene valideres på NYTT mot den: flyttes et innlegg til «Bare styret»,
+    // kan en omtale av et vanlig medlem ikke bli stående.
+    const audience = canPublish ? safe.audience : existing.audience
+    const mentionIds = await checkedPostMentions(safe.body, audience)
+
     // Uten `posts.publish` endres kun tittel og tekst: et innlegg en moderator
     // har merket «Fra styret» skal ikke miste merket fordi eieren retter en skrivefeil.
     await db()
@@ -413,6 +465,28 @@ export const updatePost = createServerFn({ method: 'POST' })
             { title: safe.title, body: safe.body, format: safe.format, updatedAt: new Date() },
       )
       .where(eq(posts.id, data.id))
+    await syncPostMentions(data.id, mentionIds)
+
+    // Er innlegget allerede publisert, er en ny omtale i teksten en ny beskjed
+    // til den det gjelder. `notified_at` sørger for at bare DE NYE får e-post —
+    // de som stod der fra før har allerede fått sin.
+    if (existing.publishedAt) {
+      const updated: Row = {
+        ...existing,
+        title: safe.title,
+        body: safe.body,
+        format: safe.format,
+        audience,
+        importance: canPublish ? safe.importance : existing.importance,
+        official: canPublish ? safe.official : existing.official,
+      }
+      try {
+        await notifyPostMentions(updated, new Set())
+      } catch (err) {
+        // Teksten er lagret; en feilende e-post skal ikke velte redigeringen.
+        console.error('[omtaler] kunne ikke varsle om omtale i innlegg:', err)
+      }
+    }
     return { ok: true }
   })
 
@@ -439,7 +513,18 @@ export const publishPost = createServerFn({ method: 'POST' })
 
     // E-post er styrets verktøy. Ber en vanlig skribent om det, ignoreres det.
     const notify = data.sendEmail && canPublish
-    const result = notify ? await notifyPost(row) : { sent: 0, logged: 0, failed: 0, skipped: 0 }
+    const { result, emailed } = notify
+      ? await notifyPost(row)
+      : { result: { sent: 0, logged: 0, failed: 0, skipped: 0 }, emailed: new Set<string>() }
+
+    // Omtale-e-posten går ETTER beskjed-e-posten, og bare til dem som ikke
+    // nettopp fikk hele innlegget i innboksen. Feiler den, står innlegget
+    // fortsatt publisert — det er den viktige delen.
+    try {
+      await notifyPostMentions(row, emailed)
+    } catch (err) {
+      console.error('[omtaler] kunne ikke varsle om omtale i innlegg:', err)
+    }
     return { ok: true, ...result }
   })
 
@@ -567,6 +652,32 @@ export const searchMentionableMembers = createServerFn({ method: 'POST' })
     )
   })
 
+/**
+ * Forslagslista bak `@` i INNLEGGSSKJEMAET. Et innlegg som ikke er lagret ennå
+ * har ingen id å slå opp, så spørsmålet stilles om målgruppen i stedet: hvem vil
+ * kunne lese dette når det publiseres?
+ *
+ * Gated på `requireMe()`, og — like viktig — på hva den som spør faktisk KAN
+ * velge: uten `posts.publish` er `audience: 'board'` ikke et gyldig valg
+ * (`sanitizePostInput` tvinger det til `all`), så da svarer vi for `all`. Ellers
+ * ville et rått kall med `board` gitt et vanlig medlem lista over styret.
+ *
+ * Returnerer KUN `{ id, name }`, som forslagslista i kommentarene.
+ */
+export const searchMentionableForAudience = createServerFn({ method: 'POST' })
+  .validator(z.object({ audience: z.enum(['all', 'board']).default('all'), query: z.string().max(60).default('') }))
+  .handler(async ({ data }): Promise<MentionUser[]> => {
+    const me = await requireMe()
+    const canPublish = hasPermission(me, PUBLISH_PERMISSION)
+    const audience: PostAudience = canPublish ? data.audience : 'all'
+    const { members } = await mentionCandidates()
+    return rankMentionCandidates(
+      mentionableForAudience(audience, members).map((m) => ({ id: m.userId, name: m.name })),
+      data.query,
+      MENTION_SUGGESTIONS,
+    )
+  })
+
 export const addComment = createServerFn({ method: 'POST' })
   .validator(
     z.object({
@@ -583,9 +694,6 @@ export const addComment = createServerFn({ method: 'POST' })
     // Omtalene valideres FØR kommentaren lagres. Klienten setter markørene, så
     // de er akkurat like betrodde som alt annet fra en nettleser: ingenting.
     const mentionIds = parseMentions(data.body)
-    if (mentionIds.length > MAX_MENTIONS) {
-      throw new Error(`Du kan omtale maks ${MAX_MENTIONS} medlemmer i én kommentar`)
-    }
     let recipients: MentionCandidate[] = []
     let mentioned: MentionUser[] = []
     if (mentionIds.length > 0) {
@@ -596,13 +704,9 @@ export const addComment = createServerFn({ method: 'POST' })
           m,
         ]),
       )
-      // ÉN feilmelding for alle avslag. «Finnes ikke», «er deaktivert» og «kan
-      // ikke lese dette innlegget» skal ikke kunne skilles fra hverandre — ellers
-      // ville et rått kall med gjettede id-er blitt et oppslagsverk over skjulte
-      // medlemmer.
-      if (mentionIds.some((id) => !allowed.has(id))) {
-        throw new Error('Du kan bare omtale aktive medlemmer som har tilgang til innlegget')
-      }
+      // Felles regel og ÉN felles feilmelding — se `MENTION_DENIED`.
+      const error = mentionRejection(mentionIds, allowed, MENTION_DENIED)
+      if (error) throw new Error(error)
       mentioned = mentionIds.map((id) => ({ id, name: allowed.get(id)!.name }))
       recipients = mentionRecipients(mentionIds, [...allowed.values()], { commenterId: me.id, prefs })
     }
@@ -652,7 +756,7 @@ async function notifyMentions(input: {
     commenterName: input.commenterName,
     postHeading: postHeading({ title: input.post.title, body: postPlainText(input.post.body, input.post.format) }, 160),
     // Utdraget viser navn, ikke markører — ingen skal lese `@[u:kd9…]` i innboksen.
-    excerpt: excerpt(commentPlainText(input.body, input.mentioned)),
+    excerpt: excerpt(mentionPlainText(input.body, input.mentioned)),
     url,
   })
   for (const batch of chunk(input.recipients, EMAIL_BATCH)) {
@@ -745,7 +849,7 @@ export const resendPostNotifications = createServerFn({ method: 'POST' })
     const row = (await selectPosts().where(eq(posts.id, data.id)).limit(1))[0]
     if (!row) throw new Error('Fant ikke beskjeden')
     if (!row.publishedAt) throw new Error('Beskjeden er ikke publisert ennå')
-    return { ok: true, ...(await notifyPost(row)) }
+    return { ok: true, ...(await notifyPost(row)).result }
   })
 
 /**
@@ -815,8 +919,8 @@ function chunk<T>(list: T[], size: number): T[][] {
  * og hver mottaker får uansett en rad i `notification_log` med sitt utfall —
  * det er den raden som gjør «send på nytt» idempotent.
  */
-async function notifyPost(row: Row): Promise<PostNotifyResult> {
-  const [{ members, prefs }, log, imageCount] = await Promise.all([
+async function notifyPost(row: Row): Promise<{ result: PostNotifyResult; emailed: Set<string> }> {
+  const [{ members, prefs }, log, imageCount, mentionsByPost] = await Promise.all([
     candidates(),
     alreadyNotified(row.id),
     db()
@@ -824,17 +928,23 @@ async function notifyPost(row: Row): Promise<PostNotifyResult> {
       .from(postImages)
       .where(eq(postImages.postId, row.id))
       .then((rows) => rows[0]?.n ?? 0),
+    postMentionsFor([row.id]),
   ])
   const recipients = recipientsFor(row, members, prefs)
   const pending = recipients.filter((r) => !log.has(r.userId))
   const result: PostNotifyResult = { sent: 0, logged: 0, failed: 0, skipped: recipients.length - pending.length }
-  if (pending.length === 0) return result
+  const emailed = new Set<string>()
+  if (pending.length === 0) return { result, emailed }
 
+  // Markørene byttes ut med navn før teksten sendes: ingen skal lese
+  // `@[u:kd9…]` i innboksen. Chip-en er en ting for internsiden.
+  const mentions = mentionsByPost.get(row.id) ?? []
+  const body = mentionPlainText(row.body, mentions)
   // URL-en bygges fra BETTER_AUTH_URL, aldri fra request-origin (AGENTS.md).
   const url = `${new URL(env.BETTER_AUTH_URL).origin}/beskjeder/${row.id}`
   const mail = postEmail({
-    title: postHeading({ title: row.title, body: postPlainText(row.body, row.format) }, 160),
-    body: row.body,
+    title: postHeading({ title: row.title, body: postPlainText(body, row.format) }, 160),
+    body,
     format: row.format,
     url,
     authorName: row.authorName ?? OFFICIAL_AUTHOR,
@@ -853,6 +963,9 @@ async function notifyPost(row: Row): Promise<PostNotifyResult> {
         res.status !== 'fulfilled' ? 'failed' : res.value.ok ? 'sent' : res.value.fallback ? 'logged' : 'failed'
       result[outcome] += 1
       outcomes.push({ userId: batch[i]!.userId, outcome })
+      // «Fikk denne personen beskjeden i denne utsendingen?» — grunnlaget for at
+      // en omtalt mottaker ikke også får omtale-e-posten om samme innlegg.
+      emailed.add(batch[i]!.userId)
     })
   }
 
@@ -863,5 +976,113 @@ async function notifyPost(row: Row): Promise<PostNotifyResult> {
       .values(batch.map((o) => ({ postId: row.id, userId: o.userId, sentAt, outcome: o.outcome })))
       .onConflictDoNothing()
   }
-  return result
+  return { result, emailed }
+}
+
+// ---------- Omtaler i innlegg ----------
+
+/**
+ * Markørene i et innlegg, validert mot målgruppen. Kaster ved første avvik, med
+ * ÉN felles feilmelding (`MENTION_DENIED`).
+ *
+ * Regelen er den samme som i `addComment`, men spørsmålet er et annet: et
+ * innlegg som ikke er publisert ennå har ingen lesere, så vi spør hvem som vil
+ * kunne lese det med den målgruppen det får (`mentionableForAudience`).
+ */
+async function checkedPostMentions(body: string, audience: PostAudience): Promise<string[]> {
+  const ids = parseMentions(body)
+  if (ids.length === 0) return []
+  const { members } = await mentionCandidates()
+  const allowed = new Set(mentionableForAudience(audience, members).map((m) => m.userId))
+  const error = mentionRejection(ids, allowed, MENTION_DENIED)
+  if (error) throw new Error(error)
+  return ids
+}
+
+/**
+ * Skriver `post_mentions` slik teksten nå ser ut. Rader som fortsatt gjelder
+ * røres IKKE — `notified_at` er sannheten om hvem som har fått e-post, og en
+ * lagring skal ikke kunne nullstille den og sende alt på nytt.
+ */
+async function syncPostMentions(postId: string, userIds: string[]): Promise<void> {
+  const d = db()
+  const existing = await d.select({ userId: postMentions.userId }).from(postMentions).where(eq(postMentions.postId, postId))
+  const wanted = new Set(userIds)
+  const gone = existing.filter((r) => !wanted.has(r.userId)).map((r) => r.userId)
+  if (gone.length > 0) {
+    await d.delete(postMentions).where(and(eq(postMentions.postId, postId), inArray(postMentions.userId, gone)))
+  }
+  if (userIds.length > 0) {
+    await d
+      .insert(postMentions)
+      .values(userIds.map((userId) => ({ postId, userId, notifiedAt: null })))
+      .onConflictDoNothing()
+  }
+}
+
+/**
+ * E-post til dem som er omtalt i et PUBLISERT innlegg og ikke er varslet fra
+ * før. Reglene, i den rekkefølgen de gjelder:
+ *
+ * 1. **Utkast varsler aldri.** Omtalen finnes, men ingen kan lese den ennå.
+ * 2. **Én gang per omtale.** `notified_at` er merket; avpubliser/republiser og
+ *    lagre-på-nytt sender aldri det samme to ganger.
+ * 3. **Aldri deg selv**, aldri uten e-postadresse, aldri når `mentions: 'off'`.
+ * 4. **Aldri dobbelt opp med beskjed-e-posten.** Den som akkurat fikk hele
+ *    innlegget i innboksen (`postEmailed`) får ikke i tillegg en e-post om at
+ *    hen er nevnt i det — men merkes som varslet, for hen ER varslet.
+ * 5. Bare de som fortsatt kan LESE innlegget. Markørene er validert ved lagring;
+ *    dette er beltet i tillegg til bukseselene.
+ */
+async function notifyPostMentions(row: Row, postEmailed: ReadonlySet<string>): Promise<void> {
+  if (!row.publishedAt) return
+  const rows = await db()
+    .select({ userId: postMentions.userId, notifiedAt: postMentions.notifiedAt })
+    .from(postMentions)
+    .where(eq(postMentions.postId, row.id))
+  if (rows.length === 0) return
+
+  const { members, prefs } = await mentionCandidates()
+  const readable = mentionableForAudience(row.audience, members)
+  const { email, markNotified } = postMentionRecipients(
+    rows.map((r) => r.userId),
+    readable,
+    {
+      authorId: row.authorId ?? '',
+      prefs,
+      alreadyNotified: new Set(rows.filter((r) => r.notifiedAt !== null).map((r) => r.userId)),
+      postEmailed,
+    },
+  )
+  if (markNotified.length === 0) return
+
+  if (email.length > 0) {
+    const url = `${new URL(env.BETTER_AUTH_URL).origin}/beskjeder/${row.id}`
+    const plain = mentionPlainText(
+      postPlainText(row.body, row.format),
+      readable.map((m) => ({ id: m.userId, name: m.name })),
+    )
+    const mail = postMentionEmail({
+      authorName: row.authorName ?? OFFICIAL_AUTHOR,
+      postHeading: postHeading({ title: row.title, body: plain }, 160),
+      excerpt: excerpt(plain),
+      url,
+    })
+    for (const batch of chunk(email, EMAIL_BATCH)) {
+      await Promise.allSettled(
+        batch.map((r) => sendEmail({ to: r.email!, subject: mail.subject, html: mail.html, text: mail.text })),
+      )
+    }
+  }
+
+  // Merket settes for ALLE som er ferdigbehandlet — også dem som fikk
+  // beskjed-e-posten i stedet. Uten det ville neste publisering sendt dem
+  // omtale-e-posten «til gode».
+  const notifiedAt = new Date()
+  for (const batch of chunk(markNotified, LOG_BATCH)) {
+    await db()
+      .update(postMentions)
+      .set({ notifiedAt })
+      .where(and(eq(postMentions.postId, row.id), inArray(postMentions.userId, batch)))
+  }
 }

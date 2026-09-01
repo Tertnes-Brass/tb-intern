@@ -4,14 +4,20 @@ import {
   type MentionCandidate,
   UNKNOWN_MENTION,
   codeRanges,
-  commentPlainText,
   findMentionQuery,
   insertMention,
+  mentionDraft,
+  mentionMarker,
   mentionMatches,
+  mentionPlainText,
   mentionRecipients,
+  mentionRejection,
+  mentionableForAudience,
   mentionableMembers,
   normalizeForSearch,
   parseMentions,
+  postLineTokens,
+  postMentionRecipients,
   rankMentionCandidates,
   renderCommentHtml,
   toMarkers,
@@ -82,13 +88,13 @@ describe('renderCommentHtml', () => {
   })
 })
 
-describe('commentPlainText', () => {
+describe('mentionPlainText', () => {
   it('skriver navn i stedet for markører — ingen skal lese «@[u:…]» i innboksen', () => {
-    expect(commentPlainText('Kan du ta med @[u:u2]?', [ASE])).toBe('Kan du ta med @Åse Bø?')
+    expect(mentionPlainText('Kan du ta med @[u:u2]?', [ASE])).toBe('Kan du ta med @Åse Bø?')
   })
 
   it('faller tilbake til «Ukjent medlem»', () => {
-    expect(commentPlainText('Hei @[u:borte]', [])).toBe(`Hei ${UNKNOWN_MENTION}`)
+    expect(mentionPlainText('Hei @[u:borte]', [])).toBe(`Hei ${UNKNOWN_MENTION}`)
   })
 })
 
@@ -281,5 +287,123 @@ describe('mentionRecipients', () => {
 describe('taket på antall omtaler', () => {
   it('er ti', () => {
     expect(MAX_MENTIONS).toBe(10)
+  })
+})
+
+// ---------- Omtaler utenfor kommentarene (innlegg og chat) ----------
+
+describe('mentionableForAudience', () => {
+  const members = [
+    { userId: 'aktiv', isActive: true, canPublish: false },
+    { userId: 'sluttet', isActive: false, canPublish: false },
+    { userId: 'styret', isActive: true, canPublish: true },
+  ]
+
+  it('lar et UTKAST omtale alle som vil kunne lese det når det publiseres', () => {
+    // Uten denne regelen ville et nytt innlegg (publishedAt = null) ikke kunnet
+    // omtale noen som helst utenom styret.
+    expect(mentionableForAudience('all', members).map((m) => m.userId)).toEqual(['aktiv', 'styret'])
+  })
+
+  it('slipper bare styret til når målgruppen er styret', () => {
+    expect(mentionableForAudience('board', members).map((m) => m.userId)).toEqual(['styret'])
+  })
+})
+
+describe('mentionRejection', () => {
+  const allowed = new Set(['a', 'b'])
+
+  it('godtar markører som peker på noen med tilgang', () => {
+    expect(mentionRejection(['a', 'b'], allowed, 'nei')).toBeNull()
+  })
+
+  it('gir SAMME melding for ukjent, deaktivert og uten tilgang', () => {
+    expect(mentionRejection(['ukjent'], allowed, 'nei')).toBe('nei')
+    expect(mentionRejection(['a', 'ukjent'], allowed, 'nei')).toBe('nei')
+  })
+
+  it('håndhever taket før alt annet', () => {
+    const many = Array.from({ length: MAX_MENTIONS + 1 }, (_, i) => `id${i}`)
+    expect(mentionRejection(many, new Set(many), 'nei')).toBe(`Du kan omtale maks ${MAX_MENTIONS} medlemmer om gangen`)
+  })
+})
+
+describe('mentionMarker', () => {
+  it('er formatet parseMentions leser', () => {
+    expect(parseMentions(`Hei ${mentionMarker('u1')}`)).toEqual(['u1'])
+  })
+})
+
+describe('postLineTokens', () => {
+  it('deler linja i omtale, lenke og tekst — i den rekkefølgen de står', () => {
+    expect(postLineTokens('Hei @[u:u1], se https://tertnesbrass.no i dag', [OLA])).toEqual([
+      { kind: 'text', value: 'Hei ' },
+      { kind: 'mention', id: 'u1', name: 'Ola Nordmann' },
+      { kind: 'text', value: ', se ' },
+      { kind: 'link', value: 'https://tertnesbrass.no', href: 'https://tertnesbrass.no' },
+      { kind: 'text', value: ' i dag' },
+    ])
+  })
+
+  it('lar en markør uten kjent bruker bli «Ukjent medlem», aldri rå markørtekst', () => {
+    expect(postLineTokens('Hei @[u:borte]', [])).toEqual([
+      { kind: 'text', value: 'Hei ' },
+      { kind: 'mention', id: 'borte', name: null },
+    ])
+  })
+})
+
+describe('mentionDraft', () => {
+  it('gjør lagret tekst om til noe et tekstfelt kan vise', () => {
+    expect(mentionDraft('Hei @[u:u1]!', [OLA])).toEqual({
+      text: 'Hei @Ola Nordmann!',
+      chosen: [OLA],
+    })
+  })
+
+  it('er den nøyaktige motsatsen til toMarkers — også med to like navn', () => {
+    const users = [
+      { id: 'a', name: 'Ola Nordmann' },
+      { id: 'b', name: 'Ola Nordmann' },
+    ]
+    const stored = '@[u:b] snakker med @[u:a]'
+    const draft = mentionDraft(stored, users)
+    // `chosen` følger TEKSTEN, ikke lista fra databasen.
+    expect(draft.chosen.map((c) => c.id)).toEqual(['b', 'a'])
+    expect(toMarkers(draft.text, draft.chosen)).toBe(stored)
+  })
+
+  it('fjerner markører for slettede brukere, så teksten kan lagres igjen', () => {
+    expect(mentionDraft('Hei @[u:borte]!', [])).toEqual({ text: 'Hei !', chosen: [] })
+  })
+})
+
+describe('postMentionRecipients', () => {
+  const members: MentionCandidate[] = [
+    { userId: 'forfatter', name: 'Forfatter', email: 'f@x.no', isActive: true, canPublish: true },
+    { userId: 'ola', name: 'Ola', email: 'ola@x.no', isActive: true, canPublish: false },
+    { userId: 'kari', name: 'Kari', email: 'kari@x.no', isActive: true, canPublish: false },
+  ]
+  const prefs = new Map<string, 'all' | 'off'>()
+  const base = { authorId: 'forfatter', prefs, alreadyNotified: new Set<string>(), postEmailed: new Set<string>() }
+
+  it('sender til de omtalte, aldri til forfatteren selv', () => {
+    const out = postMentionRecipients(['forfatter', 'ola'], members, base)
+    expect(out.email.map((m) => m.userId)).toEqual(['ola'])
+    expect(out.markNotified).toEqual(['ola'])
+  })
+
+  it('sender ALDRI to ganger — republisering går til ingen', () => {
+    const out = postMentionRecipients(['ola'], members, { ...base, alreadyNotified: new Set(['ola']) })
+    expect(out.email).toEqual([])
+    expect(out.markNotified).toEqual([])
+  })
+
+  it('dobler ikke opp med beskjed-e-posten, men merker mottakeren som varslet', () => {
+    const out = postMentionRecipients(['ola', 'kari'], members, { ...base, postEmailed: new Set(['ola']) })
+    expect(out.email.map((m) => m.userId)).toEqual(['kari'])
+    // Ola fikk hele innlegget i innboksen; han er varslet, og skal ikke få
+    // omtale-e-posten senere heller.
+    expect(out.markNotified).toEqual(['ola', 'kari'])
   })
 })

@@ -463,7 +463,9 @@ export const SEED_POSTS: SeedPostData[] = [
   {
     id: 'demo-post-notestativ',
     title: null,
-    body: 'Er det noen som har tatt med seg feil notestativ hjem etter øvelsen? Mitt har et grønt bånd rundt foten.',
+    // Demo av omtaler i selve INNLEGGET. `@[demo:<e-post>]` byttes ut med en
+    // ekte markør i `seedWallDemo` når demobrukeren finnes — se kommentaren der.
+    body: 'Er det noen som har tatt med seg feil notestativ hjem etter øvelsen? Mitt har et grønt bånd rundt foten.\n\n@[demo:silje@demo.tertnesbrass.no] du satt vel rett ved siden av meg?',
     audience: 'all',
     importance: 'normal',
     official: false,

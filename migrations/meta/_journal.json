@@ -99,6 +99,13 @@
       "when": 1788301668150,
       "tag": "0013_gruppeledere-og-omtaler",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1788302996263,
+      "tag": "0014_mentions-everywhere",
+      "breakpoints": true
     }
   ]
 }
