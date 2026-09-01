@@ -8,11 +8,14 @@ import {
   channelNameError,
   groupMessagesByDay,
   replyExcerpt,
+  unreadBadge,
   unreadCount,
 } from '../lib/board'
 import { chatPlainText } from '../lib/chat-format'
 import { formatDate, formatTime, formatWeekday, toOsloDate } from '../lib/format'
+import { type MentionUser, mentionPlainText, toMarkers } from '../lib/mentions'
 import { ChatText } from './ChatText'
+import { MentionTextarea } from './MentionTextarea'
 import { toast, toastError } from './toast'
 import { Button, EmptyState, Field, Modal } from './ui'
 
@@ -41,10 +44,22 @@ const HIGHLIGHT_MS = 1_800
 export type ChatApi = {
   listMessages: (opts: {
     data: { channel: string; after?: number }
-  }) => Promise<{ messages: ChatMessage[]; meId: string; serverTime: number }>
+  }) => Promise<{
+    messages: ChatMessage[]
+    meId: string
+    serverTime: number
+    /**
+     * Dagens navn på alle omtalte i sida, `id → navn`. Meldinger har ingen
+     * koblingstabell (de kan verken redigeres eller varsles), så navnene
+     * følger med svaret i stedet.
+     */
+    mentionNames: Record<string, string>
+  }>
   postMessage: (opts: { data: { channel: string; body: string; replyToId?: string | null } }) => Promise<unknown>
   deleteMessage: (opts: { data: { id: string } }) => Promise<unknown>
   markChannelRead: (opts: { data: { channel: string; at?: number } }) => Promise<unknown>
+  /** Forslagslista bak `@`. Gated på området funksjonen kom fra. */
+  searchMentionableMembers: (opts: { data: { query: string } }) => Promise<MentionUser[]>
 }
 
 /** Serverfunksjonene kanallista trenger for å opprette/omdøpe/arkivere. */
@@ -92,6 +107,14 @@ export function ChatThread({
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [body, setBody] = useState('')
+  /** Medlemmene som er valgt fra `@`-lista — grunnlaget for `toMarkers`. */
+  const [chosen, setChosen] = useState<MentionUser[]>([])
+  /**
+   * Navnene på alle omtalte vi har sett i denne kanalen. De akkumuleres fordi
+   * pollingen bare henter NYE meldinger: navnene fra første lasting må stå igjen
+   * når det kommer en melding til.
+   */
+  const [mentionNames, setMentionNames] = useState<Record<string, string>>({})
   const [sending, setSending] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [replyTo, setReplyTo] = useState<ReplyDraft | null>(null)
@@ -140,6 +163,7 @@ export function ChatThread({
     setLoaded(false)
     setReadMarker(null)
     setReplyTo(null)
+    setMentionNames({})
     nodeRefs.current.clear()
     latestRef.current = 0
 
@@ -148,6 +172,7 @@ export function ChatThread({
         const res = await apiRef.current.listMessages({ data: { channel } })
         if (cancelled) return
         setMessages(res.messages)
+        setMentionNames(res.mentionNames)
         setLoaded(true)
         latestRef.current = res.messages[res.messages.length - 1]?.createdAt ?? 0
         await markRead(res.serverTime, true)
@@ -175,6 +200,7 @@ export function ChatThread({
           const known = new Set(prev.map((m) => m.id))
           return [...prev, ...res.messages.filter((m) => !known.has(m.id))]
         })
+        setMentionNames((prev) => ({ ...prev, ...res.mentionNames }))
         latestRef.current = res.messages[res.messages.length - 1]!.createdAt
         await markRead(res.serverTime, true)
       } catch {
@@ -230,18 +256,21 @@ export function ChatThread({
   }
 
   const send = async () => {
-    const text = body.trim()
-    if (!text || sending) return
+    // `@Navn` → markører helt til slutt; serveren validerer hver av dem.
+    const text = toMarkers(body.trim(), chosen)
+    if (!text.trim() || sending) return
     setSending(true)
     try {
       await api.postMessage({ data: { channel, body: text, replyToId: replyTo?.id ?? null } })
       setBody('')
+      setChosen([])
       setReplyTo(null)
       const res = await api.listMessages({ data: { channel, after: latestRef.current } })
       setMessages((prev) => {
         const known = new Set(prev.map((m) => m.id))
         return [...prev, ...res.messages.filter((m) => !known.has(m.id))]
       })
+      setMentionNames((prev) => ({ ...prev, ...res.mentionNames }))
       latestRef.current = res.messages[res.messages.length - 1]?.createdAt ?? latestRef.current
     } catch (err) {
       toastError(err)
@@ -254,11 +283,16 @@ export function ChatThread({
     setReplyTo({
       id: message.id,
       authorName: message.authorName,
-      excerpt: replyExcerpt(chatPlainText(message.body)),
+      // Utdraget viser «@Navn», aldri markøren — som svarreferansen serveren lager.
+      excerpt: replyExcerpt(mentionPlainText(chatPlainText(message.body), mentionUsers)),
     })
     inputRef.current?.focus()
   }
 
+  const mentionUsers = useMemo(
+    () => Object.entries(mentionNames).map(([id, name]) => ({ id, name })),
+    [mentionNames],
+  )
   const today = toOsloDate(Date.now())
   const days = groupMessagesByDay(messages, (ms) => toOsloDate(ms))
   // Samme regel som ulest-telleren på serveren, men her på de meldingene vi
@@ -311,6 +345,7 @@ export function ChatThread({
                     <Bubble
                       api={api}
                       message={m}
+                      mentions={mentionUsers}
                       mine={m.authorId === meId}
                       highlighted={highlightId === m.id}
                       canReply={writable}
@@ -358,22 +393,26 @@ export function ChatThread({
             </div>
           )}
           <div className="flex items-end gap-2">
-            <textarea
-              ref={inputRef}
-              className="field-input max-h-40 min-h-[42px] flex-1 resize-y py-2"
+            <MentionTextarea
+              textareaRef={inputRef}
+              wrapperClassName="flex-1"
+              className="field-input max-h-40 min-h-[42px] w-full resize-y py-2"
               rows={1}
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={setBody}
+              chosen={chosen}
+              onChosenChange={setChosen}
+              // Hvem som kan omtales avgjøres server-side av området funksjonen
+              // kom fra — styret og gruppelederne har hver sin liste.
+              search={(query) => api.searchMentionableMembers({ data: { query } })}
               // Enter sender, Shift+Enter gir linjeskift — som i chatten dette
-              // erstatter. På touch gir tastaturet uansett en egen sendeknapp.
+              // erstatter. Er forslagslista åpen, tar den Enter først.
+              onEnter={() => void send()}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  void send()
-                }
+                // Escape lukker først lista (i MentionTextarea), så svaret.
                 if (e.key === 'Escape' && replyTo) setReplyTo(null)
               }}
-              placeholder="Skriv en melding… (Enter sender, Shift+Enter gir linjeskift)"
+              placeholder="Skriv en melding… @ nevner noen, Enter sender"
               aria-label={replyTo ? `Svar til ${replyTo.authorName ?? 'Ukjent'}` : 'Ny melding'}
               maxLength={4000}
             />
@@ -394,6 +433,7 @@ export function ChatThread({
 function Bubble({
   api,
   message,
+  mentions,
   mine,
   highlighted,
   canReply,
@@ -403,6 +443,8 @@ function Bubble({
 }: {
   api: ChatApi
   message: ChatMessage
+  /** Dagens navn på de omtalte i sida — markørene blir chips. */
+  mentions: MentionUser[]
   mine: boolean
   highlighted: boolean
   canReply: boolean
@@ -450,7 +492,7 @@ function Bubble({
         >
           {message.replyTo && <ReplyReference reply={message.replyTo} onJump={onJump} />}
           <div className="whitespace-pre-wrap break-words">
-            <ChatText text={message.body} />
+            <ChatText text={message.body} mentions={mentions} />
           </div>
         </div>
       </div>
@@ -681,6 +723,9 @@ function ChannelButton({
   active: boolean
   onOpen: (channel: string) => void
 }) {
+  // Tallet, hjelpeteksten og «du er nevnt» avgjøres av `unreadBadge` i
+  // lib/board.ts — samme regel som ulest-tellingen ellers, testet der.
+  const badge = unreadBadge(channel)
   return (
     <button
       type="button"
@@ -693,12 +738,15 @@ function ChannelButton({
       } ${channel.archived ? 'opacity-70' : ''}`}
     >
       <span className="min-w-0 flex-1 truncate font-medium">{channel.title}</span>
-      {channel.unread > 0 && !channel.archived && (
+      {badge && (
         <span
-          className="grid h-[18px] min-w-[18px] shrink-0 place-items-center rounded-full bg-brass px-1 font-mono text-[0.58rem] font-semibold tabular-nums text-paper-raised dark:text-paper"
-          aria-label={channel.unread === 1 ? '1 ulest melding' : `${channel.unread} uleste meldinger`}
+          className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center gap-px rounded-full bg-brass px-1 font-mono text-[0.58rem] font-semibold tabular-nums text-paper-raised dark:text-paper"
+          aria-label={badge.label}
         >
-          {channel.unread > 9 ? '9+' : channel.unread}
+          {/* «@» sier at en av de uleste gjelder DEG. Chatten sender ingen
+              e-post, så dette er det eneste varselet om en direkte henvendelse. */}
+          {badge.mentioned && <span aria-hidden>@</span>}
+          {badge.count}
         </span>
       )}
     </button>

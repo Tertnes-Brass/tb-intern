@@ -1,4 +1,5 @@
 import { chatPlainText } from './chat-format'
+import { type MentionUser, mentionPlainText } from './mentions'
 
 /**
  * Ren hjelpelogikk for styreområdet (`/styre`): rekkefølgen på oppgavelista,
@@ -271,6 +272,32 @@ export type ChannelSummary = {
   unread: number
   /** Epoch-ms, eller null når kanalen aldri har hatt en melding. */
   lastMessageAt: number | null
+  /**
+   * Er du OMTALT i en av de uleste? Chatten sender ingen e-post, så dette er
+   * eneste måten «noen har spurt deg om noe» skiller seg fra «det er skrevet
+   * noe». Utelatt = nei.
+   */
+  mentionsMe?: boolean
+}
+
+/**
+ * Prikken på en kanal i lista: tallet, hjelpeteksten og om noen har nevnt deg.
+ * `null` betyr ingen prikk — arkiverte kanaler teller aldri (samme regel som
+ * `totalUnread`: en prikk man ikke kan lese bort er en prikk ingen stoler på).
+ */
+export function unreadBadge(channel: {
+  unread: number
+  archived: boolean
+  mentionsMe?: boolean
+}): { count: string; label: string; mentioned: boolean } | null {
+  if (channel.archived || channel.unread <= 0) return null
+  const mentioned = channel.mentionsMe === true
+  const messages = channel.unread === 1 ? '1 ulest melding' : `${channel.unread} uleste meldinger`
+  return {
+    count: channel.unread > 9 ? '9+' : String(channel.unread),
+    label: mentioned ? `${messages}, du er nevnt` : messages,
+    mentioned,
+  }
 }
 
 const CHANNEL_KIND_RANK: Record<ChannelKind, number> = { general: 0, project: 1, custom: 2 }
@@ -329,21 +356,25 @@ export type ChatReply =
  * fordi den er regelen for hva et svar til en borte melding SKAL vise — og
  * fordi den da kan testes uten database.
  *
- * Utdraget lages av teksten uten backticks: referansen skal leses, ikke vise
- * syntaks.
+ * Utdraget lages av teksten uten backticks og med navn i stedet for
+ * omtale-markører: referansen skal leses, ikke vise syntaks — og ingen skal
+ * møte `@[u:kd9…]` i en svarreferanse.
  */
-export function replyReference(row: {
-  replyToDeleted: boolean
-  replyId: string | null
-  replyBody: string | null
-  replyAuthorName: string | null
-}): ChatReply | null {
+export function replyReference(
+  row: {
+    replyToDeleted: boolean
+    replyId: string | null
+    replyBody: string | null
+    replyAuthorName: string | null
+  },
+  mentions: Iterable<MentionUser> = [],
+): ChatReply | null {
   if (row.replyId) {
     return {
       deleted: false,
       id: row.replyId,
       authorName: row.replyAuthorName,
-      excerpt: replyExcerpt(chatPlainText(row.replyBody ?? '')),
+      excerpt: replyExcerpt(mentionPlainText(chatPlainText(row.replyBody ?? ''), mentions)),
     }
   }
   return row.replyToDeleted ? { deleted: true } : null

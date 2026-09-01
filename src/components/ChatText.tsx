@@ -1,26 +1,49 @@
 import { useMemo, useState } from 'react'
 import { type ChatSegment, parseChatText } from '../lib/chat-format'
+import { type MentionUser, UNKNOWN_MENTION, mentionTokens } from '../lib/mentions'
 
 /**
- * Meldingsteksten med kodeformatering (`src/lib/chat-format.ts`). Alt annet enn
- * backticks er ren tekst — ingen markdown, ingen HTML. React rendrer bitene som
- * tekstnoder, så et `<script>` i en melding er akkurat like ufarlig som resten.
+ * Meldingsteksten med kodeformatering (`src/lib/chat-format.ts`) og omtaler.
+ * Alt annet enn backticks er ren tekst — ingen markdown, ingen HTML. React
+ * rendrer bitene som tekstnoder, så et `<script>` i en melding er akkurat like
+ * ufarlig som resten.
+ *
+ * Omtalene løses KUN i tekst-bitene: en markør inne i `kode` eller en kodeblokk
+ * står som skrevet, akkurat som `@` ellers gjør det der.
  */
-export function ChatText({ text }: { text: string }) {
+export function ChatText({ text, mentions = [] }: { text: string; mentions?: MentionUser[] }) {
   const segments = useMemo(() => parseChatText(text), [text])
   return (
     <>
       {segments.map((segment, i) => (
-        <Segment key={i} segment={segment} />
+        <Segment key={i} segment={segment} mentions={mentions} />
       ))}
     </>
   )
 }
 
-function Segment({ segment }: { segment: ChatSegment }) {
-  if (segment.type === 'text') return <>{segment.value}</>
+function Segment({ segment, mentions }: { segment: ChatSegment; mentions: MentionUser[] }) {
+  if (segment.type === 'text') return <MentionedText text={segment.value} mentions={mentions} />
   if (segment.type === 'code') return <code className="chat-code">{segment.value}</code>
   return <CodeBlock value={segment.value} lang={segment.lang} />
+}
+
+/** Ren tekst der markørene er blitt chips — samme chip som på veggen. */
+function MentionedText({ text, mentions }: { text: string; mentions: MentionUser[] }) {
+  const tokens = useMemo(() => mentionTokens(text, mentions), [text, mentions])
+  return (
+    <>
+      {tokens.map((token, i) =>
+        token.kind === 'text' ? (
+          <span key={i}>{token.value}</span>
+        ) : (
+          <span key={i} className={token.name === null ? 'mention mention-unknown' : 'mention'}>
+            {token.name === null ? UNKNOWN_MENTION : `@${token.name}`}
+          </span>
+        ),
+      )}
+    </>
+  )
 }
 
 /**

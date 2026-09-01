@@ -11,6 +11,7 @@ import {
   markChannelRead,
   postMessage,
   renameChannel,
+  searchMentionableMembers,
   setChannelArchived,
 } from '../../../server/board'
 
@@ -22,7 +23,7 @@ type ChatSearch = { kanal?: string }
  * gruppelederområdet, men API-et er ikke: komponenten kjenner bare funksjonene
  * den får inn.
  */
-const BOARD_CHAT_API: ChatApi = { listMessages, postMessage, deleteMessage, markChannelRead }
+const BOARD_CHAT_API: ChatApi = { listMessages, postMessage, deleteMessage, markChannelRead, searchMentionableMembers }
 const BOARD_CHANNEL_API: ChatChannelApi = { createChannel, renameChannel, setChannelArchived }
 
 export const Route = createFileRoute('/styre/chat/')({

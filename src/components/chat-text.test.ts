@@ -8,7 +8,8 @@ import { ChatText } from './ChatText'
  * kode blir `<code>`/`<pre>`, og ALT brukerinnhold escapes — kodeformatering
  * skal ikke være en bakvei for rå HTML.
  */
-const render = (text: string) => renderToStaticMarkup(createElement(ChatText, { text }))
+const render = (text: string, mentions: Array<{ id: string; name: string }> = []) =>
+  renderToStaticMarkup(createElement(ChatText, { text, mentions }))
 
 describe('ChatText', () => {
   it('viser inline kode som <code>', () => {
@@ -37,5 +38,29 @@ describe('ChatText', () => {
   it('tolker ikke annen markdown', () => {
     expect(render('**ikke fet**')).toContain('**ikke fet**')
     expect(render('**ikke fet**')).not.toContain('<strong>')
+  })
+
+  it('gjør en omtale om til en chip med dagens navn', () => {
+    const html = render('Hei @[u:u1], tar du den?', [{ id: 'u1', name: 'Ola Nordmann' }])
+    expect(html).toContain('<span class="mention">@Ola Nordmann</span>')
+    expect(html).not.toContain('@[u:')
+  })
+
+  it('viser «Ukjent medlem» for en slettet bruker — aldri rå markørtekst', () => {
+    const html = render('Hei @[u:borte]')
+    expect(html).toContain('Ukjent medlem')
+    expect(html).not.toContain('@[u:')
+  })
+
+  it('lar en markør INNE i kode stå som skrevet', () => {
+    const html = render('formatet er `@[u:u1]`', [{ id: 'u1', name: 'Ola Nordmann' }])
+    expect(html).toContain('<code class="chat-code">@[u:u1]</code>')
+    expect(html).not.toContain('Ola Nordmann')
+  })
+
+  it('escaper navnet — et navn er brukerinnhold', () => {
+    const html = render('@[u:u1]', [{ id: 'u1', name: '<img src=x onerror=alert(1)>' }])
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;')
+    expect(html).not.toContain('<img')
   })
 })

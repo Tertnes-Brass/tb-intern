@@ -40,6 +40,13 @@ import {
   totalUnread,
 } from '../lib/board'
 import { newId } from '../lib/id'
+import {
+  type MentionUser,
+  mentionMarker,
+  mentionRejection,
+  parseMentions,
+  rankMentionCandidates,
+} from '../lib/mentions'
 import { type Me, requirePermission } from './access'
 import { deleteBoardObject } from './board-files'
 import { notifyTaskAssigned } from './board-notify'
@@ -967,6 +974,10 @@ export const listChannels = createServerFn().handler(async () => {
         channel: boardMessages.channel,
         n: sql<number>`count(*)`,
         lastAt: sql<number>`max(${boardMessages.createdAt})`,
+        // «Gjelder de uleste MEG?» Chatten sender ingen e-post, så dette er den
+        // eneste forskjellen mellom «noen har skrevet» og «noen har spurt deg».
+        // Én ekstra kolonne i en spørring som uansett går — ikke en ny runde.
+        mine: sql<number>`sum(case when instr(${boardMessages.body}, ${mentionMarker(me.id)}) > 0 then 1 else 0 end)`,
       })
       .from(boardMessages)
       .leftJoin(
@@ -987,6 +998,7 @@ export const listChannels = createServerFn().handler(async () => {
 
   const unreadByChannel = new Map(unreadRows.map((r) => [r.channel, r.n]))
   const lastByChannel = new Map(unreadRows.map((r) => [r.channel, r.lastAt]))
+  const mentionsByChannel = new Map(unreadRows.map((r) => [r.channel, r.mine]))
   const readAt = new Map(reads.map((r) => [r.channel, r.lastReadAt.getTime()]))
 
   const channels: ChannelSummary[] = all.map((c) => ({
@@ -996,6 +1008,7 @@ export const listChannels = createServerFn().handler(async () => {
     archived: c.archived,
     unread: unreadByChannel.get(c.channel) ?? 0,
     lastMessageAt: lastByChannel.get(c.channel) ?? readAt.get(c.channel) ?? null,
+    mentionsMe: (mentionsByChannel.get(c.channel) ?? 0) > 0,
   }))
 
   return { channels, totalUnread: totalUnread(channels), meId: me.id }
@@ -1115,6 +1128,72 @@ export const setChannelArchived = createServerFn({ method: 'POST' })
 const replyMessage = alias(boardMessages, 'reply_message')
 const replyAuthor = alias(user, 'reply_author')
 
+// ---------- Omtaler i styrechatten ----------
+
+/** Antall forslag lista viser om gangen. Samme tall som på veggen. */
+const MENTION_SUGGESTIONS = 8
+
+/** ÉN feilmelding for alle avslag — se `MENTION_DENIED` i src/server/posts.ts. */
+const MENTION_DENIED = 'Du kan bare omtale aktive medlemmer som har tilgang til styreområdet'
+
+/**
+ * Hvem kan omtales i styrechatten? Aktive medlemmer som selv kommer inn i
+ * området — altså de som har `board.manage` (eller `*`) gjennom rollen sin.
+ * Samme spørsmål som guarden stiller, stilt om alle medlemmene på én gang.
+ *
+ * Spørringen bor her og ikke i en delt modul med gruppelederne: de to områdene
+ * har hver sin regel for hvem som hører til, og en felles «hent medlemmer med
+ * tilgang»-funksjon ville før eller siden fått en parameter som gjorde det mulig
+ * å spørre om feil område.
+ */
+async function mentionableMembers(): Promise<MentionUser[]> {
+  const d = db()
+  const [memberRows, permRows] = await Promise.all([
+    d
+      .select({
+        userId: memberProfiles.authUserId,
+        name: user.name,
+        roleId: memberProfiles.roleId,
+        isActive: memberProfiles.isActive,
+      })
+      .from(memberProfiles)
+      .innerJoin(user, eq(memberProfiles.authUserId, user.id))
+      .orderBy(asc(user.name)),
+    d.select({ roleId: rolePermissions.roleId, permission: rolePermissions.permission }).from(rolePermissions),
+  ])
+  const boardRoles = new Set(
+    permRows.filter((p) => p.permission === '*' || p.permission === BOARD_PERMISSION).map((p) => p.roleId),
+  )
+  return memberRows
+    .filter((m) => m.isActive && boardRoles.has(m.roleId))
+    .map((m) => ({ id: m.userId, name: m.name }))
+}
+
+/**
+ * Forslagslista bak `@` i styrechatten. Gated på `board.manage`, og returnerer
+ * KUN `{ id, name }` — en autofullføring skal ikke kunne brukes til å hente ut
+ * e-post, rolle eller stemme.
+ */
+export const searchMentionableMembers = createServerFn({ method: 'POST' })
+  .validator(z.object({ query: z.string().max(60).default('') }))
+  .handler(async ({ data }): Promise<MentionUser[]> => {
+    await requirePermission(BOARD_PERMISSION)
+    return rankMentionCandidates(await mentionableMembers(), data.query, MENTION_SUGGESTIONS)
+  })
+
+/** Dagens navn på alle omtalte i en side med meldinger (inkl. svarreferansene). */
+async function mentionNamesFor(bodies: Array<string | null>): Promise<MentionUser[]> {
+  const ids = new Set<string>()
+  for (const body of bodies) {
+    if (body) for (const id of parseMentions(body)) ids.add(id)
+  }
+  if (ids.size === 0) return []
+  return db()
+    .select({ id: user.id, name: user.name })
+    .from(user)
+    .where(inArray(user.id, [...ids]))
+}
+
 /**
  * Meldingene i en kanal. `after` (epoch-ms) gjør pollingen billig: klienten ber
  * bare om det som har kommet siden sist, og får en tom liste når ingenting har
@@ -1157,6 +1236,12 @@ export const listMessages = createServerFn()
       .orderBy(desc(boardMessages.createdAt))
       .limit(CHAT_PAGE_SIZE)
 
+    // Omtalene løses til DAGENS navn her, ikke ved lagring. Meldinger har ingen
+    // koblingstabell (de kan verken redigeres eller varsles på e-post), så
+    // navnene sendes som ett oppslag for hele sida — klienten slår opp selv når
+    // den rendrer chip-ene.
+    const mentions = await mentionNamesFor(rows.flatMap((m) => [m.body, m.replyBody]))
+
     const messages: ChatMessage[] = rows
       .map((m) => ({
         id: m.id,
@@ -1164,10 +1249,15 @@ export const listMessages = createServerFn()
         authorName: m.authorName,
         body: m.body,
         createdAt: m.createdAt.getTime(),
-        replyTo: replyReference(m),
+        replyTo: replyReference(m, mentions),
       }))
       .sort((a, b) => a.createdAt - b.createdAt)
-    return { messages, meId: me.id, serverTime: Date.now() }
+    return {
+      messages,
+      meId: me.id,
+      serverTime: Date.now(),
+      mentionNames: Object.fromEntries(mentions.map((m) => [m.id, m.name])),
+    }
   })
 
 export const postMessage = createServerFn({ method: 'POST' })
@@ -1183,6 +1273,16 @@ export const postMessage = createServerFn({ method: 'POST' })
     const me = await requirePermission(BOARD_PERMISSION)
     await assertChannelExists(data.channel, { write: true })
     const d = db()
+
+    // Omtalene valideres FØR meldingen lagres: en markør kan bare peke på noen
+    // som selv har tilgang til området. Klienten setter markørene, og er derfor
+    // like betrodd som alt annet fra en nettleser — ingenting.
+    const mentionIds = parseMentions(data.body)
+    if (mentionIds.length > 0) {
+      const allowed = new Set((await mentionableMembers()).map((m) => m.id))
+      const error = mentionRejection(mentionIds, allowed, MENTION_DENIED)
+      if (error) throw new Error(error)
+    }
 
     let replyToId: string | null = null
     let replyToDeleted = false
