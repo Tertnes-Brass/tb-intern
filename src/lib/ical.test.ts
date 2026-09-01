@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { expandEvents, parseDuration, unfoldLines } from './ical'
+import { occurrenceKey, parseOccurrenceKey } from './occurrence'
 
 /**
  * Fixture som ligner en ekte Google Calendar-eksport («Hemmelig adresse i
@@ -136,6 +137,7 @@ describe('expandEvents — Google-fixture', () => {
     const konsert = expandEvents(FIXTURE, YEAR_2026).find((e) => e.uid === 'varkonsert@tertnesbrass.no')
     expect(konsert).toEqual({
       id: 'varkonsert@tertnesbrass.no',
+      occurrenceKey: occurrenceKey('varkonsert@tertnesbrass.no', null),
       uid: 'varkonsert@tertnesbrass.no',
       title: 'Vårkonsert',
       // 16. mai er sommertid i Norge (UTC+2)
@@ -272,6 +274,62 @@ describe('expandEvents — Google-fixture', () => {
       to: new Date('2026-02-16T00:00:00Z'),
     })
     expect(pagaende.map((e) => e.uid)).toEqual(['seminar@tertnesbrass.no'])
+  })
+})
+
+// ---------- Stabil identitet per forekomst (#82) ----------
+
+const OVELSE = 'ovelse@tertnesbrass.no'
+
+function ovelser(window: Parameters<typeof expandEvents>[1]) {
+  return expandEvents(FIXTURE, window).filter((e) => e.uid === OVELSE)
+}
+
+describe('occurrenceKey på en forekomst', () => {
+  it('er den samme når feeden leses på nytt med et annet vindu', () => {
+    const smaltVindu = ovelser({ from: new Date('2026-01-05T00:00:00Z'), to: new Date('2026-01-10T00:00:00Z') })
+    const heltAret = ovelser(YEAR_2026)
+    expect(smaltVindu).toHaveLength(1)
+    expect(smaltVindu[0]!.occurrenceKey).toBe(heltAret.find((e) => e.start === smaltVindu[0]!.start)!.occurrenceKey)
+  })
+
+  it('overlever at forekomsten flyttes (RECURRENCE-ID beholder den opprinnelige plassen)', () => {
+    const flyttet = ovelser({ from: new Date('2026-03-23T00:00:00Z'), to: new Date('2026-03-30T00:00:00Z') })[0]!
+    // Hendelsen starter 18:30 norsk tid, men nøkkelen peker på 19:00-plassen i
+    // serien — ellers ville øvingsplanen blitt liggende igjen på et tidspunkt
+    // som ikke finnes lenger.
+    expect(flyttet.start).toBe('2026-03-25T17:30:00.000Z')
+    expect(flyttet.occurrenceKey).toBe(occurrenceKey(OVELSE, '2026-03-25T18:00:00.000Z'))
+    expect(parseOccurrenceKey(flyttet.occurrenceKey)).toEqual({
+      uid: OVELSE,
+      originalStart: '2026-03-25T18:00:00.000Z',
+    })
+  })
+
+  it('gir ulik nøkkel for to forekomster av samme serie', () => {
+    const januar = ovelser({ from: new Date('2026-01-01T00:00:00Z'), to: new Date('2026-02-01T00:00:00Z') })
+    expect(januar).toHaveLength(4)
+    expect(new Set(januar.map((e) => e.occurrenceKey)).size).toBe(4)
+    expect(new Set(januar.map((e) => e.uid)).size).toBe(1)
+  })
+
+  it('en slettet forekomst (EXDATE) har ingen nøkkel i feeden — lokale data blir foreldreløse', () => {
+    const slettet = occurrenceKey(OVELSE, '2026-04-01T17:00:00.000Z')
+    expect(expandEvents(FIXTURE, YEAR_2026).some((e) => e.occurrenceKey === slettet)).toBe(false)
+  })
+
+  it('en enkelthendelse har uid-en som nøkkel, uten tidspunkt', () => {
+    const konsert = expandEvents(FIXTURE, YEAR_2026).find((e) => e.uid === 'varkonsert@tertnesbrass.no')!
+    expect(parseOccurrenceKey(konsert.occurrenceKey)).toEqual({
+      uid: 'varkonsert@tertnesbrass.no',
+      originalStart: null,
+    })
+  })
+
+  it('alle forekomster i vinduet har unike, URL-trygge nøkler', () => {
+    const alle = expandEvents(FIXTURE, YEAR_2026)
+    expect(new Set(alle.map((e) => e.occurrenceKey)).size).toBe(alle.length)
+    for (const event of alle) expect(encodeURIComponent(event.occurrenceKey)).toBe(event.occurrenceKey)
   })
 })
 
