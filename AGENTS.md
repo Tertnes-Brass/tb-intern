@@ -113,7 +113,7 @@ Den skal ikke gjengi områdenes oversikter i miniatyr — se
   holdt modulkroppen i live i klientbygget og dratt `./access` +
   `@tanstack/react-start/server` med seg (samme felle som `post-images.ts`).
   **Datamodellen er egen:** `leader_channels`/`leader_messages`/
-  `leader_channel_reads` (migrasjon `0013_leader-area.sql`, kun CREATE TABLE)
+  `leader_channel_reads` (migrasjon `0013_gruppeledere-og-omtaler.sql`, kun CREATE TABLE)
   speiler styrets tabeller, men ingen spørring her rører `board_*` — én tabell
   med en `area`-kolonne ville gjort én glemt WHERE til en lekkasje. Ingen
   prosjekttråder: `assertChannelExists` godtar bare `general` og `custom:<id>`.

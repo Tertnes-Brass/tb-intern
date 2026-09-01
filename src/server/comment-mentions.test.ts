@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Migrasjon `0013_comment-mentions.sql` (#83) kjørt mot ekte SQLite.
+ * Migrasjon `0013_gruppeledere-og-omtaler.sql` (#83) kjørt mot ekte SQLite.
  *
  * Tre ting skal bevises, og alle er vanskelige å se ved lesing:
  *
@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest'
  */
 
 const MIGRATION = readFileSync(
-  fileURLToPath(new URL('../../migrations/0013_comment-mentions.sql', import.meta.url)),
+  fileURLToPath(new URL('../../migrations/0013_gruppeledere-og-omtaler.sql', import.meta.url)),
   'utf8',
 )
 
