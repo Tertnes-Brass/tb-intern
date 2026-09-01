@@ -9,6 +9,8 @@ import {
   boardProjects,
   boardTasks,
   invitations,
+  leaderChannels,
+  leaderMessages,
   parts,
   postComments,
   postReactions,
@@ -18,6 +20,7 @@ import {
   rolePermissions,
   roles,
   seasons,
+  sectionLeaders,
   settings,
   shareLinks,
   user,
@@ -40,6 +43,8 @@ import {
   SEED_BOARD_MESSAGES,
   SEED_BOARD_PROJECTS,
   SEED_BOARD_TASKS,
+  SEED_LEADER_CHANNELS,
+  SEED_LEADER_MESSAGES,
   SEED_MEMBERS,
   SEED_POSTS,
   SEED_POST_COMMENTS,
@@ -48,6 +53,7 @@ import {
   SEED_ROLES,
   SEED_ROLE_PERMISSIONS,
   SEED_SEASONS,
+  SEED_SECTION_LEADERS,
   SEED_WORKS,
 } from './seed-data'
 
@@ -150,6 +156,8 @@ export async function seedDemoData(): Promise<{ ok: boolean; alreadySeeded?: boo
   // så forfattere, kommentarer og likes kobles på etter hvert som kontoene
   // finnes. Funksjonen er idempotent.
   await seedWallDemo()
+  // Samme grunn: leiarbindingene kan først settes når demobrukeren finnes.
+  await seedLeaderDemo()
 
   if (await isSeeded()) {
     // Styredemoen fyller sine egne tabeller, så lokale databaser som ble seedet
@@ -343,6 +351,83 @@ export async function seedWallDemo(): Promise<void> {
       .insert(postReactions)
       .values({ postId: sr.postId, userId, kind: 'like', createdAt: ts })
       .onConflictDoNothing()
+  }
+}
+
+/**
+ * Demoinnhold for gruppelederområdet (#81), kun i dev: leiarbindinger for to
+ * demomedlemmer, noen meldinger i fellesekanalen og én egendefinert kanal med
+ * et svar og en kodeformatert melding.
+ *
+ * Idempotent, og kjøres ved hver dev-innlogging fordi `section_leaders` peker på
+ * en bruker som først opprettes når hen logger inn første gang.
+ */
+export async function seedLeaderDemo(): Promise<void> {
+  const d = db()
+  const ts = now()
+
+  // Rettigheten området gates på. Ingen seedet rolle har den fra før, og en
+  // gruppeleder ER en vanlig musiker — derfor legges den på «Musiker», men KUN
+  // her, i dev-demoen. Den gir ingenting alene: `isGroupLeader` krever også en
+  // rad i `section_leaders`, så jonas@ (musiker uten binding) blir fortsatt
+  // avvist både i menyen og på rå serverkall. Prod seedes ikke av dette.
+  await d
+    .insert(rolePermissions)
+    .values({ roleId: 'member', permission: 'members.manage.section' })
+    .onConflictDoNothing()
+
+  const userIdByEmail = new Map(
+    (await d.select({ id: user.id, email: user.email }).from(user)).map((u) => [u.email.toLowerCase(), u.id]),
+  )
+  for (const leader of SEED_SECTION_LEADERS) {
+    const userId = userIdByEmail.get(leader.email)
+    if (!userId) continue
+    await d
+      .insert(sectionLeaders)
+      .values(leader.partIds.map((partId) => ({ userId, partId })))
+      .onConflictDoNothing()
+  }
+
+  // Hver bolk har sin egen vakt, slik at en lokal database som ble seedet før
+  // området fantes også får innholdet — uten å duplisere det som står der.
+  const hasGeneral =
+    (await d.select({ id: leaderMessages.id }).from(leaderMessages).where(eq(leaderMessages.channel, 'general')).limit(1))
+      .length > 0
+  const hasChannels = (await d.select({ id: leaderChannels.id }).from(leaderChannels).limit(1)).length > 0
+
+  for (const [i, body] of hasGeneral ? [] : SEED_LEADER_MESSAGES.entries()) {
+    await d.insert(leaderMessages).values({
+      id: newId(),
+      channel: 'general',
+      authorId: null,
+      body,
+      createdAt: new Date(ts.getTime() - (SEED_LEADER_MESSAGES.length - i) * 3_600_000),
+    })
+  }
+
+  for (const channel of hasChannels ? [] : SEED_LEADER_CHANNELS) {
+    const channelId = newId()
+    await d.insert(leaderChannels).values({
+      id: channelId,
+      kind: 'custom',
+      name: channel.name,
+      createdBy: null,
+      createdAt: ts,
+      archivedAt: null,
+    })
+    const messageIds = channel.messages.map(() => newId())
+    for (const [i, message] of channel.messages.entries()) {
+      const replyToId = message.replyToIndex === undefined ? null : (messageIds[message.replyToIndex] ?? null)
+      await d.insert(leaderMessages).values({
+        id: messageIds[i]!,
+        channel: `custom:${channelId}`,
+        authorId: null,
+        body: message.body,
+        replyToId,
+        replyToDeleted: false,
+        createdAt: new Date(ts.getTime() - (channel.messages.length - i) * 45 * 60_000),
+      })
+    }
   }
 }
 
