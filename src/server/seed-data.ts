@@ -333,6 +333,54 @@ export const SEED_BOARD_CHANNELS: SeedBoardChannel[] = [
   },
 ]
 
+// ---------- Gruppeledere (demo, #81) ----------
+
+export type SeedSectionLeader = {
+  /** E-posten til en av SEED_MEMBERS. */
+  email: string
+  /** Stemmene hen er gruppeleder for. */
+  partIds: string[]
+}
+
+/**
+ * Leiarbindingene i demoen. To vanlige musikere leder hver sin seksjon — det er
+ * poenget med #81: gruppeleder er ikke en rolle med et fint navn, det er en
+ * binding i `section_leaders`. Ingrid spiller solokornett og leder kornettene;
+ * Karim spiller Eb-bass og leder bassene.
+ */
+export const SEED_SECTION_LEADERS: SeedSectionLeader[] = [
+  {
+    email: 'ingrid@demo.tertnesbrass.no',
+    partIds: ['soprano-cornet', 'solo-cornet', 'repiano-cornet', 'second-cornet', 'third-cornet'],
+  },
+  { email: 'karim@demo.tertnesbrass.no', partIds: ['eb-bass', 'bb-bass'] },
+]
+
+/** Meldinger i fellesekanalen «Gruppelederne». */
+export const SEED_LEADER_MESSAGES: string[] = [
+  'Da har vi vårt eget rom. Her tar vi det som går på tvers av stemmegruppene.',
+  'Bra. Jeg trenger å vite hvem som mangler på lørdag før jeg setter opp bassrekka.',
+  'Send meg en beskjed hvis noen i kornettene trenger ekstra tid på Benedictus.',
+]
+
+/**
+ * Egendefinerte kanaler for gruppelederne, med et svar og en kodeformatert
+ * melding — samme demo som styret har, i sitt eget datasett.
+ */
+export const SEED_LEADER_CHANNELS: SeedBoardChannel[] = [
+  {
+    name: 'Stemmeprøver høsten',
+    messages: [
+      { body: 'Jeg foreslår at vi kjører stemmeprøver i uke 40 og 41, én seksjon per kveld.' },
+      { body: 'Sett gjerne opp lista slik: `seksjon · dag · rom`, så er den lett å lese på veggen.' },
+      {
+        body: 'Da blir det slik:\n```\nkornett · mandag · lilleslaen\nbass · onsdag · storsalen\n```\nSi fra om noe krasjer.',
+        replyToIndex: 1,
+      },
+    ],
+  },
+]
+
 // ---------- Veggen (demo) ----------
 
 export type SeedPostData = {

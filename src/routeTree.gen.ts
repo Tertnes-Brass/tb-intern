@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as GlemtPassordRouteImport } from './routes/glemt-passord'
+import { Route as GruppeledereRouteRouteImport } from './routes/gruppeledere/route'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MinProfilRouteImport } from './routes/min-profil'
 import { Route as NoterRouteRouteImport } from './routes/noter/route'
@@ -22,6 +23,7 @@ import { Route as ArkivIndexRouteImport } from './routes/arkiv/index'
 import { Route as ArkivWorkIdRouteImport } from './routes/arkiv/$workId'
 import { Route as BeskjederIndexRouteImport } from './routes/beskjeder/index'
 import { Route as BeskjederNyRouteImport } from './routes/beskjeder/ny'
+import { Route as GruppeledereIndexRouteImport } from './routes/gruppeledere/index'
 import { Route as InnstillingerIndexRouteImport } from './routes/innstillinger/index'
 import { Route as InnstillingerNedlastingerRouteImport } from './routes/innstillinger/nedlastinger'
 import { Route as KalenderIndexRouteImport } from './routes/kalender/index'
@@ -44,6 +46,7 @@ import { Route as ApiUploadPartRouteImport } from './routes/api/upload/part'
 import { Route as ApiUploadStartRouteImport } from './routes/api/upload/start'
 import { Route as BeskjederPostIdIndexRouteImport } from './routes/beskjeder/$postId/index'
 import { Route as BeskjederPostIdRedigerRouteImport } from './routes/beskjeder/$postId/rediger'
+import { Route as GruppeledereChatIndexRouteImport } from './routes/gruppeledere/chat/index'
 import { Route as NoterArkivIndexRouteImport } from './routes/noter/arkiv/index'
 import { Route as NoterArkivWorkIdRouteImport } from './routes/noter/arkiv/$workId'
 import { Route as NoterProsjekterIndexRouteImport } from './routes/noter/prosjekter/index'
@@ -64,6 +67,11 @@ const IndexRoute = IndexRouteImport.update({
 const GlemtPassordRoute = GlemtPassordRouteImport.update({
   id: '/glemt-passord',
   path: '/glemt-passord',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GruppeledereRouteRoute = GruppeledereRouteRouteImport.update({
+  id: '/gruppeledere',
+  path: '/gruppeledere',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -120,6 +128,11 @@ const BeskjederNyRoute = BeskjederNyRouteImport.update({
   id: '/beskjeder/ny',
   path: '/beskjeder/ny',
   getParentRoute: () => rootRouteImport,
+} as any)
+const GruppeledereIndexRoute = GruppeledereIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => GruppeledereRouteRoute,
 } as any)
 const InnstillingerIndexRoute = InnstillingerIndexRouteImport.update({
   id: '/innstillinger/',
@@ -232,6 +245,11 @@ const BeskjederPostIdRedigerRoute = BeskjederPostIdRedigerRouteImport.update({
   path: '/beskjeder/$postId/rediger',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GruppeledereChatIndexRoute = GruppeledereChatIndexRouteImport.update({
+  id: '/chat/',
+  path: '/chat/',
+  getParentRoute: () => GruppeledereRouteRoute,
+} as any)
 const NoterArkivIndexRoute = NoterArkivIndexRouteImport.update({
   id: '/arkiv/',
   path: '/arkiv/',
@@ -293,6 +311,7 @@ const NoterProsjekterProjectIdSlagverkRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/gruppeledere': typeof GruppeledereRouteRouteWithChildren
   '/noter': typeof NoterRouteRouteWithChildren
   '/styre': typeof StyreRouteRouteWithChildren
   '/glemt-passord': typeof GlemtPassordRoute
@@ -309,6 +328,7 @@ export interface FileRoutesByFullPath {
   '/v/$token': typeof VTokenRoute
   '/arkiv/': typeof ArkivIndexRoute
   '/beskjeder/': typeof BeskjederIndexRoute
+  '/gruppeledere/': typeof GruppeledereIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
   '/kalender/': typeof KalenderIndexRoute
   '/medlemmer/': typeof MedlemmerIndexRoute
@@ -331,6 +351,7 @@ export interface FileRoutesByFullPath {
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
   '/beskjeder/$postId/': typeof BeskjederPostIdIndexRoute
+  '/gruppeledere/chat/': typeof GruppeledereChatIndexRoute
   '/noter/arkiv/': typeof NoterArkivIndexRoute
   '/noter/prosjekter/': typeof NoterProsjekterIndexRoute
   '/styre/chat/': typeof StyreChatIndexRoute
@@ -355,6 +376,7 @@ export interface FileRoutesByTo {
   '/v/$token': typeof VTokenRoute
   '/arkiv': typeof ArkivIndexRoute
   '/beskjeder': typeof BeskjederIndexRoute
+  '/gruppeledere': typeof GruppeledereIndexRoute
   '/innstillinger': typeof InnstillingerIndexRoute
   '/kalender': typeof KalenderIndexRoute
   '/medlemmer': typeof MedlemmerIndexRoute
@@ -377,6 +399,7 @@ export interface FileRoutesByTo {
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
   '/beskjeder/$postId': typeof BeskjederPostIdIndexRoute
+  '/gruppeledere/chat': typeof GruppeledereChatIndexRoute
   '/noter/arkiv': typeof NoterArkivIndexRoute
   '/noter/prosjekter': typeof NoterProsjekterIndexRoute
   '/styre/chat': typeof StyreChatIndexRoute
@@ -388,6 +411,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/gruppeledere': typeof GruppeledereRouteRouteWithChildren
   '/noter': typeof NoterRouteRouteWithChildren
   '/styre': typeof StyreRouteRouteWithChildren
   '/glemt-passord': typeof GlemtPassordRoute
@@ -404,6 +428,7 @@ export interface FileRoutesById {
   '/v/$token': typeof VTokenRoute
   '/arkiv/': typeof ArkivIndexRoute
   '/beskjeder/': typeof BeskjederIndexRoute
+  '/gruppeledere/': typeof GruppeledereIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
   '/kalender/': typeof KalenderIndexRoute
   '/medlemmer/': typeof MedlemmerIndexRoute
@@ -426,6 +451,7 @@ export interface FileRoutesById {
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
   '/beskjeder/$postId/': typeof BeskjederPostIdIndexRoute
+  '/gruppeledere/chat/': typeof GruppeledereChatIndexRoute
   '/noter/arkiv/': typeof NoterArkivIndexRoute
   '/noter/prosjekter/': typeof NoterProsjekterIndexRoute
   '/styre/chat/': typeof StyreChatIndexRoute
@@ -438,6 +464,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/gruppeledere'
     | '/noter'
     | '/styre'
     | '/glemt-passord'
@@ -454,6 +481,7 @@ export interface FileRouteTypes {
     | '/v/$token'
     | '/arkiv/'
     | '/beskjeder/'
+    | '/gruppeledere/'
     | '/innstillinger/'
     | '/kalender/'
     | '/medlemmer/'
@@ -476,6 +504,7 @@ export interface FileRouteTypes {
     | '/styre/moter/$meetingId'
     | '/styre/prosjekter/$boardProjectId'
     | '/beskjeder/$postId/'
+    | '/gruppeledere/chat/'
     | '/noter/arkiv/'
     | '/noter/prosjekter/'
     | '/styre/chat/'
@@ -500,6 +529,7 @@ export interface FileRouteTypes {
     | '/v/$token'
     | '/arkiv'
     | '/beskjeder'
+    | '/gruppeledere'
     | '/innstillinger'
     | '/kalender'
     | '/medlemmer'
@@ -522,6 +552,7 @@ export interface FileRouteTypes {
     | '/styre/moter/$meetingId'
     | '/styre/prosjekter/$boardProjectId'
     | '/beskjeder/$postId'
+    | '/gruppeledere/chat'
     | '/noter/arkiv'
     | '/noter/prosjekter'
     | '/styre/chat'
@@ -532,6 +563,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/gruppeledere'
     | '/noter'
     | '/styre'
     | '/glemt-passord'
@@ -548,6 +580,7 @@ export interface FileRouteTypes {
     | '/v/$token'
     | '/arkiv/'
     | '/beskjeder/'
+    | '/gruppeledere/'
     | '/innstillinger/'
     | '/kalender/'
     | '/medlemmer/'
@@ -570,6 +603,7 @@ export interface FileRouteTypes {
     | '/styre/moter/$meetingId'
     | '/styre/prosjekter/$boardProjectId'
     | '/beskjeder/$postId/'
+    | '/gruppeledere/chat/'
     | '/noter/arkiv/'
     | '/noter/prosjekter/'
     | '/styre/chat/'
@@ -581,6 +615,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  GruppeledereRouteRoute: typeof GruppeledereRouteRouteWithChildren
   NoterRouteRoute: typeof NoterRouteRouteWithChildren
   StyreRouteRoute: typeof StyreRouteRouteWithChildren
   GlemtPassordRoute: typeof GlemtPassordRoute
@@ -628,6 +663,13 @@ declare module '@tanstack/react-router' {
       path: '/glemt-passord'
       fullPath: '/glemt-passord'
       preLoaderRoute: typeof GlemtPassordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gruppeledere': {
+      id: '/gruppeledere'
+      path: '/gruppeledere'
+      fullPath: '/gruppeledere'
+      preLoaderRoute: typeof GruppeledereRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -706,6 +748,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/beskjeder/ny'
       preLoaderRoute: typeof BeskjederNyRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/gruppeledere/': {
+      id: '/gruppeledere/'
+      path: '/'
+      fullPath: '/gruppeledere/'
+      preLoaderRoute: typeof GruppeledereIndexRouteImport
+      parentRoute: typeof GruppeledereRouteRoute
     }
     '/innstillinger/': {
       id: '/innstillinger/'
@@ -861,6 +910,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BeskjederPostIdRedigerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/gruppeledere/chat/': {
+      id: '/gruppeledere/chat/'
+      path: '/chat'
+      fullPath: '/gruppeledere/chat/'
+      preLoaderRoute: typeof GruppeledereChatIndexRouteImport
+      parentRoute: typeof GruppeledereRouteRoute
+    }
     '/noter/arkiv/': {
       id: '/noter/arkiv/'
       path: '/arkiv'
@@ -941,6 +997,19 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface GruppeledereRouteRouteChildren {
+  GruppeledereIndexRoute: typeof GruppeledereIndexRoute
+  GruppeledereChatIndexRoute: typeof GruppeledereChatIndexRoute
+}
+
+const GruppeledereRouteRouteChildren: GruppeledereRouteRouteChildren = {
+  GruppeledereIndexRoute: GruppeledereIndexRoute,
+  GruppeledereChatIndexRoute: GruppeledereChatIndexRoute,
+}
+
+const GruppeledereRouteRouteWithChildren =
+  GruppeledereRouteRoute._addFileChildren(GruppeledereRouteRouteChildren)
+
 interface NoterRouteRouteChildren {
   NoterIndexRoute: typeof NoterIndexRoute
   NoterArkivWorkIdRoute: typeof NoterArkivWorkIdRoute
@@ -991,6 +1060,7 @@ const StyreRouteRouteWithChildren = StyreRouteRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  GruppeledereRouteRoute: GruppeledereRouteRouteWithChildren,
   NoterRouteRoute: NoterRouteRouteWithChildren,
   StyreRouteRoute: StyreRouteRouteWithChildren,
   GlemtPassordRoute: GlemtPassordRoute,

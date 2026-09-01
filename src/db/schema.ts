@@ -447,6 +447,62 @@ export const boardChannelReads = sqliteTable(
   (t) => [primaryKey({ columns: [t.userId, t.channel] })],
 )
 
+// ---------- Gruppeledere (#81) ----------
+
+// Gruppelederområdet (`/gruppeledere`) speiler chat-modellen over, men har
+// EGNE tabeller. Det er poenget: gruppelederne skal ha samme opplevelse som
+// styret uten noen gang å kunne lese en styremelding, og en delt tabell med et
+// «område»-felt ville gjort én glemt WHERE til en lekkasje. Kanalnøklene bruker
+// samme format (`general` / `custom:<id>`, `parseChannel` i `src/lib/board.ts`),
+// men nøkkelrommene er adskilte fordi tabellene er det.
+export const leaderChannels = sqliteTable(
+  'leader_channels',
+  {
+    id: text('id').primaryKey(),
+    // Ingen `project`-variant her: gruppelederne har ingen prosjekter å tråde
+    // etter. Fellesekanalen «Gruppelederne» har ingen rad, som hos styret.
+    kind: text('kind', { enum: ['general', 'custom'] })
+      .notNull()
+      .default('custom'),
+    name: text('name').notNull(),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    archivedAt: integer('archived_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [index('leader_channels_kind_idx').on(t.kind, t.archivedAt)],
+)
+
+// Gruppeledernes chat. `author_id` er SET NULL, ikke CASCADE: en historisk
+// melding skal bli stående selv om kontoen forsvinner — og en gruppeleder som
+// mister leiarbindingen beholder navnet sitt på det hen har skrevet.
+export const leaderMessages = sqliteTable(
+  'leader_messages',
+  {
+    id: text('id').primaryKey(),
+    channel: text('channel').notNull(),
+    authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
+    body: text('body').notNull(),
+    // Samme svarmodell som styrechatten: ett nivå, og `replyToDeleted` husker at
+    // meldingen VAR et svar etter at originalen er borte.
+    replyToId: text('reply_to_id').references((): AnySQLiteColumn => leaderMessages.id, { onDelete: 'set null' }),
+    replyToDeleted: integer('reply_to_deleted', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('leader_messages_channel_idx').on(t.channel, t.createdAt)],
+)
+
+export const leaderChannelReads = sqliteTable(
+  'leader_channel_reads',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    channel: text('channel').notNull(),
+    lastReadAt: integer('last_read_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.channel] })],
+)
+
 // ---------- Beskjeder (#28) ----------
 
 // Veggen: både informasjon fra styret og vanlige medlemsinnlegg. Alle

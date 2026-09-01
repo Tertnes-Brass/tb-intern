@@ -61,6 +61,7 @@ lesing er åpnere; håndhevelsen ligger alltid i `src/server/*.ts`, aldri bare i
 | **Arkiv** | `src/routes/noter/arkiv/index.tsx`, `$workId.tsx` | Arkivaren | Katalogisere et verk og laste opp PDF per stemme | Innsyn: `archive.viewAll` ∨ `works.manage`; skriving: `works.manage` |
 | **Kalender** | `src/routes/kalender/index.tsx` (`getCalendar`) | Alle medlemmer | Se når neste øvelse og konsert er | `requireMe()`; feeden er en secret (`CALENDAR_ICS_URL`), aldri til klienten |
 | **Medlemmer** | `src/routes/medlemmer/index.tsx` | Admin (seksjonsleder i redusert form) | Invitere et medlem og sette rolle + stemme | Lesing: `requireMe()`; skriving: `members.manage` / `members.manage.section` |
+| **Gruppeledere** | `src/routes/gruppeledere/{route,index}.tsx`, `gruppeledere/chat/index.tsx` | Gruppelederen | Åpne kanalen og koordinere med de andre gruppelederne | `members.manage.section` **pluss** minst én aktiv `section_leaders`-rad (`isGroupLeader` i `src/lib/gruppeledere.ts`) — også for **lesing**. En admin uten leiarbinding kommer ikke inn |
 | **Styre** | `src/routes/styre/{index,$taskId}.tsx`, `styre/prosjekter/*`, `styre/moter/*`, `styre/chat/index.tsx`, `styre/dokumenter/index.tsx` | Styremedlemmet | Se åpne oppgaver og hake av / opprette en ny | `board.manage` — også for **lesing**; hele området er usynlig ellers. Dokumentbytene gates i `src/routes/api/board-files/$documentId.ts` |
 | **Innstillinger** | `src/routes/innstillinger/index.tsx` | Admin | Forvalte besetning og rollematrisen | `settings.manage` |
 | **Filtilganger** | `src/routes/innstillinger/nedlastinger.tsx` | Admin / arkivar | Svare på «hvem har hatt denne fila?» | `downloads.view` |
@@ -257,6 +258,29 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 > nærliggende grepet er å demotere Filtilganger og Innstillinger til
 > brukermenyen; det er ikke gjort her fordi det er et eget produktvalg, ikke en
 > detalj i styrearbeidet.
+
+> **Fulgt opp 2. september 2026 (Gruppeledere, #81):** området fikk en
+> toppnivå-oppføring, og det er den første som ikke gis av en rettighet alene —
+> den krever `members.manage.section` **og** en aktiv `section_leaders`-binding
+> (`isGroupLeader`). Slik ser menyen ut nå, per rolle:
+>
+> | Hvem | Oppføringer | Antall |
+> |---|---|---|
+> | Musiker | Hjem · Beskjeder · Noter · Kalender · Medlemmer | 5 |
+> | Gruppeleder (musiker med binding) | + Gruppeledere | 6 |
+> | Styremedlem | + Styre | 6 |
+> | Styremedlem som også er gruppeleder | + Gruppeledere + Styre | 7 |
+> | Admin uten leiarbinding | + Styre + Innstillinger | 7 |
+> | Admin med leiarbinding | + Gruppeledere + Styre + Innstillinger | 8 |
+>
+> Vanlige medlemmer ligger fortsatt på fem, og de to store gruppene (gruppeleder
+> og styremedlem) på seks — altså på taket, ikke over det. De to
+> kombinasjonsradene er reelle, men små: de gjelder folk som har to verv
+> samtidig, og for dem scroller mobilstripen. Det er den nøyaktige feilmodusen
+> §6 advarer mot, og terskelen for launcher-spørsmålet (b) er dermed passert for
+> andre gang. Neste område med toppnivå-ambisjoner skal ikke bare fortrenge noe —
+> det bør ta (b) opp til reell vurdering, med demotering av Filtilganger og
+> Innstillinger til brukermenyen som det billigste alternativet.
 
 ## 7. Hva som ikke er avgjort
 

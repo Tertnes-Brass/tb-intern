@@ -38,6 +38,7 @@ SMS-er fortsatt lander riktig. Logikken er `legacyHostRedirect` i
 - **Tilgangsstyrte filer** — alle PDF-er streames via API med sesjons- eller token-sjekk; partitur er rettighetsstyrt (scores.view); ingen offentlige filer
 - **Kalender** — øvelser og konserter hentes fra korpsets Google-kalender (iCal) og vises på `/kalender`; Google forblir stedet man redigerer
 - **Styre** — styrets eget område på `/styre`: oppgaver, styreprosjekter med fremdrift, styremøter med agenda/notater/vedtak, intern chat og styredokumenter. Synlig kun for dem som har `board.manage`
+- **Gruppeledere** — eget område på `/gruppeledere` for dem som faktisk leder en stemmegruppe: oversikt over hvem som leder hva, og en egen chat med navngitte kanaler. Egne tabeller, ingen innsyn i styrets data
 - **Beskjeder / veggen** — korpsets egen vegg (`/beskjeder`): alle medlemmer kan skrive, kommentere, like og legge ved bilder, mens styret merker sine innlegg «Fra styret» og sender dem på e-post
 
 ## Innlogging og invitasjon
@@ -159,6 +160,32 @@ ligger uansett under Styre.
 
 Hele området — også lesing — gates server-side på rettigheten `board.manage`,
 som rollen *Styremedlem* har. Andre ser hverken menyoppføringen eller sidene.
+
+## Gruppeledere
+
+`/gruppeledere` er stemmegruppeledernes egen flate — der de koordinerer på
+tvers av seksjonene, uten å måtte gå veien om styret eller en chat utenfor
+huset.
+
+- **Oversikt** (`/gruppeledere`) svarer på «hvem leder hva»: hver gruppeleder
+  med stemmene og seksjonene sine. Stemmetildelingen gjøres ikke her — det er
+  en krysslenke til **Medlemmer**, som allerede eier den jobben.
+- **Chat** (`/gruppeledere/chat`) er den samme chatten som styret har, men på
+  egne data: felleskanalen «Gruppelederne» pluss så mange navngitte kanaler man
+  vil lage, med uleste-tellere, svar med klikkbar referanse, kodeformatering
+  mellom backticks, og omdøping/arkivering av kanaler. Ingen websockets —
+  klienten spør hvert 12. sekund, bare mens fanen er synlig.
+
+**Tilgangen krever to ting samtidig:** rettigheten `members.manage.section`
+(eller `*`) **og** minst én aktiv rad i `section_leaders`. En admin uten
+leiarbinding kommer altså ikke inn — området handler om hva du *gjør*, ikke om
+hva du kan. Fjernes bindingen i `/medlemmer`, er tilgangen borte ved neste kall.
+Meldingene blir stående med navnet på den som skrev dem.
+
+Dataene er egne tabeller (`leader_channels`, `leader_messages`,
+`leader_channel_reads`) og deles aldri med styret. Chat-komponenten er felles
+(`src/components/ChatPanel.tsx`), serverfunksjonene er det ikke.
+
 ## Beskjeder: veggen
 
 Korpset skal slippe å ha en Facebook-gruppe. `/beskjeder` er derfor en **vegg**

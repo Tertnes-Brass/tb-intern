@@ -1,3 +1,5 @@
+import { isGroupLeader } from './gruppeledere'
+
 /**
  * Ren hjelpelogikk for hub-forsiden (`/`): hvilken hendelse som blir hero, og
  * hvilke områder brukeren får snarvei til. Ingen server- eller DOM-avhengigheter,
@@ -95,6 +97,7 @@ export type HubAreaTo =
   | '/noter'
   | '/kalender'
   | '/medlemmer'
+  | '/gruppeledere'
   | '/styre'
   | '/innstillinger/nedlastinger'
   | '/innstillinger'
@@ -130,9 +133,27 @@ function allows(permissions: string[], permission: string): boolean {
  * Ett unntak, bevisst: Filtilganger ble tatt ut av toppmenyen da Beskjeder kom
  * (docs/designprinsipper.md §6), men beholder kortet her — hub-en har plass, og
  * området må fortsatt ha en vei inn (§4).
+ *
+ * Gruppeledere (#81) er det ene kortet som ikke kan avgjøres av rettighetene
+ * alene: det krever i tillegg en aktiv leiarbinding, derfor `opts.leadsPartIds`.
  */
-export function areasFor(permissions: string[]): HubArea[] {
+export function areasFor(
+  permissions: string[],
+  /**
+   * Leiarbindingene fra `section_leaders` (`me.leadsPartIds`). Gruppelederkortet
+   * er det eneste som trenger mer enn rettighetene, og flagget er derfor
+   * eksplisitt: en tom/utelatt liste betyr «leder ingen gruppe», ikke «vet ikke».
+   */
+  opts: { leadsPartIds?: string[] } = {},
+): HubArea[] {
   const areas: HubArea[] = [...BASE_AREAS]
+  if (isGroupLeader({ permissions, leadsPartIds: opts.leadsPartIds ?? [] })) {
+    areas.push({
+      to: '/gruppeledere',
+      label: 'Gruppeledere',
+      description: 'Koordiner på tvers av stemmegruppene, og se hvem som leder hva.',
+    })
+  }
   if (allows(permissions, 'board.manage')) {
     areas.push({
       to: '/styre',

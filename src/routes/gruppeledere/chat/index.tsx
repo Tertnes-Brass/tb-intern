@@ -12,23 +12,22 @@ import {
   postMessage,
   renameChannel,
   setChannelArchived,
-} from '../../../server/board'
+} from '../../../server/gruppeledere'
 
 type ChatSearch = { kanal?: string }
 
 /**
- * Styrets kanaler. Alt under her går mot `src/server/board.ts`, som gater hver
- * eneste funksjon på `board.manage` — også lesing. `ChatPanel` er delt med
- * gruppelederområdet, men API-et er ikke: komponenten kjenner bare funksjonene
- * den får inn.
+ * Gruppeledernes chat. Samme komponent som styrechatten (`ChatPanel`), men et
+ * helt annet API: alt her går mot `src/server/gruppeledere.ts`, som gater hver
+ * funksjon på `requireGroupLeader()` og bare rører `leader_*`-tabellene. Ingen
+ * styremelding kan komme hit, uansett hva klienten spør om.
  */
-const BOARD_CHAT_API: ChatApi = { listMessages, postMessage, deleteMessage, markChannelRead }
-const BOARD_CHANNEL_API: ChatChannelApi = { createChannel, renameChannel, setChannelArchived }
+const LEADER_CHAT_API: ChatApi = { listMessages, postMessage, deleteMessage, markChannelRead }
+const LEADER_CHANNEL_API: ChatChannelApi = { createChannel, renameChannel, setChannelArchived }
 
-export const Route = createFileRoute('/styre/chat/')({
-  // Kanalen ligger i URL-en, så en tråd kan lenkes til fra et møte eller en
-  // melding uten at man må lete den opp igjen. Samme format som kanalnøkkelen:
-  // `?kanal=project:<id>` og `?kanal=custom:<id>`.
+export const Route = createFileRoute('/gruppeledere/chat/')({
+  // Kanalen ligger i URL-en, så en tråd kan lenkes til uten at man må lete den
+  // opp igjen. Samme format som kanalnøkkelen: `?kanal=custom:<id>`.
   validateSearch: (search: Record<string, unknown>): ChatSearch =>
     typeof search.kanal === 'string' && search.kanal ? { kanal: search.kanal } : {},
   loader: () => listChannels(),
@@ -52,7 +51,7 @@ function ChatPage() {
     <div className="space-y-6">
       <header className="rise flex flex-wrap items-end justify-between gap-3">
         <div>
-          <Kicker className="mb-2">Styrearbeidet</Kicker>
+          <Kicker className="mb-2">Stemmegruppene</Kicker>
           <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Chat</h1>
         </div>
         <Button onClick={() => setCreating(true)}>Ny kanal</Button>
@@ -63,8 +62,8 @@ function ChatPage() {
         meId={data.meId}
         active={active}
         onOpenChannel={openChannel}
-        api={BOARD_CHAT_API}
-        channelApi={BOARD_CHANNEL_API}
+        api={LEADER_CHAT_API}
+        channelApi={LEADER_CHANNEL_API}
         onRefresh={() => router.invalidate()}
         creating={creating}
         onCreatingChange={setCreating}
@@ -73,7 +72,7 @@ function ChatPage() {
           channel.channel === GENERAL_CHANNEL
             ? {
                 title: 'Ingen meldinger ennå',
-                body: 'Dette er styrets felles kanal. Skriv den første meldingen.',
+                body: 'Dette er gruppeledernes felles kanal. Skriv den første meldingen.',
               }
             : {
                 title: 'Ingen meldinger i tråden',

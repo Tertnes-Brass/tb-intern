@@ -136,7 +136,7 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
 
   // Tallene på Styre-kortet hentes bare når rettigheten finnes — et vanlig
   // medlem skal ikke koste en spørring for et område det ikke ser.
-  const areas = areasFor(me.permissions)
+  const areas = areasFor(me.permissions, { leadsPartIds: me.leadsPartIds })
   const withBoardNote = hasPermission(me, 'board.manage')
     ? await boardCounts(today).then((counts) =>
         areas.map((area) => (area.to === '/styre' ? { ...area, note: boardAreaNote(counts) ?? undefined } : area)),
