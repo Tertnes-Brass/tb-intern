@@ -297,6 +297,7 @@ export async function seedWallDemo(): Promise<void> {
         id: sp.id,
         title: sp.title,
         body: sp.body,
+        format: sp.format ?? 'plain_text',
         audience: sp.audience,
         importance: sp.importance,
         official: sp.official,

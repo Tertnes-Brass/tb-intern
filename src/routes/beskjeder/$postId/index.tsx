@@ -1,15 +1,17 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { LikeButton } from '../../../components/PostCard'
 import { toast, toastError } from '../../../components/toast'
 import { Avatar, Button, EmptyState, Kicker, Modal, Stamp } from '../../../components/ui'
 import { formatDateTime } from '../../../lib/format'
+import { markdownToHtml } from '../../../lib/markdown'
 import { postImageUrl } from '../../../lib/post-images-client'
 import {
   DEFAULT_NOTIFY,
   commentCountLabel,
   notifyLabel,
   notifyResultMessage,
+  type PostFormat,
   paragraphs,
   tokenize,
 } from '../../../lib/posts'
@@ -24,9 +26,12 @@ import {
 } from '../../../server/posts'
 
 /**
- * Hele innlegget med bilder, reaksjoner og kommentartråd. Avsnittene bevares
- * som skrevet, og URL-er blir klikkbare — teksten rendres som React-noder,
- * aldri som HTML fra brukerinnhold.
+ * Hele innlegget med bilder, reaksjoner og kommentartråd.
+ *
+ * Ren tekst (`plain_text`, alt som fantes før #79) rendres som React-noder:
+ * avsnittene bevares som skrevet og URL-er blir klikkbare, men ingenting blir
+ * noen gang HTML fra brukerinnhold. Markdown går gjennom `markdownToHtml`, som
+ * bygger utdata av en allowlist — rå HTML og farlige lenker kommer aldri ut.
  */
 export const Route = createFileRoute('/beskjeder/$postId/')({
   beforeLoad: ({ context }) => {
@@ -37,8 +42,16 @@ export const Route = createFileRoute('/beskjeder/$postId/')({
   component: PostPage,
 })
 
-/** Ren tekst med avsnitt, enkle linjeskift og auto-lenkede URL-er. */
-function PostBody({ body }: { body: string }) {
+/** Innleggets tekst, i det formatet forfatteren valgte. */
+function PostBody({ body, format }: { body: string; format: PostFormat }) {
+  const html = useMemo(() => (format === 'markdown' ? markdownToHtml(body) : ''), [body, format])
+  if (format === 'markdown') {
+    return (
+      // Sanitert i src/lib/markdown.ts: utdata inneholder kun taggene rendreren
+      // selv skriver, og alt brukerinnhold er escapet på vei ut.
+      <div className="prose max-w-2xl" dangerouslySetInnerHTML={{ __html: html }} />
+    )
+  }
   return (
     <div className="max-w-2xl space-y-4 text-[0.98rem] leading-relaxed text-ink-soft">
       {paragraphs(body).map((paragraph, pi) => (
@@ -266,7 +279,7 @@ function PostPage() {
       </header>
 
       <article className="rise space-y-5" style={{ animationDelay: '80ms' }}>
-        <PostBody body={post.body} />
+        <PostBody body={post.body} format={post.format} />
         {post.images.length > 0 && (
           <ul className="space-y-3">
             {post.images.map((image) => (
