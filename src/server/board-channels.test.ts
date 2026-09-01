@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Migrasjon `0012_board-channels.sql` (#80) kjørt mot ekte SQLite.
+ * Migrasjon `0012_markdown-og-chatkanaler.sql` (#80) kjørt mot ekte SQLite.
  *
  * To ting skal bevises her, og begge er vanskelige å se ved lesing:
  *
@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest'
  */
 
 const MIGRATION = readFileSync(
-  fileURLToPath(new URL('../../migrations/0012_board-channels.sql', import.meta.url)),
+  fileURLToPath(new URL('../../migrations/0012_markdown-og-chatkanaler.sql', import.meta.url)),
   'utf8',
 )
 
