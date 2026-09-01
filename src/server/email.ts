@@ -13,7 +13,7 @@ import { bodyToHtml, escapeHtml, postEmailFrom, postEmailImageNote, postEmailSub
 
 // Avsenderdomenet må være onboardet i Cloudflare Email Sending. Dette påvirker
 // ikke innkommende e-post for tertnesbrass.no, som fortsatt håndteres av Uniweb.
-const FROM = { email: 'noreply@tertnesbrass.com', name: 'Tertnes Brass Notearkiv' }
+const FROM = { email: 'noreply@tertnesbrass.com', name: 'Tertnes Brass Internside' }
 
 type SendArgs = { to: string; subject: string; html: string; text: string }
 
@@ -70,18 +70,25 @@ export async function sendEmail({ to, subject, html, text }: SendArgs): Promise<
   }
 }
 
+/** Bunntekst for e-poster som utløses av en innloggingsforespørsel. */
+const LOGIN_FOOTER =
+  'Du mottar denne e-posten fordi noen ba om innlogging til Tertnes Brass Internside. Var det ikke deg, kan du se bort fra den.'
+/** Bunntekst for e-poster som sendes fordi du er medlem (beskjeder, styreoppgaver). */
+const MEMBER_FOOTER =
+  'Du mottar denne e-posten fordi du er medlem i Tertnes Brass. Varslingsvalgene dine finner du under «Min profil» på intern.tertnesbrass.com.'
+
 /** Felles ramme rundt e-postene — enkel, papir/messing-estetikk. */
-function shell(heading: string, bodyHtml: string): string {
+function shell(heading: string, bodyHtml: string, footer: string = LOGIN_FOOTER): string {
   return `<!doctype html><html lang="nb"><body style="margin:0;background:#f7f1e6;font-family:'Helvetica Neue',Arial,sans-serif;color:#211b12;padding:32px 16px">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
     <table role="presentation" width="100%" style="max-width:480px;background:#fdfaf2;border:1px solid #ddd2ba;border-radius:14px;padding:32px">
       <tr><td>
-        <p style="margin:0 0 24px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#95762a;font-weight:600">Tertnes Brass · Notearkiv</p>
+        <p style="margin:0 0 24px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#95762a;font-weight:600">Tertnes Brass · Internside</p>
         <h1 style="margin:0 0 16px;font-family:Georgia,serif;font-size:24px;font-style:italic;color:#211b12">${heading}</h1>
         ${bodyHtml}
       </td></tr>
     </table>
-    <p style="margin:20px 0 0;font-size:11px;color:#8e8468">Du mottar denne e-posten fordi noen ba om innlogging til Tertnes Brass Notearkiv. Var det ikke deg, kan du se bort fra den.</p>
+    <p style="margin:20px 0 0;font-size:11px;color:#8e8468">${footer}</p>
   </td></tr></table>
 </body></html>`
 }
@@ -92,14 +99,14 @@ function button(url: string, label: string): string {
 
 export function magicLinkEmail(url: string): { subject: string; html: string; text: string } {
   return {
-    subject: 'Logg inn i Tertnes Brass Notearkiv',
+    subject: 'Logg inn på Tertnes Brass Internside',
     html: shell(
       'Logg inn',
       `<p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#5f5640">Klikk knappen under for å logge inn. Lenken er gyldig i 30 minutter og kan brukes én gang.</p>
        <p style="margin:0 0 24px">${button(url, 'Logg inn')}</p>
        <p style="margin:0;font-size:12px;color:#8e8468">Eller lim inn denne lenken i nettleseren:<br><span style="color:#7a5f1d;word-break:break-all">${url}</span></p>`,
     ),
-    text: `Logg inn i Tertnes Brass Notearkiv.\n\nÅpne denne lenken (gyldig i 30 minutter, kan brukes én gang):\n${url}\n`,
+    text: `Logg inn på Tertnes Brass Internside.\n\nÅpne denne lenken (gyldig i 30 minutter, kan brukes én gang):\n${url}\n`,
   }
 }
 
@@ -112,7 +119,7 @@ export function resetPasswordEmail(url: string): { subject: string; html: string
        <p style="margin:0 0 24px">${button(url, 'Velg nytt passord')}</p>
        <p style="margin:0;font-size:12px;color:#8e8468">Eller lim inn denne lenken i nettleseren:<br><span style="color:#7a5f1d;word-break:break-all">${url}</span></p>`,
     ),
-    text: `Tilbakestill passordet ditt for Tertnes Brass Notearkiv.\n\nÅpne denne lenken (gyldig i 1 time):\n${url}\n`,
+    text: `Tilbakestill passordet ditt for Tertnes Brass Internside.\n\nÅpne denne lenken (gyldig i 1 time):\n${url}\n`,
   }
 }
 
@@ -151,7 +158,7 @@ export function verificationCodeEmail(
        <p style="margin:0 0 20px;font-family:Menlo,Consolas,monospace;font-size:32px;letter-spacing:8px;font-weight:700;color:#7a5f1d">${otp}</p>
        <p style="margin:0;font-size:12px;color:#8e8468">Koden kan bare brukes én gang. Del den aldri med andre.</p>`,
     ),
-    text: `${copy.heading} i Tertnes Brass Notearkiv.\n\n${copy.lead}\n\nKode: ${otp}\n\nKoden kan bare brukes én gang. Del den aldri med andre.\n`,
+    text: `${copy.heading} på Tertnes Brass Internside.\n\n${copy.lead}\n\nKode: ${otp}\n\nKoden kan bare brukes én gang. Del den aldri med andre.\n`,
   }
 }
 
@@ -196,6 +203,7 @@ export function postEmail({
        ${images ? `<p style="margin:0 0 20px;font-size:13px;color:#8e8468">${escapeHtml(images)}</p>` : ''}
        <p style="margin:8px 0 24px">${button(url, 'Les på internsiden')}</p>
        <p style="margin:0;font-size:12px;color:#8e8468">Du kan velge hvilke beskjeder du vil ha på e-post under «Min profil» på internsiden.</p>`,
+      MEMBER_FOOTER,
     ),
     text: `${official ? 'FRA STYRET\n' : ''}${important ? 'VIKTIG BESKJED\n' : ''}\n${title}\n${fromText} · Tertnes Brass\n\n${body.trim()}\n${images ? `\n${images}\n` : ''}\nLes på internsiden:\n${url}\n\nVil du ha færre e-poster? Endre varslingsvalget under «Min profil».\n`,
   }
@@ -203,14 +211,14 @@ export function postEmail({
 
 export function inviteEmail(url: string, bandName = 'Tertnes Brass'): { subject: string; html: string; text: string } {
   return {
-    subject: `Du er invitert til ${bandName} Notearkiv`,
+    subject: `Du er invitert til internsiden til ${bandName}`,
     html: shell(
       'Velkommen!',
-      `<p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#5f5640">Du er lagt til i notearkivet til ${bandName}. Klikk under for å logge inn første gang — så finner du notene dine, kommende konserter og lytteeksempler.</p>
+      `<p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#5f5640">Du er lagt til på internsiden til ${bandName}. Klikk under for å logge inn første gang — så finner du beskjeder, kalender, notene dine og kommende konserter.</p>
        <p style="margin:0 0 24px">${button(url, 'Logg inn første gang')}</p>
        <p style="margin:0;font-size:12px;color:#8e8468">Lenken er gyldig i 30 minutter. Du kan også gå til <span style="color:#7a5f1d">intern.tertnesbrass.com</span> og logge inn med e-postadressen din når som helst.</p>`,
     ),
-    text: `Du er invitert til ${bandName} Notearkiv.\n\nLogg inn første gang her (gyldig i 30 minutter):\n${url}\n`,
+    text: `Du er invitert til internsiden til ${bandName}.\n\nLogg inn første gang her (gyldig i 30 minutter):\n${url}\n`,
   }
 }
 
@@ -240,6 +248,7 @@ export function taskAssignedEmail(input: {
        ${facts.length > 0 ? `<p style="margin:0 0 24px;font-size:13px;color:#8e8468">${facts.map(escapeHtml).join('<br>')}</p>` : ''}
        <p style="margin:0 0 24px">${button(url, 'Åpne oppgaven')}</p>
        <p style="margin:0;font-size:12px;color:#8e8468">Eller lim inn denne lenken i nettleseren:<br><span style="color:#7a5f1d;word-break:break-all">${url}</span></p>`,
+      MEMBER_FOOTER,
     ),
     text: `${assignedByName} har satt deg som ansvarlig for en oppgave i styrearbeidet.\n\n${title}\n${facts.length > 0 ? `${facts.join('\n')}\n` : ''}\nÅpne oppgaven her:\n${url}\n`,
   }
@@ -275,6 +284,7 @@ export function overdueTasksEmail(input: {
       } i styrearbeidet, og fristen er passert:</p>
        <ul style="margin:0 0 24px;padding:0 0 0 18px">${rows}</ul>
        <p style="margin:0;font-size:12px;color:#8e8468">Du får denne e-posten én gang per dag så lenge noe ligger på overtid. Vil du slippe den, skru av «E-post om styreoppgaver» under «Min profil».</p>`,
+      MEMBER_FOOTER,
     ),
     text: `${heading}.\n\nDu står som ansvarlig for ${count === 1 ? 'denne oppgaven' : 'disse oppgavene'} i styrearbeidet:\n\n${tasks
       .map((t) => `- ${t.title} (frist ${formatIsoDate(t.dueDate)}${t.projectTitle ? `, ${t.projectTitle}` : ''})\n  ${t.url}`)
