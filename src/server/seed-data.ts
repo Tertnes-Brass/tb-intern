@@ -50,6 +50,11 @@ export const SEED_ROLE_PERMISSIONS: Array<{ roleId: string; permission: string }
   { roleId: 'conductor', permission: 'archive.viewAll' },
   { roleId: 'conductor', permission: 'downloads.view' },
   { roleId: 'conductor', permission: 'posts.publish' },
+  // Øvingsplanen og fraværet (#82/#24) er dirigentens arbeid. Begge er egne
+  // rettigheter nettopp for at en fraværsansvarlig skal kunne få den ene uten
+  // prosjekt-, medlems- eller admintilgang — se rollematrisen i /innstillinger.
+  { roleId: 'conductor', permission: 'calendar.manage' },
+  { roleId: 'conductor', permission: 'attendance.manage' },
   // Styremedlem har alt en musiker har, pluss styreområdet (/styre) og retten
   // til å publisere beskjeder «Fra styret» på veggen (/beskjeder).
   { roleId: 'board', permission: 'scores.view' },
