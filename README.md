@@ -232,6 +232,10 @@ synlig for hele korpset — serveren stripper resten uansett hva klienten sender
   hit (skru av under «Min profil»). Omtalen lagres mot brukerens id, så den
   følger med om vedkommende bytter navn — og `@` i e-postadresser og kode blir
   aldri en omtale.
+- Det samme `@` virker i **selve innlegget** (én e-post når innlegget
+  publiseres, aldri i tillegg til beskjed-e-posten, og aldri to ganger) og i
+  **chatten** i styret og hos gruppelederne (ingen e-post, men kanalen får en
+  «@» på ulest-prikken når en av de uleste nevner deg).
 - Filteret øverst («Alt · Fra styret · Viktig») ligger i URL-en, så en visning
   kan lenkes til.
 - Beskjeder merket «Bare styret» er usynlige for alle andre — også via direkte
