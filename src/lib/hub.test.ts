@@ -133,8 +133,8 @@ describe('areasFor', () => {
     expect(areasFor(['*'], { leadsPartIds: ['eb-bass'] }).map((a) => a.to)).toContain('/gruppeledere')
   })
 
-  it('gir ikke Gruppeledere til en med binding, men uten rettigheten', () => {
-    expect(areasFor(['scores.view'], { leadsPartIds: ['flugel'] }).map((a) => a.to)).not.toContain('/gruppeledere')
+  it('gir Gruppeledere til en med binding uansett rolle — én rolle per medlem gjør at ledere ofte har en annen', () => {
+    expect(areasFor(['scores.view'], { leadsPartIds: ['flugel'] }).map((a) => a.to)).toContain('/gruppeledere')
   })
 
   it('plasserer Gruppeledere mellom Medlemmer og Styre, som i toppmenyen', () => {

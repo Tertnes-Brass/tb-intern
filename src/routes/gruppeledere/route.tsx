@@ -27,7 +27,7 @@ const ITEMS: AreaNavItem[] = [
 export const Route = createFileRoute('/gruppeledere')({
   beforeLoad: ({ context }) => {
     if (!context.me) throw redirect({ to: '/login' })
-    // Uten rettighet ELLER uten aktiv leiarbinding finnes ikke området.
+    // Uten aktiv leiarbinding finnes ikke området.
     if (!isGroupLeader(context.me)) throw redirect({ to: '/' })
     return { me: context.me }
   },

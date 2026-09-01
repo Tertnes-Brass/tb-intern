@@ -187,14 +187,18 @@ vanskeligere å lese, uten å gjøre noen ting tryggere.
 Gruppelederne fikk sitt eget område. Det er det første som **ikke** gates på en
 rettighet alene:
 
-- **Guarden er rettighet OG binding.** `requireGroupLeader()` i
-  `src/server/gruppeledere.ts` krever `members.manage.section` (eller `*`) **og**
-  minst én aktiv rad i `section_leaders` — `me.leadsPartIds.length > 0`. Regelen
+- **Guarden er leiarbindingen.** `requireGroupLeader()` i
+  `src/server/gruppeledere.ts` krever minst én aktiv rad i `section_leaders` —
+  `me.leadsPartIds.length > 0`. (Justert 2. september 2026: kravet var
+  opprinnelig rettighet OG binding, men med én rolle per medlem hadde de
+  faktiske lederne rollene Styremedlem og Musiker og kunne aldri fått
+  rettigheten. Bindingen settes uansett kun via «Seksjonsleder»-modalen i
+  `/medlemmer`, gated på global `members.manage`, så den er en eksplisitt,
+  admin-styrt tilgang alene. `members.manage.section` styrer fortsatt
+  stemme-tildeling i eget omfang — en annen ting enn å se området.) Regelen
   er den rene `isGroupLeader` i `src/lib/gruppeledere.ts`, delt av guarden,
   `beforeLoad`, toppmenyen i `Shell.tsx` og `areasFor` på hub-en, slik at de
-  fire ikke kan komme i utakt. Testene i `gruppeledere.test.ts` dekker vanlig
-  medlem, styremedlem uten binding, binding uten rettighet, og admin med og uten
-  binding.
+  fire ikke kan komme i utakt.
 - **En admin uten leiarbinding får ikke tilgang.** Det er ikke en forglemmelse:
   `*` betyr «kan alt», og området handler om hva du *gjør*. Vil en admin inn,
   binder hen seg selv i `/medlemmer` — en handling som logges

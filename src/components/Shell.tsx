@@ -138,7 +138,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
   const canManageSettings = me.permissions.includes('*') || me.permissions.includes('settings.manage')
   const canManageBoard = me.permissions.includes('*') || me.permissions.includes('board.manage')
   const NAV: NavItem[] = [...BASE_NAV]
-  // Gruppeledere (#81): rettighet OG aktiv leiarbinding, samme rene regel som
+  // Gruppeledere (#81): aktiv leiarbinding, samme rene regel som
   // guarden på serveren og `areasFor` på hub-en. En admin uten binding ser den
   // altså ikke — oppføringen skal si noe om hva du gjør, ikke hva du kan.
   if (isGroupLeader(me)) NAV.push({ to: '/gruppeledere', label: 'Gruppeledere' })

@@ -29,8 +29,8 @@ import { type Me, requireMe } from './access'
  *
  * To ting skiller dette fra styreområdet, og begge er bevisste:
  *
- * 1. **Guarden er ikke bare en rettighet.** `requireGroupLeader()` krever både
- *    `members.manage.section` (eller `*`) OG minst én aktiv rad i
+ * 1. **Guarden er leiarbindingen** (justert 2. sept 2026, se
+ *    src/lib/gruppeledere.ts). `requireGroupLeader()` krever minst én aktiv rad i
  *    `section_leaders`. En admin uten leiarbinding leder ingen gruppe og får
  *    ikke tilgang — se `isGroupLeader` i `src/lib/gruppeledere.ts`. Fordi
  *    `leadsPartIds` leses ferskt i `currentUser()` ved hvert kall, faller

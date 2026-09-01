@@ -14,10 +14,8 @@ describe('isGroupLeader', () => {
     expect(isGroupLeader(subject(['scores.view', 'board.manage', 'posts.publish']))).toBe(false)
   })
 
-  it('avviser en med leiarbinding, men uten rettigheten', () => {
-    // Kan skje etter at rettigheten er tatt bort i rollematrisen mens raden i
-    // `section_leaders` står igjen. Bindingen alene gir ingenting.
-    expect(isGroupLeader(subject(['scores.view'], ['solo-cornet']))).toBe(false)
+  it('slipper inn en med leiarbinding selv uten rettigheten — én rolle per medlem gjør at ledere ofte har en annen rolle', () => {
+    expect(isGroupLeader({ permissions: ['scores.view'], leadsPartIds: ['basses'] })).toBe(true)
   })
 
   it('slipper inn en gruppeleder med både rettighet og binding', () => {
@@ -44,8 +42,8 @@ describe('isGroupLeader', () => {
     expect(isGroupLeader(undefined)).toBe(false)
   })
 
-  it('lar ikke global members.manage alene åpne området', () => {
+  it('lar ikke global members.manage alene åpne området — uten binding er man ikke leder', () => {
     // Medlemsforvaltning er ikke det samme som å lede en stemmegruppe.
-    expect(isGroupLeader(subject(['members.manage'], ['solo-cornet']))).toBe(false)
+    expect(isGroupLeader(subject(['members.manage'], []))).toBe(false)
   })
 })
