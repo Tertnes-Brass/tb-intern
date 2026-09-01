@@ -293,7 +293,7 @@ gjør det.
 5. **Døp om GitHub-repoet** (etter at deployen er verifisert):
 
    ```bash
-   gh repo rename tb-intern --repo Tertnes-Brass/tb-notearkiv
+   gh repo rename tb-intern --repo Tertnes-Brass/tb-notearkiv   # gjort 31. august 2026
    git remote set-url origin git@github.com:Tertnes-Brass/tb-intern.git
    ```
 

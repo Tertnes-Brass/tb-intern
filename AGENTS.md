@@ -1,4 +1,6 @@
-# tb-notearkiv — notater for agenter
+# tb-intern — notater for agenter
+
+Repoet het tidligere `tb-notearkiv` (omdøpt 31. august 2026). Cloudflare-Workeren, D1-databasen og R2-bøtta heter fortsatt `tb-notearkiv` — det navnet skal IKKE endres (nytt Worker-navn = ny Worker uten bindinger/secrets).
 
 Notearkiv for brass band (Tertnes Brass). TanStack Start (React) på Cloudflare Workers, D1 (Drizzle) + R2. Norsk UI.
 
