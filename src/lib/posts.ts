@@ -4,14 +4,30 @@
  * server- eller DOM-avhengigheter, slik at reglene kan testes uten database,
  * R2 og e-postbinding.
  *
- * Teksten i et innlegg er ren tekst med avsnitt — ikke markdown. URL-er
- * gjenkjennes og gjøres klikkbare ved rendring; alt annet vises som skrevet.
+ * Teksten i et innlegg er ren tekst med avsnitt (`plain_text`) — URL-er
+ * gjenkjennes og gjøres klikkbare ved rendring, alt annet vises som skrevet.
+ * Forfatteren kan i stedet velge `markdown` (#79); da rendres teksten av
+ * `src/lib/markdown.ts`, som er en egen modul nettopp for at feeden og kortene
+ * ikke skal dra inn markdown-parseren for å telle kommentarer.
  */
 
 export type PostAudience = 'all' | 'board'
 export type PostImportance = 'normal' | 'important'
+/**
+ * Hvordan teksten skal tolkes ved rendring (#79). `plain_text` er standarden og
+ * det eneste eksisterende innlegg har — de skal se ut nøyaktig som før.
+ */
+export type PostFormat = 'plain_text' | 'markdown'
 /** Valget medlemmet gjør på /min-profil. Ingen rad i databasen = `all`. */
 export type PostNotificationChoice = 'all' | 'important' | 'off'
+
+export const POST_FORMATS: PostFormat[] = ['plain_text', 'markdown']
+/**
+ * Standarden for et nytt innlegg, og det formatet alle eksisterende innlegg
+ * har. Én konstant, slik at skjemaet, sanitizeren og databasens `DEFAULT` ikke
+ * kan komme i utakt.
+ */
+export const DEFAULT_POST_FORMAT: PostFormat = 'plain_text'
 
 export const POST_AUDIENCES: PostAudience[] = ['all', 'board']
 export const POST_IMPORTANCES: PostImportance[] = ['normal', 'important']
@@ -163,6 +179,8 @@ export function canReadPost(
 export type PostWriterInput = {
   title: string | null
   body: string
+  /** Rein tekst eller markdown. Ikke privilegert — alle kan velge fritt. */
+  format: PostFormat
   audience: PostAudience
   importance: PostImportance
   official: boolean
@@ -176,8 +194,11 @@ export type PostWriterInput = {
 export function sanitizePostInput(input: PostWriterInput, canPublish: boolean): PostWriterInput {
   const title = input.title?.trim() ? input.title.trim() : null
   const body = input.body.trim()
-  if (canPublish) return { ...input, title, body }
-  return { title, body, audience: 'all', importance: 'normal', official: false }
+  // Formatet er ikke et privilegium: et medlem som skriver en lang beskjed skal
+  // kunne strukturere den, akkurat som styret.
+  const format: PostFormat = input.format === 'markdown' ? 'markdown' : DEFAULT_POST_FORMAT
+  if (canPublish) return { ...input, title, body, format }
+  return { title, body, format, audience: 'all', importance: 'normal', official: false }
 }
 
 /** Eieren av innlegget, eller en med `posts.publish` (moderasjon). */

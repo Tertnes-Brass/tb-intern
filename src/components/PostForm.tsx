@@ -1,10 +1,13 @@
 import { useNavigate, useRouter } from '@tanstack/react-router'
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { markdownToHtml } from '../lib/markdown'
 import { postImageUrl, uploadPostImages } from '../lib/post-images-client'
 import {
   DEFAULT_NOTIFY,
+  DEFAULT_POST_FORMAT,
   MAX_POST_IMAGES,
   type PostAudience,
+  type PostFormat,
   type PostImportance,
   imageRejectionReason,
   notifyLabel,
@@ -21,6 +24,11 @@ import { Button, Field } from './ui'
  *
  * Flyten er alltid opprett → last opp bilder → publiser, slik at et innlegg
  * aldri blir synlig halvferdig og bilder aldri blir foreldreløse.
+ *
+ * Formatvalget (#79) er ikke privilegert: alle kan velge markdown når teksten
+ * trenger overskrifter, lister eller en tabell. Forhåndsvisningen kjører samme
+ * rendrer som serveren og detaljsiden — `src/lib/markdown.ts` er en ren modul
+ * nettopp for at klienten skal kunne vise nøyaktig det som blir publisert.
  */
 
 export type PostFormImage = { id: string; fileName: string }
@@ -29,6 +37,7 @@ export type PostFormValues = {
   id: string
   title: string | null
   body: string
+  format: PostFormat
   audience: PostAudience
   importance: PostImportance
   official: boolean
@@ -39,6 +48,19 @@ export type PostFormValues = {
 const AUDIENCES: Array<{ value: PostAudience; label: string; hint: string }> = [
   { value: 'all', label: 'Hele korpset', hint: 'Alle innloggede medlemmer ser innlegget.' },
   { value: 'board', label: 'Bare styret', hint: 'Kun de som selv kan publisere beskjeder ser det.' },
+]
+
+const FORMATS: Array<{ value: PostFormat; label: string; hint: string }> = [
+  {
+    value: 'plain_text',
+    label: 'Rein tekst',
+    hint: 'Tomme linjer lager avsnitt. Lenker blir klikkbare av seg selv.',
+  },
+  {
+    value: 'markdown',
+    label: 'Markdown',
+    hint: '# overskrift · **fet** · - liste · [tekst](lenke) · tabeller. Rå HTML og bilder utenfra blir ikke vist.',
+  },
 ]
 
 const IMPORTANCES: Array<{ value: PostImportance; label: string; hint: string }> = [
@@ -52,6 +74,8 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
   const fileInput = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState(post?.title ?? '')
   const [body, setBody] = useState(post?.body ?? '')
+  const [format, setFormat] = useState<PostFormat>(post?.format ?? DEFAULT_POST_FORMAT)
+  const [preview, setPreview] = useState(false)
   const [audience, setAudience] = useState<PostAudience>(post?.audience ?? 'all')
   const [importance, setImportance] = useState<PostImportance>(post?.importance ?? 'normal')
   const [official, setOfficial] = useState(post?.official ?? false)
@@ -62,6 +86,12 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
   const [busy, setBusy] = useState<'draft' | 'publish' | null>(null)
   const isPublished = post?.publishedAt != null
   const imageBudget = MAX_POST_IMAGES - existingImages.length - files.length
+  // Samme rendrer som serveren og detaljsiden — forhåndsvisningen kan ikke
+  // vise noe annet enn det som faktisk blir publisert.
+  const previewHtml = useMemo(
+    () => (format === 'markdown' && preview ? markdownToHtml(body) : ''),
+    [body, format, preview],
+  )
 
   const addFiles = (list: FileList | null) => {
     if (!list) return
@@ -96,6 +126,7 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
     const values = {
       title: title.trim() || null,
       body: body.trim(),
+      format,
       audience,
       importance,
       official,
@@ -152,15 +183,89 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
 
   return (
     <form onSubmit={canPublish ? saveDraft : (e) => { e.preventDefault(); void publish() }} className="space-y-6">
-      <Field label="Tekst *" hint="Tomme linjer lager avsnitt. Lenker blir klikkbare av seg selv.">
-        <textarea
-          className="field-input min-h-40 resize-y leading-relaxed"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder={canPublish ? 'Hei alle sammen!\n\nØvelsen neste uke er flyttet …' : 'Hva skjer?'}
-          autoFocus
-        />
-      </Field>
+      <div>
+        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[0.8rem] font-medium text-ink-soft">Tekst *</span>
+          <fieldset className="flex items-center gap-1 rounded-full border border-line p-0.5">
+            <legend className="sr-only">Format på teksten</legend>
+            {FORMATS.map((f) => (
+              <label
+                key={f.value}
+                className={`cursor-pointer rounded-full px-2.5 py-1 text-xs font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brass ${
+                  format === f.value
+                    ? 'bg-[var(--brass-soft)] text-brass-strong'
+                    : 'text-ink-faint hover:text-brass-strong'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="post-format"
+                  className="sr-only"
+                  value={f.value}
+                  checked={format === f.value}
+                  onChange={() => {
+                    setFormat(f.value)
+                    // «Forhåndsvisning» gir ikke mening for rein tekst.
+                    if (f.value !== 'markdown') setPreview(false)
+                  }}
+                />
+                {f.label}
+              </label>
+            ))}
+          </fieldset>
+        </div>
+
+        {format === 'markdown' && (
+          <div className="mb-2 flex gap-2">
+            {[
+              { on: false, label: 'Skriv' },
+              { on: true, label: 'Forhåndsvisning' },
+            ].map((tab) => (
+              <button
+                key={tab.label}
+                type="button"
+                aria-pressed={preview === tab.on}
+                onClick={() => setPreview(tab.on)}
+                className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  preview === tab.on
+                    ? 'border-brass bg-[var(--brass-soft)] text-brass-strong'
+                    : 'border-line text-ink-soft hover:border-brass hover:text-brass-strong'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {preview && format === 'markdown' ? (
+          previewHtml ? (
+            // HTML-en kommer fra `markdownToHtml`, som bygger utdata av en
+            // allowlist og aldri slipper gjennom rå HTML eller farlige lenker.
+            <div
+              className="prose sheet min-h-40 px-4 py-3.5"
+              dangerouslySetInnerHTML={{ __html: previewHtml }}
+            />
+          ) : (
+            <p className="sheet min-h-40 px-4 py-3.5 text-sm text-ink-faint">Ingenting å vise ennå.</p>
+          )
+        ) : (
+          <textarea
+            className="field-input min-h-40 resize-y leading-relaxed"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder={
+              format === 'markdown'
+                ? '## Øvelsen neste uke\n\n- Vi starter 19.00\n- Ta med **svart mappe**'
+                : canPublish
+                  ? 'Hei alle sammen!\n\nØvelsen neste uke er flyttet …'
+                  : 'Hva skjer?'
+            }
+            autoFocus
+          />
+        )}
+        <p className="mt-1 text-xs text-ink-faint">{FORMATS.find((f) => f.value === format)!.hint}</p>
+      </div>
 
       <Field label="Tittel" hint="Valgfri. Uten tittel vises første linje av teksten.">
         <input

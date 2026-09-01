@@ -235,3 +235,28 @@ den eneste reelle skranken.
 | Medlem | Ja | **404** | **404** | Ja | **403** |
 | `posts.publish` | Ja | Ja | Ja | Ja | Ja (moderasjon) |
 | Uinnlogget | **401** | 401 | 401 | 401 | 401 |
+
+## 8. Markdown på veggen (#79, 1. september 2026)
+
+Et innlegg kan skrives som markdown (`posts.format`). Formatet er **ikke** en
+rettighet — alle som kan skrive på veggen kan velge det. Det tilgangsstyringen
+angår, er at brukerstyrt tekst nå blir markering, og der gjelder én regel:
+
+- **Ingen rå HTML, i noen form.** `src/lib/markdown.ts` bruker bare lexeren i
+  `marked` og skriver HTML-en selv, av en fast allowlist (`p`, `h2`–`h6`,
+  `strong`, `em`, `del`, `ul`/`ol`/`li`, `blockquote`, `pre`/`code`, `a`, `hr`,
+  `br`, tabell). Det finnes ingen passthrough å sanitere i etterkant. HTML i
+  teksten (`<script>`, `<img onerror=…>`, `<iframe>`) escapes og vises som den
+  teksten den er — den blir aldri markering.
+- **Lenker:** kun `http:`, `https:`, `mailto:` og relative lenker/fragmenter.
+  Alt annet (`javascript:`, `data:`, `vbscript:`, …) mister lenken og blir
+  stående som tekst. Kontrolltegn strippes **før** skjemasjekken, slik at
+  `java<TAB>script:` ikke slipper forbi.
+- **Eksterne bilder rendres aldri som `<img>`.** De blir en vanlig lenke.
+  Begrunnelsen er personvern og §7: et innbakt bilde ville lastet av seg selv og
+  fortalt en tredjepart hvilke medlemmer som leser hvilket innlegg, og når.
+  Bilder som hører til innlegget går gjennom den gatede opplastingen i §7.
+- Rendreren er ren og deles av server, klient og e-post, så forhåndsvisningen i
+  skjemaet kan aldri vise noe annet enn det som faktisk publiseres.
+- Angrepsforsøkene ligger i `src/lib/markdown.test.ts`. Faller en av dem, er det
+  et hull — ikke en kosmetisk endring.

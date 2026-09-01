@@ -463,8 +463,14 @@ export const posts = sqliteTable(
     // Valgfri: et medlemsinnlegg er ofte bare et par setninger. Uten tittel
     // vises første linje av teksten (`postHeading` i src/lib/posts.ts).
     title: text('title'),
-    // Ren tekst med avsnitt. Ikke markdown — URL-er auto-lenkes ved rendring.
+    // Teksten slik forfatteren skrev den. Tolkningen styres av `format`.
     body: text('body').notNull(),
+    // Hvordan `body` skal rendres (#79). `plain_text` = avsnitt med auto-lenkede
+    // URL-er, som før; `markdown` går gjennom sanitizeren i src/lib/markdown.ts.
+    // Standarden er `plain_text`, så eksisterende innlegg er uendret.
+    format: text('format', { enum: ['plain_text', 'markdown'] })
+      .notNull()
+      .default('plain_text'),
     audience: text('audience', { enum: ['all', 'board'] })
       .notNull()
       .default('all'),

@@ -5,6 +5,7 @@ import { boardTasks, postComments, postReactions, posts, projectWorks, projects,
 import { boardAreaNote } from '../lib/board'
 import { type HubArea, type HubCalendar, type HubEvent, type HubPost, type HubProject, areasFor, eventsAfter } from '../lib/hub'
 import type { CalendarEvent } from '../lib/ical'
+import { postPlainText } from '../lib/markdown'
 import { excerpt, postHeading } from '../lib/posts'
 import { hasPermission, requireMe } from './access'
 import { loadCalendar } from './calendar-feed'
@@ -81,6 +82,7 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
         id: posts.id,
         title: posts.title,
         body: posts.body,
+        format: posts.format,
         importance: posts.importance,
         official: posts.official,
         authorName: user.name,
@@ -142,17 +144,22 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
     : areas
 
   return {
-    posts: postRows.map((p) => ({
-      id: p.id,
-      heading: postHeading(p),
-      excerpt: excerpt(p.body, 120),
-      publishedAt: p.publishedAt!.getTime(),
-      important: p.importance === 'important',
-      official: p.official,
-      authorName: p.authorName ?? (p.official ? 'Styret' : 'Ukjent'),
-      commentCount: commentCounts.get(p.id) ?? 0,
-      likeCount: likeCounts.get(p.id) ?? 0,
-    })),
+    posts: postRows.map((p) => {
+      // Markdown strippes til ren tekst før utdraget — hub-en skal aldri vise
+      // «#» eller «**» (samme regel som feeden i src/server/posts.ts).
+      const plain = postPlainText(p.body, p.format)
+      return {
+        id: p.id,
+        heading: postHeading({ title: p.title, body: plain }),
+        excerpt: excerpt(plain, 120),
+        publishedAt: p.publishedAt!.getTime(),
+        important: p.importance === 'important',
+        official: p.official,
+        authorName: p.authorName ?? (p.official ? 'Styret' : 'Ukjent'),
+        commentCount: commentCounts.get(p.id) ?? 0,
+        likeCount: likeCounts.get(p.id) ?? 0,
+      }
+    }),
     me: {
       name: me.name,
       roleName: me.roleName,

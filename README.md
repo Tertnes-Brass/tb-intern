@@ -182,8 +182,20 @@ synlig for hele korpset — serveren stripper resten uansett hva klienten sender
 **Innlegget**
 
 - Tittel er valgfri; uten tittel vises første linje av teksten.
-- Teksten er ren tekst med avsnitt. Tomme linjer blir avsnitt, og URL-er gjøres
-  klikkbare automatisk — ingen markdown, ingen HTML fra skrivefeltet.
+- **Format velges per innlegg: «Rein tekst» (standard) eller «Markdown».**
+  - *Rein tekst* er som før: tomme linjer blir avsnitt, og URL-er gjøres
+    klikkbare automatisk. Eksisterende innlegg er alle rein tekst og er uendret.
+  - *Markdown* gir overskrifter, utheving, lister, sitat, kode og GFM-tabeller,
+    med en «Forhåndsvisning»-fane i skjemaet. Formatvalget følger innlegget ved
+    redigering, og er ikke en rettighet — alle kan bruke det.
+- **Ingen HTML fra skrivefeltet, i noe format.** Markdown rendres av
+  `src/lib/markdown.ts`, som bygger HTML-en av en fast allowlist: rå HTML escapes
+  og vises som tekst, lenker må være `http(s):`, `mailto:` eller relative, og
+  eksterne bilder (`![]()`) blir en lenke i stedet for et `<img>` — et innbakt
+  bilde ville fortalt en tredjepart hvem som leser veggen og når. Bilder i et
+  innlegg lastes opp gjennom den gatede flyten under.
+- Utdrag i feeden, på forsiden og i e-postemnet lages alltid av den *rene*
+  teksten, så et markdown-innlegg viser aldri `#` eller `**` der.
 - Inntil 10 bilder per innlegg, maks 10 MB hver (JPG, PNG, WebP, GIF, HEIC).
   Bildene lagres i R2 og vises **kun** gjennom `/api/post-images/$imageId`, som
   krever innlogging og gjentar innleggets synlighetsregel. Ingen offentlige URL-er.
@@ -199,6 +211,8 @@ synlig for hele korpset — serveren stripper resten uansett hva klienten sender
 - Kun styrets innlegg kan varsles på e-post, og kun når skriveren krysser av.
   E-posten går til aktive medlemmer med e-postadresse, filtrert på målgruppe og
   den enkeltes varslingsvalg, i små puljer. Feiler én adresse, fortsetter resten.
+- Markdown-innlegg sendes som HTML med inline-stiler (e-postklienter kan ikke
+  bruke klasser) og en ren tekst-versjon uten formateringssyntaks.
 - Hver sending skrives til `notification_log` (én rad per innlegg og mottaker).
   Derfor får ingen den samme beskjeden to ganger, og «Send e-post på nytt» går
   kun til dem som mangler varselet.

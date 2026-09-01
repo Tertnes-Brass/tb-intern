@@ -340,6 +340,8 @@ export type SeedPostData = {
   id: string
   title: string | null
   body: string
+  /** Utelatt = `plain_text`, som alle innlegg var før #79. */
+  format?: 'plain_text' | 'markdown'
   audience: 'all' | 'board'
   importance: 'normal' | 'important'
   official: boolean
@@ -396,6 +398,19 @@ export const SEED_POSTS: SeedPostData[] = [
     official: true,
     authorEmail: 'sindre@demo.tertnesbrass.no',
     publishedDaysAgo: null,
+  },
+  {
+    id: 'demo-post-generalprove',
+    title: 'Kjøreplan for generalprøven',
+    // Markdown-demoen (#79): overskrift, liste, tabell og lenke i ett innlegg,
+    // så rendringen og `.prose` kan sees uten å skrive noe først.
+    body: '## Program\n\nVi kjører gjennom hele programmet i rekkefølge. Ta med **blyant** og svart mappe.\n\n| Klokken | Hva | Hvor |\n| --- | --- | --- |\n| 18.30 | Rigg og oppvarming | Salen |\n| 19.00 | Gjennomkjøring | Salen |\n| 20.15 | Bilder | Foajeen |\n\n### Husk\n\n- Svart antrekk, ingen joggesko\n- Notestativ merkes med navn\n- Er du forhindret, si fra til stemmegruppa\n\n> Kjøreplanen ligger også på [tertnesbrass.no](https://tertnesbrass.no).',
+    format: 'markdown',
+    audience: 'all',
+    importance: 'normal',
+    official: true,
+    authorEmail: 'sindre@demo.tertnesbrass.no',
+    publishedDaysAgo: 5,
   },
   {
     id: 'demo-post-notestativ',

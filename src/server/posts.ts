@@ -15,8 +15,10 @@ import {
   user,
 } from '../db/schema'
 import { newId } from '../lib/id'
+import { postPlainText } from '../lib/markdown'
 import {
   type PostAudience,
+  type PostFormat,
   type PostImportance,
   type PostNotificationChoice,
   type PostRecipient,
@@ -57,6 +59,9 @@ const idInput = z.object({ id: z.string().min(1) })
 const postInput = z.object({
   title: z.string().trim().max(160, 'Tittelen er for lang').nullish(),
   body: z.string().trim().min(1, 'Teksten kan ikke være tom').max(20_000, 'Teksten er for lang'),
+  // #79: hvordan teksten skal tolkes. Standarden er formatet alle innlegg hadde
+  // før, slik at et gammelt klientkall uten feltet oppfører seg som i dag.
+  format: z.enum(['plain_text', 'markdown']).default('plain_text'),
   audience: z.enum(['all', 'board']).default('all'),
   importance: z.enum(['normal', 'important']).default('normal'),
   official: z.boolean().default(false),
@@ -73,10 +78,12 @@ export type PostImage = {
 
 export type PostListItem = {
   id: string
-  /** Tittel når den finnes, ellers første linje av teksten. */
+  /** Tittel når den finnes, ellers første linje av teksten (uten markdown-støy). */
   heading: string
   title: string | null
+  /** Alltid ren tekst — markdown strippes før utdraget lages. */
   excerpt: string
+  format: PostFormat
   audience: PostAudience
   importance: PostImportance
   official: boolean
@@ -117,6 +124,7 @@ type Row = {
   id: string
   title: string | null
   body: string
+  format: PostFormat
   audience: PostAudience
   importance: PostImportance
   official: boolean
@@ -133,6 +141,7 @@ function selectPosts() {
       id: posts.id,
       title: posts.title,
       body: posts.body,
+      format: posts.format,
       audience: posts.audience,
       importance: posts.importance,
       official: posts.official,
@@ -230,11 +239,15 @@ function toListItem(
   imageLimit: number,
 ): PostListItem {
   const all = extra.images.get(row.id) ?? []
+  // Overskrift og utdrag lages ALLTID av den rene teksten: feeden, hub-en og
+  // e-postemnet skal aldri vise «#» eller «**».
+  const plain = postPlainText(row.body, row.format)
   return {
     id: row.id,
-    heading: postHeading(row),
+    heading: postHeading({ title: row.title, body: plain }),
     title: row.title,
-    excerpt: excerpt(row.body),
+    excerpt: excerpt(plain),
+    format: row.format,
     audience: row.audience,
     importance: row.importance,
     official: row.official,
@@ -335,6 +348,7 @@ export const createPost = createServerFn({ method: 'POST' })
         id,
         title: safe.title,
         body: safe.body,
+        format: safe.format,
         audience: safe.audience,
         importance: safe.importance,
         official: safe.official,
@@ -365,12 +379,15 @@ export const updatePost = createServerFn({ method: 'POST' })
           ? {
               title: safe.title,
               body: safe.body,
+              format: safe.format,
               audience: safe.audience,
               importance: safe.importance,
               official: safe.official,
               updatedAt: new Date(),
             }
-          : { title: safe.title, body: safe.body, updatedAt: new Date() },
+          : // Formatet er ikke privilegert, så det følger med også her — ellers
+            // ville et markdown-innlegg blitt ren tekst av en skrivefeilretting.
+            { title: safe.title, body: safe.body, format: safe.format, updatedAt: new Date() },
       )
       .where(eq(posts.id, data.id))
     return { ok: true }
@@ -626,8 +643,9 @@ async function notifyPost(row: Row): Promise<PostNotifyResult> {
   // URL-en bygges fra BETTER_AUTH_URL, aldri fra request-origin (AGENTS.md).
   const url = `${new URL(env.BETTER_AUTH_URL).origin}/beskjeder/${row.id}`
   const mail = postEmail({
-    title: postHeading(row, 160),
+    title: postHeading({ title: row.title, body: postPlainText(row.body, row.format) }, 160),
     body: row.body,
+    format: row.format,
     url,
     authorName: row.authorName ?? OFFICIAL_AUTHOR,
     important: row.importance === 'important',

@@ -449,6 +449,176 @@ select.field-input {
   right: 0;
 }
 
+/* ---------- Markdown-innhold («.prose», #79) ----------
+   Brukes på rendret markdown i Beskjeder: detaljsiden, forhåndsvisningen i
+   skjemaet. Alt er bygget av tokens over, så lys/mørk følger av seg selv, og
+   HTML-en kommer fra allowlisten i src/lib/markdown.ts — her stylet vi bare det
+   som faktisk kan komme ut derfra. Mobil først: skriftstørrelsene er satt for
+   liten skjerm og vokser med `clamp()`, og tabeller får vannrett scroll i
+   stedet for å sprenge siden. */
+.prose {
+  font-size: 0.98rem;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  overflow-wrap: break-word;
+}
+.prose > *:first-child {
+  margin-top: 0;
+}
+.prose > *:last-child {
+  margin-bottom: 0;
+}
+.prose p {
+  margin: 0 0 1em;
+}
+
+/* Overskrifter i et innlegg starter på h2 — sidens h1 er tittelen. Samme
+   Fraunces-uttrykk som `.display-title`, men uten kursiven: en mellomtittel
+   skal føre leseren videre, ikke ta over siden. */
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-variation-settings: 'SOFT' 24, 'WONK' 1;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  line-height: 1.2;
+  margin: 1.6em 0 0.5em;
+}
+.prose h2 {
+  font-size: clamp(1.3rem, 3.4vw, 1.55rem);
+  font-weight: 600;
+}
+.prose h3 {
+  font-size: clamp(1.12rem, 3vw, 1.28rem);
+  font-weight: 600;
+}
+.prose h4 {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+.prose h5,
+.prose h6 {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brass);
+  font-variation-settings: normal;
+}
+
+.prose strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.prose em {
+  font-style: italic;
+}
+.prose del {
+  color: var(--ink-faint);
+}
+
+.prose ul,
+.prose ol {
+  margin: 0 0 1em;
+  padding-left: 1.35em;
+}
+.prose ul {
+  list-style: disc;
+}
+.prose ol {
+  list-style: decimal;
+}
+.prose li {
+  margin: 0.25em 0;
+}
+.prose li::marker {
+  color: var(--brass);
+}
+.prose li > ul,
+.prose li > ol {
+  margin: 0.25em 0 0.25em;
+}
+
+.prose blockquote {
+  margin: 0 0 1em;
+  padding: 0.1em 0 0.1em 1em;
+  border-left: 2px solid var(--brass);
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.prose a {
+  color: var(--brass-strong);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--brass) 40%, transparent);
+  transition: border-color 0.15s, color 0.15s;
+}
+.prose a:hover {
+  color: var(--brass);
+  border-bottom-color: var(--brass);
+}
+
+.prose code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--paper-sunken);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.prose pre {
+  margin: 0 0 1em;
+  padding: 0.85rem 1rem;
+  background: var(--paper-sunken);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow-x: auto;
+}
+.prose pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.prose hr {
+  margin: 1.8em 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* Tabellen ligger i en wrapper (`markdownToHtml`) nettopp for at scrollen skal
+   bli tabellens egen og ikke sidens. */
+.prose .prose-table {
+  margin: 0 0 1em;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.prose table {
+  border-collapse: collapse;
+  width: auto;
+  min-width: 100%;
+  font-size: 0.9rem;
+}
+.prose th,
+.prose td {
+  border: 1px solid var(--line);
+  padding: 0.4rem 0.65rem;
+  text-align: left;
+  vertical-align: top;
+}
+.prose th {
+  background: var(--paper-sunken);
+  color: var(--ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* ---------- Utskrift ----------
    Én felles regel for alle sider som skal kunne skrives ut — i praksis
    slagverksoppsettet (`/noter/prosjekter/$projectId/slagverk`). Skjermkromet

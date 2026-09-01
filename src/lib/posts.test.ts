@@ -218,6 +218,7 @@ describe('sanitizePostInput', () => {
   const raw = {
     title: '  Viktig melding  ',
     body: '  Hei  ',
+    format: 'plain_text' as const,
     audience: 'board' as const,
     importance: 'important' as const,
     official: true,
@@ -227,6 +228,7 @@ describe('sanitizePostInput', () => {
     expect(sanitizePostInput(raw, true)).toEqual({
       title: 'Viktig melding',
       body: 'Hei',
+      format: 'plain_text',
       audience: 'board',
       importance: 'important',
       official: true,
@@ -237,10 +239,21 @@ describe('sanitizePostInput', () => {
     expect(sanitizePostInput(raw, false)).toEqual({
       title: 'Viktig melding',
       body: 'Hei',
+      format: 'plain_text',
       audience: 'all',
       importance: 'normal',
       official: false,
     })
+  })
+
+  it('lar et vanlig medlem beholde markdown-formatet (#79)', () => {
+    // Formatet er ikke et privilegium — det er bare hvordan teksten skal leses.
+    expect(sanitizePostInput({ ...raw, format: 'markdown' }, false).format).toBe('markdown')
+    expect(sanitizePostInput({ ...raw, format: 'markdown' }, true).format).toBe('markdown')
+  })
+
+  it('faller tilbake til rein tekst når formatet er ukjent', () => {
+    expect(sanitizePostInput({ ...raw, format: 'html' as never }, true).format).toBe('plain_text')
   })
 
   it('gjør tom tittel til null', () => {
