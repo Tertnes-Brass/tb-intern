@@ -41,6 +41,12 @@ const SCHEMA_BEFORE = `
     created_at INTEGER NOT NULL
   );
   CREATE INDEX board_messages_channel_idx ON board_messages (channel, created_at);
+  -- Migrasjonen ble slått sammen med #79 (format på beskjeder) ved fletting;
+  -- tabellen må finnes for at ALTER-setningen skal gå gjennom.
+  CREATE TABLE posts (
+    id TEXT PRIMARY KEY NOT NULL,
+    body TEXT NOT NULL
+  );
 `
 
 function migratedDb(): DatabaseSync {
