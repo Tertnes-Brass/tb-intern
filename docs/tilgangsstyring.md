@@ -221,6 +221,59 @@ rettighet alene:
   mot `user`, ikke mot `section_leaders`: mister noen leiarbindingen, står
   meldingene igjen med navnet på den som skrev dem.
 
+## 5d. Oppmøte og fravær (`attendance.manage`, #82 + #24, 2. september 2026)
+
+Kalenderen fikk en detaljrute per forekomst (`/kalender/$eventId`) med
+øvingsplan og oppmøte. Øvingsplanen er ufarlig — alle innloggede leser den, og
+`calendar.manage` skriver den. Oppmøtet er ikke: hvem som ikke kommer på øvelse
+er en personopplysning, og kommentarfeltet er det stedet en fraværsgrunn kunne
+snike seg inn. Reglene:
+
+- **Innsynet er en trapp, håndhevet i `getEventDetail`:**
+
+  | Aktør | Tallene | Egen status og kommentar | Andres navn og status | Andres kommentarer |
+  |---|---|---|---|---|
+  | Medlem | Ja | Ja | **Nei** | **Nei** |
+  | Gruppeleder (aktiv `section_leaders`-binding) | Ja | Ja | Ja, **kun egne seksjoner** | Ja, kun egne seksjoner |
+  | `attendance.manage` | Ja | Ja | Ja | Ja |
+  | Admin (`*`) | Ja | Ja | Ja | Ja |
+  | Uinnlogget | **Redirect til /login** | — | — | — |
+
+  Regelen er den rene `attendanceScope`/`canSeeMemberAttendance` i
+  `src/lib/attendance.ts`, og serveren returnerer `groups: null` når leseren
+  bare skal se tall — navnene forlater aldri serveren. Et rått kall gir
+  nøyaktig det samme som skjermen viser. **Tallene er bevisst åpne:** «18
+  kommer» handler om øvelsen kan gjennomføres, ikke om hvem som er borte.
+- **Skriving er tre veier til SAMME rad.** Medlemmet svarer for seg selv
+  (`setMyAttendance`, som ikke har en `userId`-parameter i det hele tatt —
+  ingen kan svare på andres vegne), `attendance.manage` registrerer for hvem
+  som helst, og en gruppeleder for sine egne seksjoner
+  (`setMemberAttendance` → `canSetAttendanceFor`). Målets stemmer leses
+  **ferskt fra databasen**, aldri fra kallet, av samme grunn som
+  `canManageMemberParts` gjør det. Siste skriving vinner; `source`
+  (`self`/`admin`) og `registered_by` settes av serveren og sier hvem som
+  registrerte.
+- **Bare aktive medlemmer.** `requireMe()` avviser deaktiverte, og
+  `setMemberAttendance` slår opp målets profil og svarer likt på «finnes ikke»
+  og «er deaktivert».
+- **Ingen fraværsgrunn.** Feltet er en kort kommentar (200 tegn, trimmet), og
+  den følger navnelisten i innsynstrappen over. Skal noe sensitivt sies, sies
+  det utenfor systemet.
+- **Nøkkelen kan ikke brukes som et fritt tekstfelt.** `occurrenceKey` valideres
+  med `isOccurrenceKey` i hver `validator(zod)`, og `event_meta` kan bare
+  opprettes for en forekomst som FAKTISK finnes i feeden — snapshotet
+  (`summary`, `start`) tas derfra, aldri fra klienten.
+- **Foreldreløse rader lekker ikke.** Er hendelsen borte fra feeden, ser en
+  vanlig leser kun beskjeden om at den ikke finnes lenger; øvingsplan og
+  oppmøte vises bare for dem med skriverett eller en lederbinding. Selve
+  teksten på siden skiller heller ikke mellom «det finnes data du ikke får se»
+  og «det finnes ingenting».
+- **`calendar.manage` er ikke `projects.manage`.** Verkssøket på detaljruta er
+  en egen serverfunksjon (`searchWorksForEvent`) gated på `calendar.manage`,
+  slik at den som setter opp en øvelse ikke må kunne publisere prosjekter. Og
+  prosjektkoblingen godtar kun **publiserte** prosjekter — et utkast er ikke
+  synlig for medlemmene, og navnet skulle ikke lekket via en kobling.
+
 ## 6. Produktvalg før fase 4 (avgjort — historikk)
 
 Alle valg ble avgjort før deploy, i tråd med de anbefalte alternativene (se

@@ -682,3 +682,95 @@ export const notificationLog = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.postId, t.userId] })],
 )
+
+// ---------- Øvingsplan og oppmøte (#82 + #24) ----------
+
+// Lokale data på ÉN forekomst av en Google-kalenderhendelse. `occurrence_key`
+// er den stabile identiteten fra src/lib/occurrence.ts: base64url(uid) for en
+// enkelthendelse, base64url(uid) + forekomstens OPPRINNELIGE start for en
+// gjentakende. Nøkkelen kommer aldri fra klienten uten å valideres, og den
+// bygges alltid av parseren — aldri av et skjema.
+//
+// Raden opprettes LAZILY: første gang noen legger inn et punkt i øvingsplanen,
+// kobler et prosjekt eller svarer på oppmøte. En hendelse ingen har rørt har
+// ingen rad, og kalenderen er fortsatt bare en lesekopi av Google.
+//
+// `summary` og `start` er SNAPSHOT, ikke sannhet. Feeden er sannheten så lenge
+// hendelsen finnes der; snapshotet er det som gjør en foreldreløs rad
+// (hendelsen slettet i Google, eller falt ut av vinduet) mulig å forstå — uten
+// det ville en administrator sittet igjen med en base64-nøkkel og en liste med
+// verk. Lokale data slettes ALDRI automatisk fordi feeden endrer seg.
+export const eventMeta = sqliteTable(
+  'event_meta',
+  {
+    occurrenceKey: text('occurrence_key').primaryKey(),
+    /** iCalendar-UID-en. Lik for hele serien; duplisert ut av nøkkelen for å kunne spørres på. */
+    uid: text('uid').notNull(),
+    /** Tittelen slik den sto i feeden da raden ble laget. */
+    summary: text('summary').notNull(),
+    /** Forekomstens starttidspunkt slik det sto i feeden da raden ble laget. */
+    start: integer('start', { mode: 'timestamp_ms' }).notNull(),
+    // Kobling til et prosjekt/konsert (#26). SET NULL: slettes prosjektet,
+    // består øvingsplanen — den er ikke prosjektets eiendom.
+    linkedProjectId: text('linked_project_id').references(() => projects.id, { onDelete: 'set null' }),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('event_meta_uid_idx').on(t.uid)],
+)
+
+// Ett punkt i øvingsplanen: ENTEN et verk fra arkivet ELLER en fritekst-tittel
+// (oppvarming, marsjoppstilling, pause). Regelen håndheves i
+// src/lib/setlist.ts og i serverfunksjonen — SQLite har ingen CHECK her fordi
+// migrasjonen skal være ren additiv og en CHECK ikke kan legges til uten
+// tabell-rebuild (se AGENTS.md om D1 og rebuild).
+//
+// `work_id` er ON DELETE SET NULL: slettes verket fra arkivet, står punktet
+// igjen med rekkefølgen og merknaden sin i stedet for å forsvinne fra en plan
+// noen allerede har lest.
+export const eventSetlist = sqliteTable(
+  'event_setlist',
+  {
+    id: text('id').primaryKey(),
+    occurrenceKey: text('occurrence_key')
+      .notNull()
+      .references(() => eventMeta.occurrenceKey, { onDelete: 'cascade' }),
+    workId: text('work_id').references(() => works.id, { onDelete: 'set null' }),
+    /** Tittel for et punkt som ikke er et verk i arkivet. Null når `work_id` er satt. */
+    customTitle: text('custom_title'),
+    /** Kort merknad: sats, taktnummer, omtrentlig tidsbruk. */
+    note: text('note'),
+    sortOrder: integer('sort_order').notNull().default(0),
+  },
+  (t) => [index('event_setlist_key_idx').on(t.occurrenceKey, t.sortOrder)],
+)
+
+// ÉN status per medlem per forekomst — samme rad for selvbetjent RSVP (#24) og
+// administrert fravær (#82). To tabeller ville gitt to svar på «kommer Ingrid
+// på torsdag?»; her vinner siste skriving, og `source` + `registered_by` sier
+// hvem som satte den. Det er sporbarheten saken ber om.
+//
+// `comment` er en KORT, valgfri merknad — ikke en fraværsgrunn. Den følger
+// samme innsyn som navnelisten (docs/tilgangsstyring.md §5d).
+export const eventAttendance = sqliteTable(
+  'event_attendance',
+  {
+    occurrenceKey: text('occurrence_key')
+      .notNull()
+      .references(() => eventMeta.occurrenceKey, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    status: text('status', { enum: ['attending', 'not_attending', 'unsure'] }).notNull(),
+    comment: text('comment'),
+    /** `self` = medlemmet svarte selv, `admin` = registrert av en ansvarlig. */
+    source: text('source', { enum: ['self', 'admin'] })
+      .notNull()
+      .default('self'),
+    registeredBy: text('registered_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.occurrenceKey, t.userId] }), index('event_attendance_user_idx').on(t.userId)],
+)

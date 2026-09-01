@@ -27,6 +27,7 @@ import { Route as GruppeledereIndexRouteImport } from './routes/gruppeledere/ind
 import { Route as InnstillingerIndexRouteImport } from './routes/innstillinger/index'
 import { Route as InnstillingerNedlastingerRouteImport } from './routes/innstillinger/nedlastinger'
 import { Route as KalenderIndexRouteImport } from './routes/kalender/index'
+import { Route as KalenderEventIdRouteImport } from './routes/kalender/$eventId'
 import { Route as MedlemmerIndexRouteImport } from './routes/medlemmer/index'
 import { Route as NoterIndexRouteImport } from './routes/noter/index'
 import { Route as ProsjekterIndexRouteImport } from './routes/prosjekter/index'
@@ -148,6 +149,11 @@ const InnstillingerNedlastingerRoute =
 const KalenderIndexRoute = KalenderIndexRouteImport.update({
   id: '/kalender/',
   path: '/kalender/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KalenderEventIdRoute = KalenderEventIdRouteImport.update({
+  id: '/kalender/$eventId',
+  path: '/kalender/$eventId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MedlemmerIndexRoute = MedlemmerIndexRouteImport.update({
@@ -323,6 +329,7 @@ export interface FileRoutesByFullPath {
   '/arkiv/$workId': typeof ArkivWorkIdRoute
   '/beskjeder/ny': typeof BeskjederNyRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
+  '/kalender/$eventId': typeof KalenderEventIdRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
   '/styre/$taskId': typeof StyreTaskIdRoute
   '/v/$token': typeof VTokenRoute
@@ -371,6 +378,7 @@ export interface FileRoutesByTo {
   '/arkiv/$workId': typeof ArkivWorkIdRoute
   '/beskjeder/ny': typeof BeskjederNyRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
+  '/kalender/$eventId': typeof KalenderEventIdRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
   '/styre/$taskId': typeof StyreTaskIdRoute
   '/v/$token': typeof VTokenRoute
@@ -423,6 +431,7 @@ export interface FileRoutesById {
   '/arkiv/$workId': typeof ArkivWorkIdRoute
   '/beskjeder/ny': typeof BeskjederNyRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
+  '/kalender/$eventId': typeof KalenderEventIdRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
   '/styre/$taskId': typeof StyreTaskIdRoute
   '/v/$token': typeof VTokenRoute
@@ -476,6 +485,7 @@ export interface FileRouteTypes {
     | '/arkiv/$workId'
     | '/beskjeder/ny'
     | '/innstillinger/nedlastinger'
+    | '/kalender/$eventId'
     | '/prosjekter/$projectId'
     | '/styre/$taskId'
     | '/v/$token'
@@ -524,6 +534,7 @@ export interface FileRouteTypes {
     | '/arkiv/$workId'
     | '/beskjeder/ny'
     | '/innstillinger/nedlastinger'
+    | '/kalender/$eventId'
     | '/prosjekter/$projectId'
     | '/styre/$taskId'
     | '/v/$token'
@@ -575,6 +586,7 @@ export interface FileRouteTypes {
     | '/arkiv/$workId'
     | '/beskjeder/ny'
     | '/innstillinger/nedlastinger'
+    | '/kalender/$eventId'
     | '/prosjekter/$projectId'
     | '/styre/$taskId'
     | '/v/$token'
@@ -627,6 +639,7 @@ export interface RootRouteChildren {
   ArkivWorkIdRoute: typeof ArkivWorkIdRoute
   BeskjederNyRoute: typeof BeskjederNyRoute
   InnstillingerNedlastingerRoute: typeof InnstillingerNedlastingerRoute
+  KalenderEventIdRoute: typeof KalenderEventIdRoute
   ProsjekterProjectIdRoute: typeof ProsjekterProjectIdRoute
   VTokenRoute: typeof VTokenRoute
   ArkivIndexRoute: typeof ArkivIndexRoute
@@ -775,6 +788,13 @@ declare module '@tanstack/react-router' {
       path: '/kalender'
       fullPath: '/kalender/'
       preLoaderRoute: typeof KalenderIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kalender/$eventId': {
+      id: '/kalender/$eventId'
+      path: '/kalender/$eventId'
+      fullPath: '/kalender/$eventId'
+      preLoaderRoute: typeof KalenderEventIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/medlemmer/': {
@@ -1072,6 +1092,7 @@ const rootRouteChildren: RootRouteChildren = {
   ArkivWorkIdRoute: ArkivWorkIdRoute,
   BeskjederNyRoute: BeskjederNyRoute,
   InnstillingerNedlastingerRoute: InnstillingerNedlastingerRoute,
+  KalenderEventIdRoute: KalenderEventIdRoute,
   ProsjekterProjectIdRoute: ProsjekterProjectIdRoute,
   VTokenRoute: VTokenRoute,
   ArkivIndexRoute: ArkivIndexRoute,

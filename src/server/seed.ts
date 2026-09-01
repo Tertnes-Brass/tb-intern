@@ -8,6 +8,9 @@ import {
   boardMessages,
   boardProjects,
   boardTasks,
+  eventAttendance,
+  eventMeta,
+  eventSetlist,
   invitations,
   leaderChannels,
   leaderMessages,
@@ -30,6 +33,8 @@ import {
   workLinks,
   works,
 } from '../db/schema'
+import { calendarWindow } from '../lib/calendar-window'
+import { expandEvents } from '../lib/ical'
 import { findRoleNameCollision, roleNameCollisionMessage } from '../lib/roles'
 import { BRASS_BAND_PARTS } from '../lib/taxonomy'
 import { newId, sha256Hex } from '../lib/id'
@@ -40,6 +45,7 @@ import {
   DEMO_SHARE_PART_IDS,
   DEMO_SHARE_RECIPIENT,
   DEMO_SHARE_TOKEN,
+  SEED_ATTENDANCE,
   SEED_BOARD_CHANNELS,
   SEED_BOARD_MEETINGS,
   SEED_BOARD_MESSAGES,
@@ -56,6 +62,7 @@ import {
   SEED_ROLE_PERMISSIONS,
   SEED_SEASONS,
   SEED_SECTION_LEADERS,
+  SEED_SETLIST,
   SEED_WORKS,
 } from './seed-data'
 
@@ -172,6 +179,9 @@ export async function seedDemoData(): Promise<{ ok: boolean; alreadySeeded?: boo
     // Styredemoen fyller sine egne tabeller, så lokale databaser som ble seedet
     // før /styre fantes skal også få innhold.
     await seedBoardDemoData()
+    // Øvingsplanen peker på verk, og oppmøtet på brukere: begge kjøres derfor
+    // ETTER at verkene finnes, og på nytt ved hver dev-innlogging.
+    await seedRehearsalDemo()
     return { ok: true, alreadySeeded: true }
   }
 
@@ -287,6 +297,10 @@ export async function seedDemoData(): Promise<{ ok: boolean; alreadySeeded?: boo
 
   // Etter prosjektene: en styreoppgave kobles til Sommerkonserten.
   await seedBoardDemoData()
+
+  // Til slutt: øvingsplanen slår opp verk på tittel, så den må kjøre etter at
+  // verkene er lagt inn.
+  await seedRehearsalDemo()
 
   await d.insert(settings).values([{ key: 'bandName', value: 'Tertnes Brass' }])
   return { ok: true }
@@ -660,5 +674,92 @@ async function seedBoardDemoData(): Promise<void> {
     for (const body of t.comments) {
       await d.insert(boardComments).values({ id: newId(), taskId: id, authorId: null, body, createdAt: ts })
     }
+  }
+}
+
+/**
+ * Demoinnhold for øvingsplan og oppmøte (#82 + #24), kun i dev.
+ *
+ * Nøkkelen er ikke oppdiktet: den hentes fra SAMME parser og SAMME dev-fixture
+ * som `/kalender` bruker (`devCalendarIcs` via `loadCalendar` når
+ * `CALENDAR_ICS_URL` mangler), så demoplanen havner på den øvelsen som faktisk
+ * står som «neste» i kalenderen. Er `CALENDAR_ICS_URL` satt lokalt, peker
+ * demodataene på en forekomst som ikke finnes i din feed — da er raden
+ * foreldreløs, og detaljruta viser nettopp den rolige siden #82 ber om.
+ *
+ * Idempotent: `event_meta` skrives med `onConflictDoNothing`, øvingsplanen
+ * legges bare inn hvis forekomsten ikke har punkter fra før, og oppmøteradene
+ * overskriver aldri et svar noen har gitt i UI-et.
+ */
+export async function seedRehearsalDemo(): Promise<void> {
+  const d = db()
+  const ts = now()
+  const nowMs = ts.getTime()
+
+  // Dynamisk import: `dev-calendar` skal ikke følge med i produksjonsbygget.
+  const { DEV_REHEARSAL_UID, devCalendarIcs } = await import('./dev-calendar')
+  const occurrence = expandEvents(devCalendarIcs(nowMs), calendarWindow(nowMs)).find(
+    (e) => e.uid === DEV_REHEARSAL_UID && Date.parse(e.start) >= nowMs,
+  )
+  if (!occurrence) return
+
+  const key = occurrence.occurrenceKey
+  await d
+    .insert(eventMeta)
+    .values({
+      occurrenceKey: key,
+      uid: occurrence.uid,
+      summary: occurrence.title,
+      start: new Date(occurrence.start),
+      linkedProjectId: null,
+      createdBy: null,
+      createdAt: ts,
+      updatedAt: ts,
+    })
+    .onConflictDoNothing()
+
+  const existingPlan = await d
+    .select({ id: eventSetlist.id })
+    .from(eventSetlist)
+    .where(eq(eventSetlist.occurrenceKey, key))
+    .limit(1)
+  if (existingPlan.length === 0) {
+    const workIdByTitle = new Map((await d.select({ id: works.id, title: works.title }).from(works)).map((w) => [w.title, w.id]))
+    for (const [i, item] of SEED_SETLIST.entries()) {
+      const workId = item.workTitle ? (workIdByTitle.get(item.workTitle) ?? null) : null
+      // Et verk som ikke er seedet ennå hoppes over — planen skal ikke få et
+      // punkt uten både verk og tittel.
+      if (item.workTitle && !workId) continue
+      await d.insert(eventSetlist).values({
+        id: newId(),
+        occurrenceKey: key,
+        workId,
+        customTitle: workId ? null : item.customTitle,
+        note: item.note,
+        sortOrder: (i + 1) * 10,
+      })
+    }
+  }
+
+  const userIdByEmail = new Map(
+    (await d.select({ id: user.id, email: user.email }).from(user)).map((u) => [u.email.toLowerCase(), u.id]),
+  )
+  for (const row of SEED_ATTENDANCE) {
+    const userId = userIdByEmail.get(row.email)
+    if (!userId) continue
+    const registeredBy = row.registeredByEmail ? (userIdByEmail.get(row.registeredByEmail) ?? null) : userId
+    await d
+      .insert(eventAttendance)
+      .values({
+        occurrenceKey: key,
+        userId,
+        status: row.status,
+        comment: row.comment,
+        source: row.registeredByEmail ? 'admin' : 'self',
+        registeredBy,
+        createdAt: ts,
+        updatedAt: ts,
+      })
+      .onConflictDoNothing()
   }
 }

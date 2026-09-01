@@ -124,7 +124,13 @@ function HubPage() {
           <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
             <div className="min-w-0">
               <Kicker className="mb-3">Neste · {relativeDays(toOsloDate(hero.event.start))}</Kicker>
-              <Link to="/kalender" className="link-quiet block">
+              {/* Til forekomsten, ikke til lista: derfra ser man øvingsplanen
+                  og kan svare på oppmøte (#82/#24). */}
+              <Link
+                to="/kalender/$eventId"
+                params={{ eventId: hero.event.occurrenceKey }}
+                className="link-quiet block"
+              >
                 <h1 className={heroTitleClass}>{hero.event.title}</h1>
               </Link>
               <p className="mt-4 text-[0.95rem] leading-relaxed text-ink-soft">

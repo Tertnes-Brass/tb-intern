@@ -16,9 +16,18 @@
  * RECURRENCE-ID (endret enkeltforekomst) og STATUS:CANCELLED.
  */
 
+import { occurrenceKey } from './occurrence'
+
 export type CalendarEvent = {
-  /** Stabil nøkkel per forekomst (uid, evt. uid#start for gjentakelser). */
+  /** Visnings- og listenøkkel (uid, evt. uid#start for gjentakelser). */
   id: string
+  /**
+   * Stabil identitet for forekomsten, brukt av alt lokalt vi henger på den
+   * (øvingsplan, oppmøte) og i `/kalender/$eventId`. Bygges av `uid` +
+   * forekomstens OPPRINNELIGE start, så den overlever at tidspunktet flyttes.
+   * Se `src/lib/occurrence.ts`.
+   */
+  occurrenceKey: string
   uid: string
   title: string
   /** ISO-8601 i UTC. */
@@ -552,7 +561,7 @@ function finishEvent(partial: Partial<RawEvent> & { exDates: number[] }): RawEve
 
 // ---------- Offentlig API ----------
 
-function toEvent(source: RawEvent, startFloating: number, isRecurring: boolean): CalendarEvent {
+function toEvent(source: RawEvent, startFloating: number, originalStartUtc: number | null): CalendarEvent {
   // `floatingToUtc` er identitet for tidssonen «UTC», så Z-tider trenger ingen
   // egen gren. Varigheten legges på i veggklokke-rommet — en øvelse 19:00–21:00
   // varer to timer også i uken sommertiden legges om.
@@ -561,8 +570,13 @@ function toEvent(source: RawEvent, startFloating: number, isRecurring: boolean):
   const endUtc = source.durationMs === null ? null : floatingToUtc(startFloating + source.durationMs, timeZone)
 
   const start = new Date(startUtc).toISOString()
+  // `originalStartUtc` er forekomstens plass i serien — det Google kaller
+  // RECURRENCE-ID. For en flyttet forekomst er den ULIK `start`, og det er
+  // nettopp derfor nøkkelen bruker den: planen skal bli med på flyttingen.
+  const original = originalStartUtc === null ? null : new Date(originalStartUtc).toISOString()
   return {
-    id: isRecurring ? `${source.uid}#${start}` : source.uid,
+    id: original === null ? source.uid : `${source.uid}#${start}`,
+    occurrenceKey: occurrenceKey(source.uid, original),
     uid: source.uid,
     title: source.summary || '(uten tittel)',
     start,
@@ -595,27 +609,30 @@ export function expandEvents(ics: string, options: ExpandOptions): CalendarEvent
   const collected: CalendarEvent[] = []
   const seen = new Set<string>()
 
-  const consider = (source: RawEvent, floating: number, isRecurring: boolean) => {
+  // Dedupliseringen går på `occurrenceKey`, ikke på `id`: to rader for samme
+  // plass i serien ER samme forekomst, uansett hvilket tidspunkt de er flyttet
+  // til. For enkelthendelser er de to nøklene ekvivalente (begge er `uid`).
+  const consider = (source: RawEvent, floating: number, originalStartUtc: number | null) => {
     if (source.status === 'CANCELLED') return
-    const event = toEvent(source, floating, isRecurring)
-    if (seen.has(event.id)) return
+    const event = toEvent(source, floating, originalStartUtc)
+    if (seen.has(event.occurrenceKey)) return
     const startMs = Date.parse(event.start)
     const endMs = event.end === null ? startMs : Date.parse(event.end)
     if (startMs >= to) return
     if (endMs <= from && startMs < from) return
-    seen.add(event.id)
+    seen.add(event.occurrenceKey)
     collected.push(event)
   }
 
   for (const source of events) {
     if (source.recurrenceId) continue // håndteres via overrides
     if (!source.rrule) {
-      consider(source, source.start.floating, false)
+      consider(source, source.start.floating, null)
       continue
     }
     const rule = parseRRule(source.rrule, source.start.timeZone)
     if (!rule) {
-      consider(source, source.start.floating, false)
+      consider(source, source.start.floating, null)
       continue
     }
     // Vinduets slutt i veggklokke-rom.
@@ -623,12 +640,16 @@ export function expandEvents(ics: string, options: ExpandOptions): CalendarEvent
     const exDates = new Set(source.exDates)
     for (const floating of expandRecurrence(source.start.floating, rule, windowEndFloating)) {
       if (exDates.has(floating)) continue
+      // Den opprinnelige starten regnes alltid i SERIENS tidssone — en flyttet
+      // forekomst kan ha fått en annen TZID, og nøkkelen skal ikke flytte seg
+      // med den.
+      const originalStartUtc = floatingToUtc(floating, source.start.timeZone)
       const override = overrides.get(`${source.uid}#${floating}`)
       if (override) {
-        consider(override, override.start.floating, true)
+        consider(override, override.start.floating, originalStartUtc)
         continue
       }
-      consider(source, floating, true)
+      consider(source, floating, originalStartUtc)
     }
   }
 
