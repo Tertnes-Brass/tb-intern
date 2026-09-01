@@ -78,6 +78,13 @@
       "when": 1788177685768,
       "tag": "0010_slagverk-og-styrevarsling",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1788272143881,
+      "tag": "0011_merge-styremedlem-role",
+      "breakpoints": true
     }
   ]
 }

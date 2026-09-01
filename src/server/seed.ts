@@ -24,6 +24,7 @@ import {
   workLinks,
   works,
 } from '../db/schema'
+import { findRoleNameCollision, roleNameCollisionMessage } from '../lib/roles'
 import { BRASS_BAND_PARTS } from '../lib/taxonomy'
 import { newId, sha256Hex } from '../lib/id'
 import { youTubeSearchUrl } from '../lib/youtube'
@@ -66,8 +67,23 @@ export async function seedBaseConfig(): Promise<void> {
   // derfor inn hver systemrolle som mangler, og seeder standardrettighetene
   // KUN for roller vi nettopp opprettet: rettigheter en admin har fjernet i
   // rollematrisen skal aldri komme tilbake av seg selv.
-  const existingRoleIds = new Set((await d.select({ id: roles.id }).from(roles)).map((r) => r.id))
-  const missingRoles = SEED_ROLES.filter((r) => !existingRoleIds.has(r.id))
+  //
+  // Navnekollisjon er en egen sak (#78): `board` ble lagt inn av 0008 selv om
+  // det allerede fantes en brukeropprettet rolle som HET «Styremedlem», og
+  // resultatet var to rader ingen kunne skille i rollematrisen. Vi oppretter
+  // derfor ikke en systemrolle blindt — finnes navnet fra før, hoppes rollen
+  // over og kollisjonen logges med begge ID-ene, slik at en admin kan gi den
+  // gamle rollen nytt navn (eller slå dem sammen) før neste seeding. Å
+  // opprette duplikaten er verre enn å vente på avklaringen.
+  const existingRoles = await d.select({ id: roles.id, name: roles.name, isSystem: roles.isSystem }).from(roles)
+  const existingRoleIds = new Set(existingRoles.map((r) => r.id))
+  const missingRoles = SEED_ROLES.filter((r) => {
+    if (existingRoleIds.has(r.id)) return false
+    const collision = findRoleNameCollision(r.name, existingRoles)
+    if (!collision) return true
+    console.warn(`[seed] Hopper over systemrollen «${r.name}» (${r.id}): ${roleNameCollisionMessage(collision)}`)
+    return false
+  })
   if (missingRoles.length > 0) {
     await d
       .insert(roles)

@@ -393,7 +393,12 @@ function RolesSection({ data }: { data: Data }) {
                   <span className="flex items-center gap-2">
                     <span className="font-semibold text-ink">{role.name}</span>
                     {role.isSystem ? (
-                      <Stamp>system</Stamp>
+                      // Merket er brass, ikke nøytralt: skulle to roller ende
+                      // opp med samme navn (#78), er dette det eneste som
+                      // skiller dem i matrisen — sammen med ID-en under.
+                      <Stamp tone="brass" title="Systemrolle — plattformens egen, kan ikke slettes">
+                        systemrolle
+                      </Stamp>
                     ) : (
                       <RenameRole
                         roleId={role.id}
@@ -403,7 +408,7 @@ function RolesSection({ data }: { data: Data }) {
                     )}
                   </span>
                   <span className="mt-0.5 block font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-faint">
-                    {role.memberCount} medlem{role.memberCount === 1 ? '' : 'mer'}
+                    {role.id} · {role.memberCount} medlem{role.memberCount === 1 ? '' : 'mer'}
                   </span>
                 </td>
                 {data.permissionCatalog.map((perm) => {
