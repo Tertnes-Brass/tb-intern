@@ -6,7 +6,7 @@ import { toast, toastError } from '../../../components/toast'
 import { Avatar, Button, EmptyState, Kicker, Modal, Stamp } from '../../../components/ui'
 import { formatDateTime } from '../../../lib/format'
 import { markdownToHtml } from '../../../lib/markdown'
-import { renderCommentHtml } from '../../../lib/mentions'
+import { type MentionUser, UNKNOWN_MENTION, postLineTokens, renderCommentHtml } from '../../../lib/mentions'
 import { postImageUrl } from '../../../lib/post-images-client'
 import {
   DEFAULT_NOTIFY,
@@ -15,7 +15,6 @@ import {
   notifyResultMessage,
   type PostFormat,
   paragraphs,
-  tokenize,
 } from '../../../lib/posts'
 import {
   addComment,
@@ -44,9 +43,16 @@ export const Route = createFileRoute('/beskjeder/$postId/')({
   component: PostPage,
 })
 
-/** Innleggets tekst, i det formatet forfatteren valgte. */
-function PostBody({ body, format }: { body: string; format: PostFormat }) {
-  const html = useMemo(() => (format === 'markdown' ? markdownToHtml(body) : ''), [body, format])
+/**
+ * Innleggets tekst, i det formatet forfatteren valgte. `mentions` er dagens navn
+ * på de omtalte, slått opp server-side — begge formatene gjør markøren om til
+ * den samme chip-en som i kommentarer.
+ */
+function PostBody({ body, format, mentions }: { body: string; format: PostFormat; mentions: MentionUser[] }) {
+  const html = useMemo(
+    () => (format === 'markdown' ? markdownToHtml(body, { mentions }) : ''),
+    [body, format, mentions],
+  )
   if (format === 'markdown') {
     return (
       // Sanitert i src/lib/markdown.ts: utdata inneholder kun taggene rendreren
@@ -61,7 +67,7 @@ function PostBody({ body, format }: { body: string; format: PostFormat }) {
           {paragraph.split('\n').map((line, li) => (
             <span key={li}>
               {li > 0 && <br />}
-              {tokenize(line).map((token, ti) =>
+              {postLineTokens(line, mentions).map((token, ti) =>
                 token.kind === 'link' ? (
                   <a
                     key={ti}
@@ -72,6 +78,12 @@ function PostBody({ body, format }: { body: string; format: PostFormat }) {
                   >
                     {token.value}
                   </a>
+                ) : token.kind === 'mention' ? (
+                  // Samme chip som i kommentarene; en slettet bruker blir
+                  // «Ukjent medlem», aldri rå markørtekst.
+                  <span key={ti} className={token.name === null ? 'mention mention-unknown' : 'mention'}>
+                    {token.name === null ? UNKNOWN_MENTION : `@${token.name}`}
+                  </span>
                 ) : (
                   <span key={ti}>{token.value}</span>
                 ),
@@ -253,7 +265,7 @@ function PostPage() {
       </header>
 
       <article className="rise space-y-5" style={{ animationDelay: '80ms' }}>
-        <PostBody body={post.body} format={post.format} />
+        <PostBody body={post.body} format={post.format} mentions={post.mentions} />
         {post.images.length > 0 && (
           <ul className="space-y-3">
             {post.images.map((image) => (

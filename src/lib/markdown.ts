@@ -27,12 +27,16 @@
  *   derfor en vanlig lenke som leseren selv må velge å åpne.
  * - **Overskrifter starter på `h2`.** Sidens `h1` er innleggets tittel;
  *   `#` i teksten skal ikke konkurrere med den i dokumentstrukturen.
+ * - **Omtaler er et eget inline-steg.** Markøren `@[u:…]` blir en chip med
+ *   dagens navn (`options.mentions`), og steget kjøres KUN på tekst-tokens —
+ *   aldri på et kodespenn eller en kodeblokk, der markøren skal stå som skrevet.
  *
  * `breaks: true` er bevisst: et enkelt linjeskift blir `<br>`, slik det alltid
  * har vært for ren tekst på veggen. Ingen skal oppdage at de må trykke enter to
  * ganger for å få linjeskift.
  */
 import { Lexer, type MarkedToken, type Token, type Tokens } from 'marked'
+import { type MentionUser, mentionChipHtml, mentionTokens } from './mentions'
 import { type PostFormat, escapeHtml } from './posts'
 
 /** Lexer-oppsettet. GFM gir tabeller, gjennomstreking og oppgavelister. */
@@ -83,9 +87,14 @@ export type MarkdownOptions = {
    * `src/styles.css` gjør jobben), satt for e-post.
    */
   styles?: MarkdownStyles
+  /**
+   * Dagens navn på de omtalte i teksten, slått opp server-side. Markørene
+   * `@[u:…]` blir chips; uten et treff her blir de «Ukjent medlem».
+   */
+  mentions?: Iterable<MentionUser>
 }
 
-type Ctx = { base: number; styles: MarkdownStyles }
+type Ctx = { base: number; styles: MarkdownStyles; mentions: MentionUser[] }
 
 /**
  * Inline-stilene e-posten bruker. E-postklienter støtter ikke klasser eller
@@ -154,8 +163,25 @@ export function markdownToHtml(source: string, options: MarkdownOptions = {}): s
   const ctx: Ctx = {
     base: Math.min(6, Math.max(1, options.headingLevel ?? 2)),
     styles: options.styles ?? {},
+    mentions: [...(options.mentions ?? [])],
   }
   return blocks(Lexer.lex(text, LEX_OPTIONS), ctx)
+}
+
+/**
+ * Ren tekst → HTML, med omtaler som chips. Dette er det ENESTE stedet i
+ * markdown-rendreren der brukerinnhold kan bli noe annet enn escapet tekst, og
+ * det er med vilje: omtale-steget kjøres på tekst-tokens FØR alt annet inline,
+ * og aldri på et kodespenn eller en kodeblokk — de går rett til `escapeHtml`, så
+ * `@[u:…]` i et kodeeksempel forblir nøyaktig det som ble skrevet.
+ *
+ * Chip-en skrives av `mentionChipHtml` (samme som i kommentarer), navnet
+ * escapes. Allowlisten holdes: taggene er fortsatt bare våre egne.
+ */
+function textHtml(text: string, ctx: Ctx): string {
+  return mentionTokens(text, ctx.mentions)
+    .map((token) => (token.kind === 'text' ? escapeHtml(token.value) : mentionChipHtml(token.name)))
+    .join('')
 }
 
 function blocks(tokens: Token[], ctx: Ctx): string {
@@ -190,7 +216,7 @@ function block(token: Token, ctx: Ctx): string {
       return `${open(ctx, 'p', 'p')}${inlines(t.tokens, ctx)}</p>`
     case 'text':
       // Løse tekstlinjer (bl.a. innholdet i en «tett» liste) står uten <p>.
-      return t.tokens ? inlines(t.tokens, ctx) : escapeHtml(t.text)
+      return t.tokens ? inlines(t.tokens, ctx) : textHtml(t.text, ctx)
     case 'checkbox':
       return checkbox(t.checked)
     case 'html':
@@ -245,7 +271,7 @@ function inline(token: Token, ctx: Ctx): string {
   const t = token as MarkedToken
   switch (t.type) {
     case 'text':
-      return t.tokens ? inlines(t.tokens, ctx) : escapeHtml(t.text)
+      return t.tokens ? inlines(t.tokens, ctx) : textHtml(t.text, ctx)
     case 'escape':
       return escapeHtml(t.text)
     case 'strong':

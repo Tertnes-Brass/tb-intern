@@ -578,6 +578,30 @@ export const postCommentMentions = sqliteTable(
   (t) => [primaryKey({ columns: [t.commentId, t.userId] }), index('post_comment_mentions_user_idx').on(t.userId)],
 )
 
+// Medlemsomtaler i selve INNLEGGET (#83, utvidet). Samme idé som over — teksten
+// sier hvor omtalen står, tabellen sier hvem som er omtalt — men med ett tillegg
+// et innlegg trenger og en kommentar ikke: `notified_at`.
+//
+// Et innlegg kan lagres, redigeres, avpubliseres og publiseres på nytt. Uten et
+// merke per omtale ville hver av de handlingene kunnet sende den samme
+// omtale-e-posten en gang til. `notified_at` er derfor det samme for omtaler som
+// `notification_log` er for beskjeden: sannheten om hvem som ER varslet. Den
+// settes også for dem som fikk beskjed-e-posten i samme utsending — de er
+// varslet, bare gjennom en annen e-post.
+export const postMentions = sqliteTable(
+  'post_mentions',
+  {
+    postId: text('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    notifiedAt: integer('notified_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.userId] }), index('post_mentions_user_idx').on(t.userId)],
+)
+
 // Reaksjoner. `kind` er foreløpig alltid 'like'; kolonnen finnes så flere kan
 // komme uten en ny tabell. PK (postId, userId) = én reaksjon per person.
 export const postReactions = sqliteTable(

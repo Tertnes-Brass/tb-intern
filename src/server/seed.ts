@@ -14,6 +14,7 @@ import {
   parts,
   postCommentMentions,
   postComments,
+  postMentions,
   postReactions,
   posts,
   projectWorks,
@@ -64,6 +65,10 @@ const now = () => new Date()
 
 /** Plassholder for en omtale i demodata: `@[demo:<e-post>]` → `@[u:<brukerId>]`. */
 const DEMO_MENTION = /@\[demo:([^\]]+)\]/g
+
+/** Demoomtalen i styrechatten: hvem som nevnes, og den faste id-en som gjør den idempotent. */
+const DEMO_CHAT_MENTION_EMAIL = 'sindre@demo.tertnesbrass.no'
+const DEMO_CHAT_MENTION_MESSAGE_ID = 'demo-board-message-omtale'
 
 export async function isSeeded(): Promise<boolean> {
   const row = await db().select({ id: works.id }).from(works).limit(1)
@@ -305,12 +310,21 @@ export async function seedWallDemo(): Promise<void> {
   for (const sp of SEED_POSTS) {
     const publishedAt = at(sp.publishedDaysAgo)
     const authorId = userIdByEmail.get(sp.authorEmail) ?? null
+    // Samme plassholder som i kommentarene: markøren peker på en bruker-id som
+    // først finnes når demobrukeren har logget inn.
+    const postMentionIds: string[] = []
+    const body = sp.body.replace(DEMO_MENTION, (raw, email: string) => {
+      const id = userIdByEmail.get(email.toLowerCase())
+      if (!id) return raw
+      postMentionIds.push(id)
+      return `@[u:${id}]`
+    })
     await d
       .insert(posts)
       .values({
         id: sp.id,
         title: sp.title,
-        body: sp.body,
+        body,
         format: sp.format ?? 'plain_text',
         audience: sp.audience,
         importance: sp.importance,
@@ -328,6 +342,16 @@ export async function seedWallDemo(): Promise<void> {
         .update(posts)
         .set({ authorId })
         .where(and(eq(posts.id, sp.id), isNull(posts.authorId)))
+    }
+    if (postMentionIds.length > 0) {
+      await d.update(posts).set({ body }).where(eq(posts.id, sp.id))
+      await d
+        .insert(postMentions)
+        // `notified_at` settes med det samme: demoinnlegget er «publisert» for
+        // dager siden, og en lokal database skal ikke kunne sende e-post om en
+        // omtale i noe som allerede står på veggen.
+        .values(postMentionIds.map((userId) => ({ postId: sp.id, userId, notifiedAt: ts })))
+        .onConflictDoNothing()
     }
   }
 
@@ -561,6 +585,26 @@ async function seedBoardDemoData(): Promise<void> {
       body,
       createdAt: new Date(ts.getTime() - (SEED_BOARD_MESSAGES.length - i) * 3_600_000),
     })
+  }
+
+  // Én melding med en omtale, så chip-en og «@»-merket på ulest-telleren kan
+  // ses uten å skrive noe først. Egen vakt (fast id) i stedet for `hasGeneralChat`:
+  // markøren peker på en bruker-id som først finnes når demobrukeren har logget
+  // inn, altså som regel LENGE etter at resten av chatten ble seedet.
+  const mentioned = (
+    await d.select({ id: user.id }).from(user).where(eq(user.email, DEMO_CHAT_MENTION_EMAIL)).limit(1)
+  )[0]
+  if (mentioned) {
+    await d
+      .insert(boardMessages)
+      .values({
+        id: DEMO_CHAT_MENTION_MESSAGE_ID,
+        channel: 'general',
+        authorId: null,
+        body: `@[u:${mentioned.id}] kan du ta med kontoutskriften til neste møte?`,
+        createdAt: new Date(ts.getTime() - 30 * 60_000),
+      })
+      .onConflictDoNothing()
   }
 
   // Egendefinerte kanaler (#80) med et svar og en kodeformatert melding, så

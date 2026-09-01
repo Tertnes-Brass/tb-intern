@@ -1,6 +1,7 @@
 import { useNavigate, useRouter } from '@tanstack/react-router'
 import { useMemo, useRef, useState } from 'react'
 import { markdownToHtml } from '../lib/markdown'
+import { type MentionUser, mentionDraft, toMarkers } from '../lib/mentions'
 import { postImageUrl, uploadPostImages } from '../lib/post-images-client'
 import {
   DEFAULT_NOTIFY,
@@ -13,7 +14,8 @@ import {
   notifyLabel,
   notifyResultMessage,
 } from '../lib/posts'
-import { createPost, deletePostImage, publishPost, updatePost } from '../server/posts'
+import { createPost, deletePostImage, publishPost, searchMentionableForAudience, updatePost } from '../server/posts'
+import { MentionTextarea } from './MentionTextarea'
 import { toast, toastError } from './toast'
 import { Button, Field } from './ui'
 
@@ -29,6 +31,13 @@ import { Button, Field } from './ui'
  * trenger overskrifter, lister eller en tabell. Forhåndsvisningen kjører samme
  * rendrer som serveren og detaljsiden — `src/lib/markdown.ts` er en ren modul
  * nettopp for at klienten skal kunne vise nøyaktig det som blir publisert.
+ *
+ * Omtaler: brødteksten er en `MentionTextarea`, delt med kommentarfeltet og
+ * chatten. Feltet viser `@Navn` — også når et LAGRET innlegg åpnes for
+ * redigering, der `mentionDraft` gjør markørene om til navn og gir tilbake de
+ * samme medlemmene som «valgt», slik at `toMarkers` kan legge markørene tilbake
+ * ved lagring. Forslagslista spør om målgruppen, ikke om innlegget: et nytt
+ * innlegg har ingen id å slå opp ennå.
  */
 
 export type PostFormImage = { id: string; fileName: string }
@@ -43,6 +52,8 @@ export type PostFormValues = {
   official: boolean
   publishedAt: number | null
   images: PostFormImage[]
+  /** Dagens navn på de omtalte i `body`, slik at feltet kan vise `@Navn`. */
+  mentions: MentionUser[]
 }
 
 const AUDIENCES: Array<{ value: PostAudience; label: string; hint: string }> = [
@@ -73,7 +84,11 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
   const router = useRouter()
   const fileInput = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState(post?.title ?? '')
-  const [body, setBody] = useState(post?.body ?? '')
+  // Lagret tekst har markører; feltet skal vise navn. `draft` gjør om begge
+  // veier, og `chosen` er grunnlaget `toMarkers` bruker ved lagring.
+  const [draft] = useState(() => mentionDraft(post?.body ?? '', post?.mentions ?? []))
+  const [body, setBody] = useState(draft.text)
+  const [chosen, setChosen] = useState<MentionUser[]>(draft.chosen)
   const [format, setFormat] = useState<PostFormat>(post?.format ?? DEFAULT_POST_FORMAT)
   const [preview, setPreview] = useState(false)
   const [audience, setAudience] = useState<PostAudience>(post?.audience ?? 'all')
@@ -88,9 +103,11 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
   const imageBudget = MAX_POST_IMAGES - existingImages.length - files.length
   // Samme rendrer som serveren og detaljsiden — forhåndsvisningen kan ikke
   // vise noe annet enn det som faktisk blir publisert.
+  // Omtalene vises som chips også her: teksten oversettes til markører først, med
+  // nøyaktig de samme navnene serveren vil slå opp etterpå.
   const previewHtml = useMemo(
-    () => (format === 'markdown' && preview ? markdownToHtml(body) : ''),
-    [body, format, preview],
+    () => (format === 'markdown' && preview ? markdownToHtml(toMarkers(body, chosen), { mentions: chosen }) : ''),
+    [body, chosen, format, preview],
   )
 
   const addFiles = (list: FileList | null) => {
@@ -125,7 +142,9 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
   const save = async (): Promise<string> => {
     const values = {
       title: title.trim() || null,
-      body: body.trim(),
+      // `@Navn` → `@[u:…]` helt til slutt. Bare navn som faktisk er valgt fra
+      // lista blir markører; serveren validerer hver av dem uansett.
+      body: toMarkers(body.trim(), chosen),
       format,
       audience,
       importance,
@@ -250,10 +269,17 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
             <p className="sheet min-h-40 px-4 py-3.5 text-sm text-ink-faint">Ingenting å vise ennå.</p>
           )
         ) : (
-          <textarea
-            className="field-input min-h-40 resize-y leading-relaxed"
+          <MentionTextarea
+            className="field-input min-h-40 w-full resize-y leading-relaxed"
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={setBody}
+            chosen={chosen}
+            onChosenChange={setChosen}
+            // Målgruppen avgjør hvem som kan omtales — den er valgt her i
+            // skjemaet, og innlegget har kanskje ingen id ennå.
+            search={(query) => searchMentionableForAudience({ data: { audience, query } })}
+            // Ingen `onEnter`: her er enter et linjeskift, ikke «send».
+            placement="below"
             placeholder={
               format === 'markdown'
                 ? '## Øvelsen neste uke\n\n- Vi starter 19.00\n- Ta med **svart mappe**'
@@ -264,7 +290,9 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
             autoFocus
           />
         )}
-        <p className="mt-1 text-xs text-ink-faint">{FORMATS.find((f) => f.value === format)!.hint}</p>
+        <p className="mt-1 text-xs text-ink-faint">
+          {FORMATS.find((f) => f.value === format)!.hint} Skriv @ for å nevne noen.
+        </p>
       </div>
 
       <Field label="Tittel" hint="Valgfri. Uten tittel vises første linje av teksten.">

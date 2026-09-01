@@ -3,7 +3,15 @@ import { and, asc, desc, eq, gt, inArray, isNull, ne, or, sql } from 'drizzle-or
 import { alias } from 'drizzle-orm/sqlite-core'
 import { z } from 'zod'
 import { db } from '../db'
-import { leaderChannelReads, leaderChannels, leaderMessages, parts, sectionLeaders, user } from '../db/schema'
+import {
+  leaderChannelReads,
+  leaderChannels,
+  leaderMessages,
+  memberProfiles,
+  parts,
+  sectionLeaders,
+  user,
+} from '../db/schema'
 import {
   type ChannelKind,
   type ChannelSummary,
@@ -20,6 +28,13 @@ import {
 } from '../lib/board'
 import { isGroupLeader } from '../lib/gruppeledere'
 import { newId } from '../lib/id'
+import {
+  type MentionUser,
+  mentionMarker,
+  mentionRejection,
+  parseMentions,
+  rankMentionCandidates,
+} from '../lib/mentions'
 import { SECTION_LABELS, type SectionId } from '../lib/taxonomy'
 import { type Me, requireMe } from './access'
 
@@ -207,6 +222,8 @@ export const listChannels = createServerFn().handler(async () => {
         channel: leaderMessages.channel,
         n: sql<number>`count(*)`,
         lastAt: sql<number>`max(${leaderMessages.createdAt})`,
+        // «Gjelder de uleste MEG?» — se den tilsvarende kolonnen i board.ts.
+        mine: sql<number>`sum(case when instr(${leaderMessages.body}, ${mentionMarker(me.id)}) > 0 then 1 else 0 end)`,
       })
       .from(leaderMessages)
       .leftJoin(
@@ -224,6 +241,7 @@ export const listChannels = createServerFn().handler(async () => {
 
   const unreadByChannel = new Map(unreadRows.map((r) => [r.channel, r.n]))
   const lastByChannel = new Map(unreadRows.map((r) => [r.channel, r.lastAt]))
+  const mentionsByChannel = new Map(unreadRows.map((r) => [r.channel, r.mine]))
   const readAt = new Map(reads.map((r) => [r.channel, r.lastReadAt.getTime()]))
 
   const channels: ChannelSummary[] = all.map((c) => ({
@@ -233,6 +251,7 @@ export const listChannels = createServerFn().handler(async () => {
     archived: c.archived,
     unread: unreadByChannel.get(c.channel) ?? 0,
     lastMessageAt: lastByChannel.get(c.channel) ?? readAt.get(c.channel) ?? null,
+    mentionsMe: (mentionsByChannel.get(c.channel) ?? 0) > 0,
   }))
 
   return { channels, totalUnread: totalUnread(channels), meId: me.id }
@@ -351,6 +370,56 @@ export const setChannelArchived = createServerFn({ method: 'POST' })
 const replyMessage = alias(leaderMessages, 'reply_message')
 const replyAuthor = alias(user, 'reply_author')
 
+// ---------- Omtaler i lederchatten ----------
+
+/** Antall forslag lista viser om gangen. Samme tall som ellers. */
+const MENTION_SUGGESTIONS = 8
+
+/** ÉN feilmelding for alle avslag — samme prinsipp som på veggen. */
+const MENTION_DENIED = 'Du kan bare omtale aktive gruppeledere'
+
+/**
+ * Hvem kan omtales her? De som selv slipper inn: medlemmer med minst én aktiv
+ * leiarbinding (`section_leaders`) — nøyaktig utvalget `isGroupLeader` beskriver,
+ * stilt som ett spørsmål om alle. Rollen og rettighetene teller ikke, like lite
+ * som de gjør i guarden.
+ *
+ * Spørringen bor her, ikke i en modul delt med styret: de to områdene har hver
+ * sin regel, og en felles funksjon ville trengt en parameter som gjorde det
+ * mulig å spørre om feil område.
+ */
+async function mentionableMembers(): Promise<MentionUser[]> {
+  const rows = await db()
+    .selectDistinct({ id: user.id, name: user.name })
+    .from(sectionLeaders)
+    .innerJoin(user, eq(sectionLeaders.userId, user.id))
+    .innerJoin(memberProfiles, eq(memberProfiles.authUserId, user.id))
+    .where(eq(memberProfiles.isActive, true))
+    .orderBy(asc(user.name))
+  return rows
+}
+
+/**
+ * Forslagslista bak `@`. Gated på leder-guarden, og returnerer KUN
+ * `{ id, name }`.
+ */
+export const searchMentionableMembers = createServerFn({ method: 'POST' })
+  .validator(z.object({ query: z.string().max(60).default('') }))
+  .handler(async ({ data }): Promise<MentionUser[]> => {
+    await requireGroupLeader()
+    return rankMentionCandidates(await mentionableMembers(), data.query, MENTION_SUGGESTIONS)
+  })
+
+/** Dagens navn på alle omtalte i en side med meldinger (inkl. svarreferansene). */
+async function mentionNamesFor(bodies: Array<string | null>): Promise<MentionUser[]> {
+  const ids = new Set<string>()
+  for (const body of bodies) {
+    if (body) for (const id of parseMentions(body)) ids.add(id)
+  }
+  if (ids.size === 0) return []
+  return db().select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, [...ids]))
+}
+
 /**
  * Meldingene i en kanal. `after` (epoch-ms) gjør pollingen billig: klienten ber
  * bare om det som har kommet siden sist, og får en tom liste når ingenting har
@@ -394,6 +463,10 @@ export const listMessages = createServerFn()
       .orderBy(desc(leaderMessages.createdAt))
       .limit(CHAT_PAGE_SIZE)
 
+    // Navnene på de omtalte for hele sida — meldinger har ingen koblingstabell,
+    // og markøren slås opp mot dagens navn ved visning (som ellers).
+    const mentions = await mentionNamesFor(rows.flatMap((m) => [m.body, m.replyBody]))
+
     const messages: ChatMessage[] = rows
       .map((m) => ({
         id: m.id,
@@ -401,10 +474,15 @@ export const listMessages = createServerFn()
         authorName: m.authorName,
         body: m.body,
         createdAt: m.createdAt.getTime(),
-        replyTo: replyReference(m),
+        replyTo: replyReference(m, mentions),
       }))
       .sort((a, b) => a.createdAt - b.createdAt)
-    return { messages, meId: me.id, serverTime: Date.now() }
+    return {
+      messages,
+      meId: me.id,
+      serverTime: Date.now(),
+      mentionNames: Object.fromEntries(mentions.map((m) => [m.id, m.name])),
+    }
   })
 
 export const postMessage = createServerFn({ method: 'POST' })
@@ -420,6 +498,15 @@ export const postMessage = createServerFn({ method: 'POST' })
     const me = await requireGroupLeader()
     await assertChannelExists(data.channel, { write: true })
     const d = db()
+
+    // Omtalene valideres FØR meldingen lagres: en markør kan bare peke på noen
+    // som selv har tilgang til området — her: en aktiv gruppeleder.
+    const mentionIds = parseMentions(data.body)
+    if (mentionIds.length > 0) {
+      const allowed = new Set((await mentionableMembers()).map((m) => m.id))
+      const error = mentionRejection(mentionIds, allowed, MENTION_DENIED)
+      if (error) throw new Error(error)
+    }
 
     let replyToId: string | null = null
     let replyToDeleted = false

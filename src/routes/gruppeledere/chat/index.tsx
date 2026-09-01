@@ -11,6 +11,7 @@ import {
   markChannelRead,
   postMessage,
   renameChannel,
+  searchMentionableMembers,
   setChannelArchived,
 } from '../../../server/gruppeledere'
 
@@ -22,7 +23,7 @@ type ChatSearch = { kanal?: string }
  * funksjon på `requireGroupLeader()` og bare rører `leader_*`-tabellene. Ingen
  * styremelding kan komme hit, uansett hva klienten spør om.
  */
-const LEADER_CHAT_API: ChatApi = { listMessages, postMessage, deleteMessage, markChannelRead }
+const LEADER_CHAT_API: ChatApi = { listMessages, postMessage, deleteMessage, markChannelRead, searchMentionableMembers }
 const LEADER_CHANNEL_API: ChatChannelApi = { createChannel, renameChannel, setChannelArchived }
 
 export const Route = createFileRoute('/gruppeledere/chat/')({

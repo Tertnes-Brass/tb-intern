@@ -1,11 +1,12 @@
 import { createServerFn } from '@tanstack/react-start'
 import { and, asc, desc, eq, gte, inArray, isNotNull, sql } from 'drizzle-orm'
 import { db } from '../db'
-import { boardTasks, postComments, postReactions, posts, projectWorks, projects, user } from '../db/schema'
+import { boardTasks, postComments, postMentions, postReactions, posts, projectWorks, projects, user } from '../db/schema'
 import { boardAreaNote } from '../lib/board'
 import { type HubArea, type HubCalendar, type HubEvent, type HubPost, type HubProject, areasFor, eventsAfter } from '../lib/hub'
 import type { CalendarEvent } from '../lib/ical'
 import { postPlainText } from '../lib/markdown'
+import { type MentionUser, mentionPlainText } from '../lib/mentions'
 import { excerpt, postHeading } from '../lib/posts'
 import { hasPermission, requireMe } from './access'
 import { loadCalendar } from './calendar-feed'
@@ -102,7 +103,7 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
 
   // Tellerne hentes for de tre innleggene som faktisk vises — ikke for hele veggen.
   const postIds = postRows.map((p) => p.id)
-  const [commentRows, reactionRows] = postIds.length
+  const [commentRows, reactionRows, mentionRows] = postIds.length
     ? await Promise.all([
         d
           .select({ postId: postComments.postId, n: sql<number>`count(*)` })
@@ -114,10 +115,20 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
           .from(postReactions)
           .where(inArray(postReactions.postId, postIds))
           .groupBy(postReactions.postId),
+        // Navnene på de omtalte: utdraget skal vise «@Ola», aldri «@[u:kd9…]».
+        d
+          .select({ postId: postMentions.postId, id: user.id, name: user.name })
+          .from(postMentions)
+          .innerJoin(user, eq(postMentions.userId, user.id))
+          .where(inArray(postMentions.postId, postIds)),
       ])
-    : [[], []]
+    : [[], [], []]
   const commentCounts = new Map(commentRows.map((r) => [r.postId, r.n]))
   const likeCounts = new Map(reactionRows.map((r) => [r.postId, r.n]))
+  const mentionsByPost = new Map<string, MentionUser[]>()
+  for (const r of mentionRows) {
+    mentionsByPost.set(r.postId, [...(mentionsByPost.get(r.postId) ?? []), { id: r.id, name: r.name }])
+  }
 
   // `gte` utelukker allerede NULL-datoer i SQL; filteret gjør det sant for typen òg.
   const upcoming = upcomingRows.filter((p): p is DatedProject => p.eventDate !== null)
@@ -147,7 +158,7 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
     posts: postRows.map((p) => {
       // Markdown strippes til ren tekst før utdraget — hub-en skal aldri vise
       // «#» eller «**» (samme regel som feeden i src/server/posts.ts).
-      const plain = postPlainText(p.body, p.format)
+      const plain = mentionPlainText(postPlainText(p.body, p.format), mentionsByPost.get(p.id) ?? [])
       return {
         id: p.id,
         heading: postHeading({ title: p.title, body: plain }),

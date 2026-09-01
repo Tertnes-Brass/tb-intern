@@ -28,6 +28,7 @@ import {
   sortChannels,
   sortTasks,
   totalUnread,
+  unreadBadge,
   unreadCount,
   wantsTaskEmail,
 } from './board'
@@ -432,6 +433,44 @@ describe('replyReference', () => {
     expect(
       replyReference({ replyToDeleted: false, replyId: 'm1', replyBody: 'hei', replyAuthorName: null }),
     ).toMatchObject({ authorName: null, excerpt: 'hei' })
+  })
+
+  it('viser navn i stedet for omtale-markører i utdraget', () => {
+    expect(
+      replyReference(
+        { replyToDeleted: false, replyId: 'm1', replyBody: '@[u:u1] tar bassrekka', replyAuthorName: 'Hilde' },
+        [{ id: 'u1', name: 'Ola Nordmann' }],
+      ),
+    ).toMatchObject({ excerpt: '@Ola Nordmann tar bassrekka' })
+  })
+})
+
+describe('unreadBadge', () => {
+  it('viser tallet på uleste', () => {
+    expect(unreadBadge({ unread: 3, archived: false })).toEqual({
+      count: '3',
+      label: '3 uleste meldinger',
+      mentioned: false,
+    })
+  })
+
+  it('stopper på «9+»', () => {
+    expect(unreadBadge({ unread: 42, archived: false })?.count).toBe('9+')
+  })
+
+  it('merker at en av de uleste nevner deg', () => {
+    // Chatten sender ingen e-post; dette er det eneste varselet om at noen har
+    // spurt deg om noe direkte.
+    expect(unreadBadge({ unread: 2, archived: false, mentionsMe: true })).toEqual({
+      count: '2',
+      label: '2 uleste meldinger, du er nevnt',
+      mentioned: true,
+    })
+  })
+
+  it('gir ingen prikk uten uleste, og aldri på en arkivert kanal', () => {
+    expect(unreadBadge({ unread: 0, archived: false })).toBeNull()
+    expect(unreadBadge({ unread: 5, archived: true, mentionsMe: true })).toBeNull()
   })
 })
 

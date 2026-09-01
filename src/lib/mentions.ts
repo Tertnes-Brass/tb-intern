@@ -1,31 +1,36 @@
 /**
- * Medlemsomtaler i kommentarer på veggen (#83) — all logikk som ikke trenger
- * database, DOM eller e-postbinding.
+ * Medlemsomtaler — all logikk som ikke trenger database, DOM eller
+ * e-postbinding. Funksjonen ble født i kommentarer på veggen (#83) og gjelder nå
+ * TRE steder: kommentarer, innlegg (veggen) og de to chattene (styret og
+ * gruppelederne). Formatet, skrivehjelpen og valideringsregelen er den samme
+ * alle tre stedene; det som skiller dem er *hvem* som kan omtales og *hvordan*
+ * varselet går ut.
  *
  * ## Lagringsformatet
  *
- * En omtale lagres som en markør i kommentarteksten: `@[u:<brukerId>]`. Markøren
- * peker på en STABIL id, aldri på et navn — bytter noen navn, følger omtalen med
- * av seg selv. Ved visning slås markøren opp mot dagens navn (server-side join
- * mot `user`) og rendres som en chip; en markør uten treff blir «Ukjent medlem»,
+ * En omtale lagres som en markør i teksten: `@[u:<brukerId>]`. Markøren peker på
+ * en STABIL id, aldri på et navn — bytter noen navn, følger omtalen med av seg
+ * selv. Ved visning slås markøren opp mot dagens navn (server-side join mot
+ * `user`) og rendres som en chip; en markør uten treff blir «Ukjent medlem»,
  * aldri rå markørtekst og aldri et gammelt navn.
  *
- * Den spørrbare koblingen ligger i tabellen `post_comment_mentions`
- * (kommentar → bruker). Teksten er sannheten om *hvor* i kommentaren omtalen
- * står; tabellen er sannheten om *hvem* som er omtalt.
+ * Den spørrbare koblingen ligger i en tabell per innholdstype:
+ * `post_comment_mentions` (kommentar → bruker) og `post_mentions` (innlegg →
+ * bruker, med `notified_at`). Chatten har INGEN tabell: en melding kan verken
+ * redigeres eller varsles på e-post, så teksten alene er nok.
  *
  * ## Hvorfor `@` i e-post og kode aldri blir en omtale
  *
- * Kommentarer er ren tekst — de går ALDRI gjennom `src/lib/markdown.ts`. En
- * omtale oppstår derfor ikke ved å skrive `@noe`: den oppstår kun når
- * skribenten velger et medlem fra forslagslista, og teksten blir omskrevet til
- * en markør ved innsending (`toMarkers`). `ola@epost.no` mangler både ordgrensen
- * foran `@` og et valgt navn, og backtick-spenn hoppes over helt. Serveren
- * validerer i tillegg hver markør før kommentaren lagres.
+ * En omtale oppstår ikke ved å skrive `@noe`: den oppstår kun når skribenten
+ * velger et medlem fra forslagslista, og teksten blir omskrevet til en markør
+ * ved innsending (`toMarkers`). `ola@epost.no` mangler både ordgrensen foran `@`
+ * og et valgt navn, og backtick-spenn hoppes over helt. Serveren validerer i
+ * tillegg hver markør før teksten lagres — tre steder, én regel
+ * (`mentionRejection`).
  */
-import { type PostAudience, canReadPost, escapeHtml } from './posts'
+import { type PostAudience, type PostToken, canReadPost, escapeHtml, tokenize } from './posts'
 
-/** Maks antall omtaler i én kommentar. Håndheves server-side i `addComment`. */
+/** Maks antall omtaler i én tekst. Håndheves server-side alle tre stedene. */
 export const MAX_MENTIONS = 10
 
 /** Teksten en markør uten kjent bruker får. Aldri markøren, aldri et gammelt navn. */
@@ -59,18 +64,18 @@ export function parseMentions(body: string): string[] {
   return out
 }
 
-export type CommentToken = { kind: 'text'; value: string } | { kind: 'mention'; id: string; name: string | null }
+export type MentionToken = { kind: 'text'; value: string } | { kind: 'mention'; id: string; name: string | null }
 
 /**
  * Deler teksten i ren tekst og omtaler, med dagens navn slått opp. `name: null`
  * betyr at brukeren ikke finnes lenger (slettet konto) — kallerne viser
  * `UNKNOWN_MENTION`.
  */
-export function commentTokens(body: string, users: Iterable<MentionUser> = []): CommentToken[] {
+export function mentionTokens(body: string, users: Iterable<MentionUser> = []): MentionToken[] {
   const names = new Map<string, string>()
   for (const u of users) names.set(u.id, u.name)
 
-  const out: CommentToken[] = []
+  const out: MentionToken[] = []
   let last = 0
   for (const match of body.matchAll(MARKER)) {
     const start = match.index
@@ -83,6 +88,18 @@ export function commentTokens(body: string, users: Iterable<MentionUser> = []): 
 }
 
 /**
+ * Chip-en som HTML. Ett sted, fordi den skrives både av `renderCommentHtml`
+ * (kommentarer) og av markdown-rendreren (innlegg) — to varianter av samme chip
+ * ville før eller siden blitt to forskjellige.
+ *
+ * Navnet er brukerinnhold og escapes; taggen er skrevet her.
+ */
+export function mentionChipHtml(name: string | null): string {
+  if (name === null) return `<span class="mention mention-unknown">${escapeHtml(UNKNOWN_MENTION)}</span>`
+  return `<span class="mention">@${escapeHtml(name)}</span>`
+}
+
+/**
  * Kommentaren som HTML. ALT brukerinnhold escapes; det eneste som blir markering
  * er omtale-chipene, som rendreren skriver selv. Samme prinsipp som
  * `src/lib/markdown.ts`: allowlist ved konstruksjon, ingen sanitizer etterpå.
@@ -91,22 +108,39 @@ export function commentTokens(body: string, users: Iterable<MentionUser> = []): 
  * akkurat som før omtalene fantes.
  */
 export function renderCommentHtml(body: string, users: Iterable<MentionUser> = []): string {
-  return commentTokens(body, users)
-    .map((token) => {
-      if (token.kind === 'text') return escapeHtml(token.value)
-      if (token.name === null) {
-        return `<span class="mention mention-unknown">${escapeHtml(UNKNOWN_MENTION)}</span>`
-      }
-      return `<span class="mention">@${escapeHtml(token.name)}</span>`
-    })
+  return mentionTokens(body, users)
+    .map((token) => (token.kind === 'text' ? escapeHtml(token.value) : mentionChipHtml(token.name)))
     .join('')
 }
 
-/** Kommentaren som ren tekst med navn i stedet for markører — til e-postutdrag. */
-export function commentPlainText(body: string, users: Iterable<MentionUser> = []): string {
-  return commentTokens(body, users)
+/**
+ * Teksten som ren tekst med navn i stedet for markører. Brukes overalt der en
+ * omtale skal LESES uten å kunne bli en chip: e-postutdrag, feed-utdrag,
+ * tittel-fallback, svarreferansen i chatten. Ingen skal møte `@[u:kd9…]`.
+ */
+export function mentionPlainText(body: string, users: Iterable<MentionUser> = []): string {
+  return mentionTokens(body, users)
     .map((token) => (token.kind === 'text' ? token.value : token.name === null ? UNKNOWN_MENTION : `@${token.name}`))
     .join('')
+}
+
+/** Teksten i et innlegg delt i omtaler, lenker og ren tekst — i den rekkefølgen. */
+export type PostBodyToken = PostToken | { kind: 'mention'; id: string; name: string | null }
+
+/**
+ * Én linje av et `plain_text`-innlegg, klar for React: omtalene skilles ut
+ * FØRST, og bare den gjenstående teksten auto-lenkes. Rekkefølgen er poenget —
+ * `tokenize` skal aldri få se en markør, og en markør skal aldri kunne havne
+ * inne i en URL.
+ *
+ * Den bor her og ikke i `lib/posts.ts` fordi omtale-modulen allerede importerer
+ * derfra; motsatt vei ville gitt en sirkulær import mellom to moduler som begge
+ * lastes i klienten.
+ */
+export function postLineTokens(line: string, users: Iterable<MentionUser> = []): PostBodyToken[] {
+  return mentionTokens(line, users).flatMap((token): PostBodyToken[] =>
+    token.kind === 'mention' ? [token] : tokenize(token.value),
+  )
 }
 
 // ---------- Backtick-spenn ----------
@@ -248,7 +282,7 @@ export function toMarkers(body: string, chosen: MentionUser[]): string {
         if (name) {
           const id = queue.get(name)!.shift() ?? lastUsed.get(name)!
           lastUsed.set(name, id)
-          out += `@[u:${id}]`
+          out += mentionMarker(id)
           i += 1 + name.length
           continue
         }
@@ -331,7 +365,90 @@ export function mentionableMembers<T extends { isActive: boolean; canPublish: bo
   return members.filter((m) => m.isActive && canReadPost(post, m.canPublish))
 }
 
+/** Et hvilket som helst satt publiseringstidspunkt. Se `mentionableForAudience`. */
+const AS_IF_PUBLISHED = 1
+
+/**
+ * Hvem kan omtales i et INNLEGG med denne målgruppen? Samme regel som over, men
+ * uten spørsmålet om innlegget er publisert ennå: et utkast blir lesbart i det
+ * øyeblikket det publiseres, og et nytt innlegg har ikke engang en id å slå opp.
+ * Det som avgjør er målgruppen — `all` treffer alle aktive medlemmer, `board`
+ * kun dem som selv kan publisere.
+ *
+ * Regelen hentes fortsatt fra `canReadPost`, slik at forslagslista og
+ * valideringen ikke kan komme i utakt med hvem som faktisk får se innlegget.
+ */
+export function mentionableForAudience<T extends { isActive: boolean; canPublish: boolean }>(
+  audience: PostAudience,
+  members: T[],
+): T[] {
+  return members.filter((m) => m.isActive && canReadPost({ audience, publishedAt: AS_IF_PUBLISHED }, m.canPublish))
+}
+
+// ---------- Valideringen (felles for alle tre stedene) ----------
+
+/**
+ * Feilmeldingen når markørene ikke holder mål — `null` betyr «greit».
+ *
+ * Regelen er den samme i kommentarer, innlegg og chat, og den er ikke til
+ * forhandling: maks `MAX_MENTIONS`, og hver markør må peke på noen i `allowed`.
+ * ÉN felles feilmelding for alle avslag: «finnes ikke», «er deaktivert» og «har
+ * ikke tilgang her» må ikke kunne skilles fra hverandre, ellers blir et rått
+ * kall med gjettede id-er et oppslagsverk over skjulte medlemmer.
+ *
+ * `denied` er den ene meldingen kalleren vil vise — teksten skiller seg mellom
+ * stedene («innlegget», «samtalen»), regelen gjør ikke.
+ */
+export function mentionRejection(
+  userIds: string[],
+  allowed: ReadonlySet<string> | ReadonlyMap<string, unknown>,
+  denied: string,
+): string | null {
+  if (userIds.length > MAX_MENTIONS) return `Du kan omtale maks ${MAX_MENTIONS} medlemmer om gangen`
+  const has = (id: string) => allowed.has(id)
+  return userIds.some((id) => !has(id)) ? denied : null
+}
+
+// ---------- Redigering av en tekst som allerede har markører ----------
+
+/**
+ * Gjør lagret tekst om til noe et tekstfelt kan vise: markørene byttes ut med
+ * `@Navn`, og de samme medlemmene returneres som «valgt fra lista» slik at
+ * `toMarkers` kan gjøre nøyaktig den motsatte jobben ved lagring.
+ *
+ * Rekkefølgen på `chosen` følger rekkefølgen i TEKSTEN, ikke databasen. Det er
+ * hele poenget: heter to medlemmer det samme, deler `toMarkers` ut id-ene i den
+ * rekkefølgen de ble valgt — og da må «valgt» bety «står først i teksten».
+ *
+ * En markør uten kjent bruker (slettet konto — raden er borte via cascade)
+ * fjernes helt. Å la den stå ville gitt en tekst som ikke kan lagres igjen.
+ */
+export function mentionDraft(
+  body: string,
+  users: Iterable<MentionUser> = [],
+): { text: string; chosen: MentionUser[] } {
+  const chosen: MentionUser[] = []
+  const text = mentionTokens(body, users)
+    .map((token) => {
+      if (token.kind === 'text') return token.value
+      if (token.name === null) return ''
+      chosen.push({ id: token.id, name: token.name })
+      return `@${token.name}`
+    })
+    .join('')
+  return { text, chosen }
+}
+
 // ---------- Varsling ----------
+
+/**
+ * Markøren for én bruker, slik den står i teksten. Ett sted, fordi den også
+ * brukes som søkestreng i ulest-SQL-en («inneholder de uleste en omtale av
+ * meg?») — der en håndskrevet `'@[u:' || id || ']'` fort ville blitt noe annet.
+ */
+export function mentionMarker(userId: string): string {
+  return `@[u:${userId}]`
+}
 
 /** Valget på /min-profil. Ingen rad i databasen = `all`. */
 export type MentionNotificationChoice = 'all' | 'off'
@@ -369,4 +486,47 @@ export function mentionRecipients(
     out.push(member)
   }
   return out
+}
+
+/**
+ * Hvem skal ha e-post om at de er omtalt i et INNLEGG — og hvem skal bare
+ * merkes som varslet?
+ *
+ * Innlegg skiller seg fra kommentarer på to punkter, og begge er grunnen til at
+ * `post_mentions.notified_at` finnes:
+ *
+ * 1. **Et innlegg kan lagres, avpubliseres og publiseres på nytt.** Har noen
+ *    allerede fått omtale-e-posten (`alreadyNotified`), skal hen aldri få den
+ *    igjen — samme idé som `notification_log` for selve beskjeden.
+ * 2. **Beskjed-e-posten går ofte ut i samme handling.** Den som akkurat fikk
+ *    hele innlegget i innboksen (`postEmailed`) skal ikke få en ekstra e-post om
+ *    at hen er nevnt *i det samme innlegget* — to e-poster om samme sak er én
+ *    for mye. Hen er varslet, og merkes derfor som varslet, uten at det sendes
+ *    noe mer.
+ *
+ * Resten (aldri deg selv, må ha e-post, `mentions: 'off'`, dedupe) er felles med
+ * kommentarene og hentes fra `mentionRecipients`.
+ */
+export function postMentionRecipients(
+  userIds: string[],
+  members: MentionCandidate[],
+  options: {
+    /** Forfatteren av innlegget — varsles aldri om sin egen omtale. */
+    authorId: string
+    prefs: Map<string, MentionNotificationChoice> | Record<string, MentionNotificationChoice>
+    /** Omtalte som allerede har en `notified_at`. */
+    alreadyNotified: ReadonlySet<string>
+    /** Mottakere som fikk beskjed-e-posten i den samme utsendingen. */
+    postEmailed: ReadonlySet<string>
+  },
+): { email: MentionCandidate[]; markNotified: string[] } {
+  const eligible = mentionRecipients(userIds, members, {
+    commenterId: options.authorId,
+    prefs: options.prefs,
+  }).filter((m) => !options.alreadyNotified.has(m.userId))
+
+  const email = eligible.filter((m) => !options.postEmailed.has(m.userId))
+  // Også de som fikk beskjed-e-posten merkes: de ER varslet, og en senere
+  // republisering skal ikke sende dem omtale-e-posten «til gode».
+  return { email, markNotified: eligible.map((m) => m.userId) }
 }
