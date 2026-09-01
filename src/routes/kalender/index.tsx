@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { EmptyState, Kicker, SectionHeading, Stamp } from '../../components/ui'
+import { CALENDAR_WINDOW_LABEL } from '../../lib/calendar-window'
 import { formatDate, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../../lib/format'
 import type { CalendarEvent } from '../../lib/ical'
 import { getCalendar } from '../../server/calendar'
@@ -97,7 +98,7 @@ function CalendarPage() {
           </EmptyState>
         ) : !next ? (
           <EmptyState title="Ingenting på programmet ennå">
-            Det står ingen øvelser eller konserter i kalenderen de neste åtte ukene.
+            Det står ingen øvelser eller konserter i kalenderen de neste fire månedene.
           </EmptyState>
         ) : (
           <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
@@ -145,7 +146,7 @@ function CalendarPage() {
 
       {data.configured && !data.error && rest.length > 0 && (
         <section className="rise" style={{ animationDelay: '120ms' }}>
-          <SectionHeading kicker="De neste åtte ukene" title="Kommende" className="mb-6" />
+          <SectionHeading kicker={CALENDAR_WINDOW_LABEL} title="Kommende" className="mb-6" />
           <div className="space-y-8">
             {groupByMonth(rest).map((group) => (
               <div key={group.key}>

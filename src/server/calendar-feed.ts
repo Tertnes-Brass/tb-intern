@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers'
+import { calendarWindow } from '../lib/calendar-window'
 import { type CalendarEvent, expandEvents } from '../lib/ical'
 
 /**
@@ -19,10 +20,13 @@ import { type CalendarEvent, expandEvents } from '../lib/ical'
  * embed-adressen og kan trygt sendes til nettleseren.
  */
 
-/** Vinduet forsiden viser: fra i går (så dagens hendelse ikke forsvinner) og åtte uker frem. */
-const WINDOW_BACK_MS = 86_400_000
-const WINDOW_FORWARD_MS = 8 * 7 * 86_400_000
-const MAX_EVENTS = 200
+/**
+ * Vinduet (fra i går, fire måneder frem) og taket på antall forekomster bor i
+ * `lib/calendar-window.ts` — se begrunnelsene der. Hub-forsiden bruker samme
+ * `loadCalendar`, men sender bare de fire neste hendelsene til klienten
+ * (`eventsAfter` i `getHub`), så det lengre vinduet gjør ikke hub-payloaden
+ * større.
+ */
 
 /** Feeden er treg og endrer seg sjelden; ti minutter er rikelig ferskt for en korpskalender. */
 const CACHE_TTL_SECONDS = 600
@@ -123,11 +127,7 @@ export async function loadCalendar(now: number): Promise<CalendarPayload> {
 
   try {
     const ics = await fetchFeed(url)
-    const events = expandEvents(ics, {
-      from: now - WINDOW_BACK_MS,
-      to: now + WINDOW_FORWARD_MS,
-      max: MAX_EVENTS,
-    })
+    const events = expandEvents(ics, calendarWindow(now))
     // «Neste» = første hendelse som ikke er ferdig ennå.
     const next = events.find((e) => Date.parse(e.end ?? e.start) >= now) ?? null
     return { configured: true, error: false, embedUrl: embedUrl(), next, events }
