@@ -45,14 +45,21 @@ export function Button({ variant = 'secondary', size = 'md', loading, className 
 export function Stamp({
   tone = 'neutral',
   className = '',
+  title,
   children,
 }: {
   tone?: 'neutral' | 'brass' | 'oxblood'
   className?: string
+  /** Valgfri forklaring på hover — for stempler som er et begrep, ikke en etikett. */
+  title?: string
   children: ReactNode
 }) {
   const toneClass = tone === 'brass' ? 'stamp-brass' : tone === 'oxblood' ? 'stamp-oxblood' : ''
-  return <span className={`stamp ${toneClass} ${className}`}>{children}</span>
+  return (
+    <span className={`stamp ${toneClass} ${className}`} title={title}>
+      {children}
+    </span>
+  )
 }
 
 // ---------- Typografi ----------

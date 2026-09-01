@@ -3,6 +3,7 @@ import { asc, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
 import { invitations, memberProfiles, parts, rolePermissions, roles, userParts, workFiles } from '../db/schema'
+import { findRoleNameCollision, roleNameCollisionMessage } from '../lib/roles'
 import { SECTION_ORDER } from '../lib/taxonomy'
 import { requirePermission } from './access'
 import { buildDisplayOrder, listSiblings, reorderAfter } from './parts-tree'
@@ -290,8 +291,14 @@ export const createRole = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     await requirePermission(SETTINGS_PERMISSION)
     const d = db()
+    const allRoles = await d.select({ id: roles.id, name: roles.name, isSystem: roles.isSystem }).from(roles)
+    // To roller med samme navn kan ikke skilles i rollematrisen — det var
+    // nettopp det som skjedde med «Styremedlem» (#78). Navnet sammenlignes
+    // normalisert, så «styremedlem » ikke slipper forbi «Styremedlem».
+    const collision = findRoleNameCollision(data.name, allRoles)
+    if (collision) throw new Error(roleNameCollisionMessage(collision))
     let id = slugify(data.name)
-    const existing = new Set((await d.select({ id: roles.id }).from(roles)).map((r) => r.id))
+    const existing = new Set(allRoles.map((r) => r.id))
     if (existing.has(id)) {
       let i = 2
       while (existing.has(`${id}-${i}`)) i++
@@ -305,7 +312,13 @@ export const renameRole = createServerFn({ method: 'POST' })
   .validator(z.object({ roleId: z.string(), name: z.string().min(1) }))
   .handler(async ({ data }) => {
     await requirePermission(SETTINGS_PERMISSION)
-    await db().update(roles).set({ name: data.name.trim() }).where(eq(roles.id, data.roleId))
+    const d = db()
+    // Samme vakt som ved opprettelse: en omdøping til et navn som allerede er i
+    // bruk gir nøyaktig den duplikaten #78 handler om.
+    const allRoles = await d.select({ id: roles.id, name: roles.name, isSystem: roles.isSystem }).from(roles)
+    const collision = findRoleNameCollision(data.name, allRoles, { excludeId: data.roleId })
+    if (collision) throw new Error(roleNameCollisionMessage(collision))
+    await d.update(roles).set({ name: data.name.trim() }).where(eq(roles.id, data.roleId))
     return { ok: true }
   })
 

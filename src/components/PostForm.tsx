@@ -2,10 +2,12 @@ import { useNavigate, useRouter } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
 import { postImageUrl, uploadPostImages } from '../lib/post-images-client'
 import {
+  DEFAULT_NOTIFY,
   MAX_POST_IMAGES,
   type PostAudience,
   type PostImportance,
   imageRejectionReason,
+  notifyLabel,
   notifyResultMessage,
 } from '../lib/posts'
 import { createPost, deletePostImage, publishPost, updatePost } from '../server/posts'
@@ -53,7 +55,8 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
   const [audience, setAudience] = useState<PostAudience>(post?.audience ?? 'all')
   const [importance, setImportance] = useState<PostImportance>(post?.importance ?? 'normal')
   const [official, setOfficial] = useState(post?.official ?? false)
-  const [notify, setNotify] = useState(true)
+  // Avslått som standard (#85): publisering og masseutsending er to handlinger.
+  const [notify, setNotify] = useState(DEFAULT_NOTIFY)
   const [existingImages, setExistingImages] = useState<PostFormImage[]>(post?.images ?? [])
   const [files, setFiles] = useState<File[]>([])
   const [busy, setBusy] = useState<'draft' | 'publish' | null>(null)
@@ -276,11 +279,12 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
               onChange={(e) => setNotify(e.target.checked)}
             />
             <span>
-              <span className="block text-sm font-medium text-ink">Send e-post til medlemmene</span>
+              <span className="block text-sm font-medium text-ink">{notifyLabel(audience)}</span>
               <span className="mt-0.5 block text-xs leading-snug text-ink-soft">
+                Uten avkryssing publiseres innlegget uten at det sendes e-post.{' '}
                 {audience === 'board'
-                  ? 'Går kun til dem som selv kan publisere beskjeder.'
-                  : 'Går til aktive medlemmer med e-post, etter varslingsvalget deres.'}{' '}
+                  ? 'E-posten går kun til dem som selv kan publisere beskjeder.'
+                  : 'E-posten går til aktive medlemmer med e-post, etter varslingsvalget deres.'}{' '}
                 Ingen får den samme beskjeden to ganger.
               </span>
             </span>

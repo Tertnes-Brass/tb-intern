@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_NOTIFY,
   type PostRecipient,
   bodyToHtml,
   canDeleteComment,
@@ -10,6 +13,7 @@ import {
   excerpt,
   imageExtension,
   imageRejectionReason,
+  notifyLabel,
   notifyResultMessage,
   paragraphs,
   postEmailFrom,
@@ -363,5 +367,30 @@ describe('e-postkopi', () => {
     expect(postEmailImageNote(0)).toBe('')
     expect(postEmailImageNote(1)).toBe('Ett bilde er lagt ved — se dem på internsiden.')
     expect(postEmailImageNote(3)).toBe('3 bilder er lagt ved — se dem på internsiden.')
+  })
+})
+
+describe('e-postvarsling ved publisering', () => {
+  it('er avslått som standard — publisering og masseutsending er to handlinger', () => {
+    expect(DEFAULT_NOTIFY).toBe(false)
+  })
+
+  it('sier i etiketten hva som skjer og til hvem', () => {
+    expect(notifyLabel('all')).toBe('Send e-post til hele korpset nå')
+    expect(notifyLabel('board')).toBe('Send e-post til styret nå')
+  })
+
+  /**
+   * Låser standarden i selve UI-et, ikke bare i konstanten: uten dette kunne
+   * en `useState(true)` snike seg inn igjen ved siden av `DEFAULT_NOTIFY` og
+   * teste-grønt likevel. Publiseringsflatene er PostForm (skriv/rediger) og
+   * bekreftelsesdialogen på beskjed-detaljruta.
+   */
+  it('publiseringsflatene leser standarden fra konstanten', () => {
+    for (const file of ['../components/PostForm.tsx', '../routes/beskjeder/$postId/index.tsx']) {
+      const source = readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
+      expect(source).toContain('useState(DEFAULT_NOTIFY)')
+      expect(source).not.toMatch(/const \[notify, setNotify\] = useState\(true\)/)
+    }
   })
 })

@@ -10,7 +10,7 @@ import { type CalendarPayload, loadCalendar } from './calendar-feed'
 
 export type { CalendarPayload }
 
-/** Hele kalendervinduet: fra i går og åtte uker frem, maks 200 forekomster. */
+/** Hele kalendervinduet: fra i går og fire måneder frem (`lib/calendar-window.ts`). */
 export const getCalendar = createServerFn().handler(async (): Promise<CalendarPayload> => {
   await requireMe()
   return loadCalendar(Date.now())

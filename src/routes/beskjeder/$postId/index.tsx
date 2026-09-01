@@ -5,7 +5,14 @@ import { toast, toastError } from '../../../components/toast'
 import { Avatar, Button, EmptyState, Kicker, Modal, Stamp } from '../../../components/ui'
 import { formatDateTime } from '../../../lib/format'
 import { postImageUrl } from '../../../lib/post-images-client'
-import { commentCountLabel, notifyResultMessage, paragraphs, tokenize } from '../../../lib/posts'
+import {
+  DEFAULT_NOTIFY,
+  commentCountLabel,
+  notifyLabel,
+  notifyResultMessage,
+  paragraphs,
+  tokenize,
+} from '../../../lib/posts'
 import {
   addComment,
   deleteComment,
@@ -175,7 +182,8 @@ function PostPage() {
   const post = data.post
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmPublish, setConfirmPublish] = useState(false)
-  const [notify, setNotify] = useState(true)
+  // Avslått som standard (#85): publisering og masseutsending er to handlinger.
+  const [notify, setNotify] = useState(DEFAULT_NOTIFY)
   const [busy, setBusy] = useState<'resend' | 'publish' | 'unpublish' | 'delete' | null>(null)
   const isDraft = post.publishedAt === null
 
@@ -357,9 +365,10 @@ function PostPage() {
               onChange={(e) => setNotify(e.target.checked)}
             />
             <span>
-              <span className="block text-sm font-medium text-ink">Send e-post til medlemmene</span>
+              <span className="block text-sm font-medium text-ink">{notifyLabel(post.audience)}</span>
               <span className="mt-0.5 block text-xs leading-snug text-ink-soft">
-                Følger varslingsvalget til hver enkelt. Ingen får den samme beskjeden to ganger.
+                Uten avkryssing publiseres innlegget uten at det sendes e-post. E-posten følger
+                varslingsvalget til hver enkelt, og ingen får den samme beskjeden to ganger.
               </span>
             </span>
           </label>

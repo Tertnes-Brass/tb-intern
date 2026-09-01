@@ -202,6 +202,28 @@ export function canDeleteComment(
   return comment.authorId !== null && comment.authorId === me.id
 }
 
+/**
+ * Er «Send e-post» huket av når publiseringsflaten åpnes? Nei (#85).
+ *
+ * Å publisere og å sende masse-e-post er to forskjellige handlinger, og bare
+ * den ene kan angres. Med avkryssingen på som standard var det nok å overse
+ * den for å sende e-post til hele korpset. Valget kan fortsatt slås på
+ * eksplisitt, og gjør da nøyaktig det samme som før.
+ *
+ * Konstanten deles av PostForm, publiseringsdialogen og testen, slik at en
+ * senere UI-endring ikke kan slå standarden på igjen uten at testen faller.
+ */
+export const DEFAULT_NOTIFY = false
+
+/**
+ * Etiketten ved avkryssingen. «nå» og målgruppen står i selve etiketten, ikke
+ * bare i hjelpeteksten under: det skal gå fram av det man huker av at det
+ * sendes e-post, og til hvem.
+ */
+export function notifyLabel(audience: PostAudience): string {
+  return audience === 'board' ? 'Send e-post til styret nå' : 'Send e-post til hele korpset nå'
+}
+
 /** Maks antall bilder per innlegg. Håndheves server-side ved opplasting. */
 export const MAX_POST_IMAGES = 10
 /** Maks størrelse per bilde. */
