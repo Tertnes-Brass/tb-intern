@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { type HubCalendar, type HubEvent, type HubProject, areasFor, chooseHero, eventsAfter } from './hub'
 
 function event(id: string, start: string): HubEvent {
-  return { id, title: `Hendelse ${id}`, start, end: null, allDay: false, location: null }
+  return { id, occurrenceKey: `key-${id}`, title: `Hendelse ${id}`, start, end: null, allDay: false, location: null }
 }
 
 const ovelse = event('ovelse', '2026-09-02T17:00:00.000Z')

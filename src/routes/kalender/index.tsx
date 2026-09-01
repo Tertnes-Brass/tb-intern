@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import { Link, createFileRoute, redirect } from '@tanstack/react-router'
 import { EmptyState, Kicker, SectionHeading, Stamp } from '../../components/ui'
 import { CALENDAR_WINDOW_LABEL } from '../../lib/calendar-window'
 import { formatDate, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../../lib/format'
@@ -59,20 +59,50 @@ function DateBlock({ event }: { event: CalendarEvent }) {
   )
 }
 
-function EventRow({ event }: { event: CalendarEvent }) {
+/**
+ * En diskret markør på radene som har en øvingsplan (#82). Bare det: at det
+ * finnes en plan. Innholdet står på detaljsiden, og markøren røper ingenting om
+ * oppmøte.
+ */
+function PlanMark() {
   return (
-    <li className="hairline-row flex items-center gap-4 py-3">
-      <DateBlock event={event} />
-      <div className="min-w-0 flex-1">
-        <p className="display-title truncate text-base font-semibold text-ink">{event.title}</p>
-        <p className="mt-0.5 truncate text-xs text-ink-soft">
-          {timeLabel(event)}
-          {event.location ? ` · ${event.location}` : ''}
-        </p>
-      </div>
-      <span className="hidden shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-brass sm:inline">
-        {relativeDays(toOsloDate(event.start))}
-      </span>
+    <span
+      title="Øvingsplan lagt inn"
+      className="inline-flex shrink-0 items-center gap-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-brass"
+    >
+      <svg width="9" height="9" viewBox="0 0 9 9" fill="none" aria-hidden>
+        <path d="M1 2h7M1 4.5h7M1 7h4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+      Plan
+    </span>
+  )
+}
+
+function EventRow({ event, hasPlan }: { event: CalendarEvent; hasPlan: boolean }) {
+  return (
+    <li className="hairline-row">
+      <Link
+        to="/kalender/$eventId"
+        params={{ eventId: event.occurrenceKey }}
+        className="group flex items-center gap-4 py-3 transition-colors"
+      >
+        <DateBlock event={event} />
+        <div className="min-w-0 flex-1">
+          <p className="display-title truncate text-base font-semibold text-ink transition-colors group-hover:text-brass-strong">
+            {event.title}
+          </p>
+          <p className="mt-0.5 flex items-center gap-2 truncate text-xs text-ink-soft">
+            <span className="truncate">
+              {timeLabel(event)}
+              {event.location ? ` · ${event.location}` : ''}
+            </span>
+            {hasPlan && <PlanMark />}
+          </p>
+        </div>
+        <span className="hidden shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-brass sm:inline">
+          {relativeDays(toOsloDate(event.start))}
+        </span>
+      </Link>
     </li>
   )
 }
@@ -82,6 +112,7 @@ function CalendarPage() {
   const next = data.next
   // Hero-hendelsen gjentas ikke i lista under.
   const rest = next ? data.events.filter((e) => e.id !== next.id) : data.events
+  const withPlan = new Set(data.keysWithPlan)
 
   return (
     <div className="space-y-14">
@@ -104,9 +135,11 @@ function CalendarPage() {
           <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
             <div className="min-w-0">
               <Kicker className="mb-3">Neste · {relativeDays(toOsloDate(next.start))}</Kicker>
-              <h1 className="display-title break-words text-[clamp(2.4rem,6.5vw,4.2rem)] font-semibold italic leading-[0.98] text-ink [hyphens:auto]">
-                {next.title}
-              </h1>
+              <Link to="/kalender/$eventId" params={{ eventId: next.occurrenceKey }} className="link-quiet block">
+                <h1 className="display-title break-words text-[clamp(2.4rem,6.5vw,4.2rem)] font-semibold italic leading-[0.98] text-ink [hyphens:auto]">
+                  {next.title}
+                </h1>
+              </Link>
               <p className="mt-4 text-[0.95rem] leading-relaxed text-ink-soft">
                 {formatWeekday(toOsloDate(next.start))} {formatDate(toOsloDate(next.start))}
                 {next.allDay ? '' : ` · ${formatTimeRange(next.start, next.end)}`}
@@ -153,7 +186,7 @@ function CalendarPage() {
                 <h3 className="kicker mb-1">{group.label}</h3>
                 <ul>
                   {group.events.map((event) => (
-                    <EventRow key={event.id} event={event} />
+                    <EventRow key={event.id} event={event} hasPlan={withPlan.has(event.occurrenceKey)} />
                   ))}
                 </ul>
               </div>

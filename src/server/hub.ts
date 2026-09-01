@@ -44,6 +44,7 @@ export type HubPayload = {
 function toHubEvent(event: CalendarEvent): HubEvent {
   return {
     id: event.id,
+    occurrenceKey: event.occurrenceKey,
     title: event.title,
     start: event.start,
     end: event.end,

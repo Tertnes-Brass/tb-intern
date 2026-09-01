@@ -12,6 +12,12 @@ import { isGroupLeader } from './gruppeledere'
 /** Kalenderhendelse redusert til feltene hub-en faktisk viser. */
 export type HubEvent = {
   id: string
+  /**
+   * Stabil nøkkel for forekomsten (`src/lib/occurrence.ts`). Hub-en bruker den
+   * KUN til å lenke «Neste» videre til `/kalender/$eventId` — payloaden skal
+   * ellers holdes liten (§4), så det er ett felt, ikke en ny blokk.
+   */
+  occurrenceKey: string
   title: string
   /** ISO-8601 i UTC. */
   start: string
