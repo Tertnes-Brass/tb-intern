@@ -356,6 +356,59 @@ select.field-input {
   }
 }
 
+/* ---------- Chat: kode og svarreferanser (#80) ----------
+   Chatten formaterer BARE backticks (`src/lib/chat-format.ts`) — ingen annen
+   markdown. Inline kode brekker med teksten, mens blokker heller scroller
+   vannrett: en linje SQL som brekker midt i er verre å lese enn en man drar
+   på. */
+.chat-code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: color-mix(in srgb, var(--paper-sunken) 70%, var(--paper-raised));
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 0.05em 0.32em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-block {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  background: color-mix(in srgb, var(--paper-sunken) 70%, var(--paper-raised));
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0.55rem 0.7rem;
+  overflow-x: auto;
+  white-space: pre;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Meldingen man hoppet til fra en svarreferanse blinker kort, så øyet finner
+   den igjen uten at tråden flytter på seg. */
+.chat-bubble {
+  transition: box-shadow 0.25s, background-color 0.25s;
+}
+.chat-bubble-marked {
+  animation: chat-mark 1.8s ease-out;
+}
+@keyframes chat-mark {
+  0%,
+  55% {
+    box-shadow: 0 0 0 2px var(--brass);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-bubble-marked {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--brass);
+  }
+}
+
 /* ---------- Diverse ---------- */
 .link-quiet {
   text-decoration: none;

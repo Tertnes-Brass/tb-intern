@@ -305,6 +305,34 @@ export const SEED_BOARD_MESSAGES: string[] = [
   'Husk at oktobermøtet er flyttet en uke. Agendaen ligger på møtesiden.',
 ]
 
+export type SeedBoardChannel = {
+  name: string
+  /** `replyToIndex` peker på en tidligere melding i samme liste. */
+  messages: Array<{ body: string; replyToIndex?: number }>
+}
+
+/**
+ * Egendefinerte chatkanaler (#80) i demodataene: én kanal med et svar og en
+ * kodeformatert melding, så både svarreferansen og backtick-formateringen kan
+ * ses uten å skrive noe først.
+ */
+export const SEED_BOARD_CHANNELS: SeedBoardChannel[] = [
+  {
+    name: 'Uniformer 2027',
+    messages: [
+      { body: 'Vi tar uniformspraten her, så prosjekttråden holder seg til oppgavene.' },
+      {
+        body: 'Leverandøren vil ha målene som en CSV med kolonnene `navn`, `jakke` og `bukse` — ingenting annet.',
+      },
+      {
+        body: 'Her er formatet de sendte:\n```csv\nnavn;jakke;bukse\nKari Nordmann;48;46\n```\nJeg fyller ut etter måltakingen.',
+        replyToIndex: 1,
+      },
+      { body: 'Da tar vi målene rett etter øvelsen på torsdag.' },
+    ],
+  },
+]
+
 // ---------- Veggen (demo) ----------
 
 export type SeedPostData = {

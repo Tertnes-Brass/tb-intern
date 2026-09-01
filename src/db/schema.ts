@@ -387,9 +387,33 @@ export const boardDocuments = sqliteTable(
   (t) => [index('board_documents_meeting_idx').on(t.meetingId)],
 )
 
-// Styrets interne chat. `channel` er enten 'general' (kanalen «Styret») eller
-// 'project:<boardProjectId>' — én tråd per styreprosjekt. Kanalen er en streng
-// og ikke en egen tabell: trådene finnes så lenge prosjektet finnes, og en
+// Egendefinerte chatkanaler styret oppretter selv (#80). Fellesekanalen
+// ('general') og prosjekttrådene ('project:<id>') er FORTSATT bare strenger —
+// de har en eier andre steder i modellen, og skal ikke få en tom rad her.
+// Tabellen er derfor i praksis lista over `kind = 'custom'`-kanaler, med
+// kanalnøkkelen `custom:<id>` i `board_messages.channel`; `kind` finnes for at
+// et framtidig område (#81) skal kunne eie sine egne kanaler uten skjemabytte.
+// Arkivering er myk: `archivedAt` gjør kanalen lesbar, men ikke skrivbar.
+export const boardChannels = sqliteTable(
+  'board_channels',
+  {
+    id: text('id').primaryKey(),
+    kind: text('kind', { enum: ['general', 'project', 'custom'] })
+      .notNull()
+      .default('custom'),
+    name: text('name').notNull(),
+    boardProjectId: text('board_project_id').references(() => boardProjects.id, { onDelete: 'set null' }),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    archivedAt: integer('archived_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [index('board_channels_kind_idx').on(t.kind, t.archivedAt)],
+)
+
+// Styrets interne chat. `channel` er enten 'general' (kanalen «Styret»),
+// 'project:<boardProjectId>' (én tråd per styreprosjekt) eller 'custom:<id>'
+// (en egendefinert kanal i `board_channels`). Kanalen er en streng og ikke en
+// fremmednøkkel: de to første trådtypene finnes så lenge eieren finnes, og en
 // slettet tråd skal ikke etterlate en tom rad noe sted.
 export const boardMessages = sqliteTable(
   'board_messages',
@@ -398,6 +422,12 @@ export const boardMessages = sqliteTable(
     channel: text('channel').notNull(),
     authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
     body: text('body').notNull(),
+    // Svar på en konkret melding i samme kanal — én nivå, aldri nøstede tråder.
+    // Fremmednøkkelen nullstilles når originalen slettes, og nettopp derfor
+    // finnes `replyToDeleted`: uten den ville svaret sett ut som en helt vanlig
+    // melding, og referansen «Meldingen er slettet» forsvunnet i stillhet.
+    replyToId: text('reply_to_id').references((): AnySQLiteColumn => boardMessages.id, { onDelete: 'set null' }),
+    replyToDeleted: integer('reply_to_deleted', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (t) => [index('board_messages_channel_idx').on(t.channel, t.createdAt)],

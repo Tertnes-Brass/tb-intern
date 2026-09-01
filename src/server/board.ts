@@ -1,9 +1,11 @@
 import { createServerFn } from '@tanstack/react-start'
-import { and, asc, desc, eq, gt, isNull, like, ne, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNull, like, ne, or, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/sqlite-core'
 import { z } from 'zod'
 import { db } from '../db'
 import {
   boardChannelReads,
+  boardChannels,
   boardComments,
   boardDocuments,
   boardMeetings,
@@ -20,12 +22,22 @@ import {
   BOARD_TASK_STATUSES,
   type BoardProjectStatus,
   type BoardTaskStatus,
+  type ChannelKind,
+  type ChannelSummary,
+  type ChatMessage,
   GENERAL_CHANNEL,
-  channelProjectId,
+  channelNameError,
+  channelNameKey,
+  customChannel,
   groupTasks,
+  normalizeChannelName,
+  parseChannel,
   projectChannel,
+  replyReference,
   sortBoardProjects,
+  sortChannels,
   sortTasks,
+  totalUnread,
 } from '../lib/board'
 import { newId } from '../lib/id'
 import { type Me, requirePermission } from './access'
@@ -862,18 +874,73 @@ export const deleteBoardProject = createServerFn({ method: 'POST' })
 // ---------- Chat ----------
 
 /**
- * En kanalnøkkel er enten fellesekanalen eller en tråd for et styreprosjekt som
- * FINNES. Uten denne sjekken kunne hvem som helst med `board.manage` skrevet i
- * en oppdiktet kanal ingen andre ser.
+ * Kanalene styret kan se, i lista si egen rekkefølge. Tre typer med hver sin
+ * eier: fellesekanalen (ingen rad noe sted), prosjekttrådene (lever så lenge
+ * styreprosjektet er aktivt) og de egendefinerte kanalene i `board_channels`.
+ * Arkiverte kanaler blir med — de skal kunne leses, bare ikke skrives i.
  */
-async function assertChannelExists(channel: string): Promise<void> {
-  if (channel === GENERAL_CHANNEL) return
-  const boardProjectId = channelProjectId(channel)
-  if (!boardProjectId) throw new Error('Ukjent kanal')
-  const found = (
-    await db().select({ id: boardProjects.id }).from(boardProjects).where(eq(boardProjects.id, boardProjectId)).limit(1)
+async function loadChannels(): Promise<
+  Array<{ channel: string; title: string; kind: ChannelKind; archived: boolean }>
+> {
+  const d = db()
+  const [projectRows, customRows] = await Promise.all([
+    d
+      .select({ id: boardProjects.id, title: boardProjects.title })
+      .from(boardProjects)
+      .where(eq(boardProjects.status, 'active')),
+    d
+      .select({ id: boardChannels.id, name: boardChannels.name, archivedAt: boardChannels.archivedAt })
+      .from(boardChannels)
+      .where(eq(boardChannels.kind, 'custom')),
+  ])
+
+  return sortChannels([
+    { channel: GENERAL_CHANNEL, title: 'Styret', kind: 'general' as ChannelKind, archived: false },
+    ...projectRows.map((p) => ({
+      channel: projectChannel(p.id),
+      title: p.title,
+      kind: 'project' as ChannelKind,
+      archived: false,
+    })),
+    ...customRows.map((c) => ({
+      channel: customChannel(c.id),
+      title: c.name,
+      kind: 'custom' as ChannelKind,
+      archived: c.archivedAt !== null,
+    })),
+  ])
+}
+
+/**
+ * En kanalnøkkel er fellesekanalen, en tråd for et styreprosjekt som FINNES,
+ * eller en egendefinert kanal som finnes. Uten denne sjekken kunne hvem som
+ * helst med `board.manage` skrevet i en oppdiktet kanal ingen andre ser.
+ *
+ * `write: true` krever i tillegg at kanalen ikke er arkivert. Arkivering er en
+ * myk stenging: historikken skal fortsatt kunne leses, men samtalen er over.
+ */
+async function assertChannelExists(channel: string, opts: { write?: boolean } = {}): Promise<void> {
+  const parsed = parseChannel(channel)
+  if (!parsed) throw new Error('Ukjent kanal')
+  if (parsed.kind === 'general') return
+
+  if (parsed.kind === 'project') {
+    const found = (
+      await db().select({ id: boardProjects.id }).from(boardProjects).where(eq(boardProjects.id, parsed.id)).limit(1)
+    )[0]
+    if (!found) throw new Error('Ukjent kanal')
+    return
+  }
+
+  const row = (
+    await db()
+      .select({ id: boardChannels.id, archivedAt: boardChannels.archivedAt })
+      .from(boardChannels)
+      .where(and(eq(boardChannels.id, parsed.id), eq(boardChannels.kind, 'custom')))
+      .limit(1)
   )[0]
-  if (!found) throw new Error('Ukjent kanal')
+  if (!row) throw new Error('Ukjent kanal')
+  if (opts.write && row.archivedAt) throw new Error('Kanalen er arkivert')
 }
 
 /** Hvor mye historikk en kanal laster ved åpning. Styret er lite; dette holder. */
@@ -881,18 +948,14 @@ const CHAT_PAGE_SIZE = 200
 
 /**
  * Kanallista med uleste. Fellesekanalen først, deretter prosjekttrådene for
- * aktive prosjekter i alfabetisk rekkefølge.
+ * aktive prosjekter, så de egendefinerte kanalene — arkiverte nederst.
  */
 export const listChannels = createServerFn().handler(async () => {
   const me = await requirePermission(BOARD_PERMISSION)
   const d = db()
 
-  const [projectRows, reads, unreadRows] = await Promise.all([
-    d
-      .select({ id: boardProjects.id, title: boardProjects.title })
-      .from(boardProjects)
-      .where(eq(boardProjects.status, 'active'))
-      .orderBy(asc(boardProjects.title)),
+  const [all, reads, unreadRows] = await Promise.all([
+    loadChannels(),
     d.select().from(boardChannelReads).where(eq(boardChannelReads.userId, me.id)),
     // Uleste telles i SQL fordi alternativet er å hente HVER melding i hver
     // kanal bare for å telle dem. Regelen er den samme som `unreadCount` i
@@ -926,21 +989,28 @@ export const listChannels = createServerFn().handler(async () => {
   const lastByChannel = new Map(unreadRows.map((r) => [r.channel, r.lastAt]))
   const readAt = new Map(reads.map((r) => [r.channel, r.lastReadAt.getTime()]))
 
-  const channels = [
-    { channel: GENERAL_CHANNEL, title: 'Styret', boardProjectId: null as string | null },
-    ...projectRows.map((p) => ({ channel: projectChannel(p.id), title: p.title, boardProjectId: p.id })),
-  ].map((c) => ({
-    ...c,
+  const channels: ChannelSummary[] = all.map((c) => ({
+    channel: c.channel,
+    title: c.title,
+    kind: c.kind,
+    archived: c.archived,
     unread: unreadByChannel.get(c.channel) ?? 0,
     lastMessageAt: lastByChannel.get(c.channel) ?? readAt.get(c.channel) ?? null,
   }))
 
-  return { channels, totalUnread: channels.reduce((sum, c) => sum + c.unread, 0), meId: me.id }
+  return { channels, totalUnread: totalUnread(channels), meId: me.id }
 })
 
-/** Samlet ulest-teller til områdemenyen. Holdes bevisst liten. */
+/**
+ * Samlet ulest-teller til områdemenyen. Bare kanaler som faktisk står i
+ * kanallista teller: en prikk man ikke kan bli kvitt ved å lese noe — fordi
+ * kanalen er arkivert eller prosjektet lagt bort — er en prikk ingen stoler på.
+ */
 export const getChatUnread = createServerFn().handler(async () => {
   const me = await requirePermission(BOARD_PERMISSION)
+  const open = (await loadChannels()).filter((c) => !c.archived).map((c) => c.channel)
+  if (open.length === 0) return { unread: 0 }
+
   const rows = await db()
     .select({ n: sql<number>`count(*)` })
     .from(boardMessages)
@@ -950,6 +1020,7 @@ export const getChatUnread = createServerFn().handler(async () => {
     )
     .where(
       and(
+        inArray(boardMessages.channel, open),
         ne(boardMessages.authorId, me.id),
         or(isNull(boardChannelReads.lastReadAt), gt(boardMessages.createdAt, boardChannelReads.lastReadAt)),
       ),
@@ -957,10 +1028,100 @@ export const getChatUnread = createServerFn().handler(async () => {
   return { unread: rows[0]?.n ?? 0 }
 })
 
+// ---------- Egendefinerte kanaler ----------
+
+/** Navnet er ledig når ingen AKTIV egendefinert kanal heter det samme. */
+async function assertChannelNameFree(name: string, exceptId?: string): Promise<void> {
+  const key = channelNameKey(name)
+  const taken = await db()
+    .select({ id: boardChannels.id, name: boardChannels.name })
+    .from(boardChannels)
+    .where(and(eq(boardChannels.kind, 'custom'), isNull(boardChannels.archivedAt)))
+  if (taken.some((c) => c.id !== exceptId && channelNameKey(c.name) === key)) {
+    throw new Error(`Det finnes allerede en kanal som heter «${normalizeChannelName(name)}»`)
+  }
+}
+
+const channelName = z.string().min(1, 'Kanalen må ha et navn').max(200)
+
+/** Validerer navnet med samme regel som klienten viser. */
+function validChannelName(name: string): string {
+  const error = channelNameError(name)
+  if (error) throw new Error(error)
+  return normalizeChannelName(name)
+}
+
+export const createChannel = createServerFn({ method: 'POST' })
+  .validator(z.object({ name: channelName }))
+  .handler(async ({ data }) => {
+    const me = await requirePermission(BOARD_PERMISSION)
+    const name = validChannelName(data.name)
+    await assertChannelNameFree(name)
+    const id = newId()
+    await db().insert(boardChannels).values({
+      id,
+      kind: 'custom',
+      name,
+      boardProjectId: null,
+      createdBy: me.id,
+      createdAt: new Date(),
+      archivedAt: null,
+    })
+    return { id, channel: customChannel(id) }
+  })
+
+export const renameChannel = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string(), name: channelName }))
+  .handler(async ({ data }) => {
+    await requirePermission(BOARD_PERMISSION)
+    const name = validChannelName(data.name)
+    await assertChannelNameFree(name, data.id)
+    await db()
+      .update(boardChannels)
+      .set({ name })
+      .where(and(eq(boardChannels.id, data.id), eq(boardChannels.kind, 'custom')))
+    return { ok: true }
+  })
+
+/**
+ * Arkivering og gjenoppretting. Meldingene blir liggende — arkivering er å
+ * rydde kanalen bort fra samtalen, ikke å slette den. En kanal som gjenopprettes
+ * må fortsatt ha et ledig navn, ellers ville to like kanaler stått side om side.
+ */
+export const setChannelArchived = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string(), archived: z.boolean() }))
+  .handler(async ({ data }) => {
+    await requirePermission(BOARD_PERMISSION)
+    const row = (
+      await db()
+        .select({ id: boardChannels.id, name: boardChannels.name })
+        .from(boardChannels)
+        .where(and(eq(boardChannels.id, data.id), eq(boardChannels.kind, 'custom')))
+        .limit(1)
+    )[0]
+    if (!row) throw new Error('Ukjent kanal')
+    if (!data.archived) await assertChannelNameFree(row.name, row.id)
+
+    await db()
+      .update(boardChannels)
+      .set({ archivedAt: data.archived ? new Date() : null })
+      .where(eq(boardChannels.id, data.id))
+    return { ok: true }
+  })
+
+// ---------- Meldinger ----------
+
+/** Meldingen et svar peker på — eller «slettet», når originalen er borte. */
+const replyMessage = alias(boardMessages, 'reply_message')
+const replyAuthor = alias(user, 'reply_author')
+
 /**
  * Meldingene i en kanal. `after` (epoch-ms) gjør pollingen billig: klienten ber
  * bare om det som har kommet siden sist, og får en tom liste når ingenting har
  * skjedd. Uten `after` lastes den siste sida med historikk.
+ *
+ * Lesing gates på at kanalen finnes (også for egendefinerte kanaler) — men
+ * ikke på at den er aktiv: en arkivert kanal skal kunne leses.
  */
 export const listMessages = createServerFn()
   .validator(z.object({ channel: z.string().min(1).max(120), after: z.number().int().nonnegative().optional() }))
@@ -976,9 +1137,15 @@ export const listMessages = createServerFn()
         authorName: user.name,
         body: boardMessages.body,
         createdAt: boardMessages.createdAt,
+        replyToDeleted: boardMessages.replyToDeleted,
+        replyId: replyMessage.id,
+        replyBody: replyMessage.body,
+        replyAuthorName: replyAuthor.name,
       })
       .from(boardMessages)
       .leftJoin(user, eq(boardMessages.authorId, user.id))
+      .leftJoin(replyMessage, eq(boardMessages.replyToId, replyMessage.id))
+      .leftJoin(replyAuthor, eq(replyMessage.authorId, replyAuthor.id))
       .where(
         and(
           eq(boardMessages.channel, data.channel),
@@ -990,24 +1157,56 @@ export const listMessages = createServerFn()
       .orderBy(desc(boardMessages.createdAt))
       .limit(CHAT_PAGE_SIZE)
 
-    const messages = rows
-      .map((m) => ({ ...m, createdAt: m.createdAt.getTime() }))
+    const messages: ChatMessage[] = rows
+      .map((m) => ({
+        id: m.id,
+        authorId: m.authorId,
+        authorName: m.authorName,
+        body: m.body,
+        createdAt: m.createdAt.getTime(),
+        replyTo: replyReference(m),
+      }))
       .sort((a, b) => a.createdAt - b.createdAt)
     return { messages, meId: me.id, serverTime: Date.now() }
   })
 
 export const postMessage = createServerFn({ method: 'POST' })
   .validator(
-    z.object({ channel: z.string().min(1).max(120), body: z.string().min(1, 'Skriv noe først').max(4000) }),
+    z.object({
+      channel: z.string().min(1).max(120),
+      body: z.string().min(1, 'Skriv noe først').max(4000),
+      /** Meldingen det svares på. Må ligge i samme kanal — ingen kryssvar. */
+      replyToId: z.string().nullish(),
+    }),
   )
   .handler(async ({ data }) => {
     const me = await requirePermission(BOARD_PERMISSION)
-    await assertChannelExists(data.channel)
+    await assertChannelExists(data.channel, { write: true })
+    const d = db()
+
+    let replyToId: string | null = null
+    let replyToDeleted = false
+    if (data.replyToId) {
+      const original = (
+        await d
+          .select({ id: boardMessages.id, channel: boardMessages.channel })
+          .from(boardMessages)
+          .where(eq(boardMessages.id, data.replyToId))
+          .limit(1)
+      )[0]
+      if (original && original.channel !== data.channel) throw new Error('Meldingen hører til en annen kanal')
+      // Ble originalen slettet mens svaret ble skrevet, går svaret likevel
+      // inn — som et svar på noe som er borte. Å kaste bort teksten ville
+      // vært verre enn å vise «Meldingen er slettet».
+      replyToId = original?.id ?? null
+      replyToDeleted = !original
+    }
+
     const id = newId()
     const createdAt = new Date()
-    await db()
+    await d
       .insert(boardMessages)
-      .values({ id, channel: data.channel, authorId: me.id, body: data.body.trim(), createdAt })
+      .values({ id, channel: data.channel, authorId: me.id, body: data.body.trim(), replyToId, replyToDeleted, createdAt })
     return { id, createdAt: createdAt.getTime() }
   })
 
@@ -1015,10 +1214,25 @@ export const deleteMessage = createServerFn({ method: 'POST' })
   .validator(z.object({ id: z.string() }))
   .handler(async ({ data }) => {
     const me = await requirePermission(BOARD_PERMISSION)
+    const d = db()
     // Styret er lite: man rydder i sitt eget, ingen moderering utover det.
-    await db()
-      .delete(boardMessages)
-      .where(and(eq(boardMessages.id, data.id), eq(boardMessages.authorId, me.id)))
+    const mine = (
+      await d
+        .select({ id: boardMessages.id })
+        .from(boardMessages)
+        .where(and(eq(boardMessages.id, data.id), eq(boardMessages.authorId, me.id)))
+        .limit(1)
+    )[0]
+    if (!mine) return { ok: true }
+
+    // Svarene på meldingen merkes FØR den forsvinner. Fremmednøkkelen
+    // nullstiller `reply_to_id` av seg selv, og uten merket ville svaret sett
+    // ut som en vanlig melding i stedet for et svar på noe som er borte.
+    await d
+      .update(boardMessages)
+      .set({ replyToId: null, replyToDeleted: true })
+      .where(eq(boardMessages.replyToId, data.id))
+    await d.delete(boardMessages).where(eq(boardMessages.id, data.id))
     return { ok: true }
   })
 
@@ -1027,6 +1241,7 @@ export const markChannelRead = createServerFn({ method: 'POST' })
   .validator(z.object({ channel: z.string().min(1).max(120), at: z.number().int().nonnegative().optional() }))
   .handler(async ({ data }) => {
     const me = await requirePermission(BOARD_PERMISSION)
+    // Lesing, ikke skriving: en arkivert kanal skal kunne leses ferdig.
     await assertChannelExists(data.channel)
     const lastReadAt = new Date(data.at ?? Date.now())
     await db()
