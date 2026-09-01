@@ -103,9 +103,42 @@ pnpm exec wrangler secret put CALENDAR_ICS_URL   # hemmelig — kun som secret
 # CALENDAR_EMBED_URL er ikke hemmelig: legg verdien i "vars" i wrangler.jsonc
 ```
 
-Uten `CALENDAR_ICS_URL` er siden en rolig tomtilstand («Kalenderen er ikke koblet
-til ennå») — ingen feil. Feeden caches i ti minutter, så den hentes ikke på hver
-sidevisning.
+I produksjon uten `CALENDAR_ICS_URL` er siden en rolig tomtilstand
+(«Kalenderen er ikke koblet til ennå») — ingen feil. **Lokalt** faller den i
+stedet tilbake til en generert demofeed (`src/server/dev-calendar.ts`) med en
+ukentlig øvelse, én flyttet og én slettet forekomst, slik at kalenderen og
+demo-øvingsplanen har noe å vise uten oppsett. Feeden caches i ti minutter, så
+den hentes ikke på hver sidevisning.
+
+## Øvingsplan og oppmøte
+
+Hver hendelse i kalenderen har en detaljside — `/kalender/$eventId` — med to
+ting Google ikke kan gi oss: **hva som skal øves på**, og **hvem som kommer**.
+
+- **Øvingsplanen** er en ordnet liste: verk fra arkivet (med lenke til
+  `/noter/arkiv/$workId` for dem som har arkivinnsyn) eller fritekst for det
+  som ikke er noter — oppvarming, marsjoppstilling, en pause. Hvert punkt kan
+  ha en kort merknad (sats, taktnummer, tidsbruk). Hendelsen kan i tillegg
+  knyttes til et publisert prosjekt. Alle innloggede leser planen; å endre den
+  krever rettigheten **Øvingsplan** (`calendar.manage`).
+- **Oppmøte** er ett svar per medlem per hendelse: *Kommer*, *Kommer ikke*
+  eller *Usikker*, med en valgfri kort kommentar. Medlemmet svarer selv og kan
+  endre eller nullstille svaret når som helst. Den som har rettigheten
+  **Fravær og oppmøte** (`attendance.manage`) kan sette eller fjerne status for
+  et aktivt medlem — samme rad, så det finnes aldri to konkurrerende svar; hvem
+  som registrerte hva, står på raden.
+- **Hvem ser hva:** tallene («18 kommer · 3 kommer ikke») og sin egen status ser
+  alle. Full navneliste med kommentarer ser bare `attendance.manage` (og admin)
+  — og en gruppeleder, men kun for sine egne stemmegrupper. Regelen håndheves i
+  serverfunksjonen, ikke i skjermbildet.
+- **Fraværsansvarlig trenger ingen andre rettigheter.** `attendance.manage` er
+  en egen rad i rollematrisen (`/innstillinger`) nettopp for at den som fører
+  fravær ikke skal måtte få prosjekt-, medlems- eller administratortilgang.
+  Begge rettighetene er seedet til rollen Dirigent.
+- Blir en hendelse slettet i Google, eller faller den ut av firemåneders­vinduet,
+  blir de lokale dataene stående. Detaljsiden sier fra at hendelsen ikke finnes
+  i kalenderen lenger, og de som har skriverett ser fortsatt det som ble
+  registrert. Ingenting slettes automatisk.
 
 ## Styre
 

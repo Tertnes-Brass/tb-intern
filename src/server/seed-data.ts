@@ -566,3 +566,48 @@ export const SEED_POST_REACTIONS: Array<{ postId: string; authorEmail: string }>
   { postId: 'demo-post-kaffe', authorEmail: 'jonas@demo.tertnesbrass.no' },
   { postId: 'demo-post-samspill', authorEmail: 'ingrid@demo.tertnesbrass.no' },
 ]
+
+// ---------- Øvingsplan og oppmøte (#82 + #24) ----------
+
+export type SeedSetlistItem = {
+  /** Tittel på et verk i SEED_WORKS, eller null for et fritekstpunkt. */
+  workTitle: string | null
+  customTitle: string | null
+  note: string | null
+}
+
+/**
+ * Øvingsplanen for neste øvelse i demoen: to verk fra arkivet og ett
+ * fritekstpunkt — nettopp den blandingen #82 ber om («ting utenfor arkivet,
+ * f.eks. oppvarming»).
+ */
+export const SEED_SETLIST: SeedSetlistItem[] = [
+  { workTitle: null, customTitle: 'Oppvarming og stemming', note: 'Ca. 10 min — koraler i Bb' },
+  { workTitle: 'Benedictus', customTitle: null, note: 'Fra takt 42, euphonium-soloen' },
+  { workTitle: 'Where Eagles Sing', customTitle: null, note: 'Gjennomspilling, tempo som på konserten' },
+]
+
+export type SeedAttendance = {
+  /** E-posten til en av SEED_MEMBERS. */
+  email: string
+  status: 'attending' | 'not_attending' | 'unsure'
+  comment: string | null
+  /**
+   * Hvem som registrerte den. `null` = medlemmet svarte selv (`source: 'self'`);
+   * en e-post = registrert av en ansvarlig (`source: 'admin'`). Det er hele
+   * poenget med den delte raden i #82: samme status, ulik opprinnelse.
+   */
+  registeredByEmail: string | null
+}
+
+export const SEED_ATTENDANCE: SeedAttendance[] = [
+  { email: 'ingrid@demo.tertnesbrass.no', status: 'attending', comment: null, registeredByEmail: null },
+  { email: 'astrid@demo.tertnesbrass.no', status: 'unsure', comment: 'Kommer senest 19:30', registeredByEmail: null },
+  { email: 'karim@demo.tertnesbrass.no', status: 'attending', comment: null, registeredByEmail: null },
+  {
+    email: 'jonas@demo.tertnesbrass.no',
+    status: 'not_attending',
+    comment: 'Meldt fra på telefon',
+    registeredByEmail: 'dirigent@demo.tertnesbrass.no',
+  },
+]

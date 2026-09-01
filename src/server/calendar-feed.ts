@@ -116,6 +116,12 @@ async function fetchFeed(url: string): Promise<string> {
   return text
 }
 
+/** Forekomstene i vinduet + «neste» = første som ikke er ferdig ennå. */
+function expand(ics: string, now: number): { next: CalendarEvent | null; events: CalendarEvent[] } {
+  const events = expandEvents(ics, calendarWindow(now))
+  return { next: events.find((e) => Date.parse(e.end ?? e.start) >= now) ?? null, events }
+}
+
 /**
  * Felles kjerne for `getCalendar`, `getNextEvent` og `getHub`. Kaster aldri:
  * manglende konfigurasjon og feil i feeden er tilstander UI-et skal kunne vise.
@@ -123,14 +129,21 @@ async function fetchFeed(url: string): Promise<string> {
  */
 export async function loadCalendar(now: number): Promise<CalendarPayload> {
   const url = icsUrl()
-  if (!url) return { configured: false, error: false, embedUrl: embedUrl(), next: null, events: [] }
+  if (!url) {
+    // I dev uten secret: en generert demofeed, slik at kalenderen — og
+    // demo-øvingsplanen som henger på en forekomst i den (#82) — faktisk har
+    // noe å vise. `import.meta.env.DEV` er statisk `false` i produksjonsbygget,
+    // så både grenen og `./dev-calendar` faller bort der.
+    if (import.meta.env.DEV) {
+      const { devCalendarIcs } = await import('./dev-calendar')
+      return { configured: true, error: false, embedUrl: embedUrl(), ...expand(devCalendarIcs(now), now) }
+    }
+    return { configured: false, error: false, embedUrl: embedUrl(), next: null, events: [] }
+  }
 
   try {
     const ics = await fetchFeed(url)
-    const events = expandEvents(ics, calendarWindow(now))
-    // «Neste» = første hendelse som ikke er ferdig ennå.
-    const next = events.find((e) => Date.parse(e.end ?? e.start) >= now) ?? null
-    return { configured: true, error: false, embedUrl: embedUrl(), next, events }
+    return { configured: true, error: false, embedUrl: embedUrl(), ...expand(ics, now) }
   } catch (error) {
     // Aldri logg URL-en — den er hemmelig og havner i Workers-loggene.
     console.error('[kalender] Klarte ikke hente eller tolke kalenderfeeden:', (error as Error).message)
