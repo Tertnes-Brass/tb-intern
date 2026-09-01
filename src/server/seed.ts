@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers'
 import { and, eq, isNull } from 'drizzle-orm'
 import { db } from '../db'
 import {
+  boardChannels,
   boardComments,
   boardMeetings,
   boardMessages,
@@ -34,6 +35,7 @@ import {
   DEMO_SHARE_PART_IDS,
   DEMO_SHARE_RECIPIENT,
   DEMO_SHARE_TOKEN,
+  SEED_BOARD_CHANNELS,
   SEED_BOARD_MEETINGS,
   SEED_BOARD_MESSAGES,
   SEED_BOARD_PROJECTS,
@@ -359,7 +361,8 @@ function isoDayFromToday(offset: number): string {
 /**
  * Demoinnhold for styreområdet: to møter (ett med agenda, notater og vedtak),
  * to styreprosjekter med egne oppgaver og chat-tråder, fem løse oppgaver (én
- * forfalt, én ferdig), et par kommentarer og noen meldinger i fellesekanalen.
+ * forfalt, én ferdig), et par kommentarer, noen meldinger i fellesekanalen og
+ * én egendefinert kanal med et svar og en kodeformatert melding.
  * Datoene er relative til i dag, så «forfalt» faktisk er forfalt uansett når
  * demoen kjøres. Ingen dokumenter — de ville krevd R2-objekter uten å vise noe
  * seeding ikke allerede viser.
@@ -374,6 +377,7 @@ async function seedBoardDemoData(): Promise<void> {
   const hasGeneralChat =
     (await d.select({ id: boardMessages.id }).from(boardMessages).where(eq(boardMessages.channel, 'general')).limit(1))
       .length > 0
+  const hasCustomChannels = (await d.select({ id: boardChannels.id }).from(boardChannels).limit(1)).length > 0
 
   const meetingIdByTitle = new Map<string, string>()
   for (const m of hasMeetings ? [] : SEED_BOARD_MEETINGS) {
@@ -449,6 +453,34 @@ async function seedBoardDemoData(): Promise<void> {
       body,
       createdAt: new Date(ts.getTime() - (SEED_BOARD_MESSAGES.length - i) * 3_600_000),
     })
+  }
+
+  // Egendefinerte kanaler (#80) med et svar og en kodeformatert melding, så
+  // både svarreferansen og backtick-formateringen kan ses i demoen.
+  for (const channel of hasCustomChannels ? [] : SEED_BOARD_CHANNELS) {
+    const channelId = newId()
+    await d.insert(boardChannels).values({
+      id: channelId,
+      kind: 'custom',
+      name: channel.name,
+      boardProjectId: null,
+      createdBy: null,
+      createdAt: ts,
+      archivedAt: null,
+    })
+    const messageIds = channel.messages.map(() => newId())
+    for (const [i, message] of channel.messages.entries()) {
+      const replyToId = message.replyToIndex === undefined ? null : (messageIds[message.replyToIndex] ?? null)
+      await d.insert(boardMessages).values({
+        id: messageIds[i]!,
+        channel: `custom:${channelId}`,
+        authorId: null,
+        body: message.body,
+        replyToId,
+        replyToDeleted: false,
+        createdAt: new Date(ts.getTime() - (channel.messages.length - i) * 45 * 60_000),
+      })
+    }
   }
 
   for (const t of hasMeetings ? [] : SEED_BOARD_TASKS) {

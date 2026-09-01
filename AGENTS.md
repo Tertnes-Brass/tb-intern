@@ -75,12 +75,33 @@ Den skal ikke gjengi områdenes oversikter i miniatyr — se
   (`'all' | 'off'`, ingen rad = `'all'`) og dekker BÅDE delegering og den
   daglige påminnelsen. Regelen er `wantsTaskEmail` i `src/lib/board.ts`, og
   valget vises på `/min-profil` kun for dem som har `board.manage`.
-- Styrechatten er kanaler som strenger: `general` eller `project:<id>` (se
-  `projectChannel`/`channelProjectId` i `src/lib/board.ts`). Ingen websockets og
-  ingen Durable Objects — `listMessages({channel, after})` pollet hvert 12. sek
-  fra `src/components/BoardChat.tsx`, kun mens `document.visibilityState` er
-  `visible`. Uleste bor i `board_channel_reads`; tellerne beregnes i SQL, mens
-  «nye meldinger»-skillet i den åpne kanalen bruker den rene `unreadCount`.
+- **Styrechatten** er kanaler som strenger: `general`, `project:<id>` eller
+  `custom:<id>` (`parseChannel`/`projectChannel`/`customChannel` i
+  `src/lib/board.ts` er sannhetskilden for formatet). De to første har en eier
+  andre steder i modellen og har derfor INGEN rad noe sted; de egendefinerte
+  kanalene (#80) bor i `board_channels` og er de eneste `custom:`-nøklene som
+  finnes. `board_messages.channel` er fortsatt en streng — kanaltabellen kom
+  additivt, uten datamigrering. `assertChannelExists` gater både lesing og
+  skriving på at kanalen finnes; `{ write: true }` krever i tillegg at den ikke
+  er arkivert (arkivering er myk: historikken leses, samtalen er over).
+  Ingen websockets og ingen Durable Objects — `listMessages({channel, after})`
+  pollet hvert 12. sek fra `src/components/BoardChat.tsx`, kun mens
+  `document.visibilityState` er `visible`. Uleste bor i `board_channel_reads`;
+  tellerne beregnes i SQL over kanalene som faktisk STÅR i kanallista (arkiverte
+  og lagte-bort prosjekter teller ikke — en prikk man ikke kan lese bort er en
+  prikk ingen stoler på), mens «nye meldinger»-skillet i den åpne kanalen bruker
+  den rene `unreadCount`.
+- **Svar i chatten:** `board_messages.reply_to_id` (ON DELETE SET NULL) pluss
+  `reply_to_deleted`. Fremmednøkkelen alene ville slettet selve opplysningen om
+  at meldingen VAR et svar, så `deleteMessage` merker svarene før originalen
+  forsvinner, og `replyReference` i `src/lib/board.ts` gjør raden om til enten
+  en klikkbar referanse eller «Meldingen er slettet». Ett nivå, aldri nøstet.
+- **Chat-format:** `src/lib/chat-format.ts` er en egen liten tokenizer for
+  backticks (inline, doble backticks når koden selv har en backtick, og fenced
+  blokker med valgfri språkmarkør) — IKKE en markdown-rendrer. Alt annet er ren
+  tekst, og `src/components/ChatText.tsx` rendrer bitene som tekstnoder i
+  `<code>`/`<pre>`, aldri HTML. Rå HTML og annen markdown skal aldri tolkes;
+  `chat-text.test.ts` låser både formateringen og escapingen.
 - Hub-forsiden: `src/server/hub.ts` (`getHub`) henter kalender, neste publiserte prosjekt (med antall verk) og `me` i parallell og returnerer en liten payload. Reglene — hvilken hendelse som blir hero, og hvilke områdesnarveier rettighetene gir — ligger i `src/lib/hub.ts` (`chooseHero`, `eventsAfter`, `areasFor`), testet i `hub.test.ts`. `areasFor` må holdes i takt med `BASE_NAV` i `Shell.tsx` — med ett bevisst unntak: Filtilganger har kort på hub-en, men ingen toppmeny-oppføring (docs/designprinsipper.md §6). Hub-en henter også de tre siste beskjedene, audience-filtrert på samme regel som `/beskjeder`.
 - Roller: `SEED_ROLES` i `src/server/seed-data.ts` (`admin`, `archivist`, `conductor`, `board` «Styremedlem», `member`). `seedBaseConfig` legger inn systemroller som MANGLER og seeder standardrettighetene kun for dem den nettopp opprettet (fjernede rettigheter skal ikke komme tilbake). Prod seedes ikke av seg selv, så en ny systemrolle eller rettighet krever fortsatt en migrasjon — se `migrations/0008_board-role.sql` og `0009_styre-og-vegg.sql`. NB: `INSERT OR IGNORE` dekker ikke fremmednøkler — skriv `INSERT ... SELECT id, '<rettighet>' FROM roles WHERE id IN (…)` så migrasjonen også går gjennom i en database uten roller. `board` har `scores.view` + `board.manage` (styreområdet) + `posts.publish` (veggen); `conductor` har også `posts.publish`.
 - **Tabell-rebuild i D1:** drizzle-kit genererer `PRAGMA foreign_keys=OFF` + `CREATE __new_x` / `DROP TABLE x` / `RENAME` når en kolonne endres. D1 kjører migrasjonen i en transaksjon, der PRAGMA-en er en **no-op** — `DROP TABLE` cascader altså til barnetabellene og sletter data i stillhet. Sjekk alltid hvem som peker på tabellen før du lar en generert rebuild passere — sikre barnetabellenes rader i en midlertidig tabell og legg dem tilbake etterpå, eller unngå rebuilden helt ved å gjøre skjemaendringen additiv.

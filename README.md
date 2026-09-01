@@ -126,10 +126,17 @@ Chat og Drive:
   kan gjøres om til en oppgave direkte fra feltet, knyttet til møtet og
   eventuelt et prosjekt. Møtet viser også oppgavene som ble fordelt og papirene
   som hører til.
-- **Chat** (`/styre/chat`) erstatter Google Chat: én felles kanal («Styret») og
-  én tråd per aktivt prosjekt, med uleste-tellere. Enter sender, Shift+Enter
-  gir linjeskift. Ingen websockets — klienten spør serveren hvert 12. sekund,
-  og bare mens fanen er synlig.
+- **Chat** (`/styre/chat`) erstatter Google Chat: én felles kanal («Styret»),
+  én tråd per aktivt prosjekt og så mange egne kanaler styret vil lage
+  («Uniformer 2027»), med uleste-tellere per kanal. En kanal kan få nytt navn
+  og arkiveres — arkiverte kanaler samles nederst, kan fortsatt leses, men ikke
+  skrives i, og teller ikke med i prikken på «Chat». Du kan svare på en konkret
+  melding: svaret viser en kort, klikkbar referanse til originalen, og sier
+  «Meldingen er slettet» hvis den er borte. Tekst mellom backticks vises som
+  kode — `felt_navn` inline og ```-blokker med kopierknapp — men ingenting
+  annet tolkes: hverken markdown eller HTML. Enter sender, Shift+Enter gir
+  linjeskift. Ingen websockets — klienten spør serveren hvert 12. sekund, og
+  bare mens fanen er synlig.
 - **Dokumenter** (`/styre/dokumenter`) er referater, budsjetter og kontrakter.
   Filene ligger i samme R2-bøtte som notene, under prefikset `board/`, og kan
   **kun** hentes gjennom `/api/board-files/<id>` — som krever `board.manage`.
