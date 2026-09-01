@@ -1,0 +1,1 @@
+ALTER TABLE `posts` ADD `format` text DEFAULT 'plain_text' NOT NULL;

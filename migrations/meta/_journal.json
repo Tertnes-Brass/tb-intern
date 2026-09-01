@@ -85,6 +85,13 @@
       "when": 1788272143881,
       "tag": "0011_merge-styremedlem-role",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1788277348271,
+      "tag": "0012_post-format",
+      "breakpoints": true
     }
   ]
 }

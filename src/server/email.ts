@@ -1,5 +1,13 @@
 import { env } from 'cloudflare:workers'
-import { bodyToHtml, escapeHtml, postEmailFrom, postEmailImageNote, postEmailSubject } from '../lib/posts'
+import { EMAIL_MARKDOWN_STYLES, markdownToHtml, postPlainText } from '../lib/markdown'
+import {
+  type PostFormat,
+  bodyToHtml,
+  escapeHtml,
+  postEmailFrom,
+  postEmailImageNote,
+  postEmailSubject,
+} from '../lib/posts'
 
 /**
  * E-postsending via Cloudflare Email Sending (binding `EMAIL`) — ingen ekstern
@@ -164,12 +172,16 @@ export function verificationCodeEmail(
 
 /**
  * Varsel om en ny beskjed (#28). Teksten er skrevet av et menneske i en
- * textarea og escapes med `bodyToHtml` — den er aldri betrodd som HTML.
+ * textarea og er aldri betrodd som HTML: `plain_text` escapes med
+ * `bodyToHtml`, `markdown` (#79) rendres av `markdownToHtml`, som bygger HTML-en
+ * fra en allowlist og aldri slipper gjennom rå HTML. E-postklienter kan ikke
+ * bruke klasser, så markdown-utgaven får inline-stiler (`EMAIL_MARKDOWN_STYLES`).
  * `url` bygges server-side fra `BETTER_AUTH_URL`, aldri fra request-origin.
  */
 export function postEmail({
   title,
   body,
+  format = 'plain_text',
   url,
   authorName,
   important,
@@ -179,6 +191,8 @@ export function postEmail({
   title: string
   /** Hele teksten i beskjeden — e-posten skal kunne leses uten å logge inn. */
   body: string
+  /** Hvordan `body` skal tolkes. Utelatt = ren tekst, som før #79. */
+  format?: PostFormat
   url: string
   authorName: string
   important: boolean
@@ -192,6 +206,12 @@ export function postEmail({
   const fromText = postEmailFrom(authorName, official)
   const from = escapeHtml(fromText)
   const images = postEmailImageNote(imageCount)
+  const bodyHtml =
+    format === 'markdown'
+      ? markdownToHtml(body, { styles: EMAIL_MARKDOWN_STYLES })
+      : bodyToHtml(body, 'margin:0 0 16px')
+  // Tekstversjonen skal aldri vise «#» eller «**».
+  const bodyText = postPlainText(body, format).trim()
   return {
     subject: postEmailSubject(title, important),
     html: shell(
@@ -199,13 +219,13 @@ export function postEmail({
       `${official ? '<p style="margin:0 0 12px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#95762a;font-weight:700">Fra styret</p>' : ''}
        ${important ? '<p style="margin:0 0 16px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8f2f24;font-weight:700">Viktig beskjed</p>' : ''}
        <p style="margin:0 0 20px;font-size:12px;color:#8e8468">${from} · Tertnes Brass</p>
-       <div style="font-size:15px;line-height:1.6;color:#5f5640">${bodyToHtml(body, 'margin:0 0 16px')}</div>
+       <div style="font-size:15px;line-height:1.6;color:#5f5640">${bodyHtml}</div>
        ${images ? `<p style="margin:0 0 20px;font-size:13px;color:#8e8468">${escapeHtml(images)}</p>` : ''}
        <p style="margin:8px 0 24px">${button(url, 'Les på internsiden')}</p>
        <p style="margin:0;font-size:12px;color:#8e8468">Du kan velge hvilke beskjeder du vil ha på e-post under «Min profil» på internsiden.</p>`,
       MEMBER_FOOTER,
     ),
-    text: `${official ? 'FRA STYRET\n' : ''}${important ? 'VIKTIG BESKJED\n' : ''}\n${title}\n${fromText} · Tertnes Brass\n\n${body.trim()}\n${images ? `\n${images}\n` : ''}\nLes på internsiden:\n${url}\n\nVil du ha færre e-poster? Endre varslingsvalget under «Min profil».\n`,
+    text: `${official ? 'FRA STYRET\n' : ''}${important ? 'VIKTIG BESKJED\n' : ''}\n${title}\n${fromText} · Tertnes Brass\n\n${bodyText}\n${images ? `\n${images}\n` : ''}\nLes på internsiden:\n${url}\n\nVil du ha færre e-poster? Endre varslingsvalget under «Min profil».\n`,
   }
 }
 
