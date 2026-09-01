@@ -1,3 +1,5 @@
+import { chatPlainText } from './chat-format'
+
 /**
  * Ren hjelpelogikk for styreområdet (`/styre`): rekkefølgen på oppgavelista,
  * hva som teller som forfalt, og delingen mellom åpne og ferdige oppgaver.
@@ -204,6 +206,149 @@ export function channelProjectId(channel: string): string | null {
   return channel.startsWith('project:') ? channel.slice('project:'.length) || null : null
 }
 
+/** Kanalnøkkelen for en egendefinert kanal (`board_channels`-raden). */
+export function customChannel(channelId: string): string {
+  return `custom:${channelId}`
+}
+
+/** `custom:abc` → `abc`. Alt annet → null. */
+export function channelCustomId(channel: string): string | null {
+  return channel.startsWith('custom:') ? channel.slice('custom:'.length) || null : null
+}
+
+export type ChannelKind = 'general' | 'project' | 'custom'
+
+/** Kanalnøkkelen tolket: hva slags kanal er dette, og hvem eier den? */
+export type ParsedChannel =
+  | { kind: 'general'; id: null }
+  | { kind: 'project'; id: string }
+  | { kind: 'custom'; id: string }
+
+/**
+ * Leser en kanalnøkkel. `null` betyr «ikke en gyldig nøkkel» — serveren skal
+ * avvise den før den treffer databasen, og dette er den ene regelen begge
+ * områdene (styret nå, #81 senere) kan dele uten å dele data.
+ */
+export function parseChannel(channel: string): ParsedChannel | null {
+  if (channel === GENERAL_CHANNEL) return { kind: 'general', id: null }
+  const projectId = channelProjectId(channel)
+  if (projectId) return { kind: 'project', id: projectId }
+  const customId = channelCustomId(channel)
+  if (customId) return { kind: 'custom', id: customId }
+  return null
+}
+
+/** Lengste kanalnavn. Kort nok til å stå i kanallista uten å bli kuttet. */
+export const CHANNEL_NAME_MAX = 60
+
+/** Kanalnavn slik det lagres: trimmet, med enkle mellomrom. */
+export function normalizeChannelName(name: string): string {
+  return name.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Nøkkelen to kanalnavn sammenliknes på. «Uniformer 2027» og «uniformer  2027»
+ * er samme kanal for et menneske, og da skal de være det for oss også.
+ */
+export function channelNameKey(name: string): string {
+  return normalizeChannelName(name).toLocaleLowerCase('nb')
+}
+
+/** Er navnet brukbart? Tom tekst og for lange navn avvises begge steder. */
+export function channelNameError(name: string): string | null {
+  const normalized = normalizeChannelName(name)
+  if (!normalized) return 'Kanalen må ha et navn'
+  if (normalized.length > CHANNEL_NAME_MAX) return `Navnet kan være maks ${CHANNEL_NAME_MAX} tegn`
+  return null
+}
+
+/** En kanal slik kanallista viser den, uavhengig av hvem som eier dataene. */
+export type ChannelSummary = {
+  channel: string
+  title: string
+  kind: ChannelKind
+  archived: boolean
+  unread: number
+  /** Epoch-ms, eller null når kanalen aldri har hatt en melding. */
+  lastMessageAt: number | null
+}
+
+const CHANNEL_KIND_RANK: Record<ChannelKind, number> = { general: 0, project: 1, custom: 2 }
+
+/**
+ * Rekkefølgen i kanallista: «Styret» først, så prosjekttrådene, så de
+ * egendefinerte — og arkiverte helt til slutt uansett type. Innenfor hver bolk
+ * alfabetisk, så lista ikke hopper rundt når noen skriver noe.
+ */
+export function sortChannels<T extends Pick<ChannelSummary, 'title' | 'kind' | 'archived'>>(channels: T[]): T[] {
+  return [...channels].sort((a, b) => {
+    if (a.archived !== b.archived) return a.archived ? 1 : -1
+    const kind = CHANNEL_KIND_RANK[a.kind] - CHANNEL_KIND_RANK[b.kind]
+    if (kind !== 0) return kind
+    return a.title.localeCompare(b.title, 'nb')
+  })
+}
+
+/**
+ * Samlet ulest-teller til områdemenyen. Arkiverte kanaler holdes utenfor: en
+ * teller man ikke kan nullstille ved å lese noe, er en teller ingen stoler på.
+ */
+export function totalUnread(channels: Array<Pick<ChannelSummary, 'archived' | 'unread'>>): number {
+  return channels.reduce((sum, c) => (c.archived ? sum : sum + c.unread), 0)
+}
+
+/** Lengden på utdraget i en svarreferanse. */
+export const REPLY_EXCERPT_MAX = 80
+
+/**
+ * Meldingen komprimert til én linje, slik den står i en svarreferanse.
+ * Linjeskift blir mellomrom — referansen er ett strekk tekst, ikke et sitat.
+ */
+export function replyExcerpt(body: string, max = REPLY_EXCERPT_MAX): string {
+  const oneLine = body.replace(/\s+/g, ' ').trim()
+  if (oneLine.length <= max) return oneLine
+  // Kutt på siste ordgrense innenfor grensen, men ikke gjør utdraget til et
+  // fragment: uten mellomrom i nærheten kutter vi rått.
+  const hard = oneLine.slice(0, max)
+  const lastSpace = hard.lastIndexOf(' ')
+  return `${(lastSpace > max * 0.6 ? hard.slice(0, lastSpace) : hard).trimEnd()}…`
+}
+
+/**
+ * Svarreferansen slik serveren sender den. `deleted` betyr at originalen er
+ * borte — svaret skal fortsatt vise at det ER et svar, ellers henger det i
+ * løse luften.
+ */
+export type ChatReply =
+  | { deleted: true }
+  | { deleted: false; id: string; authorName: string | null; excerpt: string }
+
+/**
+ * Svarreferansen ut av en rad fra `listMessages`: originalen når den finnes,
+ * «slettet» når `replyToDeleted` er satt, ellers ingen referanse. Ren funksjon
+ * fordi den er regelen for hva et svar til en borte melding SKAL vise — og
+ * fordi den da kan testes uten database.
+ *
+ * Utdraget lages av teksten uten backticks: referansen skal leses, ikke vise
+ * syntaks.
+ */
+export function replyReference(row: {
+  replyToDeleted: boolean
+  replyId: string | null
+  replyBody: string | null
+  replyAuthorName: string | null
+}): ChatReply | null {
+  if (row.replyId) {
+    return {
+      deleted: false,
+      id: row.replyId,
+      authorName: row.replyAuthorName,
+      excerpt: replyExcerpt(chatPlainText(row.replyBody ?? '')),
+    }
+  }
+  return row.replyToDeleted ? { deleted: true } : null
+}
+
 export type ChatMessage = {
   id: string
   authorId: string | null
@@ -211,6 +356,8 @@ export type ChatMessage = {
   body: string
   /** Epoch-ms. */
   createdAt: number
+  /** Meldingen dette er et svar på, eller null når det ikke er et svar. */
+  replyTo?: ChatReply | null
 }
 
 export type ChatDay<T> = {

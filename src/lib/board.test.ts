@@ -1,21 +1,33 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CHANNEL_NAME_MAX,
   GENERAL_CHANNEL,
+  REPLY_EXCERPT_MAX,
   type SortableBoardProject,
   type SortableTask,
   boardAreaNote,
+  channelCustomId,
+  channelNameError,
+  channelNameKey,
   channelProjectId,
+  customChannel,
   dueLabel,
   groupMessagesByDay,
   groupTasks,
   isOverdue,
   isProjectOverdue,
+  normalizeChannelName,
   overdueByAssignee,
+  parseChannel,
   projectChannel,
   projectProgress,
-  sortBoardProjects,
+  replyExcerpt,
+  replyReference,
   shouldRunReminders,
+  sortBoardProjects,
+  sortChannels,
   sortTasks,
+  totalUnread,
   unreadCount,
   wantsTaskEmail,
 } from './board'
@@ -230,6 +242,113 @@ describe('kanalnøkler', () => {
     expect(channelProjectId(GENERAL_CHANNEL)).toBeNull()
     expect(channelProjectId('project:')).toBeNull()
   })
+
+  it('bygger og leser egendefinerte kanaler', () => {
+    expect(customChannel('abc')).toBe('custom:abc')
+    expect(channelCustomId('custom:abc')).toBe('abc')
+    expect(channelCustomId('project:abc')).toBeNull()
+    expect(channelCustomId('custom:')).toBeNull()
+  })
+
+  it('tolker alle tre kanaltypene', () => {
+    expect(parseChannel(GENERAL_CHANNEL)).toEqual({ kind: 'general', id: null })
+    expect(parseChannel('project:abc')).toEqual({ kind: 'project', id: 'abc' })
+    expect(parseChannel('custom:abc')).toEqual({ kind: 'custom', id: 'abc' })
+  })
+
+  it('avviser nøkler som ikke er kanaler', () => {
+    // Gaten på serveren hviler på dette: en oppdiktet kanal skal aldri kunne
+    // brukes til å lese eller skrive noe.
+    expect(parseChannel('tilfeldig')).toBeNull()
+    expect(parseChannel('custom:')).toBeNull()
+    expect(parseChannel('project:')).toBeNull()
+    expect(parseChannel('')).toBeNull()
+  })
+})
+
+describe('kanalnavn', () => {
+  it('normaliserer mellomrom', () => {
+    expect(normalizeChannelName('  Uniformer   2027 ')).toBe('Uniformer 2027')
+  })
+
+  it('regner samme navn med ulik skrivemåte som likt', () => {
+    expect(channelNameKey('Uniformer 2027')).toBe(channelNameKey('  uniformer  2027 '))
+    expect(channelNameKey('Uniformer')).not.toBe(channelNameKey('Uniformar'))
+  })
+
+  it('krever navn og setter en øvre grense', () => {
+    expect(channelNameError('Uniformer')).toBeNull()
+    expect(channelNameError('   ')).toBe('Kanalen må ha et navn')
+    expect(channelNameError('x'.repeat(CHANNEL_NAME_MAX))).toBeNull()
+    expect(channelNameError('x'.repeat(CHANNEL_NAME_MAX + 1))).toBe('Navnet kan være maks 60 tegn')
+  })
+})
+
+describe('sortChannels', () => {
+  const ch = (title: string, kind: 'general' | 'project' | 'custom', archived = false) => ({
+    title,
+    kind,
+    archived,
+  })
+
+  it('setter Styret først, så prosjekter, så egne kanaler', () => {
+    const sorted = sortChannels([
+      ch('Uniformer 2027', 'custom'),
+      ch('Sommerkonsert', 'project'),
+      ch('Styret', 'general'),
+      ch('Nye uniformer', 'project'),
+    ])
+    expect(sorted.map((c) => c.title)).toEqual(['Styret', 'Nye uniformer', 'Sommerkonsert', 'Uniformer 2027'])
+  })
+
+  it('legger arkiverte kanaler nederst uansett type', () => {
+    const sorted = sortChannels([ch('Avlyst tur', 'custom', true), ch('Styret', 'general'), ch('Dugnad', 'custom')])
+    expect(sorted.map((c) => c.title)).toEqual(['Styret', 'Dugnad', 'Avlyst tur'])
+  })
+})
+
+describe('totalUnread', () => {
+  it('summerer uleste i aktive kanaler', () => {
+    expect(
+      totalUnread([
+        { archived: false, unread: 2 },
+        { archived: false, unread: 1 },
+      ]),
+    ).toBe(3)
+  })
+
+  it('teller ikke arkiverte kanaler', () => {
+    // En teller man ikke kan nullstille ved å lese noe, er en teller ingen
+    // stoler på.
+    expect(
+      totalUnread([
+        { archived: true, unread: 5 },
+        { archived: false, unread: 1 },
+      ]),
+    ).toBe(1)
+  })
+})
+
+describe('replyExcerpt', () => {
+  it('lar korte meldinger stå urørt', () => {
+    expect(replyExcerpt('Kort svar')).toBe('Kort svar')
+  })
+
+  it('gjør flere linjer til én', () => {
+    expect(replyExcerpt('to\nlinjer')).toBe('to linjer')
+  })
+
+  it('kutter lange meldinger på ordgrense', () => {
+    const excerpt = replyExcerpt(`${'ord '.repeat(40)}slutt`)
+    expect(excerpt.endsWith('…')).toBe(true)
+    expect(excerpt.length).toBeLessThanOrEqual(REPLY_EXCERPT_MAX + 1)
+    expect(excerpt).not.toMatch(/ …$/)
+  })
+
+  it('kutter rått når det ikke finnes en ordgrense', () => {
+    const excerpt = replyExcerpt('x'.repeat(200))
+    expect(excerpt).toBe(`${'x'.repeat(REPLY_EXCERPT_MAX)}…`)
+  })
 })
 
 describe('groupMessagesByDay', () => {
@@ -280,6 +399,39 @@ describe('unreadCount', () => {
 
   it('regner alt fra andre som ulest uten lest-rad', () => {
     expect(unreadCount(msgs, null, 'meg')).toBe(2)
+  })
+})
+
+describe('replyReference', () => {
+  it('viser forfatter og utdrag når originalen finnes', () => {
+    expect(
+      replyReference({
+        replyToDeleted: false,
+        replyId: 'm1',
+        replyBody: 'Kjør `npm test` før du pusher',
+        replyAuthorName: 'Hilde',
+      }),
+    ).toEqual({ deleted: false, id: 'm1', authorName: 'Hilde', excerpt: 'Kjør npm test før du pusher' })
+  })
+
+  it('sier fra når originalen er slettet', () => {
+    // Fremmednøkkelen har nullstilt `replyToId`; merket er det eneste som er
+    // igjen — og uten det ville svaret sett ut som en helt vanlig melding.
+    expect(replyReference({ replyToDeleted: true, replyId: null, replyBody: null, replyAuthorName: null })).toEqual({
+      deleted: true,
+    })
+  })
+
+  it('gir ingen referanse for en vanlig melding', () => {
+    expect(
+      replyReference({ replyToDeleted: false, replyId: null, replyBody: null, replyAuthorName: null }),
+    ).toBeNull()
+  })
+
+  it('tåler at forfatteren er borte', () => {
+    expect(
+      replyReference({ replyToDeleted: false, replyId: 'm1', replyBody: 'hei', replyAuthorName: null }),
+    ).toMatchObject({ authorName: null, excerpt: 'hei' })
   })
 })
 
