@@ -209,6 +209,54 @@ export const projectWorks = sqliteTable(
   (t) => [primaryKey({ columns: [t.projectId, t.workId] })],
 )
 
+// Tidsplanen for ett prosjekt (#9): oppmøte for lasting, avreise, oppmøte for
+// rigg i lokalet, lydprøve, konsertstart, nedrigg. En fleksibel LISTE og ikke
+// et sett kolonner på `projects`: en konsert har lasting og nedrigg, et seminar
+// har verken det ene eller det andre, og en konkurranse har en avreise ingen
+// andre har. Faste kolonner ville betydd et skjemabytte hver gang korpset fant
+// på noe nytt — og en haug tomme felt på alt annet.
+//
+// **Veggklokke, ikke tidsstempel.** `date` er ISO-dato og `time` er `HH:MM`,
+// begge slik de ble skrevet inn. Et oppmøte 17:30 er 17:30 i Bergen uansett
+// hvilken tidssone serveren kjører i, og `time` er nullbar fordi «lasting på
+// lørdag» er en avtale også uten klokkeslett. Reglene bor i src/lib/practical.ts.
+//
+// **Ansvarlig er ENTEN et medlem ELLER et navn.** `responsible_user_id` peker
+// på medlemslista (SET NULL: slutter sjåføren i korpset, står tidspunktet igjen
+// uten ansvarlig i stedet for å forsvinne), mens `responsible_name` finnes for
+// den innleide sjåføren som aldri får en konto. `contact_phone` er nummeret
+// STAB har skrevet inn for akkurat denne oppgaven — ikke medlemmets
+// telefonnummer lest fra profilen. Skillet er med vilje: telefonnummer i
+// `member_profiles` er administrasjonsdata (`members.manage`), og et tidspunkt
+// som er synlig for hele korpset skal ikke kunne bli en omvei rundt den regelen.
+export const projectTimes = sqliteTable(
+  'project_times',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    /** Se PROJECT_TIME_KINDS i src/lib/practical.ts. Ren etikett — ingen logikk henger på den. */
+    kind: text('kind').notNull().default('annet'),
+    /** Egen overskrift når typen ikke er presis nok («Andre sett», «Kaffe i pausen»). */
+    label: text('label'),
+    date: text('date').notNull(), // ISO-dato
+    time: text('time'), // 'HH:MM' i norsk veggklokke-tid, eller NULL
+    /** Stedet for DETTE punktet — lastingen skjer sjelden der konserten er. */
+    location: text('location'),
+    /** Se PROJECT_TIME_AUDIENCES i src/lib/practical.ts. Standard 'alle'. */
+    audience: text('audience').notNull().default('alle'),
+    note: text('note'),
+    responsibleUserId: text('responsible_user_id').references(() => user.id, { onDelete: 'set null' }),
+    responsibleName: text('responsible_name'),
+    contactPhone: text('contact_phone'),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('project_times_project_idx').on(t.projectId, t.date, t.time)],
+)
+
 // ---------- Vikardeling ----------
 
 export const shareLinks = sqliteTable(
@@ -710,14 +758,70 @@ export const eventMeta = sqliteTable(
     summary: text('summary').notNull(),
     /** Forekomstens starttidspunkt slik det sto i feeden da raden ble laget. */
     start: integer('start', { mode: 'timestamp_ms' }).notNull(),
-    // Kobling til et prosjekt/konsert (#26). SET NULL: slettes prosjektet,
-    // består øvingsplanen — den er ikke prosjektets eiendom.
+    // UTGÅTT (#10, 2. september 2026): prosjektkoblingen er n:m og bor i
+    // `event_projects`. Kolonnen står igjen fordi migrasjonene skal være rent
+    // additive — en `DROP COLUMN` er en tabell-rebuild i SQLite, og en rebuild
+    // i D1 cascader til barnetabellene (se AGENTS.md). Radene ble kopiert over
+    // i migrasjonen; ingenting leser eller skriver den lenger.
     linkedProjectId: text('linked_project_id').references(() => projects.id, { onDelete: 'set null' }),
+
+    // ---- Praktisk info per øving/hendelse (#10) ----
+    // Alt er valgfritt: en vanlig torsdagsøving i kjelleren trenger ingen av
+    // feltene, og en tom rad skal ikke se ut som en mangel. Normaliseringen
+    // (klokkeslett, kartlenke, fritekst) bor i src/lib/practical.ts.
+    /** Stedet med ord — «Tertnes skole, musikkrommet». */
+    locationName: text('location_name'),
+    /** Gateadressen, slik at hvem som helst finner fram uten å spørre. */
+    locationAddress: text('location_address'),
+    /** Kartlenke. KUN http(s) — validert av `parseMapUrl`, aldri lagret rått. */
+    mapUrl: text('map_url'),
+    /** Oppmøte for riggegruppa, 'HH:MM'. Kommer som regel før musikantene. */
+    meetupCrew: text('meetup_crew'),
+    /** Oppmøte for musikantene, 'HH:MM'. */
+    meetupMusicians: text('meetup_musicians'),
+    /** Dirigent for DENNE øvingen — fritekst, siden det ofte er en gjest. */
+    conductor: text('conductor'),
+    /** Nøkkelansvarlig: den som låser opp. Fritekst av samme grunn. */
+    keyholder: text('keyholder'),
+    /** Riggegruppa — navn på egne linjer. Ingen tabell: dette avtales i en chat. */
+    crew: text('crew'),
+    /** Vikarer på denne øvingen. Fravær og RSVP bor fortsatt i `event_attendance`. */
+    substitutes: text('substitutes'),
+    /** Alt annet som må sies: parkering, inngang, hva man tar med. */
+    practicalNote: text('practical_note'),
+
     createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (t) => [index('event_meta_uid_idx').on(t.uid)],
+)
+
+// Hvilke prosjekter en øving hører til (#10). n:m med vilje: «det kan være vi
+// øver til meir enn eit prosjekt på samme øvinga, så det må ikkje være låst
+// fast». Den gamle 1:1-kolonnen `event_meta.linked_project_id` er utgått og
+// kopiert hit i migrasjonen.
+//
+// Begge fremmednøklene cascader, og det betyr KOBLINGEN — ikke innholdet:
+// slettes prosjektet, forsvinner tilknytningen, mens øvingsplanen, oppmøtet og
+// den praktiske infoen på `event_meta` står igjen. Øvingen er ikke prosjektets
+// eiendom, den er kalenderens.
+export const eventProjects = sqliteTable(
+  'event_projects',
+  {
+    occurrenceKey: text('occurrence_key')
+      .notNull()
+      .references(() => eventMeta.occurrenceKey, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.occurrenceKey, t.projectId] }),
+    index('event_projects_project_idx').on(t.projectId),
+  ],
 )
 
 // Ett punkt i øvingsplanen: ENTEN et verk fra arkivet ELLER en fritekst-tittel
