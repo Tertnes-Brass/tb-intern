@@ -52,6 +52,17 @@ export const memberProfiles = sqliteTable('member_profiles', {
     .notNull()
     .references(() => roles.id),
   phone: text('phone'),
+  // Interesser/kompetanse (#25): JSON-array av nøkler fra INTEREST_CATALOG i
+  // `src/lib/member-profile.ts`. Ingen FK å peke på — katalogen er en fast
+  // enum i koden, ikke data, og en tabell ville blitt en tabell med strenger.
+  // Samme mønster som `invitations.part_ids`.
+  interests: text('interests').notNull().default('[]'),
+  // Fritekst ved siden av avkryssingene: nyansen katalogen ikke fanger
+  // («har hengerfeste», «kan bake, ikke bære»).
+  interestsNote: text('interests_note'),
+  // Instrumenter utenfor brass band-besetningen (piano, gitar, sang). Har de
+  // ingen `parts`-rad, kan de ikke være en bistemme — men de er verdt å vite om.
+  otherInstruments: text('other_instruments'),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 })
@@ -141,6 +152,24 @@ export const userParts = sqliteTable(
       .notNull()
       .references(() => parts.id, { onDelete: 'cascade' }),
     isPrimary: integer('is_primary', { mode: 'boolean' }).notNull().default(true),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.partId] })],
+)
+
+// Bistemmer (#25): instrumenter medlemmet KAN spille, men ikke er tildelt.
+// KRITISK: dette er kompetanse, ikke tilgang. `user_parts` er fortsatt det
+// eneste som gir stemmefiler (`effectivePartIds` i `access.ts` leser aldri
+// denne tabellen), og derfor kan medlemmet sette bistemmene sine selv — mens
+// stemmetildeling fortsatt krever `members.manage`/`members.manage.section`.
+export const memberInstruments = sqliteTable(
+  'member_instruments',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    partId: text('part_id')
+      .notNull()
+      .references(() => parts.id, { onDelete: 'cascade' }),
   },
   (t) => [primaryKey({ columns: [t.userId, t.partId] })],
 )

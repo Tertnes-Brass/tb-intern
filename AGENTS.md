@@ -153,6 +153,41 @@ Den skal ikke gjengi områdenes oversikter i miniatyr — se
   `<code>`/`<pre>`, aldri HTML. Rå HTML og annen markdown skal aldri tolkes;
   `chat-text.test.ts` låser både formateringen og escapingen.
 - Hub-forsiden: `src/server/hub.ts` (`getHub`) henter kalender, neste publiserte prosjekt (med antall verk) og `me` i parallell og returnerer en liten payload. Reglene — hvilken hendelse som blir hero, og hvilke områdesnarveier rettighetene gir — ligger i `src/lib/hub.ts` (`chooseHero`, `eventsAfter`, `areasFor`), testet i `hub.test.ts`. `areasFor` må holdes i takt med `BASE_NAV` i `Shell.tsx` — med ett bevisst unntak: Filtilganger har kort på hub-en, men ingen toppmeny-oppføring (docs/designprinsipper.md §6). Hub-en henter også de tre siste beskjedene, audience-filtrert på samme regel som `/beskjeder`.
+- **Medlemsprofil: kontaktinfo og interesser (#14 + #25):** profilen er utvidet
+  additivt (migrasjon `0016_medlemsprofil-kontakt-interesser.sql`: tre
+  `ADD COLUMN` på `member_profiles` + `CREATE TABLE member_instruments`). De
+  rene reglene bor i `src/lib/member-profile.ts` (`INTEREST_CATALOG`,
+  `normalizeInterests`, `matchesInterests`, `cleanSecondaryParts`,
+  `canSeeContactInfo`, `redactContact`) med tester; skrivelaget er
+  `src/server/member-details.ts`, som har levende eksport og derfor bare
+  importeres fra `profile.ts` og `members.ts` — aldri fra en rutekomponent
+  (samme felle som `post-images.ts`). Fire ting er ikke til forhandling:
+  - **Innsynsregelen er snudd med vilje.** Telefon var «kun for
+    administratorer»; nå er kontaktinfo synlig for alle innloggede medlemmer,
+    fordi `currentUser()` allerede returnerer `null` for deaktiverte og hele
+    poenget i #14 er å få tak i folk ved fravær. Unntaket går andre veien: et
+    DEAKTIVERT medlems e-post og telefon fjernes SERVER-side i `redactContact`
+    (feltene finnes ikke i payloaden, ikke bare skjult i UI-et) for alle andre
+    enn `members.manage` og medlemmet selv.
+  - **Bistemme er kompetanse, ikke tilgang.** `member_instruments` leses ALDRI
+    av `effectivePartIds` i `access.ts`; `user_parts` er fortsatt det eneste som
+    gir stemmefiler. Derfor kan medlemmet sette bistemmene sine selv, mens
+    stemmetildeling fortsatt krever `members.manage`/`members.manage.section`.
+    `cleanSecondaryParts` fjerner tildelte stemmer fra bistemmelista, slik at
+    hovedstemmen aldri får en parallell sannhet.
+  - **Interessene er en fast katalog, ikke fritekst-tagger.** «Hvem kan hjelpe
+    med rigg?» krever at alle har krysset av det samme ordet; nyansen bor i
+    fritekstfeltet ved siden av. Kolonnen er JSON (som `invitations.part_ids`) —
+    det finnes ingen FK å peke på, og en tabell ville blitt en tabell med
+    strenger. `parseInterests` dropper ukjente nøkler, så en rå payload kan
+    ikke lage egne tagger. Filteret i medlemslista er AND: to valgte tagger
+    betyr noen som kan begge deler.
+  - **Ett skjema, to steder.** `src/components/MemberDetailsFields.tsx` deles av
+    `/min-profil` og medlemsansvarliges dialog i `/medlemmer`, og
+    `saveMemberDetails` er felles skrivelag — bare gaten (`requireMe()` mot
+    `requirePermission('members.manage')`), navnefeltet og revisjonshandlingen
+    skiller dem. Selvbetjeningen skriver alltid til `me.id`, aldri til en
+    `userId` fra payloaden.
 - Roller: `SEED_ROLES` i `src/server/seed-data.ts` (`admin`, `archivist`, `conductor`, `board` «Styremedlem», `member`). `seedBaseConfig` legger inn systemroller som MANGLER og seeder standardrettighetene kun for dem den nettopp opprettet (fjernede rettigheter skal ikke komme tilbake). Prod seedes ikke av seg selv, så en ny systemrolle eller rettighet krever fortsatt en migrasjon — se `migrations/0008_board-role.sql` og `0009_styre-og-vegg.sql`. NB: `INSERT OR IGNORE` dekker ikke fremmednøkler — skriv `INSERT ... SELECT id, '<rettighet>' FROM roles WHERE id IN (…)` så migrasjonen også går gjennom i en database uten roller. `board` har `scores.view` + `board.manage` (styreområdet) + `posts.publish` (veggen); `conductor` har også `posts.publish`.
 - **Flere roller per medlem (#48):** koblingstabellen `member_roles` (PK `(auth_user_id, role_id)`) er SANNHETEN om hvilke roller et medlem har, og `invitation_roles` det samme for en invitasjon (migrasjon `0016_flere-roller-per-medlem.sql`, kun CREATE TABLE + CREATE INDEX + `INSERT ... SELECT`-backfill). **Tilgangene er UNIONEN** av rettighetene fra alle rollene (`unionRolePermissions` i `src/lib/roles.ts`); roller er rent additive, og ingen rolle kan trekke fra. `Me` har derfor `roles: Array<{id, name}>` — `roleId`/`roleName` finnes ikke lenger.
   - **`member_profiles.role_id` og `invitations.role_id` er DEPRECATED, men står.** De er NOT NULL uten standardverdi og kan ikke droppes uten en tabell-rebuild, som i D1 cascader til barnetabellene (se punktet om tabell-rebuild under). Les dem ALDRI som rollen. Skrivestien holder dem i takt med hovedrollen (`primaryRoleId`), og `effectiveRoleIds(linked, legacy)` faller tilbake på kolonnen KUN når koblingsradene mangler — vinduet mellom migrasjon og deploy, der gammel kode fortsatt bare skrev til kolonnen. Fjernes fallbacken, mister de kontoene all tilgang.

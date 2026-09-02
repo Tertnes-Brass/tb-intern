@@ -1,8 +1,20 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
+import {
+  InterestStamps,
+  MemberDetailsFields,
+  type MemberDetailsValue,
+} from '../../components/MemberDetailsFields'
 import { AccessSummary, RolePermissionList, RoleStamps } from '../../components/RoleAccess'
 import { toast, toastError } from '../../components/toast'
 import { Avatar, Button, Field, Kicker, Modal, Stamp } from '../../components/ui'
+import {
+  INTEREST_CATALOG,
+  type InterestKey,
+  countInterests,
+  matchesInterests,
+  matchesMemberQuery,
+} from '../../lib/member-profile'
 import {
   type InviteDelivery,
   MAX_INVITE_PARTS,
@@ -83,6 +95,8 @@ function MembersPage() {
   const [leaderFor, setLeaderFor] = useState<Member | null>(null)
   const [editFor, setEditFor] = useState<Member | null>(null)
   const [rolesFor, setRolesFor] = useState<Member | null>(null)
+  const [query, setQuery] = useState('')
+  const [interestFilter, setInterestFilter] = useState<InterestKey[]>([])
 
   // Stemmer denne brukeren kan tildele: alle (admin) eller eget omfang (leder).
   const partOptions =
@@ -90,9 +104,22 @@ function MembersPage() {
       ? data.allParts
       : data.allParts.filter((p) => data.assignablePartIds!.includes(p.id))
 
+  // Filtrering er rent en VISNING av det serveren allerede har sluppet gjennom:
+  // kontaktfeltene er fjernet server-side for dem den som ser ikke får se.
+  const interestCounts = countInterests(data.members)
+  const visible = data.members.filter(
+    (m) => matchesInterests(m.interests, interestFilter) && matchesMemberQuery(m, query),
+  )
+  const filtering = interestFilter.length > 0 || query.trim().length > 0
+
+  const toggleInterest = (key: InterestKey) =>
+    setInterestFilter((current) =>
+      current.includes(key) ? current.filter((k) => k !== key) : [...current, key],
+    )
+
   // Grupper etter seksjonen til primærstemmen
   const groups = new Map<string, typeof data.members>()
-  for (const m of data.members) {
+  for (const m of visible) {
     const primary = m.parts[0]
     const section = primary ? (data.allParts.find((p) => p.id === primary.id)?.section ?? 'other') : 'other'
     const list = groups.get(section) ?? []
@@ -138,6 +165,60 @@ function MembersPage() {
           </Button>
         )}
       </header>
+
+      {/* «Hvem kan hjelpe med rigg?» (#25). Filteret snevrer inn: to valgte
+          tagger betyr noen som kan begge deler. */}
+      <section className="rise sheet p-4 sm:p-5" style={{ animationDelay: '60ms' }}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <input
+            className="field-input min-h-[44px] sm:max-w-xs"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Søk etter navn, stemme eller nummer…"
+            type="search"
+            aria-label="Søk i medlemmer"
+          />
+          <div className="flex flex-wrap gap-1.5">
+            {INTEREST_CATALOG.map((interest) => {
+              const active = interestFilter.includes(interest.key)
+              return (
+                <button
+                  key={interest.key}
+                  type="button"
+                  title={interest.hint}
+                  aria-pressed={active}
+                  onClick={() => toggleInterest(interest.key)}
+                  className={`inline-flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${
+                    active
+                      ? 'border-brass bg-[var(--brass-soft)] text-brass-strong'
+                      : 'border-line-strong text-ink-soft hover:border-brass hover:text-brass-strong'
+                  }`}
+                >
+                  {interest.label}
+                  <span className="font-mono text-[0.6rem] text-ink-faint">{interestCounts[interest.key]}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        {filtering && (
+          <p className="mt-3 flex flex-wrap items-center gap-3 text-xs text-ink-soft">
+            <span>
+              {visible.length} av {data.members.length} medlemmer
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('')
+                setInterestFilter([])
+              }}
+              className="cursor-pointer font-mono text-[0.62rem] uppercase tracking-[0.1em] text-brass-strong hover:underline"
+            >
+              Nullstill
+            </button>
+          </p>
+        )}
+      </section>
 
       {data.canManage && data.invites.length > 0 && (
         <section className="rise">
@@ -203,12 +284,46 @@ function MembersPage() {
                         <span className="flex items-center gap-2">
                           <span className="truncate text-[0.92rem] font-semibold text-ink">{m.name}</span>
                           {m.id === data.meId && <Stamp tone="brass">deg</Stamp>}
+                          {!m.isActive && <Stamp tone="oxblood">Sluttet</Stamp>}
                         </span>
-                        <span className="block truncate font-mono text-[0.64rem] text-ink-faint">{m.email}</span>
+                        {/* Kontaktinfo (#14): klikkbar, for det er poenget — å få
+                            tak i folk. Tomme felt og deaktiverte medlemmers
+                            kontaktinfo er allerede fjernet server-side. */}
+                        <span className="flex flex-wrap items-center gap-x-3 font-mono text-[0.64rem] text-ink-faint">
+                          {m.email && (
+                            <a href={`mailto:${m.email}`} className="truncate hover:text-brass-strong hover:underline">
+                              {m.email}
+                            </a>
+                          )}
+                          {m.phone && (
+                            <a
+                              href={`tel:${m.phone.replace(/[^+0-9]/g, '')}`}
+                              className="whitespace-nowrap hover:text-brass-strong hover:underline"
+                            >
+                              {m.phone}
+                            </a>
+                          )}
+                        </span>
                         {leads.length > 0 && (
                           <span className="mt-0.5 block font-mono text-[0.6rem] uppercase tracking-[0.1em] text-brass-strong">
                             Leder: {leads.join(' · ')}
                           </span>
+                        )}
+                        {(m.secondaryParts.length > 0 || m.otherInstruments) && (
+                          <span className="mt-0.5 block truncate text-[0.7rem] text-ink-soft">
+                            Kan også:{' '}
+                            {[...m.secondaryParts.map((p) => p.name), ...(m.otherInstruments ? [m.otherInstruments] : [])].join(
+                              ' · ',
+                            )}
+                          </span>
+                        )}
+                        {m.interests.length > 0 && (
+                          <span className="mt-1 block">
+                            <InterestStamps interests={m.interests} />
+                          </span>
+                        )}
+                        {m.interestsNote && (
+                          <span className="mt-1 block text-[0.7rem] leading-snug text-ink-soft">{m.interestsNote}</span>
                         )}
                       </span>
                     </div>
@@ -315,6 +430,7 @@ function MembersPage() {
         <AdminProfileModal
           key={editFor.id}
           member={editFor}
+          allParts={data.allParts}
           onClose={() => setEditFor(null)}
           onSaved={() => {
             setEditFor(null)
@@ -328,15 +444,23 @@ function MembersPage() {
 
 function AdminProfileModal({
   member,
+  allParts,
   onClose,
   onSaved,
 }: {
   member: Member
+  allParts: Data['allParts']
   onClose: () => void
   onSaved: () => void
 }) {
   const [name, setName] = useState(member.name)
-  const [phone, setPhone] = useState(member.phone ?? '')
+  const [details, setDetails] = useState<MemberDetailsValue>({
+    phone: member.phone ?? '',
+    interests: [...member.interests],
+    interestsNote: member.interestsNote ?? '',
+    otherInstruments: member.otherInstruments ?? '',
+    secondaryPartIds: member.secondaryParts.map((part) => part.id),
+  })
   const [saving, setSaving] = useState(false)
   const [resetting, setResetting] = useState(false)
 
@@ -344,7 +468,7 @@ function AdminProfileModal({
     e.preventDefault()
     setSaving(true)
     try {
-      await updateMemberProfile({ data: { userId: member.id, name, phone } })
+      await updateMemberProfile({ data: { userId: member.id, name, ...details } })
       toast('Medlemsprofilen er oppdatert')
       onSaved()
     } catch (err) {
@@ -380,16 +504,14 @@ function AdminProfileModal({
         <Field label="Navn">
           <input className="field-input" value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" />
         </Field>
-        <Field label="Telefon" hint="Valgfritt. Nummeret er bare tilgjengelig for administratorer.">
-          <input
-            type="tel"
-            className="field-input"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            inputMode="tel"
-            placeholder="+47 900 00 000"
-          />
-        </Field>
+        <MemberDetailsFields
+          value={details}
+          onChange={setDetails}
+          allParts={allParts.map((p) => ({ id: p.id, name: p.nameNo, section: p.section, parentId: p.parentId }))}
+          assignedPartIds={member.parts.map((p) => p.id)}
+          phoneHint="Valgfritt. Synlig for de andre medlemmene i medlemslista."
+          idPrefix={`admin-${member.id}`}
+        />
         <div className="rounded-xl border border-line px-4 py-4">
           <p className="text-sm font-semibold text-ink">Problemer med innlogging?</p>
           <p className="mt-1 text-xs leading-relaxed text-ink-soft">
