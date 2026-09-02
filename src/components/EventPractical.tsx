@@ -38,7 +38,7 @@ export type PracticalValues = {
   practicalNote: string | null
 }
 
-type ProjectOption = { id: string; name: string; eventDate: string | null }
+type ProjectOption = { id: string; name: string; eventDate: string | null; isPublished?: boolean }
 
 export function EventPracticalSection({
   occurrenceKey,
@@ -207,7 +207,10 @@ function ProjectLinks({
       {linkedProjects.map((project) => (
         <span key={project.id} className="inline-flex items-center gap-1">
           <Link to="/noter/prosjekter/$projectId" params={{ projectId: project.id }}>
-            <Stamp className="cursor-pointer">{project.name}</Stamp>
+            {/* Avpubliserte koblinger vises kun for forvalteren (serveren avgjør). */}
+            <Stamp className="cursor-pointer">
+              {project.isPublished === false ? `${project.name} (avpublisert)` : project.name}
+            </Stamp>
           </Link>
           {canManage && (
             <button

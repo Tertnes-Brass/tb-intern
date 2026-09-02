@@ -11,6 +11,7 @@ import {
   attendanceSummary,
 } from '../../lib/attendance'
 import { formatDate, formatDateTime, formatDuration, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../../lib/format'
+import { hasEventPractical } from '../../lib/practical'
 import { SETLIST_NOTE_MAX, SETLIST_TITLE_MAX } from '../../lib/setlist'
 import {
   addSetlistItem,
@@ -115,7 +116,15 @@ function OrphanPage({ data }: { data: Detail }) {
   // Serveren har allerede avgjort om DENNE leseren får se de lokale dataene
   // (skriverett eller gruppelederbinding). Teksten skal ikke røpe at det finnes
   // en øvingsplan for en som ikke får se den.
-  const showsLocal = data.setlist.length > 0 || data.groups !== null || data.linkedProjects.length > 0
+  // `hasEventPractical` er med: en hendelse kan ha KUN praktisk info (uten
+  // øvingsplan eller prosjektkobling), og da skal den fortsatt vises — og kunne
+  // redigeres — for den som har innsyn. Serveren har allerede nullet feltene
+  // for lesere uten innsyn.
+  const showsLocal =
+    data.setlist.length > 0 ||
+    data.groups !== null ||
+    data.linkedProjects.length > 0 ||
+    hasEventPractical(data.practical)
   return (
     <div className="space-y-10">
       <header className="rise">

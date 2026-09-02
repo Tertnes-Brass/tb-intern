@@ -292,8 +292,16 @@ export const getEventDetail = createServerFn()
         canManagePlan,
         canManageAttendance: scope.kind === 'all',
         setlist: [] as EventSetlistItem[],
-        practical: practicalOf(meta),
-        linkedProjects: [] as Array<{ id: string; name: string; eventDate: string | null }>,
+        // Uten `showLocal` skal leseren ikke se noe lokalt — heller ikke den
+        // praktiske infoen. Alle de andre lokale feltene i denne grenen er
+        // tomme av samme grunn.
+        practical: showLocal ? practicalOf(meta) : EMPTY_PRACTICAL,
+        linkedProjects: [] as Array<{
+          id: string
+          name: string
+          eventDate: string | null
+          isPublished: boolean
+        }>,
         projectOptions: [] as Array<{ id: string; name: string; eventDate: string | null }>,
         myAttendance: null as { status: AttendanceStatus; comment: string | null } | null,
         counts: countAttendance([]),
@@ -336,14 +344,25 @@ export const getEventDetail = createServerFn()
             .orderBy(asc(projects.eventDate))
         : Promise.resolve([]),
       // Prosjektene øvingen hører til (#10). n:m — én øving kan peke på flere.
-      // Kun PUBLISERTE prosjekter leses ut: `setEventProject` godtar bare
-      // publiserte, men et prosjekt kan avpubliseres etterpå, og da skal navnet
-      // ikke bli stående synlig på detaljruta for hele korpset.
+      // For hele korpset leses kun PUBLISERTE prosjekter ut: et prosjekt kan
+      // avpubliseres etter at koblingen ble laget, og da skal navnet ikke bli
+      // stående synlig på detaljruta. Den som har `calendar.manage` ser også de
+      // avpubliserte (merket) — ellers fantes det ingen vei til å fjerne
+      // koblingen, og den ville dukket opp igjen ved republisering.
       d
-        .select({ id: projects.id, name: projects.name, eventDate: projects.eventDate })
+        .select({
+          id: projects.id,
+          name: projects.name,
+          eventDate: projects.eventDate,
+          isPublished: projects.isPublished,
+        })
         .from(eventProjects)
         .innerJoin(projects, eq(eventProjects.projectId, projects.id))
-        .where(and(eq(eventProjects.occurrenceKey, key), eq(projects.isPublished, true)))
+        .where(
+          canManagePlan
+            ? eq(eventProjects.occurrenceKey, key)
+            : and(eq(eventProjects.occurrenceKey, key), eq(projects.isPublished, true)),
+        )
         .orderBy(asc(projects.eventDate)),
     ])
 

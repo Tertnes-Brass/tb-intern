@@ -301,6 +301,19 @@ function TimeDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
+  // En ansvarlig som ikke lenger er valgbar (deaktivert medlem) gjøres om til
+  // fritekstnavn når medlemslista er lastet. Uten dette ville nedtrekket stått
+  // blankt mens staten beholdt id-en — og serveren avviser en deaktivert
+  // bruker-id ved lagring, også når man bare retter klokkeslettet.
+  useEffect(() => {
+    if (!open || members.length === 0) return
+    if (responsible === '' || responsible === OTHER) return
+    if (members.some((m) => m.id === responsible)) return
+    setResponsible(OTHER)
+    setResponsibleName(item?.responsibleName ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, members, responsible])
+
   /**
    * «Kontaktinfo kan hentes fra person i medlemslista» (#9). Nummeret fylles
    * inn ÉN gang, når man velger et medlem og feltet er tomt — det er et
