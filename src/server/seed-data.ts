@@ -611,3 +611,143 @@ export const SEED_ATTENDANCE: SeedAttendance[] = [
     registeredByEmail: 'dirigent@demo.tertnesbrass.no',
   },
 ]
+
+// ---------- Oppkjøring og tidsplan (#9 + #10) ----------
+
+/**
+ * Praktisk info på demo-øvelsen (#10). Viser blandingen saken ber om: adresse
+ * og kartlenke så en vikar finner fram, to ulike oppmøtetidspunkt, og navnene
+ * på dem som rigger og låser opp.
+ */
+export const SEED_EVENT_PRACTICAL = {
+  locationName: 'Tertnes skole, musikkrommet',
+  locationAddress: 'Snellingen 1, 5113 Tertnes',
+  mapUrl: 'https://maps.google.com/?q=Snellingen+1,+5113+Tertnes',
+  meetupCrew: '18:00',
+  meetupMusicians: '18:45',
+  conductor: 'Marte Dirigent',
+  keyholder: 'Kim Systad',
+  crew: 'Karim Haddad\nOle Nilsen\nSilje Bakke',
+  substitutes: 'Ola Vikar stiller på 2. kornett for Jonas',
+  practicalNote: 'Parkering på grusbanen — ikke i snuplassen.\nInngang på baksiden, ring på hvis døra er låst.',
+}
+
+/** Konserten demo-øvelsen kjører opp mot. Matches på navn i SEED_PROJECTS. */
+export const SEED_EVENT_PROJECT_NAME = 'Sommerkonsert'
+
+export type SeedProjectTime = {
+  /** Konserten i SEED_PROJECTS, matchet på navn. */
+  projectName: string
+  kind: string
+  label: string | null
+  /** Dager FØR prosjektets `eventDate`. 0 = samme dag. */
+  dayOffset: number
+  time: string | null
+  location: string | null
+  audience: string
+  note: string | null
+  /** E-posten til en av SEED_MEMBERS, eller null når ansvarlig står som fritekst. */
+  responsibleEmail: string | null
+  responsibleName: string | null
+  contactPhone: string | null
+}
+
+/**
+ * Tidsplanen for sommerkonserten (#9) — nøyaktig historien saken forteller:
+ * lasting på Tertnes dagen før, oppmøte for rigg i lokalet, oppmøte for
+ * musikantene, konsertstart og nedrigg. Lastebilsjåføren har kontaktnummer,
+ * fordi det er den ene tingen ingen finner når de trenger den.
+ */
+export const SEED_PROJECT_TIMES: SeedProjectTime[] = [
+  {
+    projectName: 'Sommerkonsert',
+    kind: 'oppmote_lasting',
+    label: null,
+    dayOffset: 1,
+    time: '18:00',
+    location: 'Tertnes skole, lageret',
+    audience: 'riggegruppe',
+    note: 'Slagverk og notestativ. Vi er ferdige på en time hvis alle kommer.',
+    responsibleEmail: 'karim@demo.tertnesbrass.no',
+    responsibleName: null,
+    contactPhone: '+47 900 12 345',
+  },
+  {
+    projectName: 'Sommerkonsert',
+    kind: 'avreise',
+    label: null,
+    dayOffset: 0,
+    time: '15:00',
+    location: 'Tertnes skole',
+    audience: 'riggegruppe',
+    note: 'Lastebilen kjører presis.',
+    responsibleEmail: null,
+    responsibleName: 'Bjørn (Åsane Transport)',
+    contactPhone: '+47 918 22 100',
+  },
+  {
+    projectName: 'Sommerkonsert',
+    kind: 'oppmote_rigg',
+    label: null,
+    dayOffset: 0,
+    time: '16:00',
+    location: 'Åsane kulturhus, scenen',
+    audience: 'riggegruppe',
+    note: 'Pauker bakerst til venstre, mallets til høyre for dirigenten.',
+    responsibleEmail: 'silje@demo.tertnesbrass.no',
+    responsibleName: null,
+    contactPhone: null,
+  },
+  {
+    projectName: 'Sommerkonsert',
+    kind: 'oppmote_musikanter',
+    label: null,
+    dayOffset: 0,
+    time: '17:30',
+    location: 'Åsane kulturhus',
+    audience: 'alle',
+    note: 'Antrekk: sort med sommersløyfe.',
+    responsibleEmail: null,
+    responsibleName: null,
+    contactPhone: null,
+  },
+  {
+    projectName: 'Sommerkonsert',
+    kind: 'lydprove',
+    label: null,
+    dayOffset: 0,
+    time: '18:00',
+    location: 'Åsane kulturhus',
+    audience: 'alle',
+    note: null,
+    responsibleEmail: null,
+    responsibleName: null,
+    contactPhone: null,
+  },
+  {
+    projectName: 'Sommerkonsert',
+    kind: 'konsertstart',
+    label: null,
+    dayOffset: 0,
+    time: '19:00',
+    location: 'Åsane kulturhus, store sal',
+    audience: 'alle',
+    note: 'Dørene åpner 18:30.',
+    responsibleEmail: null,
+    responsibleName: null,
+    contactPhone: null,
+  },
+  {
+    projectName: 'Sommerkonsert',
+    kind: 'nedrigg',
+    label: null,
+    dayOffset: 0,
+    time: null,
+    location: 'Åsane kulturhus',
+    audience: 'riggegruppe',
+    note: 'Rett etter konserten — alle hjelper til med å bære ut.',
+    responsibleEmail: 'karim@demo.tertnesbrass.no',
+    responsibleName: null,
+    contactPhone: null,
+  },
+]

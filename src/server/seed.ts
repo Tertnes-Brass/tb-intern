@@ -10,6 +10,7 @@ import {
   boardTasks,
   eventAttendance,
   eventMeta,
+  eventProjects,
   eventSetlist,
   invitations,
   leaderChannels,
@@ -20,6 +21,7 @@ import {
   postMentions,
   postReactions,
   posts,
+  projectTimes,
   projectWorks,
   projects,
   rolePermissions,
@@ -51,6 +53,8 @@ import {
   SEED_BOARD_MESSAGES,
   SEED_BOARD_PROJECTS,
   SEED_BOARD_TASKS,
+  SEED_EVENT_PRACTICAL,
+  SEED_EVENT_PROJECT_NAME,
   SEED_LEADER_CHANNELS,
   SEED_LEADER_MESSAGES,
   SEED_MEMBERS,
@@ -58,6 +62,7 @@ import {
   SEED_POST_COMMENTS,
   SEED_POST_REACTIONS,
   SEED_PROJECTS,
+  SEED_PROJECT_TIMES,
   SEED_ROLES,
   SEED_ROLE_PERMISSIONS,
   SEED_SEASONS,
@@ -761,5 +766,70 @@ export async function seedRehearsalDemo(): Promise<void> {
         updatedAt: ts,
       })
       .onConflictDoNothing()
+  }
+
+  // Praktisk info på øvelsen (#10). Skrives bare når feltene er TOMME: en
+  // demoøvelse som er redigert i UI-et skal ikke få endringene overskrevet ved
+  // neste innlogging. `location_name` er vaktposten for hele blokka.
+  await d
+    .update(eventMeta)
+    .set(SEED_EVENT_PRACTICAL)
+    .where(and(eq(eventMeta.occurrenceKey, key), isNull(eventMeta.locationName)))
+
+  // Øvelsen kjører opp mot sommerkonserten (#10). n:m-koblingen legges inn med
+  // `onConflictDoNothing`, så en kobling som er fjernet for hånd ikke kommer
+  // tilbake ved hver innlogging … men en som aldri er satt, blir satt.
+  const konsert = (
+    await d
+      .select({ id: projects.id, eventDate: projects.eventDate })
+      .from(projects)
+      .where(eq(projects.name, SEED_EVENT_PROJECT_NAME))
+      .limit(1)
+  )[0]
+  if (!konsert) return
+
+  await d
+    .insert(eventProjects)
+    .values({ occurrenceKey: key, projectId: konsert.id, createdBy: null, createdAt: ts })
+    .onConflictDoNothing()
+
+  // Tidsplanen for konserten (#9). Hele lista legges inn ÉN gang: har
+  // prosjektet et tidspunkt fra før, er planen enten seedet eller redigert, og
+  // i begge tilfeller skal den stå i fred.
+  const existingTimes = await d
+    .select({ id: projectTimes.id })
+    .from(projectTimes)
+    .where(eq(projectTimes.projectId, konsert.id))
+    .limit(1)
+  if (existingTimes.length > 0 || !konsert.eventDate) return
+
+  const demoNameByEmail = new Map(SEED_MEMBERS.map((m) => [m.email.toLowerCase(), m.name]))
+  for (const row of SEED_PROJECT_TIMES) {
+    if (row.projectName !== SEED_EVENT_PROJECT_NAME) continue
+    const date = new Date(`${konsert.eventDate}T12:00:00Z`)
+    date.setUTCDate(date.getUTCDate() - row.dayOffset)
+    // Demobrukerne opprettes først ved sin egen første innlogging. Er kontoen
+    // ikke laget ennå, faller ansvarlig tilbake på NAVNET fra demodataene —
+    // ellers ville tidsplanen vist et telefonnummer uten en person ved siden av.
+    const responsibleUserId = row.responsibleEmail ? (userIdByEmail.get(row.responsibleEmail) ?? null) : null
+    await d.insert(projectTimes).values({
+      id: newId(),
+      projectId: konsert.id,
+      kind: row.kind,
+      label: row.label,
+      date: date.toISOString().slice(0, 10),
+      time: row.time,
+      location: row.location,
+      audience: row.audience,
+      note: row.note,
+      responsibleUserId,
+      responsibleName: responsibleUserId
+        ? null
+        : (row.responsibleName ?? (row.responsibleEmail ? (demoNameByEmail.get(row.responsibleEmail) ?? null) : null)),
+      contactPhone: row.contactPhone,
+      createdBy: null,
+      createdAt: ts,
+      updatedAt: ts,
+    })
   }
 }

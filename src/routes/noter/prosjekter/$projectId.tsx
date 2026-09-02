@@ -9,6 +9,7 @@ import { Button, EmptyState, Field, Kicker, Modal, SectionHeading, Stamp } from 
 import { ZipDownloadButton } from '../../../components/ZipDownload'
 import {
   formatDate,
+  formatDateShort,
   formatDuration,
   formatTime,
   formatWeekday,
@@ -319,11 +320,12 @@ function RehearsalsSection({
                   className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-paper-sunken sm:px-5"
                 >
                   <span
-                    className={`display-title tabular mt-0.5 w-20 shrink-0 text-[0.86rem] font-semibold ${
+                    className={`display-title tabular mt-0.5 w-16 shrink-0 text-[0.86rem] font-semibold leading-tight ${
                       past ? 'text-ink-faint' : 'text-ink'
                     }`}
                   >
-                    {formatDateShortWithTime(rehearsal.start)}
+                    <span className="block">{formatDateShort(toOsloDate(rehearsal.start))}</span>
+                    <span className="block font-normal text-ink-faint">{formatTime(rehearsal.start)}</span>
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className={`block text-[0.95rem] font-semibold leading-snug ${past ? 'text-ink-faint' : 'text-ink'}`}>
@@ -357,11 +359,6 @@ function RehearsalsSection({
       )}
     </section>
   )
-}
-
-/** «19. sep 19:00» — kort nok for en smal kolonne på mobil. */
-function formatDateShortWithTime(ms: number): string {
-  return `${formatDate(toOsloDate(ms)).replace(/ \d{4}$/, '')} ${formatTime(ms)}`
 }
 
 // ---------- Rekkefølge/fjern-knapper ----------
