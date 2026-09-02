@@ -11,6 +11,7 @@ import {
   eventAttendance,
   eventMeta,
   eventSetlist,
+  invitationRoles,
   invitations,
   leaderChannels,
   leaderMessages,
@@ -155,16 +156,24 @@ export async function seedDemoData(): Promise<{ ok: boolean; alreadySeeded?: boo
   // Sørg for at dev-login virker også når databasen allerede har verk fra en
   // eldre/ufullstendig seed. Eksisterende invitasjoner skal ikke overskrives.
   for (const member of SEED_MEMBERS) {
+    const email = member.email.toLowerCase()
     await d
       .insert(invitations)
       .values({
-        email: member.email.toLowerCase(),
+        email,
         name: member.name,
-        roleId: member.roleId,
+        // Deprecated kolonne (#48) — hovedrollen. Rollene selv i `invitation_roles`.
+        roleId: member.roleIds[0]!,
         partIds: JSON.stringify(member.partIds),
         invitedBy: null,
         createdAt: ts,
       })
+      .onConflictDoNothing()
+    // Rollene legges på uansett om invitasjonen fantes fra før: en database som
+    // ble seedet før #48 har invitasjonsraden, men ingen koblingsrader.
+    await d
+      .insert(invitationRoles)
+      .values(member.roleIds.map((roleId) => ({ email, roleId })))
       .onConflictDoNothing()
   }
 

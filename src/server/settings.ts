@@ -2,7 +2,18 @@ import { createServerFn } from '@tanstack/react-start'
 import { asc, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
-import { invitations, memberProfiles, parts, rolePermissions, roles, userParts, workFiles } from '../db/schema'
+import {
+  invitationRoles,
+  invitations,
+  memberProfiles,
+  memberRoles,
+  parts,
+  rolePermissions,
+  roles,
+  userParts,
+  workFiles,
+} from '../db/schema'
+import { PERMISSION_CATALOG } from '../lib/permissions'
 import { findRoleNameCollision, roleNameCollisionMessage } from '../lib/roles'
 import { SECTION_ORDER } from '../lib/taxonomy'
 import { requirePermission } from './access'
@@ -10,26 +21,10 @@ import { buildDisplayOrder, listSiblings, reorderAfter } from './parts-tree'
 
 const SETTINGS_PERMISSION = 'settings.manage'
 
-/** Kjente rettigheter med norske etiketter — vises i rolle-matrisen. */
-export const PERMISSION_CATALOG: Array<{ key: string; label: string; hint: string }> = [
-  { key: 'works.manage', label: 'Verk og filer', hint: 'Opprette, redigere og laste opp i arkivet' },
-  { key: 'projects.manage', label: 'Prosjekter', hint: 'Lage prosjekter, sette repertoar, publisere' },
-  { key: 'shares.manage', label: 'Vikarlenker', hint: 'Dele stemmer med vikarer' },
-  { key: 'members.manage', label: 'Medlemmer', hint: 'Invitere og endre roller/stemmer' },
-  { key: 'members.manage.section', label: 'Lede egen seksjon', hint: 'Tildele stemmer og se noter for egen seksjon' },
-  { key: 'scores.view', label: 'Partitur', hint: 'Se og laste ned partitur' },
-  { key: 'archive.viewAll', label: 'Se hele arkivet', hint: 'Se og laste ned ALLE stemmer, ikke bare egne' },
-  { key: 'downloads.view', label: 'Filtilgangslogg', hint: 'Se hvem som har vist eller lastet ned filer' },
-  { key: 'board.manage', label: 'Styrearbeid', hint: 'Se og redigere styrets oppgaver, møter og dokumenter' },
-  { key: 'calendar.manage', label: 'Øvingsplan', hint: 'Sette verk, rekkefølge og prosjektkobling på en øvelse' },
-  {
-    key: 'attendance.manage',
-    label: 'Fravær og oppmøte',
-    hint: 'Se hele oppmøtelista og registrere fravær for et medlem',
-  },
-  { key: 'posts.publish', label: 'Beskjeder', hint: 'Skrive og publisere beskjeder til korpset' },
-  { key: SETTINGS_PERMISSION, label: 'Innstillinger', hint: 'Administrere besetning og roller' },
-]
+// Katalogen flyttet til `src/lib/permissions.ts` (#48) slik at /medlemmer kan
+// bruke den uten å dra en modul full av serverfunksjoner inn i klientbygget.
+// Re-eksporten står for importører som fortsatt peker hit.
+export { PERMISSION_CATALOG }
 
 function slugify(input: string): string {
   return (
@@ -58,11 +53,16 @@ export const getSettingsData = createServerFn().handler(async () => {
         .from(workFiles)
         .groupBy(workFiles.partId),
       d.select({ partId: userParts.partId, n: sql<number>`count(*)` }).from(userParts).groupBy(userParts.partId),
+      // Telles fra koblingstabellene (#48): et medlem med to roller skal telle i
+      // begge. `member_profiles.role_id` er deprecated og ville gitt bare den ene.
       d
-        .select({ roleId: memberProfiles.roleId, n: sql<number>`count(*)` })
-        .from(memberProfiles)
-        .groupBy(memberProfiles.roleId),
-      d.select({ roleId: invitations.roleId, n: sql<number>`count(*)` }).from(invitations).groupBy(invitations.roleId),
+        .select({ roleId: memberRoles.roleId, n: sql<number>`count(*)` })
+        .from(memberRoles)
+        .groupBy(memberRoles.roleId),
+      d
+        .select({ roleId: invitationRoles.roleId, n: sql<number>`count(*)` })
+        .from(invitationRoles)
+        .groupBy(invitationRoles.roleId),
     ])
 
   const fileCount = new Map(partFileCounts.map((r) => [r.partId, r.n]))
@@ -336,15 +336,18 @@ export const deleteRole = createServerFn({ method: 'POST' })
     const role = (await d.select().from(roles).where(eq(roles.id, data.roleId)).limit(1))[0]
     if (!role) return { ok: true }
     if (role.isSystem) throw new Error('Systemroller kan ikke slettes')
-    const members = await d
-      .select({ n: sql<number>`count(*)` })
-      .from(memberProfiles)
-      .where(eq(memberProfiles.roleId, data.roleId))
-    const invites = await d
-      .select({ n: sql<number>`count(*)` })
-      .from(invitations)
-      .where(eq(invitations.roleId, data.roleId))
-    if ((members[0]?.n ?? 0) + (invites[0]?.n ?? 0) > 0) {
+    // Fire tellinger, ikke to: koblingstabellene er sannheten (#48), men de
+    // deprecated kolonnene sjekkes også — et medlem opprettet i vinduet mellom
+    // migrasjon og deploy har bare kolonnen, og `member_roles.role_id` har
+    // bevisst ingen `ON DELETE`, så en sletting her ville uansett blitt en rå
+    // fremmednøkkelfeil i stedet for denne setningen.
+    const counts = await Promise.all([
+      d.select({ n: sql<number>`count(*)` }).from(memberRoles).where(eq(memberRoles.roleId, data.roleId)),
+      d.select({ n: sql<number>`count(*)` }).from(invitationRoles).where(eq(invitationRoles.roleId, data.roleId)),
+      d.select({ n: sql<number>`count(*)` }).from(memberProfiles).where(eq(memberProfiles.roleId, data.roleId)),
+      d.select({ n: sql<number>`count(*)` }).from(invitations).where(eq(invitations.roleId, data.roleId)),
+    ])
+    if (counts.reduce((sum, rows) => sum + (rows[0]?.n ?? 0), 0) > 0) {
       throw new Error('Rollen er i bruk. Flytt medlemmer/invitasjoner til en annen rolle først.')
     }
     await d.delete(roles).where(eq(roles.id, data.roleId)) // role_permissions via cascade

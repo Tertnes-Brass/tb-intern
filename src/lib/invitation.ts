@@ -2,13 +2,33 @@ import { z } from 'zod'
 import { memberNameSchema } from './profile'
 
 /**
- * Ren logikk for invitasjonsflyten (`/medlemmer` → `inviteMember`). Ligger i
- * `lib/` uten `cloudflare:workers`-import slik at reglene kan enhetstestes, og
- * slik at klient og server bruker de SAMME reglene.
+ * Ren logikk for invitasjonsflyten (`/medlemmer` → `inviteMember`), pluss de
+ * inndata-reglene medlemsadministrasjonen deler med den. Ligger i `lib/` uten
+ * `cloudflare:workers`-import slik at reglene kan enhetstestes, og slik at
+ * klient og server bruker de SAMME reglene.
+ *
+ * Zod-skjemaene bor her og ikke i `src/lib/roles.ts`: den modulen brukes av
+ * `Shell.tsx` og ligger dermed i rot-chunken, der zod ville kostet hver eneste
+ * sidelasting.
  */
 
 /** Maks stemmer på én invitasjon — samme grense som `updateMemberParts`. */
 export const MAX_INVITE_PARTS = 4
+
+/**
+ * Et rollesett (#48). Et medlem må ha MINST én rolle: null roller ville gitt et
+ * medlem uten en eneste rettighet — teknisk mulig, men en tilstand ingen ber om
+ * med vilje, og den ville dessuten gjort den deprecated NOT NULL-kolonnen
+ * `member_profiles.role_id` umulig å holde i takt. Vil man ta fra noen all
+ * tilgang, deaktiveres medlemmet i stedet.
+ *
+ * Delt av invitasjonen og `updateMemberRoles`, så de to aldri kan komme i utakt
+ * om hva som er et gyldig rollesett.
+ */
+export const roleIdsSchema = z
+  .array(z.string().min(1))
+  .min(1, 'Velg minst én rolle')
+  .refine((ids) => new Set(ids).size === ids.length, 'Samme rolle er valgt flere ganger')
 
 /** E-post er primærnøkkelen i `invitations`; normaliseres begge veier. */
 export const inviteEmailSchema = z.string().trim().toLowerCase().email('Ugyldig e-post')
@@ -34,7 +54,10 @@ export const invitePayloadSchema = z
   .object({
     email: inviteEmailSchema,
     name: inviteNameSchema,
-    roleId: z.string().min(1, 'Velg en rolle'),
+    // Flere roller også ved invitasjon (#48): en ny styreleder som også spiller
+    // skal ikke måtte inviteres som «Musiker» og rettes opp i medlemslista etter
+    // første innlogging. Minst én rolle kreves — se `roleIdsSchema`.
+    roleIds: roleIdsSchema,
     partIds: invitePartIdsSchema.default([]),
     // Hovedstemmen styrer seksjon og sortering i besetningslista. Utelatt ⇒
     // rekkefølgen i `partIds` gjelder som den er.

@@ -6,8 +6,9 @@ import { tanstackStartCookies } from 'better-auth/tanstack-start'
 import { env, waitUntil } from 'cloudflare:workers'
 import { eq } from 'drizzle-orm'
 import { db, schema } from '../db'
-import { invitations, memberProfiles, user, userParts } from '../db/schema'
+import { invitationRoles, invitations, memberProfiles, memberRoles, user, userParts } from '../db/schema'
 import { memberNameSchema, PASSWORD_MIN_LENGTH } from '../lib/profile'
+import { effectiveRoleIds, primaryRoleId } from '../lib/roles'
 import { writeAudit } from './audit'
 import { inviteEmail, magicLinkEmail, resetPasswordEmail, sendEmail, verificationCodeEmail } from './email'
 
@@ -21,7 +22,8 @@ const MAGIC_LINK_EXPIRY = 60 * 30 // 30 min
  * E-post normaliseres til små bokstaver begge steder.
  */
 type Access = {
-  roleId: string
+  /** Rollene invitasjonen gir (#48). Alltid minst én. */
+  roleIds: string[]
   partIds: string[]
   inviteEmail: string | null
   name: string | null
@@ -34,22 +36,28 @@ async function resolveAccess(email: string): Promise<Access | null> {
   const normalized = email.trim().toLowerCase()
   const adminEmail = env.ADMIN_EMAIL?.trim().toLowerCase()
   if (adminEmail && normalized === adminEmail) {
-    return { roleId: 'admin', partIds: [], inviteEmail: null, name: null, pendingInvite: false }
+    return { roleIds: ['admin'], partIds: [], inviteEmail: null, name: null, pendingInvite: false }
   }
-  const inv = await db()
-    .select({
-      email: invitations.email,
-      name: invitations.name,
-      roleId: invitations.roleId,
-      partIds: invitations.partIds,
-      acceptedAt: invitations.acceptedAt,
-    })
-    .from(invitations)
-    .where(eq(invitations.email, normalized))
-    .limit(1)
+  const d = db()
+  const [inv, inviteRoles] = await Promise.all([
+    d
+      .select({
+        email: invitations.email,
+        name: invitations.name,
+        legacyRoleId: invitations.roleId,
+        partIds: invitations.partIds,
+        acceptedAt: invitations.acceptedAt,
+      })
+      .from(invitations)
+      .where(eq(invitations.email, normalized))
+      .limit(1),
+    d.select({ roleId: invitationRoles.roleId }).from(invitationRoles).where(eq(invitationRoles.email, normalized)),
+  ])
   if (!inv[0]) return null
   return {
-    roleId: inv[0].roleId,
+    // Samme fallback som for medlemmer: en invitasjon som ble skrevet av gammel
+    // kode har bare den deprecated kolonnen, og skal fortsatt virke.
+    roleIds: effectiveRoleIds(inviteRoles.map((r) => r.roleId), inv[0].legacyRoleId),
     partIds: JSON.parse(inv[0].partIds) as string[],
     inviteEmail: inv[0].email,
     name: inv[0].name,
@@ -153,15 +161,24 @@ function buildAuth() {
           after: async (createdUser: { id: string; email: string }) => {
             const access = await resolveAccess(createdUser.email)
             const d = db()
-            if (!access) {
-              // Invitasjonen ble trukket tilbake mellom before og after — fjern den
-              // foreldreløse brukerraden så den ikke blir en konto uten profil.
+            // Ingen tilgang, eller en invitasjon uten en eneste rolle: fjern den
+            // foreldreløse brukerraden så den ikke blir en konto uten profil.
+            // (Invitasjonen kan ha blitt trukket tilbake mellom before og after.)
+            const legacyRoleId = access && primaryRoleId(access.roleIds)
+            if (!access || !legacyRoleId) {
               await d.delete(user).where(eq(user.id, createdUser.id))
               return
             }
+            // Hovedrollen i den deprecated kolonnen (NOT NULL), rollene selv i
+            // `member_roles`. Uten koblingsradene ville medlemmet fått bare den
+            // ene rollen, uansett hva invitasjonen sa.
             await d
               .insert(memberProfiles)
-              .values({ authUserId: createdUser.id, roleId: access.roleId, isActive: true, createdAt: new Date() })
+              .values({ authUserId: createdUser.id, roleId: legacyRoleId, isActive: true, createdAt: new Date() })
+              .onConflictDoNothing()
+            await d
+              .insert(memberRoles)
+              .values(access.roleIds.map((roleId) => ({ authUserId: createdUser.id, roleId })))
               .onConflictDoNothing()
             if (access.partIds.length > 0) {
               await d
@@ -179,7 +196,7 @@ function buildAuth() {
               action: 'member.account_created',
               actorUserId: createdUser.id,
               targetUserId: createdUser.id,
-              details: { roleId: access.roleId, partIds: access.partIds },
+              details: { roleIds: access.roleIds, partIds: access.partIds },
             })
           },
         },

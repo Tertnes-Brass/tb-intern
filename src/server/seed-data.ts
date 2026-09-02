@@ -6,23 +6,28 @@
 /** Fast vikartoken i demo, så vikarvisningen kan demonstreres uten oppsett. */
 export const DEMO_SHARE_TOKEN = 'demo-vikar-sommerkonsert'
 
+export type SeedRoleId = 'admin' | 'archivist' | 'conductor' | 'board' | 'member'
+
 export type SeedMember = {
   name: string
   email: string
-  roleId: 'admin' | 'archivist' | 'conductor' | 'board' | 'member'
+  /** Flere roller per medlem (#48). Rekkefølgen bestemmer hovedrollen. */
+  roleIds: SeedRoleId[]
   partIds: string[]
 }
 
 export const SEED_MEMBERS: SeedMember[] = [
-  { name: 'Sindre Ryland', email: 'sindre@demo.tertnesbrass.no', roleId: 'admin', partIds: ['euphonium'] },
-  { name: 'Eirik Berge', email: 'dirigent@demo.tertnesbrass.no', roleId: 'conductor', partIds: ['score'] },
-  { name: 'Ingrid Marie Dale', email: 'ingrid@demo.tertnesbrass.no', roleId: 'member', partIds: ['solo-cornet'] },
-  { name: 'Jonas Helle', email: 'jonas@demo.tertnesbrass.no', roleId: 'member', partIds: ['second-cornet'] },
-  { name: 'Astrid Fjeldstad', email: 'astrid@demo.tertnesbrass.no', roleId: 'member', partIds: ['flugel'] },
-  { name: 'Karim Aly', email: 'karim@demo.tertnesbrass.no', roleId: 'member', partIds: ['eb-bass'] },
-  { name: 'Silje Tveit', email: 'silje@demo.tertnesbrass.no', roleId: 'member', partIds: ['percussion-1'] },
-  { name: 'Ole Kristian Bø', email: 'ole@demo.tertnesbrass.no', roleId: 'archivist', partIds: ['bass-trombone'] },
-  { name: 'Hilde Nordvik', email: 'hilde@demo.tertnesbrass.no', roleId: 'board', partIds: ['first-horn'] },
+  { name: 'Sindre Ryland', email: 'sindre@demo.tertnesbrass.no', roleIds: ['admin'], partIds: ['euphonium'] },
+  { name: 'Eirik Berge', email: 'dirigent@demo.tertnesbrass.no', roleIds: ['conductor'], partIds: ['score'] },
+  { name: 'Ingrid Marie Dale', email: 'ingrid@demo.tertnesbrass.no', roleIds: ['member'], partIds: ['solo-cornet'] },
+  { name: 'Jonas Helle', email: 'jonas@demo.tertnesbrass.no', roleIds: ['member'], partIds: ['second-cornet'] },
+  { name: 'Astrid Fjeldstad', email: 'astrid@demo.tertnesbrass.no', roleIds: ['member'], partIds: ['flugel'] },
+  // Karim er demoens levende bevis på #48: musiker OG styremedlem samtidig. Han
+  // beholder musikertilgangen (og stemmen sin) og får styreområdet i tillegg.
+  { name: 'Karim Aly', email: 'karim@demo.tertnesbrass.no', roleIds: ['member', 'board'], partIds: ['eb-bass'] },
+  { name: 'Silje Tveit', email: 'silje@demo.tertnesbrass.no', roleIds: ['member'], partIds: ['percussion-1'] },
+  { name: 'Ole Kristian Bø', email: 'ole@demo.tertnesbrass.no', roleIds: ['archivist'], partIds: ['bass-trombone'] },
+  { name: 'Hilde Nordvik', email: 'hilde@demo.tertnesbrass.no', roleIds: ['board'], partIds: ['first-horn'] },
 ]
 
 // `isSystem` skrives eksplisitt: rollene her er plattformens egne og skal ikke

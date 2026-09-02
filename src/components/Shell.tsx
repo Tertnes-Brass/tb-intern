@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Me } from '../server/access'
 import { authClient } from '../lib/auth-client'
 import { isGroupLeader } from '../lib/gruppeledere'
+import { roleLabel } from '../lib/roles'
 import { Avatar } from './ui'
 
 function ThemeToggle() {
@@ -70,7 +71,7 @@ function UserMenu({ me }: { me: Me }) {
         <span className="hidden text-left sm:block">
           <span className="block text-[0.8rem] font-semibold leading-tight text-ink">{me.name}</span>
           <span className="block font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint">
-            {me.roleName}
+            {roleLabel(me.roles.map((r) => r.name))}
           </span>
         </span>
       </button>
@@ -78,7 +79,9 @@ function UserMenu({ me }: { me: Me }) {
         <div className="sheet rise absolute right-0 top-[calc(100%+6px)] z-50 w-52 overflow-hidden !rounded-xl p-1.5">
           <div className="border-b border-line px-3 py-2 sm:hidden">
             <p className="text-sm font-semibold">{me.name}</p>
-            <p className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint">{me.roleName}</p>
+            <p className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint">
+              {roleLabel(me.roles.map((r) => r.name))}
+            </p>
           </div>
           {me.parts.length > 0 && (
             <p className="px-3 pb-1 pt-2 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint">

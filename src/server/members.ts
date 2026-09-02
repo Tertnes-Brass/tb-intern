@@ -5,32 +5,67 @@ import { z } from 'zod'
 import { db } from '../db'
 import {
   auditLog,
+  invitationRoles,
   invitations,
   memberProfiles,
+  memberRoles,
   parts,
+  rolePermissions,
   roles,
   sectionLeaders,
   session,
   user,
   userParts,
 } from '../db/schema'
-import { type InviteDelivery, invitePayloadSchema, orderPartsWithPrimary } from '../lib/invitation'
+import { type InviteDelivery, invitePayloadSchema, orderPartsWithPrimary, roleIdsSchema } from '../lib/invitation'
 import { memberNameSchema, normalizePhone, phoneSchema } from '../lib/profile'
+import { type RoleSummary, effectiveRoleIds, orderRoles, primaryRoleId } from '../lib/roles'
 import { canManageMemberParts, hasPermission, requireMe, requirePermission } from './access'
 import { auditInsert } from './audit'
 import { getAuth } from './auth-instance'
 import { takeEmailOutcome } from './email'
 import { leaderCanAssign } from './parts-tree'
 
-/** Sjekker at rolle + stemmer faktisk finnes (partIds lagres uten FK i JSON). */
-async function assertValidRoleAndParts(roleId: string, partIds: string[]): Promise<void> {
+/** Sjekker at stemmene faktisk finnes (partIds lagres uten FK i JSON). */
+async function assertValidParts(partIds: string[]): Promise<void> {
+  if (partIds.length === 0) return
+  const found = await db().select({ id: parts.id }).from(parts).where(inArray(parts.id, partIds))
+  if (found.length !== new Set(partIds).size) throw new Error('Ukjent stemme')
+}
+
+/**
+ * Sjekker at hver rolle finnes. Fremmednøklene i `member_roles`/`invitation_roles`
+ * ville stoppet en ukjent ID uansett, men da som en rå databasefeil midt i en
+ * batch — her blir det en setning brukeren kan lese.
+ */
+async function assertValidRoles(roleIds: string[]): Promise<void> {
+  const found = await db().select({ id: roles.id }).from(roles).where(inArray(roles.id, roleIds))
+  if (found.length !== new Set(roleIds).size) throw new Error('Ukjent rolle')
+}
+
+/**
+ * Rollene med rettighetene sine — grunnlaget for både rollevelgeren og
+ * «hva får personen tilgang til?» i /medlemmer. Rettighetene sendes med, slik at
+ * skjermen kan forklare valget uten et ekstra kall til innstillingene.
+ */
+async function listRoleSummaries(): Promise<RoleSummary[]> {
   const d = db()
-  const role = await d.select({ id: roles.id }).from(roles).where(eq(roles.id, roleId)).limit(1)
-  if (!role[0]) throw new Error('Ukjent rolle')
-  if (partIds.length > 0) {
-    const found = await d.select({ id: parts.id }).from(parts).where(inArray(parts.id, partIds))
-    if (found.length !== new Set(partIds).size) throw new Error('Ukjent stemme')
+  const [allRoles, perms] = await Promise.all([
+    d.select().from(roles).orderBy(asc(roles.name)),
+    d.select().from(rolePermissions),
+  ])
+  const byRole = new Map<string, string[]>()
+  for (const p of perms) {
+    const list = byRole.get(p.roleId) ?? []
+    list.push(p.permission)
+    byRole.set(p.roleId, list)
   }
+  return allRoles.map((r) => ({
+    id: r.id,
+    name: r.name,
+    isSystem: r.isSystem,
+    permissions: byRole.get(r.id) ?? [],
+  }))
 }
 
 export const listMembers = createServerFn().handler(async () => {
@@ -43,8 +78,7 @@ export const listMembers = createServerFn().handler(async () => {
       name: user.name,
       email: user.email,
       phone: memberProfiles.phone,
-      roleId: memberProfiles.roleId,
-      roleName: roles.name,
+      legacyRoleId: memberProfiles.roleId,
       isActive: memberProfiles.isActive,
       partId: parts.id,
       partName: parts.nameNo,
@@ -53,9 +87,22 @@ export const listMembers = createServerFn().handler(async () => {
     })
     .from(memberProfiles)
     .innerJoin(user, eq(memberProfiles.authUserId, user.id))
-    .innerJoin(roles, eq(memberProfiles.roleId, roles.id))
     .leftJoin(userParts, eq(userParts.userId, user.id))
     .leftJoin(parts, eq(userParts.partId, parts.id))
+
+  // Rollene hentes som egne rader og settes sammen i JS. En join til hadde
+  // ganget opp stemme-radene med rolle-radene, og hver kombinasjon måtte uansett
+  // vært pakket ut igjen her.
+  const roleLinkRows = await d
+    .select({ authUserId: memberRoles.authUserId, roleId: memberRoles.roleId })
+    .from(memberRoles)
+  const roleIdsByUser = new Map<string, string[]>()
+  for (const r of roleLinkRows) {
+    const list = roleIdsByUser.get(r.authUserId) ?? []
+    list.push(r.roleId)
+    roleIdsByUser.set(r.authUserId, list)
+  }
+  const allRoles = await listRoleSummaries()
 
   const byId = new Map<
     string,
@@ -64,25 +111,27 @@ export const listMembers = createServerFn().handler(async () => {
       name: string
       email: string
       phone: string | null
-      roleId: string
-      roleName: string
+      roleIds: string[]
+      roles: Array<{ id: string; name: string }>
       isActive: boolean
       parts: Array<{ id: string; name: string; sort: number; isPrimary: boolean }>
     }
   >()
   for (const r of rows) {
-    const m =
-      byId.get(r.id) ??
-      {
+    let m = byId.get(r.id)
+    if (!m) {
+      const roleIds = effectiveRoleIds(roleIdsByUser.get(r.id) ?? [], r.legacyRoleId)
+      m = {
         id: r.id,
         name: r.name,
         email: r.email,
         phone: r.phone,
-        roleId: r.roleId,
-        roleName: r.roleName,
+        roleIds,
+        roles: orderRoles(roleIds, allRoles).map((role) => ({ id: role.id, name: role.name })),
         isActive: r.isActive,
         parts: [],
       }
+    }
     if (r.partId && r.partName) {
       m.parts.push({ id: r.partId, name: r.partName, sort: r.partSort ?? 999, isPrimary: r.partPrimary ?? false })
     }
@@ -100,7 +149,6 @@ export const listMembers = createServerFn().handler(async () => {
   })
 
   const allParts = await d.select().from(parts).orderBy(asc(parts.sortOrder))
-  const allRoles = await d.select().from(roles)
   const canManage = hasPermission(me, 'members.manage')
   const canManageSection = hasPermission(me, 'members.manage.section')
 
@@ -124,26 +172,39 @@ export const listMembers = createServerFn().handler(async () => {
     }
   })
 
-  const pendingInvites = canManage
-    ? await d
-        .select({
-          email: invitations.email,
-          name: invitations.name,
-          roleId: invitations.roleId,
-          roleName: roles.name,
-          partIds: invitations.partIds,
-          createdAt: invitations.createdAt,
-          acceptedAt: invitations.acceptedAt,
-        })
-        .from(invitations)
-        .innerJoin(roles, eq(invitations.roleId, roles.id))
-        .orderBy(desc(invitations.createdAt))
-    : []
+  const [pendingInvites, inviteRoleRows] = canManage
+    ? await Promise.all([
+        d
+          .select({
+            email: invitations.email,
+            name: invitations.name,
+            legacyRoleId: invitations.roleId,
+            partIds: invitations.partIds,
+            createdAt: invitations.createdAt,
+            acceptedAt: invitations.acceptedAt,
+          })
+          .from(invitations)
+          .orderBy(desc(invitations.createdAt)),
+        d.select({ email: invitationRoles.email, roleId: invitationRoles.roleId }).from(invitationRoles),
+      ])
+    : [[], []]
+
+  const inviteRoleIds = new Map<string, string[]>()
+  for (const r of inviteRoleRows) {
+    const list = inviteRoleIds.get(r.email) ?? []
+    list.push(r.roleId)
+    inviteRoleIds.set(r.email, list)
+  }
 
   return {
     members: membersOut,
     allParts,
-    allRoles,
+    // Rollene med rettighetene sine er grunnlaget for rollevelgeren og
+    // «Samlet tilgang» — og de går KUN til den som faktisk kan sette roller.
+    // Rollematrisen er ellers gated på `settings.manage`, og et vanlig medlem
+    // har ingen bruk for å vite nøyaktig hvilke rettigheter hver rolle bærer.
+    // Rollenavnene medlemslista viser ligger på hvert medlem (`roles`).
+    allRoles: canManage ? allRoles : [],
     canManage,
     canManageSection,
     // null = full tilgang (alle stemmer); ellers begrenset til ledelsesomfanget.
@@ -154,7 +215,9 @@ export const listMembers = createServerFn().handler(async () => {
       .map((i) => ({
         email: i.email,
         name: i.name,
-        roleName: i.roleName,
+        roleNames: orderRoles(effectiveRoleIds(inviteRoleIds.get(i.email) ?? [], i.legacyRoleId), allRoles).map(
+          (r) => r.name,
+        ),
         // Første stemme er hovedstemmen (samme konvensjon som `user_parts`).
         partNames: (JSON.parse(i.partIds) as string[])
           .map((id) => allParts.find((p) => p.id === id)?.nameNo ?? id),
@@ -173,7 +236,7 @@ export const updateMemberParts = createServerFn({ method: 'POST' })
       throw new Error('Du har ikke tilgang til å endre stemmer for dette medlemmet')
     }
     const d = db()
-    await assertValidRoleAndParts(me.roleId, data.partIds) // gjenbruk: validerer partIds
+    await assertValidParts(data.partIds)
     const current = await d.select({ partId: userParts.partId }).from(userParts).where(eq(userParts.userId, data.userId))
     const currentPartIds = current.map((row) => row.partId)
     if (
@@ -249,28 +312,59 @@ export const setSectionLeaderParts = createServerFn({ method: 'POST' })
     return { ok: true }
   })
 
-export const updateMemberRole = createServerFn({ method: 'POST' })
-  .validator(z.object({ userId: z.string(), roleId: z.string() }))
+/**
+ * Setter rollene til et medlem (full overskriving, #48). Tilgangene blir
+ * unionen av rettighetene til alle rollene — «Musiker» + «Styremedlem» beholder
+ * musikertilgangen og legger styret på toppen.
+ *
+ * Sesjonene til medlemmet slettes, som før: `Me` (og dermed rettighetene)
+ * bygges ved innlogging og caches i sesjons-cookien i fem minutter, så en
+ * fjernet rolle måtte ellers ventet på at cachen gikk ut.
+ */
+export const updateMemberRoles = createServerFn({ method: 'POST' })
+  .validator(z.object({ userId: z.string(), roleIds: roleIdsSchema }))
   .handler(async ({ data }) => {
     const me = await requirePermission('members.manage')
-    if (data.userId === me.id) throw new Error('Du kan ikke endre din egen rolle')
-    await assertValidRoleAndParts(data.roleId, [])
+    // Samme vakt som før: ingen kan endre sine egne roller og dermed låse seg
+    // selv ute — eller gi seg selv mer.
+    if (data.userId === me.id) throw new Error('Du kan ikke endre dine egne roller')
+    const roleIds = [...new Set(data.roleIds)]
+    await assertValidRoles(roleIds)
     const d = db()
-    const current = await d
-      .select({ roleId: memberProfiles.roleId })
+    const profile = await d
+      .select({ legacyRoleId: memberProfiles.roleId })
       .from(memberProfiles)
       .where(eq(memberProfiles.authUserId, data.userId))
       .limit(1)
-    if (!current[0]) throw new Error('Fant ikke medlemmet')
-    if (current[0].roleId === data.roleId) return { ok: true }
+    if (!profile[0]) throw new Error('Fant ikke medlemmet')
+
+    const currentLinks = await d
+      .select({ roleId: memberRoles.roleId })
+      .from(memberRoles)
+      .where(eq(memberRoles.authUserId, data.userId))
+    const currentRoleIds = effectiveRoleIds(currentLinks.map((r) => r.roleId), profile[0].legacyRoleId)
+    const unchanged =
+      currentRoleIds.length === roleIds.length && currentRoleIds.every((id) => roleIds.includes(id))
+    // Er rollene like, men koblingsradene mangler (et medlem fra vinduet mellom
+    // migrasjon og deploy), skrives de likevel — ellers ville fallbacken blitt
+    // stående som eneste kilde.
+    if (unchanged && currentLinks.length > 0) return { ok: true }
+
     await d.batch([
-      d.update(memberProfiles).set({ roleId: data.roleId }).where(eq(memberProfiles.authUserId, data.userId)),
+      d.delete(memberRoles).where(eq(memberRoles.authUserId, data.userId)),
+      d.insert(memberRoles).values(roleIds.map((roleId) => ({ authUserId: data.userId, roleId }))),
+      // Den deprecated kolonnen holdes i takt med hovedrollen. Den leses ikke så
+      // lenge koblingsradene finnes, men den er NOT NULL og skal ikke bli usann.
+      d
+        .update(memberProfiles)
+        .set({ roleId: primaryRoleId(roleIds, profile[0].legacyRoleId)! })
+        .where(eq(memberProfiles.authUserId, data.userId)),
       d.delete(session).where(eq(session.userId, data.userId)),
       auditInsert(d, {
-        action: 'member.role_changed',
+        action: 'member.roles_changed',
         actorUserId: me.id,
         targetUserId: data.userId,
-        details: { fromRoleId: current[0].roleId, toRoleId: data.roleId },
+        details: { fromRoleIds: currentRoleIds, toRoleIds: roleIds },
       }),
     ])
     return { ok: true }
@@ -349,7 +443,9 @@ export const inviteMember = createServerFn({ method: 'POST' })
   .validator(invitePayloadSchema)
   .handler(async ({ data }) => {
     const me = await requirePermission('members.manage')
-    await assertValidRoleAndParts(data.roleId, data.partIds)
+    const roleIds = [...new Set(data.roleIds)]
+    await assertValidRoles(roleIds)
+    await assertValidParts(data.partIds)
     // E-posten er normalisert av skjemaet (trim + små bokstaver).
     const email = data.email
     const name = data.name ?? null
@@ -366,26 +462,34 @@ export const inviteMember = createServerFn({ method: 'POST' })
       throw new Error('Adressen har allerede en konto — endre rolle og stemmer i medlemslista i stedet')
     }
 
+    // Hovedrollen holder den deprecated kolonnen i takt; rollene selv bor i
+    // `invitation_roles`. Kolonnen er NOT NULL, så den må ha en verdi uansett.
+    const legacyRoleId = primaryRoleId(roleIds)!
     const upsert = d
       .insert(invitations)
       .values({
         email,
         name,
-        roleId: data.roleId,
+        roleId: legacyRoleId,
         partIds: JSON.stringify(partIds),
         invitedBy: me.id,
         createdAt: new Date(),
       })
       .onConflictDoUpdate({
         target: invitations.email,
-        set: { name, roleId: data.roleId, partIds: JSON.stringify(partIds), acceptedAt: null },
+        set: { name, roleId: legacyRoleId, partIds: JSON.stringify(partIds), acceptedAt: null },
       })
+    // Rollene overskrives helt: en invitasjon som sendes på nytt med færre
+    // roller skal ikke beholde de gamle. Slettingen må komme etter upserten —
+    // fremmednøkkelen peker på invitasjonsraden, som kanskje ikke finnes ennå.
     await d.batch([
       upsert,
+      d.delete(invitationRoles).where(eq(invitationRoles.email, email)),
+      d.insert(invitationRoles).values(roleIds.map((roleId) => ({ email, roleId }))),
       auditInsert(d, {
         action: 'member.invited',
         actorUserId: me.id,
-        details: { targetEmail: email, roleId: data.roleId, partIds, emailRequested: data.sendEmail },
+        details: { targetEmail: email, roleIds, partIds, emailRequested: data.sendEmail },
       }),
     ])
 

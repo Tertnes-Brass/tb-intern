@@ -199,7 +199,9 @@ function HubPage() {
               ) : (
                 <Stamp>Ingen stemme registrert</Stamp>
               )}
-              <Stamp>{data.me.roleName}</Stamp>
+              {data.me.roleNames.map((role) => (
+                <Stamp key={role}>{role}</Stamp>
+              ))}
             </div>
           </div>
           <Link

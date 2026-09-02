@@ -1,6 +1,14 @@
+import { type PermissionInfo, describePermissions, permissionsInclude } from './permissions'
+
 /**
- * Ren logikk for rollenavn (#78). Ingen server- eller DOM-avhengigheter, slik at
- * reglene kan testes uten database.
+ * Ren logikk for roller (#78 navnekollisjoner, #48 flere roller per medlem).
+ * Ingen server- eller DOM-avhengigheter, slik at reglene kan testes uten database.
+ *
+ * **Ingen zod her.** `Shell.tsx` bruker `roleLabel`, og `Shell` ligger i
+ * rot-chunken som lastes på HVER side — en zod-import her dro hele
+ * skjemabiblioteket (~130 kB ubehandlet) inn i det bundtet, målt i et bygg.
+ * Valideringsskjemaet for et rollesett bor derfor sammen med de andre
+ * inndata-reglene for medlemsadministrasjonen, i `src/lib/invitation.ts`.
  *
  * Bakgrunn: migrasjon `0008_board-role.sql` la inn systemrollen `board`
  * («Styremedlem») og sjekket bare rolle-ID-en. I prod fantes det allerede en
@@ -74,3 +82,91 @@ export function roleNameCollisionMessage(collision: RoleNameCandidate): string {
     : `rollen «${collision.name}» (${collision.id})`
   return `Det finnes allerede ${what}. To roller med samme navn kan ikke skilles i rollematrisen — velg et annet navn, eller gi den eksisterende rollen nytt navn først.`
 }
+
+// ---------- Flere roller per medlem (#48) ----------
+
+/** Det oversiktene og velgerne trenger å vite om en rolle. */
+export type RoleSummary = {
+  id: string
+  name: string
+  isSystem: boolean
+  /** Rettighetene rollen gir, slik de står i rollematrisen. `*` = full tilgang. */
+  permissions: string[]
+}
+
+/**
+ * Rollene et medlem faktisk har, med fallback til den deprecated énrolle-kolonnen.
+ *
+ * Fallbacken er ikke pynt: mellom migrasjonen og deployen kjører fortsatt gammel
+ * kode, og en konto som opprettes i det vinduet får bare `member_profiles.role_id`.
+ * Uten fallbacken ville et slikt medlem logget inn uten en eneste rettighet.
+ * Finnes det koblingsrader, er de sannheten og kolonnen ignoreres helt.
+ */
+export function effectiveRoleIds(linkedRoleIds: string[], legacyRoleId?: string | null): string[] {
+  const unique = [...new Set(linkedRoleIds)]
+  if (unique.length > 0) return unique
+  return legacyRoleId ? [legacyRoleId] : []
+}
+
+/**
+ * Tilgangene til et medlem = UNIONEN av rettighetene fra alle rollene. Ingen
+ * rolle kan trekke fra, så en person mister aldri noe ved å få et verv til.
+ * Resultatet er sortert og uten duplikater, slik at to like rollesett alltid gir
+ * nøyaktig samme liste (viktig for øyeblikksbilder og tester).
+ */
+export function unionRolePermissions(roleIds: string[], permissionsByRole: Map<string, string[]>): string[] {
+  const out = new Set<string>()
+  for (const roleId of roleIds) {
+    for (const permission of permissionsByRole.get(roleId) ?? []) out.add(permission)
+  }
+  return [...out].sort()
+}
+
+/**
+ * Verdien den deprecated kolonnen `member_profiles.role_id` skal ha etter en
+ * endring. Kolonnen leses aldri når koblingsradene finnes, men den er NOT NULL
+ * og skal ikke bli usann: beholder medlemmet rollen den pekte på, står den, og
+ * ellers arver den den første valgte. At den ikke hopper rundt uten grunn gjør
+ * også revisjonsloggen lesbar.
+ */
+export function primaryRoleId(selectedRoleIds: string[], currentRoleId?: string | null): string | null {
+  if (selectedRoleIds.length === 0) return null
+  if (currentRoleId && selectedRoleIds.includes(currentRoleId)) return currentRoleId
+  return selectedRoleIds[0]!
+}
+
+/**
+ * Rollene i rekkefølgen rollelista har, ikke i den rekkefølgen de tilfeldigvis
+ * ble haket av. Ellers ville «Musiker · Styremedlem» og «Styremedlem · Musiker»
+ * vært to måter å vise det samme medlemmet på.
+ */
+export function orderRoles<T extends { id: string }>(roleIds: string[], allRoles: T[]): T[] {
+  const wanted = new Set(roleIds)
+  return allRoles.filter((role) => wanted.has(role.id))
+}
+
+/** Rollene som én lesbar linje. Tom liste skal si fra, ikke bli et tomt felt. */
+export function roleLabel(roleNames: string[]): string {
+  return roleNames.length > 0 ? roleNames.join(' · ') : 'Ingen rolle'
+}
+
+/** Én rettighet, og rollene som er grunnen til at medlemmet har den. */
+export type AccessSource = { permission: PermissionInfo; roleNames: string[] }
+
+/**
+ * Svaret på «hva får denne personen faktisk tilgang til, og hvorfor?» — det
+ * akseptansekriteriet i #48 som ikke handler om datamodellen.
+ *
+ * Hver rettighet i unionen listes med rollene som gir den. En rolle med `*`
+ * (administrator) gir alt, og oppgis som kilde til hver enkelt rettighet — det
+ * er sannheten, og det er mer forståelig enn en egen «alt»-rad.
+ */
+export function accessSources(roles: Array<{ name: string; permissions: string[] }>): AccessSource[] {
+  const union = new Set<string>()
+  for (const role of roles) for (const p of role.permissions) union.add(p)
+  return describePermissions(union).map((permission) => ({
+    permission,
+    roleNames: roles.filter((r) => permissionsInclude(r.permissions, permission.key)).map((r) => r.name),
+  }))
+}
+

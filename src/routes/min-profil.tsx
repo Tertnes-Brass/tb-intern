@@ -70,7 +70,13 @@ function MyProfilePage() {
               Hold kontaktinformasjonen oppdatert og velg hvordan du vil logge inn.
             </p>
           </div>
-          <Stamp tone="brass">{profile.roleName}</Stamp>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {profile.roleNames.map((role) => (
+              <Stamp key={role} tone="brass">
+                {role}
+              </Stamp>
+            ))}
+          </div>
         </div>
       </header>
 

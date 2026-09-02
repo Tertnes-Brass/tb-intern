@@ -12,7 +12,11 @@ export type AuditAction =
   | 'member.parts_changed'
   | 'member.profile_updated'
   | 'member.profile_updated_by_admin'
+  // `member.role_changed` er historikk fra tiden med én rolle per medlem — gamle
+  // rader i loggen har den fortsatt, og de skal ikke omskrives. Nye endringer
+  // skrives som `member.roles_changed` med hele rollesettet før og etter (#48).
   | 'member.role_changed'
+  | 'member.roles_changed'
   | 'member.section_leadership_changed'
   | 'member.password_reset_requested_by_admin'
 

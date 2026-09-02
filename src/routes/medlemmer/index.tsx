@@ -1,5 +1,6 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
+import { AccessSummary, RolePermissionList, RoleStamps } from '../../components/RoleAccess'
 import { toast, toastError } from '../../components/toast'
 import { Avatar, Button, Field, Kicker, Modal, Stamp } from '../../components/ui'
 import {
@@ -11,6 +12,7 @@ import {
   orderPartsWithPrimary,
   removeInvitePart,
 } from '../../lib/invitation'
+import { type RoleSummary, roleLabel } from '../../lib/roles'
 import { SECTION_LABELS, SECTION_ORDER } from '../../lib/taxonomy'
 import {
   inviteMember,
@@ -20,11 +22,51 @@ import {
   setSectionLeaderParts,
   updateMemberParts,
   updateMemberProfile,
-  updateMemberRole,
+  updateMemberRoles,
 } from '../../server/members'
 
 type Data = Awaited<ReturnType<typeof listMembers>>
 type Member = Data['members'][number]
+
+/**
+ * Rollevelgeren (#48). Avkryssing, ikke nedtrekk: et medlem kan ha flere verv
+ * samtidig, og valget skal vise HVA hvert kryss gir — ikke bare et navn.
+ * Delt av «Roller…»-modalen og invitasjonsskjemaet, så de to aldri kan komme i
+ * utakt om hva som er lov å velge.
+ */
+function RolePicker({
+  allRoles,
+  selected,
+  onToggle,
+}: {
+  allRoles: RoleSummary[]
+  selected: Set<string>
+  onToggle: (roleId: string) => void
+}) {
+  return (
+    <div className="divide-y divide-[var(--line)] rounded-xl border border-line">
+      {allRoles.map((role) => (
+        <label key={role.id} className="flex cursor-pointer items-start gap-3 px-3 py-3 hover:bg-paper-sunken">
+          <input
+            type="checkbox"
+            checked={selected.has(role.id)}
+            onChange={() => onToggle(role.id)}
+            className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-[var(--brass)]"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-ink">{role.name}</span>
+              {role.isSystem && <Stamp tone="brass">systemrolle</Stamp>}
+            </span>
+            <span className="mt-1 block">
+              <RolePermissionList role={role} />
+            </span>
+          </span>
+        </label>
+      ))}
+    </div>
+  )
+}
 
 export const Route = createFileRoute('/medlemmer/')({
   beforeLoad: ({ context }) => {
@@ -40,6 +82,7 @@ function MembersPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [leaderFor, setLeaderFor] = useState<Member | null>(null)
   const [editFor, setEditFor] = useState<Member | null>(null)
+  const [rolesFor, setRolesFor] = useState<Member | null>(null)
 
   // Stemmer denne brukeren kan tildele: alle (admin) eller eget omfang (leder).
   const partOptions =
@@ -64,19 +107,6 @@ function MembersPage() {
     try {
       await updateMemberParts({ data: { userId, partIds: partId ? [partId] : [] } })
       toast('Stemme oppdatert')
-      await router.invalidate()
-    } catch (err) {
-      toastError(err)
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  const setRole = async (userId: string, roleId: string) => {
-    setBusyId(userId)
-    try {
-      await updateMemberRole({ data: { userId, roleId } })
-      toast('Rolle oppdatert')
       await router.invalidate()
     } catch (err) {
       toastError(err)
@@ -124,7 +154,7 @@ function MembersPage() {
                     <span className="block truncate font-mono text-[0.64rem] text-ink-faint">{inv.email}</span>
                   )}
                   <span className="block font-mono text-[0.64rem] uppercase tracking-[0.1em] text-ink-faint">
-                    {inv.roleName}
+                    {roleLabel(inv.roleNames)}
                     {inv.partNames.length > 0 ? ` · ${inv.partNames.join(' · ')}` : ''}
                   </span>
                 </span>
@@ -204,25 +234,24 @@ function MembersPage() {
                         </span>
                       )}
 
-                      {data.canManage ? (
-                        <select
-                          className="field-input min-w-0 flex-1 !py-2 !text-base sm:!w-auto sm:!flex-none sm:!py-1.5 sm:!text-xs"
-                          value={m.roleId}
-                          disabled={busyId === m.id}
-                          onChange={(e) => setRole(m.id, e.target.value)}
-                        >
-                          {data.allRoles.map((r) => (
-                            <option key={r.id} value={r.id}>
-                              {r.name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <Stamp tone={m.roleId === 'member' ? 'neutral' : 'brass'}>{m.roleName}</Stamp>
-                      )}
+                      {/*
+                        Rollene er et sett, ikke ett valg (#48). En <select> kan
+                        vise ett; stemplene viser alle, og «Roller…» åpner
+                        avkryssingen der man også ser hva hvert valg gir.
+                      */}
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <RoleStamps roles={m.roles} />
+                      </span>
 
                       {data.canManage && (
                         <>
+                          <button
+                            onClick={() => setRolesFor(m)}
+                            disabled={busyId === m.id}
+                            className="inline-flex min-h-[44px] shrink-0 cursor-pointer items-center rounded-lg px-2.5 py-1.5 font-mono text-[0.6rem] uppercase tracking-wide text-ink-faint transition-colors hover:bg-paper-sunken hover:text-brass-strong"
+                          >
+                            Roller…
+                          </button>
                           <button
                             onClick={() => setEditFor(m)}
                             className="inline-flex min-h-[44px] shrink-0 cursor-pointer items-center rounded-lg px-2.5 py-1.5 font-mono text-[0.6rem] uppercase tracking-wide text-ink-faint transition-colors hover:bg-paper-sunken hover:text-brass-strong"
@@ -252,6 +281,20 @@ function MembersPage() {
           allParts={data.allParts}
           allRoles={data.allRoles}
           onInvited={() => router.invalidate()}
+        />
+      )}
+
+      {data.canManage && rolesFor && (
+        <RolesModal
+          key={rolesFor.id}
+          member={rolesFor}
+          allRoles={data.allRoles}
+          isMe={rolesFor.id === data.meId}
+          onClose={() => setRolesFor(null)}
+          onSaved={() => {
+            setRolesFor(null)
+            router.invalidate()
+          }}
         />
       )}
 
@@ -372,6 +415,94 @@ function AdminProfileModal({
   )
 }
 
+/**
+ * Rollene til ett medlem (#48). Full overskriving: det som står haket av når du
+ * lagrer, ER rollene etterpå.
+ *
+ * «Samlet tilgang» oppdateres mens du huker av, slik at spørsmålet «hva får
+ * denne personen egentlig?» besvares FØR lagring — ikke etterpå, ved å lete i
+ * rollematrisen.
+ */
+function RolesModal({
+  member,
+  allRoles,
+  isMe,
+  onClose,
+  onSaved,
+}: {
+  member: Member
+  allRoles: Data['allRoles']
+  isMe: boolean
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set(member.roleIds))
+  const [saving, setSaving] = useState(false)
+
+  const toggle = (id: string) =>
+    setSelected((s) => {
+      const next = new Set(s)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const chosen = allRoles.filter((r) => selected.has(r.id))
+
+  const submit = async () => {
+    setSaving(true)
+    try {
+      await updateMemberRoles({ data: { userId: member.id, roleIds: [...selected] } })
+      toast('Roller oppdatert')
+      onSaved()
+    } catch (err) {
+      toastError(err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Roller" kicker={member.name} mobileFull>
+      <div className="space-y-4">
+        <p className="text-sm leading-relaxed text-ink-soft">
+          Et medlem kan ha flere roller samtidig — en musiker som også sitter i styret beholder musikertilgangen og får
+          styrets på toppen. Tilgangene blir summen av alle rollene.
+        </p>
+        {isMe ? (
+          // Serveren avviser dette uansett; her sier vi hvorfor, i stedet for å
+          // la administratoren finne det ut med en feilmelding etter lagring.
+          <p className="rounded-xl border border-dashed border-line px-4 py-3 text-xs leading-relaxed text-ink-soft">
+            Du kan ikke endre dine egne roller. Be en annen administrator om det — ellers kunne man låst seg selv ute,
+            eller gitt seg selv mer.
+          </p>
+        ) : (
+          <RolePicker allRoles={allRoles} selected={selected} onToggle={toggle} />
+        )}
+        <AccessSummary roles={chosen} />
+        <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+          <Button type="button" variant="ghost" onClick={onClose} className="min-h-[44px] w-full sm:w-auto">
+            Avbryt
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            loading={saving}
+            disabled={isMe || selected.size === 0}
+            onClick={submit}
+            className="min-h-[44px] w-full sm:w-auto"
+          >
+            Lagre
+          </Button>
+        </div>
+        <p className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-faint">
+          Rolleendringer loggføres, og medlemmet må logge inn på nytt.
+        </p>
+      </div>
+    </Modal>
+  )
+}
+
 function LeaderModal({
   member,
   allParts,
@@ -448,7 +579,7 @@ function LeaderModal({
 type InviteReceipt = {
   email: string
   name: string | null
-  roleName: string
+  roleNames: string[]
   partNames: string[]
   delivery: InviteDelivery
 }
@@ -468,7 +599,9 @@ function InviteModal({
 }) {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
-  const [roleId, setRoleId] = useState('member')
+  // «Musiker» er startpunktet, ikke det eneste valget (#48): en ny styreleder
+  // som også spiller inviteres med begge rollene med én gang.
+  const [roleIds, setRoleIds] = useState<Set<string>>(new Set(['member']))
   // Rekkefølgen bærer hovedstemmen: index 0 er primær, som i `user_parts`.
   const [partIds, setPartIds] = useState<string[]>([])
   const [sendInvite, setSendInvite] = useState(true)
@@ -503,7 +636,7 @@ function InviteModal({
   const clearForm = () => {
     setEmail('')
     setName('')
-    setRoleId('member')
+    setRoleIds(new Set(['member']))
     setPartIds([])
     setReceipt(null)
   }
@@ -519,7 +652,7 @@ function InviteModal({
     const parsed = invitePayloadSchema.safeParse({
       email,
       name,
-      roleId,
+      roleIds: [...roleIds],
       partIds,
       primaryPartId: partIds[0],
       sendEmail: sendInvite,
@@ -536,7 +669,7 @@ function InviteModal({
       setReceipt({
         email: parsed.data.email,
         name: parsed.data.name ?? null,
-        roleName: allRoles.find((r) => r.id === roleId)?.name ?? roleId,
+        roleNames: allRoles.filter((r) => roleIds.has(r.id)).map((r) => r.name),
         partNames: parsed.data.partIds.map((id) => partById.get(id)?.nameNo ?? id),
         delivery: res.delivery,
       })
@@ -572,11 +705,11 @@ function InviteModal({
             <p className="truncate text-sm font-semibold text-ink">{receipt.name ?? receipt.email}</p>
             {receipt.name && <p className="truncate font-mono text-[0.64rem] text-ink-faint">{receipt.email}</p>}
             <p className="mt-1.5 font-mono text-[0.64rem] uppercase tracking-[0.1em] text-ink-faint">
-              {receipt.roleName}
+              {roleLabel(receipt.roleNames)}
               {receipt.partNames.length > 0 ? ` · ${receipt.partNames.join(' · ')}` : ' · ingen stemme'}
             </p>
             <p className="mt-2 text-xs leading-relaxed text-ink-soft">
-              Navn, rolle og stemmer settes på kontoen ved første innlogging. Medlemmet kan selv oppdatere navn og
+              Navn, roller og stemmer settes på kontoen ved første innlogging. Medlemmet kan selv oppdatere navn og
               telefon under «Min profil».
             </p>
           </div>
@@ -623,19 +756,30 @@ function InviteModal({
             enterKeyHint="next"
           />
         </Field>
-        <Field label="Rolle" hint="Bestemmer tilgangene. Kan endres senere i medlemslista.">
-          <select
-            className="field-input min-h-[44px]"
-            value={roleId}
-            onChange={(e) => setRoleId(e.target.value)}
-          >
-            {allRoles.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <div>
+          <div className="mb-1.5 flex items-baseline justify-between gap-2">
+            <span className="text-[0.8rem] font-medium text-ink-soft">Roller *</span>
+            <span className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-faint">
+              velg én eller flere
+            </span>
+          </div>
+          <RolePicker
+            allRoles={allRoles}
+            selected={roleIds}
+            onToggle={(id) =>
+              setRoleIds((s) => {
+                const next = new Set(s)
+                if (next.has(id)) next.delete(id)
+                else next.add(id)
+                return next
+              })
+            }
+          />
+          <div className="mt-2">
+            <AccessSummary roles={allRoles.filter((r) => roleIds.has(r.id))} />
+          </div>
+          <span className="mt-1 block text-xs text-ink-faint">Kan endres senere i medlemslista.</span>
+        </div>
 
         <div>
           <div className="mb-1.5 flex items-baseline justify-between gap-2">

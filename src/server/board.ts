@@ -14,7 +14,6 @@ import {
   boardTasks,
   memberProfiles,
   projects,
-  rolePermissions,
   user,
 } from '../db/schema'
 import {
@@ -47,7 +46,8 @@ import {
   parseMentions,
   rankMentionCandidates,
 } from '../lib/mentions'
-import { type Me, requirePermission } from './access'
+import { permissionsInclude } from '../lib/permissions'
+import { type Me, memberPermissionsByUser, requirePermission } from './access'
 import { deleteBoardObject } from './board-files'
 import { notifyTaskAssigned } from './board-notify'
 
@@ -238,30 +238,29 @@ export const getTask = createServerFn()
  * en oppgave kan legges på dirigenten eller arkivaren når det er dem det gjelder.
  */
 async function listAssignableMembers(): Promise<Array<{ id: string; name: string; isBoard: boolean }>> {
-  const rows = await db()
-    .select({
-      id: user.id,
-      name: user.name,
-      roleId: memberProfiles.roleId,
-      isActive: memberProfiles.isActive,
-    })
-    .from(memberProfiles)
-    .innerJoin(user, eq(memberProfiles.authUserId, user.id))
-
-  // Hvilke roller som faktisk har styretilgang leses fra rollematrisen, ikke
-  // hardkodet — en egendefinert rolle med `board.manage` skal også telle.
-  const boardRoles = new Set(
-    (
-      await db()
-        .select({ roleId: rolePermissions.roleId })
-        .from(rolePermissions)
-        .where(or(eq(rolePermissions.permission, BOARD_PERMISSION), eq(rolePermissions.permission, '*')))
-    ).map((r) => r.roleId),
-  )
+  // Hvem som faktisk har styretilgang leses fra rollematrisen, ikke hardkodet —
+  // en egendefinert rolle med `board.manage` skal også telle, og siden #48 er
+  // svaret unionen over ALLE rollene medlemmet har.
+  const [rows, permissionsByUser] = await Promise.all([
+    db()
+      .select({
+        id: user.id,
+        name: user.name,
+        authUserId: memberProfiles.authUserId,
+        isActive: memberProfiles.isActive,
+      })
+      .from(memberProfiles)
+      .innerJoin(user, eq(memberProfiles.authUserId, user.id)),
+    memberPermissionsByUser(),
+  ])
 
   return rows
     .filter((r) => r.isActive)
-    .map((r) => ({ id: r.id, name: r.name, isBoard: boardRoles.has(r.roleId) }))
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      isBoard: permissionsInclude(permissionsByUser.get(r.authUserId) ?? [], BOARD_PERMISSION),
+    }))
     .sort((a, b) => Number(b.isBoard) - Number(a.isBoard) || a.name.localeCompare(b.name, 'nb'))
 }
 
@@ -1148,24 +1147,20 @@ const MENTION_DENIED = 'Du kan bare omtale aktive medlemmer som har tilgang til 
  */
 async function mentionableMembers(): Promise<MentionUser[]> {
   const d = db()
-  const [memberRows, permRows] = await Promise.all([
+  const [memberRows, permissionsByUser] = await Promise.all([
     d
       .select({
         userId: memberProfiles.authUserId,
         name: user.name,
-        roleId: memberProfiles.roleId,
         isActive: memberProfiles.isActive,
       })
       .from(memberProfiles)
       .innerJoin(user, eq(memberProfiles.authUserId, user.id))
       .orderBy(asc(user.name)),
-    d.select({ roleId: rolePermissions.roleId, permission: rolePermissions.permission }).from(rolePermissions),
+    memberPermissionsByUser(),
   ])
-  const boardRoles = new Set(
-    permRows.filter((p) => p.permission === '*' || p.permission === BOARD_PERMISSION).map((p) => p.roleId),
-  )
   return memberRows
-    .filter((m) => m.isActive && boardRoles.has(m.roleId))
+    .filter((m) => m.isActive && permissionsInclude(permissionsByUser.get(m.userId) ?? [], BOARD_PERMISSION))
     .map((m) => ({ id: m.userId, name: m.name }))
 }
 

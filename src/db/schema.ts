@@ -31,12 +31,23 @@ export const rolePermissions = sqliteTable(
   (t) => [primaryKey({ columns: [t.roleId, t.permission] })],
 )
 
-// Domeneprofil knyttet 1:1 til en better-auth-bruker. Holder RBAC (rolle +
-// aktiv-status) adskilt fra autentiseringen. Navn/e-post bor på better-auth user.
+// Domeneprofil knyttet 1:1 til en better-auth-bruker. Holder RBAC (aktiv-status)
+// adskilt fra autentiseringen. Navn/e-post bor på better-auth user.
 export const memberProfiles = sqliteTable('member_profiles', {
   authUserId: text('auth_user_id')
     .primaryKey()
     .references(() => user.id, { onDelete: 'cascade' }),
+  /**
+   * DEPRECATED (#48) — les ALDRI rollen herfra. Sannheten er `member_roles`.
+   *
+   * Kolonnen står igjen fordi migrasjoner her er rent additive: den er NOT NULL
+   * uten standardverdi, så den kan ikke droppes uten en tabell-rebuild, og en
+   * rebuild i D1 cascader til barnetabellene inne i transaksjonen (se AGENTS.md).
+   * Skrivestien holder den i takt med hovedrollen (`primaryRoleId` i
+   * `src/lib/roles.ts`) slik at raden aldri blir usann, og `currentUser()` faller
+   * tilbake på den for et medlem som mangler koblingsrader — nettopp for
+   * vinduet mellom migrasjon og deploy, der gammel kode fortsatt bare skrev hit.
+   */
   roleId: text('role_id')
     .notNull()
     .references(() => roles.id),
@@ -45,12 +56,35 @@ export const memberProfiles = sqliteTable('member_profiles', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 })
 
+/**
+ * Rollene et medlem faktisk har (#48). Et medlem kan ha flere verv samtidig —
+ * «Musiker» + «Styremedlem» — og tilgangene er UNIONEN av rettighetene til alle
+ * rollene. Ingen rolle kan trekke fra; roller er rent additive.
+ *
+ * `role_id` har bevisst INGEN `ON DELETE`: en slettet rolle skal ikke kunne ta
+ * med seg medlemmenes tilganger i stillhet. `deleteRole` teller radene her og
+ * nekter mens rollen er i bruk, slik den alltid har gjort for `member_profiles`.
+ */
+export const memberRoles = sqliteTable(
+  'member_roles',
+  {
+    authUserId: text('auth_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    roleId: text('role_id')
+      .notNull()
+      .references(() => roles.id),
+  },
+  (t) => [primaryKey({ columns: [t.authUserId, t.roleId] }), index('member_roles_role_idx').on(t.roleId)],
+)
+
 // Invitasjoner: admin forhåndsoppretter tillatt e-post + rolle + stemmer.
 // create-hooken i better-auth slipper kun gjennom e-poster som finnes her
 // (eller ADMIN_EMAIL-bootstrap). E-post lagres alltid med små bokstaver.
 export const invitations = sqliteTable('invitations', {
   email: text('email').primaryKey(),
   name: text('name'), // valgfritt fullt navn — settes på brukeren ved første innlogging
+  /** DEPRECATED (#48), som `member_profiles.role_id`: sannheten er `invitation_roles`. */
   roleId: text('role_id')
     .notNull()
     .references(() => roles.id),
@@ -59,6 +93,28 @@ export const invitations = sqliteTable('invitations', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   acceptedAt: integer('accepted_at', { mode: 'timestamp_ms' }),
 })
+
+/**
+ * Rollene en invitasjon gir (#48) — samme flere-roller-modell som `member_roles`,
+ * slik at «Musiker + Styremedlem» kan settes ved invitasjon og ikke må rettes
+ * opp manuelt etter første innlogging. Radene kopieres til `member_roles` av
+ * create-hooken i `src/server/auth-instance.ts`.
+ *
+ * `email` cascader fra invitasjonen (en tilbaketrukket invitasjon tar rollene
+ * med seg); `role_id` gjør det ikke, av samme grunn som i `member_roles`.
+ */
+export const invitationRoles = sqliteTable(
+  'invitation_roles',
+  {
+    email: text('email')
+      .notNull()
+      .references(() => invitations.email, { onDelete: 'cascade' }),
+    roleId: text('role_id')
+      .notNull()
+      .references(() => roles.id),
+  },
+  (t) => [primaryKey({ columns: [t.email, t.roleId] })],
+)
 
 // ---------- Besetning / stemmer ----------
 
