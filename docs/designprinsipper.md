@@ -63,6 +63,7 @@ lesing er åpnere; håndhevelsen ligger alltid i `src/server/*.ts`, aldri bare i
 | **Medlemmer** | `src/routes/medlemmer/index.tsx` | Admin (seksjonsleder i redusert form) | Invitere et medlem og sette rolle + stemme | Lesing: `requireMe()`; skriving: `members.manage` / `members.manage.section` |
 | **Gruppeledere** | `src/routes/gruppeledere/{route,index}.tsx`, `gruppeledere/chat/index.tsx` | Gruppelederen | Åpne kanalen og koordinere med de andre gruppelederne | `members.manage.section` **pluss** minst én aktiv `section_leaders`-rad (`isGroupLeader` i `src/lib/gruppeledere.ts`) — også for **lesing**. En admin uten leiarbinding kommer ikke inn |
 | **Styre** | `src/routes/styre/{index,$taskId}.tsx`, `styre/prosjekter/*`, `styre/moter/*`, `styre/chat/index.tsx`, `styre/dokumenter/index.tsx` | Styremedlemmet | Se åpne oppgaver og hake av / opprette en ny | `board.manage` — også for **lesing**; hele området er usynlig ellers. Dokumentbytene gates i `src/routes/api/board-files/$documentId.ts` |
+| **Utstyr** | `src/routes/utstyr/index.tsx`, `utstyr/$assetId.tsx` | Materialforvalteren | Registrere en gjenstand med bilde, eier og lånestatus | Lesing: `requireMe()` — hele korpset ser registeret. Skriving: `assets.manage`. Bildebytene gates i `src/routes/api/utstyr-images/$imageId.ts` |
 | **Innstillinger** | `src/routes/innstillinger/index.tsx` | Admin | Forvalte besetning og rollematrisen | `settings.manage` |
 | **Filtilganger** | `src/routes/innstillinger/nedlastinger.tsx` | Admin / arkivar | Svare på «hvem har hatt denne fila?» | `downloads.view` |
 | **Vikarvisning** | `src/routes/v/$token.tsx` | Vikaren, uten konto | Åpne de stemmene hen har fått, nå | Token + `shareAllows()` mot snapshottet løvliste |
@@ -176,7 +177,7 @@ den bygges — også de som allerede har en anbefaling her.
 | **#28 Kunngjøringer** → **bygget som «Beskjeder»/veggen** (31. august 2026) | Delt: lesing som blokk på Hjem, skriving i eget navnerom | Opprinnelig: styre/dirigent → publisere; medlem → se den. **Utvidet samme dag:** medlemmet → se hva som er nytt, og selv legge ut noe | Bygget slik anbefalingen sa — de tre siste ligger øverst på hub-en, resten i `/beskjeder` — men med ett bevisst brudd på premisset: skriving er ikke lenger reservert for styret. Skal veggen erstatte Facebook-gruppen, må den tåle et notestativ som er kommet bort, ikke bare vedtak. `posts.publish` gjelder derfor de fire tingene som gjør et innlegg til en *beskjed fra styret* («Fra styret», «Viktig», styre-målgruppen, e-post) pluss moderasjon. «Lest-status» ble bevisst ikke bygget: kommentarer og likes viser at noen har sett den, uten å overvåke medlemmene. |
 | **#24 Oppmøte** → **bygget sammen med #82** (2. september 2026) | Inne i Kalender-området, på detaljruta for én forekomst | Medlem → svare kommer / kommer ikke / usikker | Bygget slik anbefalingen sa — RSVP uten aktivitet er meningsløst — men aktiviteten ble kalenderforekomsten (`/kalender/$eventId`), ikke prosjektet: øvelser er der fraværet faktisk føres, og de finnes bare i kalenderen. RSVP og administrert fravær deler ÉN rad (`event_attendance`), som #82 krevde, slik at det aldri finnes to statuser for samme medlem og hendelse. «Mine datoer» er dekket av kalenderen + eget svar; ingen egen skjerm. |
 | **#26 Kalender/aktiviteter** | Eget område (`/aktiviteter`) | Alle medlemmer → se hva som skjer, og «Mine datoer» | Sterkeste kandidat til ny toppnivå-oppføring: primærbruker er *hele* korpset, ikke stab. Det er også den som først presser navigasjonen (§6). |
-| **#13 Utstyr** | Eget område (`/utstyr`) | Materialforvalter → registrere en gjenstand med bilde, eier og lånestatus | Skal ikke under Innstillinger selv om det føles administrativt. Egen rettighet; lesing kan være åpen for medlemmer. Kobles til medlem ved privat eier og til prosjekt ved bruk — krysslenker, ikke felles side. |
+| **#13 Utstyr** → **bygget** (2. september 2026) | Eget område (`/utstyr`) | Materialforvalter → registrere en gjenstand med bilde, eier og lånestatus | Bygget slik anbefalingen sa: eget navnerom, egen rettighet (`assets.manage`) for skriving, lesing åpen for alle medlemmer, kobling til medlem ved privat eier og til prosjekt ved bruk (`asset_projects`) — krysslenker, ikke felles side. Ett avvik fra premisset: området fikk **ingen** toppnivå-oppføring, se boksen i §6. Riggelister (#12) ble bevisst holdt utenfor; datamodellen tåler at de senere refererer `assets.id`. |
 
 ## 6. Ærlige begrensninger: taket i toppnavigasjonen
 
@@ -281,6 +282,19 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 > andre gang. Neste område med toppnivå-ambisjoner skal ikke bare fortrenge noe —
 > det bør ta (b) opp til reell vurdering, med demotering av Filtilganger og
 > Innstillinger til brukermenyen som det billigste alternativet.
+
+> **Fulgt opp 2. september 2026 (Utstyr, #13):** dette er det første området som
+> tar konsekvensen av terskelen over i stedet for å flytte den. Utstyr er lesbart
+> for HELE korpset, så en toppnivå-oppføring ville gitt et vanlig medlem **seks**
+> punkter og en gruppeleder eller et styremedlem **sju** — altså scrollende
+> mobilstripe for to store grupper, ikke bare for dem med to verv. Området fikk
+> derfor ingen oppføring i `Shell.tsx` i det hele tatt. Veien inn er kortet i
+> «Områder» på hub-en (`areasFor`, blant grunnområdene siden lesing er åpen), på
+> samme måte som Filtilganger fikk det 31. august 2026.
+>
+> Det er fortsatt en utsettelse, ikke en løsning: hub-kortet skalerer like dårlig
+> som toppmenyen når det femte området må dit. Launcher-spørsmålet **(b)** står
+> dermed ubesvart for tredje gang, og bør avgjøres før neste område — ikke etter.
 
 ## 7. Hva som ikke er avgjort
 

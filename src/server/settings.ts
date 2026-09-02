@@ -28,6 +28,11 @@ export const PERMISSION_CATALOG: Array<{ key: string; label: string; hint: strin
     hint: 'Se hele oppmøtelista og registrere fravær for et medlem',
   },
   { key: 'posts.publish', label: 'Beskjeder', hint: 'Skrive og publisere beskjeder til korpset' },
+  {
+    key: 'assets.manage',
+    label: 'Utstyr',
+    hint: 'Registrere og endre utstyr, bilder, eierskap og lån. Alle medlemmer kan se registeret',
+  },
   { key: SETTINGS_PERMISSION, label: 'Innstillinger', hint: 'Administrere besetning og roller' },
 ]
 

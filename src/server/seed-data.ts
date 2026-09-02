@@ -60,6 +60,10 @@ export const SEED_ROLE_PERMISSIONS: Array<{ roleId: string; permission: string }
   { roleId: 'board', permission: 'scores.view' },
   { roleId: 'board', permission: 'board.manage' },
   { roleId: 'board', permission: 'posts.publish' },
+  // Utstyrsregisteret (#13). Materialforvalteren sitter som regel i styret, og
+  // rettigheten er egen nettopp for at hen kan få den uten resten av
+  // styretilgangen. Administrator har `*` og trenger ingen rad.
+  { roleId: 'board', permission: 'assets.manage' },
   { roleId: 'member', permission: 'scores.view' },
 ]
 
