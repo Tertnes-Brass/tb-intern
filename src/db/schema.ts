@@ -768,6 +768,111 @@ export const notificationLog = sqliteTable(
   (t) => [primaryKey({ columns: [t.postId, t.userId] })],
 )
 
+// ---------- Utstyr (#13) ----------
+
+// Utstyrsregisteret: én rad per fysisk gjenstand korpset forholder seg til —
+// slagverksinstrument, transportkasse, notestativ, lydutstyr. Saken ba
+// uttrykkelig om å slippe klistremerker og QR-koder (merking kan påvirke klang
+// på et slagverksinstrument), så identiteten er *bildet pluss opplysningene*:
+// navn, produsent, modell og serienummer. Ingen kode limes på noe.
+//
+// Alle aktive medlemmer kan LESE registeret — «kven eiger denne?» er et
+// spørsmål alle stiller. Skriving krever `assets.manage` og håndheves i
+// src/server/utstyr.ts, aldri i UI-et.
+export const assets = sqliteTable(
+  'assets',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    // Fritekst med en foreslått taksonomi i src/lib/utstyr.ts
+    // (ASSET_CATEGORIES). Bevisst IKKE en enum i skjemaet: en ny kategori skal
+    // ikke kreve en migrasjon, og en enum kan ikke utvides i SQLite uten
+    // tabell-rebuild (se AGENTS.md om D1).
+    category: text('category'),
+    manufacturer: text('manufacturer'),
+    model: text('model'),
+    serialNumber: text('serial_number'),
+    // Hvem som eier gjenstanden. `band` og `trommelaget` er organisasjoner uten
+    // rad noe sted; `member` peker på et medlem, `external` er en privatperson
+    // eller organisasjon utenfor korpset og har bare et navn.
+    ownerKind: text('owner_kind', { enum: ['band', 'trommelaget', 'member', 'external'] })
+      .notNull()
+      .default('band'),
+    // Kun ved `ownerKind = 'member'`. SET NULL: slutter eieren i korpset, skal
+    // gjenstanden bli stående i registeret — `ownerName` beholder navnet, slik
+    // at raden ikke plutselig ser ut til å være korpsets egen.
+    ownerUserId: text('owner_user_id').references(() => user.id, { onDelete: 'set null' }),
+    // Navnet på en eier som ikke er (eller ikke lenger er) et medlem.
+    ownerName: text('owner_name'),
+    // Lån INN: hvem gjenstanden er lånt av. Fravær av navn = ikke lånt. Det er
+    // med vilje ikke et eget boolsk felt — to kilder til «er den lånt?» ville
+    // før eller siden gitt to svar. Reglene bor i `loanStatus` i
+    // src/lib/utstyr.ts.
+    loanedFrom: text('loaned_from'),
+    loanFrom: text('loan_from'), // ISO-dato, valgfri
+    loanUntil: text('loan_until'), // ISO-dato, valgfri
+    notes: text('notes'),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('assets_name_idx').on(t.name), index('assets_category_idx').on(t.category)],
+)
+
+// Bilder av en gjenstand, i R2 under prefikset `utstyr/`. Samme modell som
+// veggbildene (`post_images`): nøkkelen bygges ALLTID av en fersk id, aldri av
+// filnavnet, og bytene nås kun gjennom den gatede ruta
+// /api/utstyr-images/$imageId — aldri via note-gaten i /api/files/$fileId.
+export const assetImages = sqliteTable(
+  'asset_images',
+  {
+    id: text('id').primaryKey(),
+    assetId: text('asset_id')
+      .notNull()
+      .references(() => assets.id, { onDelete: 'cascade' }),
+    r2Key: text('r2_key').notNull(),
+    fileName: text('file_name').notNull(),
+    size: integer('size').notNull().default(0),
+    contentType: text('content_type').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    uploadedBy: text('uploaded_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('asset_images_asset_idx').on(t.assetId, t.sortOrder)],
+)
+
+// Kobling utstyr ↔ prosjekt: «skal brukes til» (`planned`) og «brukt på»
+// (`used`). Egen koblingstabell og ikke en kolonne på `assets`, fordi
+// spørsmålet går begge veier: en gjenstand har en historikk, og et prosjekt har
+// en liste. Riggelistene (#12) kommer senere og skal kunne referere `assets.id`
+// direkte — de trenger ingen endring her.
+//
+// PK er (asset_id, project_id): én gjenstand har ÉN relasjon til ett prosjekt om
+// gangen, og `usage` flyttes fra `planned` til `used` når konserten er spilt.
+// «Sist brukt på» leses av prosjektets `event_date`, ikke av en egen datokolonne
+// — da kan de to aldri komme i utakt.
+export const assetProjects = sqliteTable(
+  'asset_projects',
+  {
+    assetId: text('asset_id')
+      .notNull()
+      .references(() => assets.id, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    usage: text('usage', { enum: ['planned', 'used'] })
+      .notNull()
+      .default('planned'),
+    note: text('note'),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.assetId, t.projectId] }),
+    index('asset_projects_project_idx').on(t.projectId),
+  ],
+)
+
 // ---------- Øvingsplan og oppmøte (#82 + #24) ----------
 
 // Lokale data på ÉN forekomst av en Google-kalenderhendelse. `occurrence_key`

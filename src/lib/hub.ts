@@ -103,6 +103,7 @@ export type HubAreaTo =
   | '/noter'
   | '/kalender'
   | '/medlemmer'
+  | '/utstyr'
   | '/gruppeledere'
   | '/styre'
   | '/innstillinger/nedlastinger'
@@ -126,6 +127,17 @@ const BASE_AREAS: HubArea[] = [
   { to: '/noter', label: 'Noter', description: 'Åpne stemmene dine, se programmet og bla i arkivet.' },
   { to: '/kalender', label: 'Kalender', description: 'Øvelser, konserter og oppmøtetider fremover.' },
   { to: '/medlemmer', label: 'Medlemmer', description: 'Se hvem som spiller hvilken stemme.' },
+  // Utstyr (#13) er åpent for lesing, som Beskjeder og Medlemmer, og står
+  // derfor blant grunnområdene. Det har BEVISST ingen oppføring i toppmenyen:
+  // §6 i docs/designprinsipper.md er allerede på taket, og et sjette punkt for
+  // et vanlig medlem ville skjøvet noe bak fade-gradienten på mobil uten at
+  // noen merket det. Samme løsning som Filtilganger fikk 31. august 2026 —
+  // eget område, egen oversikt, egen gate, men vei inn herfra.
+  {
+    to: '/utstyr',
+    label: 'Utstyr',
+    description: 'Instrumenter og utstyr: hvem eier hva, og hva er lånt inn.',
+  },
 ]
 
 function allows(permissions: string[], permission: string): boolean {

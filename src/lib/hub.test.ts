@@ -74,13 +74,20 @@ describe('eventsAfter', () => {
 })
 
 describe('areasFor', () => {
-  it('gir et vanlig medlem de fire åpne områdene', () => {
+  it('gir et vanlig medlem de fem åpne områdene', () => {
     expect(areasFor(['scores.view']).map((a) => a.to)).toEqual([
       '/beskjeder',
       '/noter',
       '/kalender',
       '/medlemmer',
+      '/utstyr',
     ])
+  })
+
+  // Utstyr (#13) er lesbart for alle og har ingen oppføring i toppmenyen (§6):
+  // kortet her er hovedveien inn, som for Filtilganger.
+  it('gir Utstyr også uten assets.manage — lesing er åpen', () => {
+    expect(areasFor([]).map((a) => a.to)).toContain('/utstyr')
   })
 
   it('legger til Styre ved board.manage', () => {
@@ -106,6 +113,7 @@ describe('areasFor', () => {
       '/noter',
       '/kalender',
       '/medlemmer',
+      '/utstyr',
       '/styre',
       '/innstillinger/nedlastinger',
       '/innstillinger',
@@ -143,6 +151,7 @@ describe('areasFor', () => {
       '/noter',
       '/kalender',
       '/medlemmer',
+      '/utstyr',
       '/gruppeledere',
       '/styre',
       '/innstillinger/nedlastinger',
@@ -156,6 +165,12 @@ describe('areasFor', () => {
 
   it('muterer ikke grunnlista mellom kall', () => {
     areasFor(['*'])
-    expect(areasFor([]).map((a) => a.to)).toEqual(['/beskjeder', '/noter', '/kalender', '/medlemmer'])
+    expect(areasFor([]).map((a) => a.to)).toEqual([
+      '/beskjeder',
+      '/noter',
+      '/kalender',
+      '/medlemmer',
+      '/utstyr',
+    ])
   })
 })

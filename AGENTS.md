@@ -82,6 +82,50 @@ Den skal ikke gjengi områdenes oversikter i miniatyr — se
   (`taskAssignedEmail` ved delegering, `overdueTasksEmail` ved forfalt frist);
   begge har levende eksport som rører `cloudflare:workers` og importeres aldri
   fra en rutekomponent.
+- **Utstyr (#13):** `/utstyr` er utstyrsregisteret — hvem eier hva, hva er lånt
+  inn, og hvilket prosjekt skal det brukes til. Tabellene er `assets` /
+  `asset_images` / `asset_projects` (migrasjon `0016_utstyrsregister.sql`, kun
+  CREATE TABLE + CREATE INDEX + rettighetsseeding). Serverfunksjonene bor i
+  `src/server/utstyr.ts`, R2-laget og bildegaten i `src/server/utstyr-images.ts`
+  (levende eksporter, importeres aldri fra en rutekomponent — post-images.ts-mønsteret),
+  de rene reglene i `src/lib/utstyr.ts` med tester. Fire ting er ikke til forhandling:
+  - **Tilgangsmodellen er skjev med vilje.** Lesing krever bare `requireMe()`:
+    «kven eiger denne skarptromma?» er et spørsmål alle stiller, og et register
+    bare materialforvalteren ser er et regneark med ekstra steg. ALL skriving
+    krever `assets.manage`. Eierskap i registeret er en OPPLYSNING om en fysisk
+    gjenstand, ikke en rettighet — den som eier pauken sin privat får ikke
+    skriverett av den grunn, og det finnes derfor ingen «egen» gjenstand slik
+    det finnes et eget innlegg på veggen.
+  - **Ingen klistremerker eller QR-koder.** Saken ba uttrykkelig om det: merking
+    kan påvirke klangen på et slagverksinstrument. Identiteten er bildet pluss
+    opplysningene. Bildene ligger i `FILES` under prefikset `utstyr/`, lastes opp
+    med én PUT mot `/api/utstyr-images/upload` og kan KUN hentes gjennom den
+    gatede `/api/utstyr-images/$imageId` — aldri via note-gaten i
+    `api/files/$fileId`, og aldri med note-arkivets multipart-flyt. Nøkkelen
+    bygges alltid av en fersk id og en endelse utledet av innholdstypen, aldri av
+    filnavnet. R2-bytene slettes FØR raden (`deleteAsset`/`deleteAssetImage`);
+    motsatt rekkefølge ville mistet nøkkelen og etterlatt objekter ingen finner.
+  - **`loanedFrom` er den ENE sannheten om «er den lånt?»** Et eget boolsk felt
+    ville før eller siden gitt to svar på samme spørsmål (samme grunn som at
+    `event_attendance` er én tabell). `loanStatus` i `src/lib/utstyr.ts` leser
+    navnet; `sanitizeAssetInput` nekter en låneperiode uten utlåner og nullstiller
+    datoene når utlåneren fjernes. `sanitizeAssetInput` kalles på BÅDE oppretting
+    og redigering, så et rått kall ikke kan legge igjen eierfelt som motsier
+    hverandre (f.eks. et `owner_user_id` som blir stående etter at eierskapet er
+    endret til «Tertnes Brass»).
+  - **`asset_projects` er en koblingstabell, ikke en kolonne.** PK er
+    (asset, prosjekt): en gjenstand har én relasjon til ett prosjekt om gangen, og
+    `usage` flyttes fra `planned` til `used` når konserten er spilt. «Sist brukt
+    på» leses av prosjektets `event_date` (`lastUsedLink`), ikke av en egen
+    datokolonne — de to kan da aldri komme i utakt. Kun PUBLISERTE prosjekter kan
+    kobles, og en kobling til et upublisert prosjekt filtreres bort for lesere
+    uten `projects.manage`/`assets.manage`: en utstyrskobling skal ikke være en
+    bakvei til navnet. **Riggelister (#12) er bevisst ikke bygget** — de kommer
+    som egen sak og kan referere `assets.id` direkte uten å endre modellen.
+  Navigasjon: Utstyr har **ingen oppføring i toppmenyen**. §6 i
+  `docs/designprinsipper.md` er på taket, og et sjette punkt for et vanlig medlem
+  ville forsvunnet bak fade-gradienten på mobil. Området nås fra «Områder» på
+  hub-en (`areasFor` i `src/lib/hub.ts`) — samme løsning som Filtilganger fikk.
 - **Cron og worker-entry:** `wrangler.jsonc` peker `main` på `src/worker.ts` i
   stedet for `@tanstack/react-start/server-entry`, fordi Start sin entry bare
   eksporterer `fetch` og vi trenger en `scheduled`-handler ved siden av.
