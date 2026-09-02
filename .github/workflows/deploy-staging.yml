@@ -1,9 +1,13 @@
-# Deploy til staging (test.tertnesbrass.com) — kjøres manuelt fra Actions-fanen
-# med valgfri gren. Staging har egen D1 og R2; prod røres aldri. Vil du ha
-# ferske prod-data i staging, kjør `pnpm run staging:refresh` lokalt.
+# Deploy til staging (test.tertnesbrass.com). Konvensjonen er enkel:
+# grenen `test` ER staging — push hva som helst dit, så bygges, migreres og
+# deployes det automatisk. `test` er en ren pekepinne uten historikk å bevare;
+# `git push -f origin min-gren:test` er den normale bruken. Staging har egen
+# D1 og R2; prod røres aldri herfra. Ferske prod-data: `pnpm run staging:refresh`.
 name: Deploy staging
 
 "on":
+  push:
+    branches: [test]
   workflow_dispatch:
 
 permissions:

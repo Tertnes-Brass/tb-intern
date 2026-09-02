@@ -339,7 +339,7 @@ til prod. Tre GitHub Actions-workflows og ett staging-miljø bærer flyten:
 |---|---|---|
 | `ci.yml` | hver PR | typesjekk, enhetstester, bygg |
 | `deploy.yml` | push til `main` | test → **D1-backup til R2** → additiv-sjekk av ventende migrasjoner → radtelling → migrer → radtelling igjen (ingen tabell skal krympe) → deploy → curl-verifisering → Discord-varsel |
-| `deploy-staging.yml` | manuelt (Actions-fanen, valgfri gren) | migrerer og deployer staging |
+| `deploy-staging.yml` | push til `test` (eller manuelt fra Actions-fanen) | migrerer og deployer staging |
 | `backup.yml` | hver natt 02:30 UTC | D1-dump til `tb-notearkiv-backup/d1/nightly/` + rclone-speil av filbucketen til `files-mirror/` (slettede filer arkiveres i `files-deleted/<dato>/`) |
 
 Sikkerhetsnettene i `deploy.yml` stopper kjøringen FØR ny kode publiseres, så en
@@ -364,6 +364,13 @@ uten migrasjoner og uten sjekkene over, i kappløp med `deploy.yml`.
 Frakobling: dashbordet → Workers & Pages → tb-notearkiv → Settings → Build.
 
 ### Staging (`test.tertnesbrass.com`)
+
+**Konvensjon: grenen `test` ER staging.** Vil du prøve noe før prod, push
+grenen din dit — så bygges, migreres og deployes den automatisk:
+
+```bash
+git push -f origin min-gren:test   # -f er normalen; test er en pekepinne uten egen historikk
+```
 
 Egen Worker (`tb-notearkiv-staging`, `env.staging` i `wrangler.jsonc`) med egen
 D1-database og R2-bucket — prod-data kan aldri røres derfra. To bevisste avvik
