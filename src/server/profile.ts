@@ -1,24 +1,35 @@
 import { createServerFn } from '@tanstack/react-start'
-import { and, eq } from 'drizzle-orm'
+import { and, asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
-import { account, memberProfiles, notificationPreferences } from '../db/schema'
+import { account, notificationPreferences, parts, userParts } from '../db/schema'
 import { BOARD_TASK_NOTIFICATION_CHOICES, type BoardTaskNotificationChoice } from '../lib/board'
 import { MENTION_NOTIFICATION_CHOICES, type MentionNotificationChoice } from '../lib/mentions'
 import { type PostNotificationChoice } from '../lib/posts'
-import { normalizePhone, phoneSchema } from '../lib/profile'
 import { hasPermission, requireMe } from './access'
-import { auditInsert } from './audit'
+import { memberDetailsSchema, readMemberDetails, saveMemberDetails } from './member-details'
 
 export const getMyProfile = createServerFn().handler(async () => {
   const me = await requireMe()
   const d = db()
-  const [profileRows, credentialRows, notificationRows] = await Promise.all([
+  const [details, myParts, allParts, credentialRows, notificationRows] = await Promise.all([
+    readMemberDetails(me.id),
+    // Hovedstemmen kommer fra stemmetildelingen — profilen viser den, den lager
+    // ingen egen kopi av den. `isPrimary` er sannheten om hva som er hovedstemme.
     d
-      .select({ phone: memberProfiles.phone })
-      .from(memberProfiles)
-      .where(eq(memberProfiles.authUserId, me.id))
-      .limit(1),
+      .select({
+        id: parts.id,
+        name: parts.nameNo,
+        isPrimary: userParts.isPrimary,
+        sortOrder: parts.sortOrder,
+      })
+      .from(userParts)
+      .innerJoin(parts, eq(userParts.partId, parts.id))
+      .where(eq(userParts.userId, me.id)),
+    d
+      .select({ id: parts.id, name: parts.nameNo, section: parts.section, parentId: parts.parentId })
+      .from(parts)
+      .orderBy(asc(parts.sortOrder)),
     d
       .select({ id: account.id })
       .from(account)
@@ -38,9 +49,19 @@ export const getMyProfile = createServerFn().handler(async () => {
   return {
     name: me.name,
     email: me.email,
-    phone: profileRows[0]?.phone ?? '',
+    phone: details.phone ?? '',
+    interests: details.interests,
+    interestsNote: details.interestsNote ?? '',
+    otherInstruments: details.otherInstruments ?? '',
+    secondaryParts: details.secondaryParts,
     roleName: me.roleName,
-    parts: me.parts.map((part) => part.nameNo),
+    // Hovedstemmen først, deretter øvrige tildelte stemmer i besetningsrekkefølge.
+    parts: myParts
+      .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.sortOrder - b.sortOrder)
+      .map((part) => ({ id: part.id, name: part.name, isPrimary: part.isPrimary })),
+    // Hele besetningen, til bistemme-velgeren. Egne stemmer filtreres bort i UI-et
+    // og på nytt server-side i `cleanSecondaryParts` ved lagring.
+    allParts,
     hasPassword: credentialRows.length > 0,
     // Ingen rad = alle beskjeder. Standarden er å bli varslet.
     notifyPosts: (notificationRows[0]?.posts ?? 'all') as PostNotificationChoice,
@@ -104,28 +125,24 @@ export const updateMyMentionNotifications = createServerFn({ method: 'POST' })
     return { ok: true }
   })
 
-export const updateMyPhone = createServerFn({ method: 'POST' })
-  .validator(z.object({ phone: phoneSchema }))
+/**
+ * Selvbetjening for kontaktinfo (#14) og de utvidede profilfeltene (#25).
+ * Medlemmet skriver alltid til SIN EGEN rad — `targetUserId` er `me.id`, aldri
+ * noe fra payloaden, så et rått kall kan ikke redigere en annens profil.
+ *
+ * Stemmetildeling er bevisst IKKE med: stemme = tilgang til noter, og den
+ * settes fortsatt bare av medlemsansvarlig/seksjonsleder (`updateMemberParts`).
+ * Bistemmene her gir ingen filtilgang.
+ */
+export const updateMyProfileDetails = createServerFn({ method: 'POST' })
+  .validator(memberDetailsSchema)
   .handler(async ({ data }) => {
     const me = await requireMe()
-    const phone = normalizePhone(data.phone)
-    const d = db()
-    const current = await d
-      .select({ phone: memberProfiles.phone })
-      .from(memberProfiles)
-      .where(eq(memberProfiles.authUserId, me.id))
-      .limit(1)
-    if (!current[0]) throw new Error('Fant ikke medlemsprofilen din')
-    if ((current[0].phone ?? null) === phone) return { ok: true, changed: false }
-
-    await d.batch([
-      d.update(memberProfiles).set({ phone }).where(eq(memberProfiles.authUserId, me.id)),
-      auditInsert(d, {
-        action: 'member.profile_updated',
-        actorUserId: me.id,
-        targetUserId: me.id,
-        details: { changedFields: ['phone'] },
-      }),
-    ])
-    return { ok: true, changed: true }
+    const { changedFields } = await saveMemberDetails({
+      targetUserId: me.id,
+      actorUserId: me.id,
+      action: 'member.profile_updated',
+      input: data,
+    })
+    return { ok: true, changed: changedFields.length > 0 }
   })

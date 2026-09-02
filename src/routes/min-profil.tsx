@@ -1,8 +1,10 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
+import { MemberDetailsFields, type MemberDetailsValue } from '../components/MemberDetailsFields'
 import { toast, toastError } from '../components/toast'
 import { Button, Field, Kicker, Stamp } from '../components/ui'
 import { authClient } from '../lib/auth-client'
+import { interestsNoteSchema, otherInstrumentsSchema } from '../lib/member-profile'
 import {
   PASSWORD_MIN_LENGTH,
   memberNameSchema,
@@ -16,8 +18,8 @@ import {
   getMyProfile,
   updateMyBoardTaskNotifications,
   updateMyMentionNotifications,
-  updateMyPhone,
   updateMyPostNotifications,
+  updateMyProfileDetails,
 } from '../server/profile'
 
 export const Route = createFileRoute('/min-profil')({
@@ -32,24 +34,34 @@ function MyProfilePage() {
   const profile = Route.useLoaderData()
   const router = useRouter()
   const [name, setName] = useState(profile.name)
-  const [phone, setPhone] = useState(profile.phone)
+  const [details, setDetails] = useState<MemberDetailsValue>({
+    phone: profile.phone,
+    interests: profile.interests,
+    interestsNote: profile.interestsNote,
+    otherInstruments: profile.otherInstruments,
+    secondaryPartIds: profile.secondaryParts.map((part) => part.id),
+  })
   const [savingProfile, setSavingProfile] = useState(false)
 
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
+    // Samme skjemaer som serveren bruker — feilmeldingene blir dermed identiske.
     const parsedName = memberNameSchema.safeParse(name)
-    const parsedPhone = phoneSchema.safeParse(phone)
-    if (!parsedName.success || !parsedPhone.success) {
-      toast(parsedName.error?.issues[0]?.message ?? parsedPhone.error?.issues[0]?.message ?? 'Ugyldige felt', 'error')
+    const parsedPhone = phoneSchema.safeParse(details.phone)
+    const parsedNote = interestsNoteSchema.safeParse(details.interestsNote)
+    const parsedInstruments = otherInstrumentsSchema.safeParse(details.otherInstruments)
+    const firstError = [parsedName, parsedPhone, parsedNote, parsedInstruments].find((r) => !r.success)
+    if (firstError && !firstError.success) {
+      toast(firstError.error.issues[0]?.message ?? 'Ugyldige felt', 'error')
       return
     }
     setSavingProfile(true)
     try {
-      if (parsedName.data !== profile.name) {
+      if (parsedName.success && parsedName.data !== profile.name) {
         const { error } = await authClient.updateUser({ name: parsedName.data })
         if (error) throw new Error(error.message ?? 'Kunne ikke oppdatere navnet')
       }
-      await updateMyPhone({ data: { phone: parsedPhone.data } })
+      await updateMyProfileDetails({ data: details })
       toast('Profilen er oppdatert')
       await router.invalidate({ sync: true })
     } catch (err) {
@@ -67,7 +79,7 @@ function MyProfilePage() {
           <div>
             <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Min profil</h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft">
-              Hold kontaktinformasjonen oppdatert og velg hvordan du vil logge inn.
+              Hold kontaktinformasjonen oppdatert, fortell hva du kan bidra med, og velg hvordan du vil logge inn.
             </p>
           </div>
           <Stamp tone="brass">{profile.roleName}</Stamp>
@@ -89,30 +101,44 @@ function MyProfilePage() {
                 autoComplete="name"
               />
             </Field>
-            <Field label="Telefon" hint="Valgfritt. Synlig for administratorer.">
-              <input
-                type="tel"
-                className="field-input"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                autoComplete="tel"
-                inputMode="tel"
-                placeholder="+47 900 00 000"
-              />
-            </Field>
             <Field label="E-post" hint="Dette er innloggingsadressen din og kan ikke endres her ennå.">
               <input className="field-input opacity-75" value={profile.email} readOnly aria-readonly />
             </Field>
-            {profile.parts.length > 0 && (
-              <div>
-                <p className="mb-2 text-[0.8rem] font-medium text-ink-soft">Stemme</p>
-                <div className="flex flex-wrap gap-2">
-                  {profile.parts.map((part) => (
-                    <Stamp key={part}>{part}</Stamp>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Hovedstemmen kommer fra stemmetildelingen og er sannheten om både
+                seksjon og notetilgang. Den vises her, men redigeres ikke:
+                stemme = tilgang, og settes derfor av medlemsansvarlig. */}
+            <div>
+              <p className="mb-2 text-[0.8rem] font-medium text-ink-soft">
+                {profile.parts.length > 1 ? 'Tildelte stemmer' : 'Stemme'}
+              </p>
+              {profile.parts.length > 0 ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {profile.parts.map((part) => (
+                      <Stamp key={part.id} tone={part.isPrimary ? 'brass' : 'neutral'}>
+                        {part.name}
+                        {part.isPrimary && profile.parts.length > 1 ? ' · hovedstemme' : ''}
+                      </Stamp>
+                    ))}
+                  </div>
+                  <p className="mt-1.5 text-xs leading-relaxed text-ink-faint">
+                    Stemmen avgjør hvilke noter du får, og settes av medlemsansvarlig eller seksjonslederen din.
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs leading-relaxed text-ink-faint">
+                  Du har ingen tildelt stemme ennå. Ta kontakt med medlemsansvarlig — stemmen avgjør hvilke noter du får.
+                </p>
+              )}
+            </div>
+            <MemberDetailsFields
+              value={details}
+              onChange={setDetails}
+              allParts={profile.allParts}
+              assignedPartIds={profile.parts.map((part) => part.id)}
+              phoneHint="Valgfritt. Synlig for de andre medlemmene, slik at de får tak i deg ved fravær og behov."
+              idPrefix="me"
+            />
             <div className="flex justify-end border-t border-line pt-5">
               <Button type="submit" variant="primary" loading={savingProfile}>
                 Lagre profil

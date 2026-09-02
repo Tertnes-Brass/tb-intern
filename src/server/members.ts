@@ -6,6 +6,7 @@ import { db } from '../db'
 import {
   auditLog,
   invitations,
+  memberInstruments,
   memberProfiles,
   parts,
   roles,
@@ -15,9 +16,10 @@ import {
   userParts,
 } from '../db/schema'
 import { type InviteDelivery, invitePayloadSchema, orderPartsWithPrimary } from '../lib/invitation'
-import { memberNameSchema, normalizePhone, phoneSchema } from '../lib/profile'
+import { type InterestKey, parseInterests, redactContact } from '../lib/member-profile'
 import { canManageMemberParts, hasPermission, requireMe, requirePermission } from './access'
 import { auditInsert } from './audit'
+import { adminMemberDetailsSchema, saveMemberDetails } from './member-details'
 import { getAuth } from './auth-instance'
 import { takeEmailOutcome } from './email'
 import { leaderCanAssign } from './parts-tree'
@@ -43,6 +45,9 @@ export const listMembers = createServerFn().handler(async () => {
       name: user.name,
       email: user.email,
       phone: memberProfiles.phone,
+      interests: memberProfiles.interests,
+      interestsNote: memberProfiles.interestsNote,
+      otherInstruments: memberProfiles.otherInstruments,
       roleId: memberProfiles.roleId,
       roleName: roles.name,
       isActive: memberProfiles.isActive,
@@ -57,6 +62,19 @@ export const listMembers = createServerFn().handler(async () => {
     .leftJoin(userParts, eq(userParts.userId, user.id))
     .leftJoin(parts, eq(userParts.partId, parts.id))
 
+  // Bistemmer (#25) hentes i en egen spørring: en ekstra leftJoin ved siden av
+  // `user_parts` ville gitt et kryssprodukt av tildelte stemmer og bistemmer.
+  const secondaryRows = await d
+    .select({ userId: memberInstruments.userId, partId: parts.id, name: parts.nameNo, sort: parts.sortOrder })
+    .from(memberInstruments)
+    .innerJoin(parts, eq(memberInstruments.partId, parts.id))
+  const secondaryByUser = new Map<string, Array<{ id: string; name: string; sort: number }>>()
+  for (const row of secondaryRows) {
+    const list = secondaryByUser.get(row.userId) ?? []
+    list.push({ id: row.partId, name: row.name, sort: row.sort })
+    secondaryByUser.set(row.userId, list)
+  }
+
   const byId = new Map<
     string,
     {
@@ -64,10 +82,14 @@ export const listMembers = createServerFn().handler(async () => {
       name: string
       email: string
       phone: string | null
+      interests: InterestKey[]
+      interestsNote: string | null
+      otherInstruments: string | null
       roleId: string
       roleName: string
       isActive: boolean
       parts: Array<{ id: string; name: string; sort: number; isPrimary: boolean }>
+      secondaryParts: Array<{ id: string; name: string; sort: number }>
     }
   >()
   for (const r of rows) {
@@ -78,10 +100,14 @@ export const listMembers = createServerFn().handler(async () => {
         name: r.name,
         email: r.email,
         phone: r.phone,
+        interests: parseInterests(r.interests),
+        interestsNote: r.interestsNote,
+        otherInstruments: r.otherInstruments,
         roleId: r.roleId,
         roleName: r.roleName,
         isActive: r.isActive,
         parts: [],
+        secondaryParts: (secondaryByUser.get(r.id) ?? []).sort((a, b) => a.sort - b.sort),
       }
     if (r.partId && r.partName) {
       m.parts.push({ id: r.partId, name: r.partName, sort: r.partSort ?? 999, isPrimary: r.partPrimary ?? false })
@@ -112,12 +138,16 @@ export const listMembers = createServerFn().handler(async () => {
     list.push(lr.partId)
     leadersByUser.set(lr.userId, list)
   }
+  const viewer = { canManageMembers: canManage, viewerId: me.id }
   const membersOut = members.map((m) => {
     const memberPartIds = m.parts.map((p) => p.id)
     return {
-      ...m,
-      // Telefonnummer er medlemsdata for administrasjon, ikke katalogdata.
-      phone: canManage ? m.phone : null,
+      // Innsyn (#14): medlemslista er intern, og poenget er å få tak i folk ved
+      // fravær — kontaktinfo er derfor synlig for alle innloggede (og dermed
+      // aktive) medlemmer. Dette er en bevisst omgjøring av den gamle regelen
+      // «telefon er kun for administratorer». Deaktiverte medlemmers kontaktinfo
+      // fjernes SERVER-side her, så den aldri følger med i payloaden.
+      ...redactContact(viewer, m),
       // Global ⇒ alle; seksjonsleder ⇒ kun medlemmer helt innenfor eget omfang.
       canEditParts: canManage || (canManageSection && leaderCanAssign(me.leadsPartIds, memberPartIds, memberPartIds)),
       leaderPartIds: leadersByUser.get(m.id) ?? [],
@@ -276,34 +306,27 @@ export const updateMemberRole = createServerFn({ method: 'POST' })
     return { ok: true }
   })
 
+/**
+ * Medlemsansvarliges redigering av en annens profil (#25): samme felt som
+ * medlemmet selv har på `/min-profil`, pluss navnet. Skrivelaget er delt med
+ * selvbetjeningen (`saveMemberDetails`), så de to kan ikke komme i utakt om
+ * normalisering og logging — det er bare gaten og revisjonshandlingen som skiller.
+ *
+ * `members.manage.section` gir IKKE tilgang hit: en seksjonsleder kan tildele
+ * stemmer i egen seksjon (`updateMemberParts`), men skal ikke redigere andres
+ * kontaktopplysninger.
+ */
 export const updateMemberProfile = createServerFn({ method: 'POST' })
-  .validator(z.object({ userId: z.string(), name: memberNameSchema, phone: phoneSchema }))
+  .validator(adminMemberDetailsSchema)
   .handler(async ({ data }) => {
     const me = await requirePermission('members.manage')
-    const phone = normalizePhone(data.phone)
-    const d = db()
-    const current = await d
-      .select({ name: user.name, phone: memberProfiles.phone })
-      .from(memberProfiles)
-      .innerJoin(user, eq(memberProfiles.authUserId, user.id))
-      .where(eq(memberProfiles.authUserId, data.userId))
-      .limit(1)
-    if (!current[0]) throw new Error('Fant ikke medlemmet')
-    const changedFields = [
-      ...(current[0].name === data.name ? [] : ['name']),
-      ...((current[0].phone ?? null) === phone ? [] : ['phone']),
-    ]
-    if (changedFields.length === 0) return { ok: true }
-    await d.batch([
-      d.update(user).set({ name: data.name }).where(eq(user.id, data.userId)),
-      d.update(memberProfiles).set({ phone }).where(eq(memberProfiles.authUserId, data.userId)),
-      auditInsert(d, {
-        action: 'member.profile_updated_by_admin',
-        actorUserId: me.id,
-        targetUserId: data.userId,
-        details: { changedFields },
-      }),
-    ])
+    const { userId, ...input } = data
+    await saveMemberDetails({
+      targetUserId: userId,
+      actorUserId: me.id,
+      action: 'member.profile_updated_by_admin',
+      input,
+    })
     return { ok: true }
   })
 
