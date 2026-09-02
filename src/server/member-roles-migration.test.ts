@@ -22,8 +22,11 @@ import { effectiveRoleIds, unionRolePermissions } from '../lib/roles'
  *    kjøring ikke dupliserer eller feiler.
  */
 
+// #48 ble squashet inn i runde-migrasjonen sammen med #13, #14/#25 og
+// #9/#10/#29 — testen kjører derfor HELE runde-migrasjonen, med de andre
+// grenenes tabeller i før-skjemaet.
 const MIGRATION = readFileSync(
-  fileURLToPath(new URL('../../migrations/0016_flere-roller-per-medlem.sql', import.meta.url)),
+  fileURLToPath(new URL('../../migrations/0016_backlog-runde-1.sql', import.meta.url)),
   'utf8',
 )
 
@@ -59,6 +62,21 @@ const SCHEMA_BEFORE = `
     email TEXT PRIMARY KEY NOT NULL,
     role_id TEXT NOT NULL REFERENCES roles(id),
     accepted_at INTEGER
+  );
+  -- Tabellene de andre squashede grenene rører (#13-FK-er, #9/#10-backfillen).
+  CREATE TABLE parts (
+    id TEXT PRIMARY KEY NOT NULL,
+    name_no TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE projects (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE event_meta (
+    occurrence_key TEXT PRIMARY KEY NOT NULL,
+    linked_project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+    created_by TEXT REFERENCES user(id) ON DELETE SET NULL,
+    created_at INTEGER NOT NULL DEFAULT 0
   );
 `
 
@@ -125,8 +143,8 @@ describe('migrasjon 0016 (flere roller per medlem)', () => {
     // nettopp det vi VIL ha, mens en `DELETE FROM` som setning er forbudt.
     expect(STATEMENTS).not.toMatch(/^\s*DELETE\b/im)
     expect(STATEMENTS).not.toMatch(/^\s*UPDATE\b/im)
-    // Ingen ALTER i det hele tatt her: begge tabellene er nye.
-    expect(STATEMENTS).not.toMatch(/ALTER TABLE/i)
+    // Runde-migrasjonen har ALTER-e, men KUN `ADD` — aldri rebuild/drop.
+    expect(STATEMENTS).not.toMatch(/ALTER TABLE(?!.*ADD)/i)
   })
 
   it('backfiller hvert medlem med nøyaktig rollen det hadde', () => {
