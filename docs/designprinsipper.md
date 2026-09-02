@@ -60,7 +60,7 @@ lesing er åpnere; håndhevelsen ligger alltid i `src/server/*.ts`, aldri bare i
 | **Prosjekter** | `src/routes/noter/prosjekter/index.tsx`, `$projectId.tsx`, `$projectId_.slagverk.tsx` | Dirigent / prosjektansvarlig | Klikke sammen et program i rekkefølge og publisere det | `projects.manage`; upublisert er usynlig ellers. Deling: `shares.manage`. Slagverksoppsettet per stykke redigeres inline med samme gate, og har en utskriftsvennlig samleside |
 | **Arkiv** | `src/routes/noter/arkiv/index.tsx`, `$workId.tsx` | Arkivaren | Katalogisere et verk og laste opp PDF per stemme | Innsyn: `archive.viewAll` ∨ `works.manage`; skriving: `works.manage` |
 | **Kalender** | `src/routes/kalender/index.tsx` (`getCalendar`), `kalender/$eventId.tsx` (`getEventDetail`) | Alle medlemmer | Se når neste øvelse og konsert er — og hva som skal øves på | `requireMe()` for lesing; feeden er en secret (`CALENDAR_ICS_URL`), aldri til klienten. Detaljruta hører til Kalender-området, ikke et nytt navnerom: øvingsplanen skrives med `calendar.manage`, oppmøtelista og registrert fravær med `attendance.manage` (gruppeleder ser og setter kun egen seksjon) |
-| **Medlemmer** | `src/routes/medlemmer/index.tsx` | Admin (seksjonsleder i redusert form) | Invitere et medlem og sette rolle + stemme | Lesing: `requireMe()`; skriving: `members.manage` / `members.manage.section` |
+| **Medlemmer** | `src/routes/medlemmer/index.tsx` | Admin (seksjonsleder i redusert form) | Invitere et medlem og sette roller + stemme | Lesing: `requireMe()`; skriving: `members.manage` / `members.manage.section`. Siden #48 er rolle et SETT: «Roller…» åpner avkryssingen, og «Samlet tilgang» viser unionen av rettighetene før lagring |
 | **Gruppeledere** | `src/routes/gruppeledere/{route,index}.tsx`, `gruppeledere/chat/index.tsx` | Gruppelederen | Åpne kanalen og koordinere med de andre gruppelederne | `members.manage.section` **pluss** minst én aktiv `section_leaders`-rad (`isGroupLeader` i `src/lib/gruppeledere.ts`) — også for **lesing**. En admin uten leiarbinding kommer ikke inn |
 | **Styre** | `src/routes/styre/{index,$taskId}.tsx`, `styre/prosjekter/*`, `styre/moter/*`, `styre/chat/index.tsx`, `styre/dokumenter/index.tsx` | Styremedlemmet | Se åpne oppgaver og hake av / opprette en ny | `board.manage` — også for **lesing**; hele området er usynlig ellers. Dokumentbytene gates i `src/routes/api/board-files/$documentId.ts` |
 | **Innstillinger** | `src/routes/innstillinger/index.tsx` | Admin | Forvalte besetning og rollematrisen | `settings.manage` |
@@ -281,6 +281,21 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 > andre gang. Neste område med toppnivå-ambisjoner skal ikke bare fortrenge noe —
 > det bør ta (b) opp til reell vurdering, med demotering av Filtilganger og
 > Innstillinger til brukermenyen som det billigste alternativet.
+
+> **Notert 2. september 2026 (flere roller per medlem, #48):** modellen med ett
+> verv per person var i praksis en brems på menyen — «musiker som også sitter i
+> styret» kunne ikke finnes, og kombinasjonsradene i tabellen over var derfor
+> sjeldne unntak. Med `member_roles` er de normalen, ikke unntaket:
+> tilgangene er unionen av rollene, og en person med Musiker + Styremedlem +
+> leiarbinding lander på **sju** oppføringer (Hjem · Beskjeder · Noter ·
+> Kalender · Medlemmer · Gruppeledere · Styre), en admin med de samme vervene på
+> **åtte**. Ingen ny oppføring er lagt til her, og navigasjonen er ikke rørt —
+> men antallet mennesker som faktisk treffer taket går opp, og mobilstripen
+> scroller for dem. Det gjør ikke terskelen «passert» på nytt (den er passert to
+> ganger fra før); det gjør den mer *sannsynlig å merke*. Launcher-spørsmålet
+> (b), eventuelt demotering av Innstillinger og Filtilganger til brukermenyen,
+> er fortsatt det som står igjen — som et eget produktvalg, ikke som en detalj i
+> rollearbeidet.
 
 ## 7. Hva som ikke er avgjort
 

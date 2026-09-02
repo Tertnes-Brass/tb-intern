@@ -6,11 +6,27 @@ import {
   invitePayloadSchema,
   orderPartsWithPrimary,
   removeInvitePart,
+  roleIdsSchema,
 } from './invitation'
+
+describe('roleIdsSchema', () => {
+  it('krever minst én rolle — null roller ville gitt et medlem uten rettigheter', () => {
+    expect(roleIdsSchema.safeParse([]).success).toBe(false)
+    expect(roleIdsSchema.safeParse(['member']).success).toBe(true)
+  })
+
+  it('tar imot flere roller samtidig (#48)', () => {
+    expect(roleIdsSchema.safeParse(['member', 'board']).success).toBe(true)
+  })
+
+  it('avviser samme rolle to ganger', () => {
+    expect(roleIdsSchema.safeParse(['member', 'member']).success).toBe(false)
+  })
+})
 
 const payload = (over: Record<string, unknown> = {}) => ({
   email: 'ola@example.com',
-  roleId: 'member',
+  roleIds: ['member'],
   ...over,
 })
 
@@ -38,6 +54,13 @@ describe('invitasjonsvalidering', () => {
       invitePayloadSchema.parse(payload({ partIds: ['a', 'b', 'c', 'd', 'e'] })),
     ).toThrow()
     expect(() => invitePayloadSchema.parse(payload({ partIds: ['solo-cornet', 'solo-cornet'] }))).toThrow()
+  })
+
+  // #48: invitasjonen bærer et SETT av roller, ikke én.
+  it('tar imot flere roller, men krever minst én', () => {
+    expect(invitePayloadSchema.parse(payload({ roleIds: ['member', 'board'] })).roleIds).toEqual(['member', 'board'])
+    expect(() => invitePayloadSchema.parse(payload({ roleIds: [] }))).toThrow()
+    expect(() => invitePayloadSchema.parse(payload({ roleIds: ['member', 'member'] }))).toThrow()
   })
 
   it('krever at hovedstemmen er én av de valgte stemmene', () => {

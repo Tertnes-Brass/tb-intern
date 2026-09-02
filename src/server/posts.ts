@@ -13,7 +13,6 @@ import {
   postMentions,
   postReactions,
   posts,
-  rolePermissions,
   user,
 } from '../db/schema'
 import { newId } from '../lib/id'
@@ -45,7 +44,8 @@ import {
   recipientsFor,
   sanitizePostInput,
 } from '../lib/posts'
-import { type Me, hasPermission, requireMe, requirePermission } from './access'
+import { permissionsInclude } from '../lib/permissions'
+import { type Me, hasPermission, memberPermissionsByUser, requireMe, requirePermission } from './access'
 import { canAttachImages } from './post-images'
 import { mentionEmail, postEmail, postMentionEmail, sendEmail } from './email'
 
@@ -572,34 +572,32 @@ async function mentionCandidates(): Promise<{
   prefs: Map<string, MentionNotificationChoice>
 }> {
   const d = db()
-  const [memberRows, permRows, prefRows] = await Promise.all([
+  const [memberRows, permissionsByUser, prefRows] = await Promise.all([
     d
       .select({
         userId: memberProfiles.authUserId,
         name: user.name,
         email: user.email,
-        roleId: memberProfiles.roleId,
         isActive: memberProfiles.isActive,
       })
       .from(memberProfiles)
       .innerJoin(user, eq(memberProfiles.authUserId, user.id))
       .orderBy(asc(user.name)),
-    d.select({ roleId: rolePermissions.roleId, permission: rolePermissions.permission }).from(rolePermissions),
+    // Unionen over ALLE rollene medlemmet har (#48) — en musiker som også sitter
+    // i styret kan publisere, selv om «Musiker» ikke gir det.
+    memberPermissionsByUser(),
     d
       .select({ userId: notificationPreferences.userId, mentions: notificationPreferences.mentions })
       .from(notificationPreferences),
   ])
 
-  const publishingRoles = new Set(
-    permRows.filter((p) => p.permission === '*' || p.permission === PUBLISH_PERMISSION).map((p) => p.roleId),
-  )
   return {
     members: memberRows.map((m) => ({
       userId: m.userId,
       name: m.name,
       email: m.email,
       isActive: m.isActive,
-      canPublish: publishingRoles.has(m.roleId),
+      canPublish: permissionsInclude(permissionsByUser.get(m.userId) ?? [], PUBLISH_PERMISSION),
     })),
     prefs: new Map(prefRows.map((p) => [p.userId, p.mentions])),
   }
@@ -858,32 +856,28 @@ export const resendPostNotifications = createServerFn({ method: 'POST' })
  */
 async function candidates(): Promise<{ members: PostRecipient[]; prefs: Map<string, PostNotificationChoice> }> {
   const d = db()
-  const [memberRows, permRows, prefRows] = await Promise.all([
+  const [memberRows, permissionsByUser, prefRows] = await Promise.all([
     d
       .select({
         userId: memberProfiles.authUserId,
-        roleId: memberProfiles.roleId,
         isActive: memberProfiles.isActive,
         email: user.email,
       })
       .from(memberProfiles)
       .innerJoin(user, eq(memberProfiles.authUserId, user.id))
       .orderBy(asc(user.name)),
-    d.select({ roleId: rolePermissions.roleId, permission: rolePermissions.permission }).from(rolePermissions),
+    memberPermissionsByUser(),
     d
       .select({ userId: notificationPreferences.userId, posts: notificationPreferences.posts })
       .from(notificationPreferences),
   ])
 
-  const publishingRoles = new Set(
-    permRows.filter((p) => p.permission === '*' || p.permission === PUBLISH_PERMISSION).map((p) => p.roleId),
-  )
   return {
     members: memberRows.map((m) => ({
       userId: m.userId,
       email: m.email,
       isActive: m.isActive,
-      canPublish: publishingRoles.has(m.roleId),
+      canPublish: permissionsInclude(permissionsByUser.get(m.userId) ?? [], PUBLISH_PERMISSION),
     })),
     prefs: new Map(prefRows.map((p) => [p.userId, p.posts])),
   }

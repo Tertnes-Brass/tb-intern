@@ -39,7 +39,7 @@ export const getMyProfile = createServerFn().handler(async () => {
     name: me.name,
     email: me.email,
     phone: profileRows[0]?.phone ?? '',
-    roleName: me.roleName,
+    roleNames: me.roles.map((r) => r.name),
     parts: me.parts.map((part) => part.nameNo),
     hasPassword: credentialRows.length > 0,
     // Ingen rad = alle beskjeder. Standarden er å bli varslet.

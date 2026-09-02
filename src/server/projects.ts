@@ -150,7 +150,7 @@ export const getHome = createServerFn().handler(async () => {
   const showPercussion = showPercussionFor(me)
 
   return {
-    me: { name: me.name, parts: me.parts, roleName: me.roleName },
+    me: { name: me.name, parts: me.parts, roleNames: me.roles.map((r) => r.name) },
     nextProject: next ? { ...next, percussionNotes: showPercussion ? next.percussionNotes : null } : null,
     repertoire: showPercussion ? repertoire : repertoire.map((r) => ({ ...r, percussionSetup: null })),
     showPercussion,

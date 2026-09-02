@@ -5,7 +5,7 @@ import { seedDemoData } from '../../server/seed'
 
 const DEV_PASSWORD = 'notearkiv-demo!'
 const LEGACY_DEV_PASSWORD = 'notearkiv-demo'
-const DEFAULT_EMAIL = SEED_MEMBERS.find((member) => member.roleId === 'admin')!.email
+const DEFAULT_EMAIL = SEED_MEMBERS.find((member) => member.roleIds.includes('admin'))!.email
 
 function internalPath(value: string | null): string {
   return value?.startsWith('/') && !value.startsWith('//') ? value : '/'

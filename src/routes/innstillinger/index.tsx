@@ -1,5 +1,6 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
+import { RoleGuide } from '../../components/RoleAccess'
 import { toast, toastError } from '../../components/toast'
 import { Button, Field, Kicker, Modal, Stamp } from '../../components/ui'
 import { SECTION_LABELS } from '../../lib/taxonomy'
@@ -364,13 +365,28 @@ function RolesSection({ data }: { data: Data }) {
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="display-title text-2xl font-semibold text-ink">Roller og tilgang</h2>
-          <p className="mt-1 text-sm text-ink-soft">Hvilke rettigheter hver rolle har. Administrator har alltid full tilgang.</p>
+          <p className="mt-1 text-sm text-ink-soft">
+            Et medlem kan ha flere roller, og får summen av rettighetene til alle sammen. Ingen rolle trekker fra.
+          </p>
         </div>
         <Button variant="secondary" onClick={() => setCreating(true)}>
           + Ny rolle
         </Button>
       </div>
 
+      {/*
+        Oversikten før matrisen: «hva gir denne rollen?» er spørsmålet en admin
+        har når hen skal sette en rolle på et medlem. Matrisen under svarer på
+        det motsatte — «hvem har denne rettigheten?» — og er verktøyet for å
+        ENDRE rollene. Rekkefølgen følger det (#48: tilgangsmatrisen er teknisk
+        og vanskelig å tolke uten domenekunnskap).
+      */}
+      <div className="mb-6">
+        <h3 className="kicker mb-3">Hva rollene gir tilgang til</h3>
+        <RoleGuide roles={data.roles} />
+      </div>
+
+      <h3 className="kicker mb-3">Rettighetsmatrise</h3>
       <div className="sheet relative overflow-x-auto overscroll-x-contain after:pointer-events-none after:absolute after:inset-y-px after:right-px after:w-8 after:rounded-r-[13px] after:bg-gradient-to-l after:from-[var(--paper-raised)] after:to-transparent md:after:hidden">
         <table className="w-full min-w-[640px] border-collapse text-sm">
           <thead>

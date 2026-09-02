@@ -44,7 +44,9 @@ function HomePage() {
                     {p.nameNo}
                   </Stamp>
                 ))}
-                <Stamp>{data.me.roleName}</Stamp>
+                {data.me.roleNames.map((role) => (
+                  <Stamp key={role}>{role}</Stamp>
+                ))}
               </div>
             </div>
 

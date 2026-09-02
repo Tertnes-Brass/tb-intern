@@ -30,7 +30,8 @@ export type HubPayload = {
   posts: HubPost[]
   me: {
     name: string
-    roleName: string
+    /** Alle rollene medlemmet har (#48) — «Musiker · Styremedlem». */
+    roleNames: string[]
     parts: Array<{ id: string; nameNo: string }>
   }
   /** Snarveiene brukeren har tilgang til, utledet av rettighetene (`areasFor`). */
@@ -174,7 +175,7 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
     }),
     me: {
       name: me.name,
-      roleName: me.roleName,
+      roleNames: me.roles.map((r) => r.name),
       parts: me.parts.map((p) => ({ id: p.id, nameNo: p.nameNo })),
     },
     areas: withBoardNote,

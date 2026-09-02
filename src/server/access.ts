@@ -1,8 +1,9 @@
-import { eq } from 'drizzle-orm'
+import { asc, eq, inArray } from 'drizzle-orm'
 import { redirect } from '@tanstack/react-router'
 import { getRequest } from '@tanstack/react-start/server'
 import { db } from '../db'
-import { memberProfiles, parts, rolePermissions, roles, sectionLeaders, userParts } from '../db/schema'
+import { memberProfiles, memberRoles, parts, rolePermissions, roles, sectionLeaders, userParts } from '../db/schema'
+import { effectiveRoleIds, orderRoles, unionRolePermissions } from '../lib/roles'
 import { getAuth } from './auth-instance'
 import type { AccessCtx } from './file-access'
 import { buildChildrenMap, expandPartIds, leaderCanAssign } from './parts-tree'
@@ -11,8 +12,12 @@ export type Me = {
   id: string
   name: string
   email: string
-  roleId: string
-  roleName: string
+  /**
+   * Alle rollene medlemmet har (#48), i rollelistas rekkefølge. Et medlem kan
+   * være «Musiker» og «Styremedlem» samtidig, og `permissions` er UNIONEN av
+   * rettighetene til dem alle — ingen rolle trekker fra.
+   */
+  roles: Array<{ id: string; name: string }>
   permissions: string[]
   parts: Array<{ id: string; nameNo: string; nameEn: string; section: string }>
   // Tildelte stemmer ekspandert nedover treet (forelder ⇒ alle barn). Brukes
@@ -34,25 +39,22 @@ export async function currentUser(): Promise<Me | null> {
   const authUserId = session.user.id
   const d = db()
 
-  const rows = await d
-    .select({
-      roleId: memberProfiles.roleId,
-      roleName: roles.name,
-      isActive: memberProfiles.isActive,
-    })
-    .from(memberProfiles)
-    .innerJoin(roles, eq(memberProfiles.roleId, roles.id))
-    .where(eq(memberProfiles.authUserId, authUserId))
-    .limit(1)
-
-  const profile = rows[0]
-  if (!profile || !profile.isActive) return null
-
-  const [perms, myParts, allPartRows, leaderRows] = await Promise.all([
+  // Alt som ikke avhenger av HVILKE roller brukeren har, hentes i én runde.
+  // Rollene måtte ellers vært slått opp før rettighetene, og `currentUser()`
+  // kjører på hver eneste forespørsel — én rundtur ekstra her koster overalt.
+  const [rows, linkedRoles, allRoles, myParts, allPartRows, leaderRows] = await Promise.all([
     d
-      .select({ permission: rolePermissions.permission })
-      .from(rolePermissions)
-      .where(eq(rolePermissions.roleId, profile.roleId)),
+      .select({
+        // DEPRECATED-kolonnen, kun som fallback for et medlem uten koblingsrader
+        // (se `effectiveRoleIds`). Rollen leses fra `member_roles`.
+        legacyRoleId: memberProfiles.roleId,
+        isActive: memberProfiles.isActive,
+      })
+      .from(memberProfiles)
+      .where(eq(memberProfiles.authUserId, authUserId))
+      .limit(1),
+    d.select({ roleId: memberRoles.roleId }).from(memberRoles).where(eq(memberRoles.authUserId, authUserId)),
+    d.select({ id: roles.id, name: roles.name }).from(roles).orderBy(asc(roles.name)),
     d
       .select({ id: parts.id, nameNo: parts.nameNo, nameEn: parts.nameEn, section: parts.section })
       .from(userParts)
@@ -62,16 +64,34 @@ export async function currentUser(): Promise<Me | null> {
     d.select({ partId: sectionLeaders.partId }).from(sectionLeaders).where(eq(sectionLeaders.userId, authUserId)),
   ])
 
+  const profile = rows[0]
+  if (!profile || !profile.isActive) return null
+
+  const myRoleIds = effectiveRoleIds(linkedRoles.map((r) => r.roleId), profile.legacyRoleId)
+  const permRows =
+    myRoleIds.length > 0
+      ? await d
+          .select({ roleId: rolePermissions.roleId, permission: rolePermissions.permission })
+          .from(rolePermissions)
+          .where(inArray(rolePermissions.roleId, myRoleIds))
+      : []
+
   const childrenMap = buildChildrenMap(allPartRows)
   const leadsPartIds = expandPartIds(leaderRows.map((r) => r.partId), childrenMap)
+
+  const permissionsByRole = new Map<string, string[]>()
+  for (const row of permRows) {
+    const list = permissionsByRole.get(row.roleId) ?? []
+    list.push(row.permission)
+    permissionsByRole.set(row.roleId, list)
+  }
 
   return {
     id: authUserId,
     name: session.user.name,
     email: session.user.email,
-    roleId: profile.roleId,
-    roleName: profile.roleName,
-    permissions: perms.map((p) => p.permission),
+    roles: orderRoles(myRoleIds, allRoles),
+    permissions: unionRolePermissions(myRoleIds, permissionsByRole),
     parts: myParts,
     effectivePartIds: expandPartIds(myParts.map((p) => p.id), childrenMap),
     leadsPartIds,
@@ -82,6 +102,53 @@ export async function currentUser(): Promise<Me | null> {
 export function hasPermission(me: Me | null, permission: string): boolean {
   if (!me) return false
   return me.permissions.includes('*') || me.permissions.includes(permission)
+}
+
+/**
+ * Rettighetene til ALLE medlemmer, som `userId → unionen av rollenes rettigheter`.
+ *
+ * Finnes fordi flere steder må vurdere andre enn den innloggede: hvem som kan
+ * publisere en beskjed (`posts.ts`), hvem som hører til styret (`board.ts`),
+ * hvem som kan omtales. Før #48 kunne hvert av dem slå opp én rolle-ID per
+ * medlem og sjekke den mot et sett av «roller med rettigheten». Med flere roller
+ * per medlem er det svaret feil for alle som har mer enn én rolle, og regelen
+ * skal finnes ÉN gang — ikke gjenskapes med litt ulike join-er i tre moduler.
+ *
+ * Tre spørringer, uansett antall medlemmer. Bruk `permissionsInclude` fra
+ * `src/lib/permissions.ts` til oppslaget, så `*` behandles likt overalt.
+ */
+export async function memberPermissionsByUser(): Promise<Map<string, string[]>> {
+  const d = db()
+  const [profileRows, linkRows, permRows] = await Promise.all([
+    d
+      .select({ authUserId: memberProfiles.authUserId, legacyRoleId: memberProfiles.roleId })
+      .from(memberProfiles),
+    d.select({ authUserId: memberRoles.authUserId, roleId: memberRoles.roleId }).from(memberRoles),
+    d.select({ roleId: rolePermissions.roleId, permission: rolePermissions.permission }).from(rolePermissions),
+  ])
+
+  const permissionsByRole = new Map<string, string[]>()
+  for (const row of permRows) {
+    const list = permissionsByRole.get(row.roleId) ?? []
+    list.push(row.permission)
+    permissionsByRole.set(row.roleId, list)
+  }
+  const linkedByUser = new Map<string, string[]>()
+  for (const row of linkRows) {
+    const list = linkedByUser.get(row.authUserId) ?? []
+    list.push(row.roleId)
+    linkedByUser.set(row.authUserId, list)
+  }
+
+  return new Map(
+    profileRows.map((profile) => [
+      profile.authUserId,
+      unionRolePermissions(
+        effectiveRoleIds(linkedByUser.get(profile.authUserId) ?? [], profile.legacyRoleId),
+        permissionsByRole,
+      ),
+    ]),
+  )
 }
 
 /** Fullt arkivinnsyn, uavhengig av om det kommer fra lesing eller forvaltning. */

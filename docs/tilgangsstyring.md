@@ -182,6 +182,36 @@ vanskeligere å lese, uten å gjøre noen ting tryggere.
   prosjektnavn og en lenke — mottakeren har uansett `board.manage` for å kunne
   åpne den.
 
+## 5b2. Flere roller per medlem (#48, 2. september 2026)
+
+Rollen er ikke lenger et felt på medlemmet, men et **sett**. Reglene:
+
+- **`member_roles` er sannheten.** `member_profiles.role_id` og
+  `invitations.role_id` er DEPRECATED og skal aldri leses som rollen. De står
+  igjen fordi de er NOT NULL og bare kunne fjernes med en tabell-rebuild, som i
+  D1 cascader til barnetabellene inne i transaksjonen.
+- **Tilgang = unionen.** `unionRolePermissions` i `src/lib/roles.ts` legger
+  sammen rettighetene fra alle rollene. Roller er rent additive — **ingen rolle
+  kan trekke fra**. Legger man til en rolle, kan et medlem aldri miste noe; det
+  er egenskapen som gjør «musiker som også sitter i styret» trygg, og den er
+  låst av en test.
+- **Fallbacken er en del av gaten, ikke en snarvei.**
+  `effectiveRoleIds(linked, legacy)` bruker den deprecated kolonnen KUN når
+  koblingsradene mangler. Det dekker kontoer opprettet i vinduet mellom
+  migrasjon og deploy (workflowen migrerer før den deployer). Fjernes
+  fallbacken, logger de inn uten en eneste rettighet.
+- **Vurderer du en ANNEN enn den innloggede, bruk `memberPermissionsByUser()`**
+  i `src/server/access.ts`. Det gamle mønsteret — et sett av «roller med
+  rettigheten», sjekket mot medlemmets ene `role_id` — svarer feil for alle med
+  mer enn én rolle. Det er en stille feil: den *nekter* tilgang der den skulle
+  gitt (varsling, omtaler, ansvarlig-lista), men den kunne like gjerne gått
+  andre veien i en fremtidig bruk.
+- **Skriving er fortsatt `members.manage` alene**, og ingen kan endre sine egne
+  roller (samme vakt som før). Endringen sletter medlemmets sesjoner, siden
+  rettighetene bygges ved innlogging og caches i fem minutter.
+- **Minst én rolle.** Null roller ville gitt et medlem uten rettigheter og en
+  usann NOT NULL-kolonne. Skal noen fratas alt, deaktiveres medlemmet.
+
 ## 5c. Gruppelederområdet (`/gruppeledere`, #81, 2. september 2026)
 
 Gruppelederne fikk sitt eget område. Det er det første som **ikke** gates på en
@@ -192,7 +222,9 @@ rettighet alene:
   `me.leadsPartIds.length > 0`. (Justert 2. september 2026: kravet var
   opprinnelig rettighet OG binding, men med én rolle per medlem hadde de
   faktiske lederne rollene Styremedlem og Musiker og kunne aldri fått
-  rettigheten. Bindingen settes uansett kun via «Seksjonsleder»-modalen i
+  rettigheten. Flere roller per medlem (#48) endrer ikke dette: en rolle som
+  het «Gruppeleder» ville ikke åpnet området, og navnet ville løyet — derfor
+  finnes ingen slik systemrolle. Bindingen settes uansett kun via «Seksjonsleder»-modalen i
   `/medlemmer`, gated på global `members.manage`, så den er en eksplisitt,
   admin-styrt tilgang alene. `members.manage.section` styrer fortsatt
   stemme-tildeling i eget omfang — en annen ting enn å se området.) Regelen
