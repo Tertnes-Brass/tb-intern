@@ -165,7 +165,10 @@ export function Modal({
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-6 pb-6 pt-4 sm:px-7">{children}</div>
+      {/* flex-auto (ikke flex-1): flex-basis 0 % blir 0 px i WebKit på iPhone/
+          iPad, som regner dialogens høyde som bestemt. Med overflow-y: auto er
+          minimumshøyden også 0, så kroppen kollapset til bare padding. */}
+      <div className="min-h-0 flex-auto overflow-y-auto px-6 pb-6 pt-4 sm:px-7">{children}</div>
     </dialog>
   )
 }
