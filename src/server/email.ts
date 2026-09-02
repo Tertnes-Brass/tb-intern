@@ -56,16 +56,28 @@ export function takeEmailOutcome(to: string): EmailOutcome | null {
 }
 
 export async function sendEmail({ to, subject, html, text }: SendArgs): Promise<{ ok: boolean; fallback?: boolean }> {
+  // Staging kjører på en prod-kopi med EKTE medlemsadresser. All e-post derfra
+  // omdirigeres derfor til én adresse (EMAIL_REDIRECT_ALL_TO, satt i env.staging
+  // i wrangler.jsonc) — hele flyten kan testes ende-til-ende uten at et medlem
+  // noensinne får en test-e-post. Opprinnelig mottaker legges i emnet.
+  // Utfallet registreres på den OPPRINNELIGE adressen: det er den flytene
+  // (f.eks. invitasjon) slår opp med `takeEmailOutcome`.
+  const redirectTo = (env as unknown as { EMAIL_REDIRECT_ALL_TO?: string }).EMAIL_REDIRECT_ALL_TO?.trim()
+  const originalTo = to
+  if (redirectTo) {
+    subject = `[staging, til ${to}] ${subject}`
+    to = redirectTo
+  }
   const binding = (env as unknown as { EMAIL?: { send: (m: unknown) => Promise<unknown> } }).EMAIL
   if (!binding || typeof binding.send !== 'function') {
     // Binding mangler (lokal dev): logg innholdet så lenker kan testes.
     console.log(`\n[e-post:fallback] Til: ${to}\nEmne: ${subject}\n${text}\n`)
-    recordOutcome(to, 'logged')
+    recordOutcome(originalTo, 'logged')
     return { ok: false, fallback: true }
   }
   try {
     await binding.send({ to, from: FROM, subject, html, text })
-    recordOutcome(to, 'sent')
+    recordOutcome(originalTo, 'sent')
     return { ok: true }
   } catch (err) {
     // Binding finnes, men sending feilet (f.eks. domenet ikke onboardet ennå).
@@ -73,7 +85,7 @@ export async function sendEmail({ to, subject, html, text }: SendArgs): Promise<
     // for å bootstrappe første admin før e-post er ferdig satt opp.
     console.error('[e-post] sending feilet, logger innhold som nødløsning:', err)
     console.log(`\n[e-post:fallback] Til: ${to}\nEmne: ${subject}\n${text}\n`)
-    recordOutcome(to, 'logged')
+    recordOutcome(originalTo, 'logged')
     return { ok: false }
   }
 }

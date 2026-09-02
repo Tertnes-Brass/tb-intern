@@ -330,6 +330,88 @@ før første deploy.
 
 Logg så inn med `ADMIN_EMAIL`-adressen (blir admin automatisk) og inviter resten. Custom domene (`intern.tertnesbrass.com`) som ikke skal være bak Cloudflare Access må ha en egen Access-app med **Bypass / Everyone**, ellers blokkeres besøkende.
 
+## Drift: CI/CD, staging og backup
+
+Utvikling skjer i grener med PR mot `main`; merge til `main` deployer automatisk
+til prod. Tre GitHub Actions-workflows og ett staging-miljø bærer flyten:
+
+| Hva | Når | Gjør |
+|---|---|---|
+| `ci.yml` | hver PR | typesjekk, enhetstester, bygg |
+| `deploy.yml` | push til `main` | test → **D1-backup til R2** → additiv-sjekk av ventende migrasjoner → radtelling → migrer → radtelling igjen (ingen tabell skal krympe) → deploy → curl-verifisering → Discord-varsel |
+| `deploy-staging.yml` | push til `test` (eller manuelt fra Actions-fanen) | migrerer og deployer staging |
+| `backup.yml` | hver natt 02:30 UTC | D1-dump til `tb-notearkiv-backup/d1/nightly/` + rclone-speil av filbucketen til `files-mirror/` (slettede filer arkiveres i `files-deleted/<dato>/`) |
+
+Sikkerhetsnettene i `deploy.yml` stopper kjøringen FØR ny kode publiseres, så en
+feilet deploy lar prod stå urørt. Radtellingen kan i sjeldne tilfeller slå
+falskt ut hvis et medlem sletter noe i sekundene mellom tellingene — da er det
+bare å kjøre workflowen på nytt.
+
+**Krever disse repo-secretene** (Settings → Secrets and variables → Actions):
+
+- `CLOUDFLARE_API_TOKEN` — token med Workers Scripts:Edit, D1:Edit og
+  Workers R2 Storage:Edit på kontoen, pluss Workers Routes:Edit på sonen
+  `tertnesbrass.com` (custom domains).
+- `R2_BACKUP_ACCESS_KEY_ID` / `R2_BACKUP_SECRET_ACCESS_KEY` — S3-nøkler fra en
+  R2 API-token (dashbordet → R2 → Manage API Tokens); trenger lesetilgang til
+  `tb-notearkiv-files` og skrivetilgang til `tb-notearkiv-backup`. Mangler de,
+  hopper backupen over filspeilingen (kun D1 tas).
+- `DISCORD_WEBHOOK_URL` fantes fra før og gjenbrukes til deploy-/backup-varsler.
+
+**VIKTIG: Workers Builds (Git-integrasjonen i Cloudflare-dashbordet) må være
+frakoblet** for `tb-notearkiv` — ellers deployer den hver push til `main` selv,
+uten migrasjoner og uten sjekkene over, i kappløp med `deploy.yml`.
+Frakobling: dashbordet → Workers & Pages → tb-notearkiv → Settings → Build.
+
+### Staging (`test.tertnesbrass.com`)
+
+**Konvensjon: grenen `test` ER staging.** Vil du prøve noe før prod, push
+grenen din dit — så bygges, migreres og deployes den automatisk:
+
+```bash
+git push -f origin min-gren:test   # -f er normalen; test er en pekepinne uten egen historikk
+```
+
+Egen Worker (`tb-notearkiv-staging`, `env.staging` i `wrangler.jsonc`) med egen
+D1-database og R2-bucket — prod-data kan aldri røres derfra. To bevisste avvik
+fra prod: cron-triggeren kjører ikke, og **all e-post omdirigeres til
+`EMAIL_REDIRECT_ALL_TO`** (staging-databasen er en prod-kopi med ekte adresser;
+opprinnelig mottaker vises i emnefeltet). Logg inn i staging med
+engangskode/magisk lenke — e-posten lander hos adressaten i
+`EMAIL_REDIRECT_ALL_TO`.
+
+```bash
+pnpm run staging:refresh    # fersk prod-kopi inn i staging-D1 (prod leses bare)
+pnpm run deploy:staging     # bygg for staging + migrer + deploy
+```
+
+**NB:** miljøet velges ved *byggetidspunktet* (`CLOUDFLARE_ENV=staging`, ligger
+i `deploy:staging`-scriptet). Cloudflare-vite-pluginen skriver en ferdig flatet
+config til `dist/` som `wrangler deploy` følger — `wrangler deploy --env staging`
+etter et vanlig bygg deployer derfor PROD, ikke staging.
+
+Filbucketen kopieres ikke ved `staging:refresh` (PDF-er/bilder kan mangle i
+staging). Trengs filene: engangs `rclone sync` fra `tb-notearkiv-files` til
+`tb-notearkiv-files-staging` med R2 S3-nøkler. Kalenderen i staging krever
+`wrangler secret put CALENDAR_ICS_URL --env staging` (samme verdi som prod);
+uten den er hendelseslista bare tom.
+
+### Gjenoppretting (runbook)
+
+- **Kode:** `wrangler rollback` (forrige versjon) eller
+  `wrangler rollback <versjons-ID>` — sekunder, rører ikke databasen.
+- **Data, nylig uhell:** D1 Time Travel gir punkt-i-tid-gjenoppretting 30 dager
+  tilbake: `wrangler d1 time-travel restore tb-notearkiv --timestamp=<ISO-tid>`.
+  NB: hele databasen settes tilbake — endringer etter tidspunktet går tapt.
+- **Data, fra backup:** dumper ligger i R2 (`tb-notearkiv-backup/d1/…`, 60
+  dagers oppbevaring). Gjenopprett til en tom/ny database med mønsteret i
+  `scripts/staging-refresh.sh` (skjema før data, INSERT-er i FK-rekkefølge via
+  `scripts/reorder-inserts.mjs`).
+- **Filer:** speilet ligger i `tb-notearkiv-backup/files-mirror/`; filer som ble
+  slettet fra kilden ligger 90 dager i `files-deleted/<dato>/`.
+- Manuell nød-deploy utenom Actions: `pnpm run deploy` (som før — backup-rutinen
+  må da gjøres for hånd).
+
 ## Cutover til intern.tertnesbrass.com (sjekkliste)
 
 Notearkivet blir internsiden, og domenet flytter fra `noter.tertnesbrass.com`

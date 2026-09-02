@@ -39,7 +39,11 @@
 		// denne kalenderen»). Tom = ingen innebygd kalender nederst på /kalender.
 		// Selve hendelseslista kommer fra den HEMMELIGE iCal-adressen, som settes
 		// som secret: `wrangler secret put CALENDAR_ICS_URL` (aldri i denne fila).
-		"CALENDAR_EMBED_URL": "https://calendar.google.com/calendar/embed?src=0ieontn6bgp0f9loh031ba9hgc%40group.calendar.google.com&ctz=Europe%2FOslo&wkst=2&hl=no"
+		"CALENDAR_EMBED_URL": "https://calendar.google.com/calendar/embed?src=0ieontn6bgp0f9loh031ba9hgc%40group.calendar.google.com&ctz=Europe%2FOslo&wkst=2&hl=no",
+		// Tom streng = e-post sendes til faktisk mottaker (prod). I staging settes
+		// denne til en enkeltadresse, og ALL e-post omdirigeres dit — se env.staging
+		// under og sendEmail i src/server/email.ts.
+		"EMAIL_REDIRECT_ALL_TO": ""
 	},
 	// Sonen tertnesbrass.com ligger i Cloudflare, så `wrangler deploy` oppretter
 	// DNS-oppføringen for custom domains automatisk — ingen manuelle DNS-steg.
@@ -75,5 +79,53 @@
 	],
 	// Cloudflare Email Sending — magisk lenke + passord-reset. Domenet onboardes
 	// med `wrangler email sending enable tertnesbrass.com` (setter opp DKIM/SPF automatisk).
-	"send_email": [{ "name": "EMAIL" }]
+	"send_email": [{ "name": "EMAIL" }],
+
+	// ── Staging ────────────────────────────────────────────────────────────────
+	// Egen Worker (tb-notearkiv-staging) på test.tertnesbrass.com med EGEN
+	// D1-database og EGEN R2-bucket — prod-data røres aldri herfra. Fylles med en
+	// fersk prod-kopi ved behov: `pnpm run staging:refresh` (scripts/staging-refresh.sh).
+	// Deploy: `pnpm run deploy:staging`, eller «Deploy staging»-workflowen i Actions.
+	//
+	// Vars og bindinger ARVES IKKE mellom miljøer i wrangler — alt må gjentas her.
+	// To bevisste avvik fra prod:
+	//  - `triggers.crons` er tom: den daglige påminnelsen skal aldri kjøre fra staging.
+	//  - `EMAIL_REDIRECT_ALL_TO` er satt: all e-post fra staging går til Sindre,
+	//    uansett mottaker, siden databasen er en prod-kopi med ekte adresser.
+	"env": {
+		"staging": {
+			"name": "tb-notearkiv-staging",
+			"workers_dev": true,
+			"triggers": {
+				"crons": []
+			},
+			"routes": [
+				{
+					"pattern": "test.tertnesbrass.com",
+					"custom_domain": true
+				}
+			],
+			"vars": {
+				"BETTER_AUTH_URL": "https://test.tertnesbrass.com",
+				"ADMIN_EMAIL": "sindre.ryland@gmail.com",
+				"CALENDAR_EMBED_URL": "https://calendar.google.com/calendar/embed?src=0ieontn6bgp0f9loh031ba9hgc%40group.calendar.google.com&ctz=Europe%2FOslo&wkst=2&hl=no",
+				"EMAIL_REDIRECT_ALL_TO": "sindre.ryland@gmail.com"
+			},
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "tb-notearkiv-staging",
+					"database_id": "114957a0-8a1a-42f2-83e8-bc9da6bf719b",
+					"migrations_dir": "migrations"
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "FILES",
+					"bucket_name": "tb-notearkiv-files-staging"
+				}
+			],
+			"send_email": [{ "name": "EMAIL" }]
+		}
+	}
 }

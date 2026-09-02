@@ -11,6 +11,14 @@ Notearkiv for brass band (Tertnes Brass). TanStack Start (React) på Cloudflare 
 - `pnpm exec drizzle-kit generate --name <navn>` → `pnpm exec wrangler d1 migrations apply tb-notearkiv --local` — skjemaendringer
 - `pnpm generate-routes` — regenerer routeTree etter nye filer i `src/routes/`
 
+## Grener og miljøer
+
+- **`main` = prod** (intern.tertnesbrass.com). Merge til main deployer automatisk via `.github/workflows/deploy.yml`: backup av D1 → sjekk at ventende migrasjoner er additive → radtelling → migrer → deploy → verifisering. Deploy aldri prod manuelt uten grunn; workflowen ER deploy-rutinen.
+- **`test` = staging** (test.tertnesbrass.com, egen D1/R2 — prod røres aldri derfra). Vil du vise/teste noe før merge: `git push -f origin <din-gren>:test`. `-f` er normalen; `test` er en pekepinne uten egen historikk. All e-post fra staging omdirigeres til én adresse, cron kjører ikke der.
+- `pnpm run staging:refresh` — fersk prod-kopi inn i staging-D1 (prod leses bare).
+- **Felle:** miljø velges ved BYGGING (`CLOUDFLARE_ENV=staging`) — vite-pluginen flater konfigen til `dist/`. `wrangler deploy --env staging` etter et vanlig bygg deployer PROD. Bruk `pnpm run deploy:staging` hvis du må deploye staging manuelt.
+- Cloudflare Workers Builds (Git-integrasjonen i dashbordet) skal være FRAKOBLET — den deployer uten migrasjoner og sjekker. Ser du doble deployer per push, er den koblet på igjen.
+
 ## Rutestruktur
 
 Appen er i ferd med å bli hele internsiden («Tertnes Brass Intern»), og noter er
