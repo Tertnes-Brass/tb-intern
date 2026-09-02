@@ -306,6 +306,50 @@ snike seg inn. Reglene:
   prosjektkoblingen godtar kun **publiserte** prosjekter — et utkast er ikke
   synlig for medlemmene, og navnet skulle ikke lekket via en kobling.
 
+## 5e. Tidsplan og praktisk info (#9 + #10 + #29, 2. september 2026)
+
+Prosjektet fikk en tidsplan, og øvingen fikk praktisk info. Ingen av delene
+trengte en ny rettighet — men to ting måtte avgjøres eksplisitt.
+
+- **To rettigheter, to eiere.** Tidsplanen (`project_times`) skrives med
+  `projects.manage`, fordi det er prosjektansvarlig som bestemmer når
+  lastebilen kjører. Den praktiske infoen på en øving og
+  prosjektkoblingene (`event_meta`, `event_projects`) skrives med
+  `calendar.manage`, fordi det er den som setter opp øvelsen. Lesing er åpen
+  for alle som allerede ser prosjektet eller hendelsen. Prosjektkoblingen
+  godtar fortsatt kun **publiserte** prosjekter, og `getEventDetail` leser
+  bare ut publiserte: et prosjekt som avpubliseres etter at koblingen ble
+  laget, skal ikke bli stående synlig med navn for hele korpset.
+- **Telefonnummeret er kopiert, ikke speilet.** #9 ber om kontaktinfo på den
+  som kjører lastebilen, «kan hentes fra person i medlemslista». Men
+  `listMembers` gir bare `phone` til `members.manage` — telefonnummer er
+  administrasjonsdata, ikke katalogdata. Løsningen bryter ikke den regelen:
+  - `project_times.contact_phone` er et EGET felt som stab skriver inn, ikke en
+    join mot `member_profiles`. Ingen spørring i prosjektområdet leser
+    medlemmets telefonnummer ut til en side hele korpset ser.
+  - `listProjectMembers` (gated på `projects.manage`) tar med `phone` **kun**
+    når den som spør også har `members.manage` — nøyaktig samme regel som
+    medlemslista. Har hen den ikke, får hen navn og stemme, og skriver et
+    nummer selv.
+  - Nummeret prefylles ÉN gang i skjemaet, som et forslag. Den som lagrer ser
+    og godkjenner hva som blir stående, og et medlem som senere endrer
+    profilen sin får ikke det nye nummeret publisert på en gammel konsert uten
+    at noen har bestemt det. Alternativet — å vise medlemmets profilnummer
+    direkte — ville gjort tidsplanen til en omvei rundt `members.manage`.
+  - **Navnet** på ansvarlig slås derimot alltid opp ferskt mot `user`, som
+    omtaler i #83: et navn er allerede synlig for alle i medlemslista, og et
+    gammelt navn i en tidsplan er en feil, ikke personvern.
+- **Ansvarlig må være et AKTIVT medlem.** `assertResponsibleMember` slår opp
+  `member_profiles` før skriving, så et rått kall ikke kan feste en hvilken som
+  helst bruker-id — eller en deaktivert konto — på en side hele korpset leser.
+- **`projectId` står i WHERE, ikke bare i validatoren.** `updateProjectTime` og
+  `removeProjectTime` krever at raden hører til prosjektet som sendes inn;
+  id-en alene ville latt et kall redigere et tidspunkt i et annet prosjekt.
+- **Kartlenka er en allowlist.** `parseMapUrl` stripper kontrolltegn FØR
+  skjemasjekken og godtar kun `http(s):` — samme disiplin som `safeHref` i
+  markdown-rendringen (§8). En `javascript:`-lenke skal ikke kunne lagres av
+  stab og senere klikkes av et medlem.
+
 ## 6. Produktvalg før fase 4 (avgjort — historikk)
 
 Alle valg ble avgjort før deploy, i tråd med de anbefalte alternativene (se

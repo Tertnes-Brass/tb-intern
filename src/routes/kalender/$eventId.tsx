@@ -1,5 +1,6 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
+import { EventPracticalSection } from '../../components/EventPractical'
 import { toast, toastError } from '../../components/toast'
 import { Button, EmptyState, Kicker, Modal, SectionHeading, Stamp } from '../../components/ui'
 import {
@@ -17,7 +18,6 @@ import {
   moveSetlistItem,
   removeSetlistItem,
   searchWorksForEvent,
-  setLinkedProject,
   setMemberAttendance,
   setMyAttendance,
   updateSetlistItem,
@@ -82,17 +82,23 @@ function EventDetailPage() {
           <p className="mt-3 max-w-xl whitespace-pre-line text-sm leading-relaxed text-ink-soft">{event.description}</p>
         )}
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          {event.location && <Stamp tone="brass">{event.location}</Stamp>}
-          {event.allDay && <Stamp>Hele dagen</Stamp>}
-          {data.linkedProject && (
-            <Link to="/noter/prosjekter/$projectId" params={{ projectId: data.linkedProject.id }}>
-              <Stamp className="cursor-pointer">{data.linkedProject.name}</Stamp>
-            </Link>
+          {(data.practical.locationName || event.location) && (
+            <Stamp tone="brass">{data.practical.locationName ?? event.location}</Stamp>
           )}
+          {event.allDay && <Stamp>Hele dagen</Stamp>}
+          {data.practical.meetupMusicians && <Stamp>Oppmøte {data.practical.meetupMusicians}</Stamp>}
         </div>
         <div className="staff-rule mt-7 w-full opacity-50" aria-hidden />
       </header>
 
+      <EventPracticalSection
+        occurrenceKey={eventId}
+        practical={data.practical}
+        linkedProjects={data.linkedProjects}
+        projectOptions={data.projectOptions}
+        canManage={data.canManagePlan}
+        eventLocation={event.location}
+      />
       <PlanSection data={data} occurrenceKey={eventId} />
       <AttendanceSection data={data} occurrenceKey={eventId} />
     </div>
@@ -109,7 +115,7 @@ function OrphanPage({ data }: { data: Detail }) {
   // Serveren har allerede avgjort om DENNE leseren får se de lokale dataene
   // (skriverett eller gruppelederbinding). Teksten skal ikke røpe at det finnes
   // en øvingsplan for en som ikke får se den.
-  const showsLocal = data.setlist.length > 0 || data.groups !== null
+  const showsLocal = data.setlist.length > 0 || data.groups !== null || data.linkedProjects.length > 0
   return (
     <div className="space-y-10">
       <header className="rise">
@@ -136,6 +142,14 @@ function OrphanPage({ data }: { data: Detail }) {
 
       {showsLocal && (
         <>
+          <EventPracticalSection
+            occurrenceKey={data.occurrenceKey}
+            practical={data.practical}
+            linkedProjects={data.linkedProjects}
+            projectOptions={data.projectOptions}
+            canManage={data.canManagePlan}
+            eventLocation={null}
+          />
           <PlanSection data={data} occurrenceKey={data.occurrenceKey} />
           <AttendanceSection data={data} occurrenceKey={data.occurrenceKey} />
         </>
@@ -256,30 +270,6 @@ function PlanSection({ data, occurrenceKey }: { data: Detail; occurrenceKey: str
             </li>
           ))}
         </ol>
-      )}
-
-      {data.canManagePlan && (
-        <div className="mt-4">
-          <label className="flex flex-wrap items-center gap-2 text-[0.8rem] text-ink-soft">
-            <span className="font-mono text-[0.66rem] uppercase tracking-[0.14em] text-ink-faint">Hører til</span>
-            <select
-              className="field-input !w-auto !text-base sm:!text-xs"
-              value={data.linkedProject?.id ?? ''}
-              disabled={busy}
-              onChange={(e) =>
-                act(() => setLinkedProject({ data: { occurrenceKey, projectId: e.target.value || null } }))
-              }
-            >
-              <option value="">Ingen prosjektkobling</option>
-              {data.projectOptions.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                  {p.eventDate ? ` · ${formatDate(p.eventDate)}` : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
       )}
 
       <WorkPicker occurrenceKey={occurrenceKey} open={pickerOpen} onClose={() => setPickerOpen(false)} />

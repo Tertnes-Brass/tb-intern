@@ -2,9 +2,35 @@ import { createServerFn } from '@tanstack/react-start'
 import { and, asc, desc, eq, gte, inArray, like, lt, lte, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db, type Db } from '../db'
-import { parts, projectWorks, projects, seasons, workFiles, workLinks, works } from '../db/schema'
+import {
+  eventMeta,
+  eventProjects,
+  memberProfiles,
+  parts,
+  projectTimes,
+  projectWorks,
+  projects,
+  seasons,
+  user,
+  userParts,
+  workFiles,
+  workLinks,
+  works,
+} from '../db/schema'
+import { CALENDAR_PERMISSION } from '../lib/attendance'
 import { newId } from '../lib/id'
 import { PERCUSSION_MAX_LENGTH, parsePercussionSetup, showPercussionFor } from '../lib/percussion'
+import {
+  PRACTICAL_LABEL_MAX,
+  PRACTICAL_LOCATION_MAX,
+  PRACTICAL_NAME_MAX,
+  PRACTICAL_NOTE_MAX,
+  PRACTICAL_PHONE_MAX,
+  PROJECT_TIME_AUDIENCES,
+  PROJECT_TIME_KINDS,
+  parseProjectTimeInput,
+  sortProjectTimes,
+} from '../lib/practical'
 import {
   hasFullArchiveAccess,
   hasPermission,
@@ -12,6 +38,7 @@ import {
   requireMe,
   requirePermission,
 } from './access'
+import { loadCalendar } from './calendar-feed'
 import { type AccessCtx, memberCanAccessFile, memberCanSeeFile } from './file-access'
 import {
   DEFAULT_PROJECT_SORT,
@@ -240,20 +267,162 @@ export const getProject = createServerFn()
 
     const inAccessibleProject =
       project.isPublished && !!project.eventDate && project.eventDate >= today
-    const repertoire = await assembleRepertoire(
-      d,
-      project.id,
-      memberFileAccessContext(me, inAccessibleProject),
-    )
+    const [repertoire, times, rehearsals] = await Promise.all([
+      assembleRepertoire(d, project.id, memberFileAccessContext(me, inAccessibleProject)),
+      loadProjectTimes(d, project.id),
+      loadProjectRehearsals(d, project.id),
+    ])
 
     return {
       project,
       repertoire,
+      times,
+      rehearsals,
       canManage,
+      canManageCalendar: hasPermission(me, CALENDAR_PERMISSION),
       canShare: hasPermission(me, 'shares.manage'),
       myParts: me.parts,
     }
   })
+
+// ---------- Tidsplan (#9) ----------
+
+export type ProjectTimeRow = {
+  id: string
+  kind: string
+  label: string | null
+  date: string
+  time: string | null
+  location: string | null
+  audience: string
+  note: string | null
+  /** Medlemmet som er ansvarlig — for å kunne forhåndsvelge det i skjemaet. */
+  responsibleUserId: string | null
+  /** Navnet som skal vises: medlemmets NÅVÆRENDE navn, ellers fritekstnavnet. */
+  responsibleName: string | null
+  contactPhone: string | null
+  createdAt: number
+}
+
+/**
+ * Tidsplanen for ett prosjekt, kronologisk.
+ *
+ * Navnet på ansvarlig slås alltid opp ferskt mot `user` (som omtaler i #83):
+ * har hen byttet navn, skal tidsplanen vise det nye. Fritekstnavnet brukes bare
+ * når ingen medlemsrad er valgt.
+ *
+ * Rekkefølgen avgjøres i `sortProjectTimes` (enhetstestet), ikke i SQL: et
+ * punkt uten klokkeslett skal sist på dagen, og `ORDER BY time` ville lagt
+ * NULL først i SQLite.
+ */
+async function loadProjectTimes(d: Db, projectId: string): Promise<ProjectTimeRow[]> {
+  const rows = await d
+    .select({
+      id: projectTimes.id,
+      kind: projectTimes.kind,
+      label: projectTimes.label,
+      date: projectTimes.date,
+      time: projectTimes.time,
+      location: projectTimes.location,
+      audience: projectTimes.audience,
+      note: projectTimes.note,
+      responsibleUserId: projectTimes.responsibleUserId,
+      responsibleName: projectTimes.responsibleName,
+      contactPhone: projectTimes.contactPhone,
+      createdAt: projectTimes.createdAt,
+      memberName: user.name,
+    })
+    .from(projectTimes)
+    .leftJoin(user, eq(projectTimes.responsibleUserId, user.id))
+    .where(eq(projectTimes.projectId, projectId))
+
+  return sortProjectTimes(
+    rows.map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      label: row.label,
+      date: row.date,
+      time: row.time,
+      location: row.location,
+      audience: row.audience,
+      note: row.note,
+      responsibleUserId: row.responsibleUserId,
+      responsibleName: row.memberName ?? row.responsibleName,
+      contactPhone: row.contactPhone,
+      createdAt: row.createdAt.getTime(),
+    })),
+  )
+}
+
+// ---------- Oppkjøring: øvingene som hører til prosjektet (#10) ----------
+
+export type ProjectRehearsal = {
+  occurrenceKey: string
+  title: string
+  /** Epoch-ms. Fra feeden når hendelsen finnes der, ellers fra snapshotet. */
+  start: number
+  /** Hendelsen finnes fortsatt i kalenderfeeden. */
+  inCalendar: boolean
+  location: string | null
+  meetupCrew: string | null
+  meetupMusicians: string | null
+  conductor: string | null
+  setlistCount: number
+}
+
+/**
+ * Øvingene som peker på prosjektet (#10), kronologisk.
+ *
+ * Kalenderen er sannheten om tittel og tidspunkt så lenge hendelsen finnes der;
+ * `event_meta`-snapshotet er reserveløsningen. En øvelse som har falt ut av
+ * firemånedersvinduet — eller er slettet i Google — forsvinner derfor ikke fra
+ * oppkjøringsplanen, den vises med det vi visste sist og merkes `inCalendar:
+ * false`. Det er samme regel som detaljruta: lokale data slettes aldri fordi
+ * feeden endrer seg.
+ *
+ * Feeden hentes bare når prosjektet FAKTISK har koblede øvinger, og gjennom
+ * `loadCalendar` — samme ti-minutters cache som `/kalender` og hub-en bruker.
+ */
+async function loadProjectRehearsals(d: Db, projectId: string): Promise<ProjectRehearsal[]> {
+  const rows = await d
+    .select({
+      occurrenceKey: eventProjects.occurrenceKey,
+      summary: eventMeta.summary,
+      start: eventMeta.start,
+      locationName: eventMeta.locationName,
+      meetupCrew: eventMeta.meetupCrew,
+      meetupMusicians: eventMeta.meetupMusicians,
+      conductor: eventMeta.conductor,
+      setlistCount: sql<number>`(select count(*) from event_setlist es where es.occurrence_key = ${eventProjects.occurrenceKey})`,
+    })
+    .from(eventProjects)
+    .innerJoin(eventMeta, eq(eventProjects.occurrenceKey, eventMeta.occurrenceKey))
+    .where(eq(eventProjects.projectId, projectId))
+
+  if (rows.length === 0) return []
+
+  const calendar = await loadCalendar(Date.now())
+  const byKey = new Map(calendar.events.map((event) => [event.occurrenceKey, event]))
+
+  return rows
+    .map((row): ProjectRehearsal => {
+      const live = byKey.get(row.occurrenceKey) ?? null
+      return {
+        occurrenceKey: row.occurrenceKey,
+        title: live?.title ?? row.summary,
+        start: live ? Date.parse(live.start) : row.start.getTime(),
+        inCalendar: live !== null,
+        // Stedet fra den praktiske infoen går foran kalenderens egen
+        // lokasjon: den er skrevet av noen som vet hvor vi faktisk skal.
+        location: row.locationName ?? live?.location ?? null,
+        meetupCrew: row.meetupCrew,
+        meetupMusicians: row.meetupMusicians,
+        conductor: row.conductor,
+        setlistCount: row.setlistCount,
+      }
+    })
+    .sort((a, b) => a.start - b.start)
+}
 
 export const createProject = createServerFn({ method: 'POST' })
   .validator(
@@ -411,6 +580,157 @@ export const updateProjectWorkPercussion = createServerFn({ method: 'POST' })
       .where(and(eq(projectWorks.projectId, data.projectId), eq(projectWorks.workId, data.workId)))
     return { ok: true }
   })
+
+// ---------- Tidsplan: skriving (#9) ----------
+
+/**
+ * Feltene i ett tidspunkt. `nullish` overalt fordi skjemaet sender tomme felt
+ * som tom streng eller `null`; `parseProjectTimeInput` avgjør hva som er
+ * gyldig, slik at serveren og skjemaet ikke kan ha hver sin mening om det.
+ * Takene her er romslige (×4) — den EKTE kuttingen skjer i den rene modulen.
+ */
+const projectTimeFields = {
+  kind: z.enum(PROJECT_TIME_KINDS).optional(),
+  label: z.string().max(PRACTICAL_LABEL_MAX * 4).nullish(),
+  date: z.string().max(32),
+  time: z.string().max(32).nullish(),
+  location: z.string().max(PRACTICAL_LOCATION_MAX * 4).nullish(),
+  audience: z.enum(PROJECT_TIME_AUDIENCES).optional(),
+  note: z.string().max(PRACTICAL_NOTE_MAX * 4).nullish(),
+  responsibleUserId: z.string().max(64).nullish(),
+  responsibleName: z.string().max(PRACTICAL_NAME_MAX * 4).nullish(),
+  contactPhone: z.string().max(PRACTICAL_PHONE_MAX * 4).nullish(),
+}
+
+/**
+ * Ansvarlig må være et AKTIVT medlem. Uten sjekken kunne et rått kall pekt på
+ * en hvilken som helst bruker-id — også en deaktivert konto — og navnet ville
+ * dukket opp på en side hele korpset leser.
+ */
+async function assertResponsibleMember(d: Db, userId: string | null): Promise<void> {
+  if (!userId) return
+  const rows = await d
+    .select({ isActive: memberProfiles.isActive })
+    .from(memberProfiles)
+    .where(eq(memberProfiles.authUserId, userId))
+    .limit(1)
+  if (!rows[0] || !rows[0].isActive) throw new Error('Ukjent eller deaktivert medlem')
+}
+
+export const addProjectTime = createServerFn({ method: 'POST' })
+  .validator(z.object({ projectId: z.string(), ...projectTimeFields }))
+  .handler(async ({ data }) => {
+    const me = await requirePermission('projects.manage')
+    const d = db()
+    const value = parseProjectTimeInput(data)
+    const project = await d.select({ id: projects.id }).from(projects).where(eq(projects.id, data.projectId)).limit(1)
+    if (!project[0]) throw new Error('Fant ikke prosjektet')
+    await assertResponsibleMember(d, value.responsibleUserId)
+    const now = new Date()
+    await d.insert(projectTimes).values({
+      id: newId(),
+      projectId: data.projectId,
+      ...value,
+      createdBy: me.id,
+      createdAt: now,
+      updatedAt: now,
+    })
+    return { ok: true }
+  })
+
+/**
+ * Hele raden skrives om — som `updateEventPractical`. Skjemaet er ett lite
+ * skjema med åtte felt, og en delvis oppdatering ville krevd at «tomt felt» og
+ * «ikke sendt» kunne skilles for hvert av dem.
+ */
+export const updateProjectTime = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string(), projectId: z.string(), ...projectTimeFields }))
+  .handler(async ({ data }) => {
+    await requirePermission('projects.manage')
+    const d = db()
+    const value = parseProjectTimeInput(data)
+    await assertResponsibleMember(d, value.responsibleUserId)
+    // `projectId` er med i WHERE, ikke bare i validatoren: id-en alene ville
+    // latt et rått kall redigere et tidspunkt i et annet prosjekt.
+    await d
+      .update(projectTimes)
+      .set({ ...value, updatedAt: new Date() })
+      .where(and(eq(projectTimes.id, data.id), eq(projectTimes.projectId, data.projectId)))
+    return { ok: true }
+  })
+
+export const removeProjectTime = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string(), projectId: z.string() }))
+  .handler(async ({ data }) => {
+    await requirePermission('projects.manage')
+    await db()
+      .delete(projectTimes)
+      .where(and(eq(projectTimes.id, data.id), eq(projectTimes.projectId, data.projectId)))
+    return { ok: true }
+  })
+
+/**
+ * De aktive medlemmene, til «ansvarlig»-velgeren i tidsplanen. Gated på
+ * `projects.manage` — det er den som setter opp tidsplanen som velger.
+ *
+ * Hele lista, ikke et søk: korpset er tretti personer, og en nedtrekksliste
+ * uten søkefelt er raskere enn en debouncet spørring per tastetrykk.
+ *
+ * **Telefonnummeret følger medlemslista sin regel, ikke prosjektets.**
+ * `listMembers` gir bare `phone` til `members.manage`, fordi telefonnummer er
+ * administrasjonsdata og ikke katalogdata. Den regelen gjentas her: har du den
+ * ikke, får du navnet og stemmen, og skriver et kontaktnummer selv. Nummeret
+ * som til slutt står på tidspunktet er alltid et BEVISST publisert
+ * kontaktpunkt for akkurat den oppgaven — aldri profilen speilet ut til hele
+ * korpset av seg selv.
+ */
+export const listProjectMembers = createServerFn().handler(async () => {
+  const me = await requirePermission('projects.manage')
+  const d = db()
+  const canSeePhone = hasPermission(me, 'members.manage')
+
+  const rows = await d
+    .select({
+      id: user.id,
+      name: user.name,
+      phone: memberProfiles.phone,
+      partName: parts.nameNo,
+      partSort: parts.sortOrder,
+      isPrimary: userParts.isPrimary,
+    })
+    .from(memberProfiles)
+    .innerJoin(user, eq(memberProfiles.authUserId, user.id))
+    .leftJoin(userParts, eq(userParts.userId, user.id))
+    .leftJoin(parts, eq(userParts.partId, parts.id))
+    .where(eq(memberProfiles.isActive, true))
+
+  const byId = new Map<string, { id: string; name: string; phone: string | null; partName: string | null; rank: number }>()
+  for (const row of rows) {
+    // Primærstemmen først, ellers laveste sortOrder — samme regel som
+    // medlemslista, så et navn ikke får to ulike stemmer to steder.
+    const rank = (row.isPrimary ? 0 : 1) * 10_000 + (row.partSort ?? 999)
+    const current = byId.get(row.id)
+    if (!current) {
+      byId.set(row.id, {
+        id: row.id,
+        name: row.name,
+        phone: canSeePhone ? row.phone : null,
+        partName: row.partName,
+        rank,
+      })
+    } else if (rank < current.rank) {
+      current.partName = row.partName
+      current.rank = rank
+    }
+  }
+
+  return {
+    members: [...byId.values()]
+      .sort((a, b) => a.name.localeCompare(b.name, 'nb'))
+      .map(({ rank: _rank, ...member }) => member),
+    canSeePhone,
+  }
+})
 
 export const removeWorkFromProject = createServerFn({ method: 'POST' })
   .validator(z.object({ projectId: z.string(), workId: z.string() }))

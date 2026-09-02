@@ -5,6 +5,7 @@ import { db, type Db } from '../db'
 import {
   eventAttendance,
   eventMeta,
+  eventProjects,
   eventSetlist,
   memberProfiles,
   parts,
@@ -28,6 +29,15 @@ import {
 } from '../lib/attendance'
 import { newId } from '../lib/id'
 import { isOccurrenceKey } from '../lib/occurrence'
+import {
+  type EventPracticalValue,
+  PRACTICAL_ADDRESS_MAX,
+  PRACTICAL_LOCATION_MAX,
+  PRACTICAL_NAME_MAX,
+  PRACTICAL_NOTE_MAX,
+  PRACTICAL_URL_MAX,
+  parseEventPracticalInput,
+} from '../lib/practical'
 import { SETLIST_NOTE_MAX, SETLIST_TITLE_MAX, parseSetlistInput } from '../lib/setlist'
 import { type Me, hasFullArchiveAccess, hasPermission, requireMe, requirePermission } from './access'
 import { loadCalendar } from './calendar-feed'
@@ -195,6 +205,40 @@ export type EventSetlistItem = {
   note: string | null
 }
 
+/** Praktisk info per øving (#10). Alle felt er valgfrie — se src/lib/practical.ts. */
+export type EventPractical = EventPracticalValue
+
+const EMPTY_PRACTICAL: EventPractical = {
+  locationName: null,
+  locationAddress: null,
+  mapUrl: null,
+  meetupCrew: null,
+  meetupMusicians: null,
+  conductor: null,
+  keyholder: null,
+  crew: null,
+  substitutes: null,
+  practicalNote: null,
+}
+
+/** Plukker ut de ti praktiske feltene fra en `event_meta`-rad. Ett sted, så en
+ *  ny kolonne ikke kan bli glemt i den ene av to returgrener. */
+function practicalOf(meta: typeof eventMeta.$inferSelect | null | undefined): EventPractical {
+  if (!meta) return EMPTY_PRACTICAL
+  return {
+    locationName: meta.locationName,
+    locationAddress: meta.locationAddress,
+    mapUrl: meta.mapUrl,
+    meetupCrew: meta.meetupCrew,
+    meetupMusicians: meta.meetupMusicians,
+    conductor: meta.conductor,
+    keyholder: meta.keyholder,
+    crew: meta.crew,
+    substitutes: meta.substitutes,
+    practicalNote: meta.practicalNote,
+  }
+}
+
 export type EventAttendanceRow = {
   userId: string
   name: string
@@ -248,7 +292,8 @@ export const getEventDetail = createServerFn()
         canManagePlan,
         canManageAttendance: scope.kind === 'all',
         setlist: [] as EventSetlistItem[],
-        linkedProject: null as { id: string; name: string } | null,
+        practical: practicalOf(meta),
+        linkedProjects: [] as Array<{ id: string; name: string; eventDate: string | null }>,
         projectOptions: [] as Array<{ id: string; name: string; eventDate: string | null }>,
         myAttendance: null as { status: AttendanceStatus; comment: string | null } | null,
         counts: countAttendance([]),
@@ -256,7 +301,7 @@ export const getEventDetail = createServerFn()
       }
     }
 
-    const [setlistRows, attendanceRows, roster, projectOptions] = await Promise.all([
+    const [setlistRows, attendanceRows, roster, projectOptions, linkedProjects] = await Promise.all([
       d
         .select({
           id: eventSetlist.id,
@@ -290,6 +335,16 @@ export const getEventDetail = createServerFn()
             .where(eq(projects.isPublished, true))
             .orderBy(asc(projects.eventDate))
         : Promise.resolve([]),
+      // Prosjektene øvingen hører til (#10). n:m — én øving kan peke på flere.
+      // Kun PUBLISERTE prosjekter leses ut: `setEventProject` godtar bare
+      // publiserte, men et prosjekt kan avpubliseres etterpå, og da skal navnet
+      // ikke bli stående synlig på detaljruta for hele korpset.
+      d
+        .select({ id: projects.id, name: projects.name, eventDate: projects.eventDate })
+        .from(eventProjects)
+        .innerJoin(projects, eq(eventProjects.projectId, projects.id))
+        .where(and(eq(eventProjects.occurrenceKey, key), eq(projects.isPublished, true)))
+        .orderBy(asc(projects.eventDate)),
     ])
 
     const nameById = new Map(roster.map((m) => [m.id, m.name]))
@@ -328,16 +383,6 @@ export const getEventDetail = createServerFn()
             members: group.members.map(({ section: _s, sortOrder: _o, ...row }) => row),
           }))
 
-    const linkedProject = meta?.linkedProjectId
-      ? ((
-          await d
-            .select({ id: projects.id, name: projects.name })
-            .from(projects)
-            .where(eq(projects.id, meta.linkedProjectId))
-            .limit(1)
-        )[0] ?? null)
-      : null
-
     return {
       occurrenceKey: key,
       found: event !== null,
@@ -367,7 +412,8 @@ export const getEventDetail = createServerFn()
           note: row.note,
         }),
       ),
-      linkedProject,
+      practical: practicalOf(meta),
+      linkedProjects,
       projectOptions,
       myAttendance: mine ? { status: mine.status, comment: mine.comment } : null,
       counts,
@@ -501,26 +547,102 @@ export const moveSetlistItem = createServerFn({ method: 'POST' })
     return { ok: true }
   })
 
-export const setLinkedProject = createServerFn({ method: 'POST' })
-  .validator(z.object({ occurrenceKey: occurrenceKeySchema, projectId: z.string().nullable() }))
+/**
+ * Kobler øvingen til — eller fra — ETT prosjekt (#10). Koblingen er n:m: «det
+ * kan være vi øver til meir enn eit prosjekt på samme øvinga, så det må ikkje
+ * være låst fast». Én rad om gangen, ikke «sett hele lista»: to personer som
+ * huker av hvert sitt prosjekt samtidig skal ikke kunne slette hverandres valg.
+ *
+ * Kun PUBLISERTE prosjekter kan kobles på — som før. Et utkast er ikke synlig
+ * for medlemmene, og en kobling ville lekket navnet på detaljruta.
+ */
+export const setEventProject = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      occurrenceKey: occurrenceKeySchema,
+      projectId: z.string().max(64),
+      linked: z.boolean(),
+    }),
+  )
   .handler(async ({ data }) => {
     const me = await requirePermission(CALENDAR_PERMISSION)
     const d = db()
-    if (data.projectId) {
-      // Kun publiserte prosjekter: et utkast er ikke synlig for medlemmene, og
-      // en kobling ville lekket navnet på detaljruta.
-      const project = await d
-        .select({ id: projects.id })
-        .from(projects)
-        .where(and(eq(projects.id, data.projectId), eq(projects.isPublished, true)))
-        .limit(1)
-      if (!project[0]) throw new Error('Ukjent eller upublisert prosjekt')
+
+    if (!data.linked) {
+      // Frakobling krever ingen prosjektsjekk: raden skal bort uansett hva
+      // prosjektet har blitt til siden den ble laget.
+      await d
+        .delete(eventProjects)
+        .where(
+          and(
+            eq(eventProjects.occurrenceKey, data.occurrenceKey),
+            eq(eventProjects.projectId, data.projectId),
+          ),
+        )
+      await touchMeta(d, data.occurrenceKey)
+      return { ok: true }
     }
+
+    const project = await d
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.id, data.projectId), eq(projects.isPublished, true)))
+      .limit(1)
+    if (!project[0]) throw new Error('Ukjent eller upublisert prosjekt')
+
     await ensureMeta(d, data.occurrenceKey, me)
     await d
+      .insert(eventProjects)
+      .values({
+        occurrenceKey: data.occurrenceKey,
+        projectId: data.projectId,
+        createdBy: me.id,
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing()
+    await touchMeta(d, data.occurrenceKey)
+    return { ok: true }
+  })
+
+/**
+ * Praktisk info på øvingen (#10): sted, kartlenke, oppmøtetider, dirigent,
+ * nøkkelansvarlig, riggegruppe, vikarer.
+ *
+ * **Hele blokka skrives under ett.** Feltene fylles ut i ett skjema, og en
+ * delvis oppdatering ville krevd at hvert felt kunne skilles fra «ikke sendt»
+ * — mye maskineri for en dialog med ti felt. `parseEventPracticalInput`
+ * normaliserer alt og kaster på en ugyldig kartlenke eller et klokkeslett som
+ * ikke finnes, FØR noe skrives: en halvlagret blokk er verre enn en feilmelding.
+ *
+ * Gates på `calendar.manage` — samme rettighet som øvingsplanen og
+ * prosjektkoblingen. Det er den samme personen som setter opp øvingen.
+ */
+export const updateEventPractical = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      occurrenceKey: occurrenceKeySchema,
+      locationName: z.string().max(PRACTICAL_LOCATION_MAX * 4).nullable().optional(),
+      locationAddress: z.string().max(PRACTICAL_ADDRESS_MAX * 4).nullable().optional(),
+      mapUrl: z.string().max(PRACTICAL_URL_MAX * 2).nullable().optional(),
+      meetupCrew: z.string().max(32).nullable().optional(),
+      meetupMusicians: z.string().max(32).nullable().optional(),
+      conductor: z.string().max(PRACTICAL_NAME_MAX * 4).nullable().optional(),
+      keyholder: z.string().max(PRACTICAL_NAME_MAX * 4).nullable().optional(),
+      crew: z.string().max(PRACTICAL_NOTE_MAX * 4).nullable().optional(),
+      substitutes: z.string().max(PRACTICAL_NOTE_MAX * 4).nullable().optional(),
+      practicalNote: z.string().max(PRACTICAL_NOTE_MAX * 4).nullable().optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const me = await requirePermission(CALENDAR_PERMISSION)
+    const { occurrenceKey, ...input } = data
+    const value = parseEventPracticalInput(input)
+    const d = db()
+    await ensureMeta(d, occurrenceKey, me)
+    await d
       .update(eventMeta)
-      .set({ linkedProjectId: data.projectId, updatedAt: new Date() })
-      .where(eq(eventMeta.occurrenceKey, data.occurrenceKey))
+      .set({ ...value, updatedAt: new Date() })
+      .where(eq(eventMeta.occurrenceKey, occurrenceKey))
     return { ok: true }
   })
 

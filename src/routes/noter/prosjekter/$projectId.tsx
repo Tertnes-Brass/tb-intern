@@ -2,11 +2,20 @@ import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-rout
 import { useEffect, useState } from 'react'
 import { PercussionNotesField, PercussionSetupField } from '../../../components/Percussion'
 import { ProjectFormModal } from '../../../components/ProjectForm'
+import { ProjectTimesSection } from '../../../components/ProjectTimes'
 import { RepertoireList } from '../../../components/Repertoire'
 import { toast, toastError } from '../../../components/toast'
-import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
+import { Button, EmptyState, Field, Kicker, Modal, SectionHeading, Stamp } from '../../../components/ui'
 import { ZipDownloadButton } from '../../../components/ZipDownload'
-import { formatDate, formatDuration, formatWeekday, relativeDays } from '../../../lib/format'
+import {
+  formatDate,
+  formatDateShort,
+  formatDuration,
+  formatTime,
+  formatWeekday,
+  relativeDays,
+  toOsloDate,
+} from '../../../lib/format'
 import { zipEntryName } from '../../../lib/zip'
 import {
   addWorkToProject,
@@ -115,6 +124,13 @@ function ProjectPage() {
         <div className="staff-rule mt-7 w-full opacity-50" aria-hidden />
       </header>
 
+      <ProjectTimesSection
+        projectId={p.id}
+        times={data.times}
+        canManage={data.canManage}
+        animationDelay="70ms"
+      />
+
       <section className="rise" style={{ animationDelay: '100ms' }}>
         <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
           <h2 className="kicker">Program</h2>
@@ -179,6 +195,8 @@ function ProjectPage() {
           />
         )}
       </section>
+
+      <RehearsalsSection rehearsals={data.rehearsals} canManageCalendar={data.canManageCalendar} />
 
       {(hasPercussion || data.canManage) && (
         <section className="rise" style={{ animationDelay: '130ms' }}>
@@ -245,6 +263,101 @@ function ProjectPage() {
         </div>
       </Modal>
     </div>
+  )
+}
+
+// ---------- Oppkjøring: øvingene fram mot prosjektet (#10) ----------
+
+/**
+ * Øvingene som peker på prosjektet, kronologisk. Selve øvingen — plan, praktisk
+ * info, oppmøte — bor på `/kalender/$eventId`; her er den en RAD med en lenke.
+ *
+ * Koblingen settes på øvingen (`calendar.manage`), ikke herfra. Prosjektet er
+ * ikke eier av kalenderen, og en «legg til øving»-knapp her ville betydd to
+ * steder å gjøre det samme.
+ */
+function RehearsalsSection({
+  rehearsals,
+  canManageCalendar,
+}: {
+  rehearsals: Awaited<ReturnType<typeof getProject>>['rehearsals']
+  canManageCalendar: boolean
+}) {
+  // Ingen øvinger og ingen skriverett i kalenderen: da er seksjonen bare støy.
+  if (rehearsals.length === 0 && !canManageCalendar) return null
+
+  const today = toOsloDate(Date.now())
+
+  return (
+    <section className="rise" style={{ animationDelay: '150ms' }}>
+      <SectionHeading
+        kicker={
+          rehearsals.length > 0
+            ? `${rehearsals.length} ${rehearsals.length === 1 ? 'øving' : 'øvinger'}`
+            : undefined
+        }
+        title="Oppkjøring"
+        className="mb-4"
+      />
+
+      {rehearsals.length === 0 ? (
+        <p className="text-sm text-ink-soft">
+          Ingen øvinger er koblet til prosjektet ennå. Koblingen settes på øvingen i{' '}
+          <Link to="/kalender" className="link-brass">
+            kalenderen
+          </Link>{' '}
+          — én øving kan høre til flere prosjekter.
+        </p>
+      ) : (
+        <ul className="sheet overflow-hidden">
+          {rehearsals.map((rehearsal) => {
+            const past = toOsloDate(rehearsal.start) < today
+            return (
+              <li key={rehearsal.occurrenceKey} className="hairline-row">
+                <Link
+                  to="/kalender/$eventId"
+                  params={{ eventId: rehearsal.occurrenceKey }}
+                  className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-paper-sunken sm:px-5"
+                >
+                  <span
+                    className={`display-title tabular mt-0.5 w-16 shrink-0 text-[0.86rem] font-semibold leading-tight ${
+                      past ? 'text-ink-faint' : 'text-ink'
+                    }`}
+                  >
+                    <span className="block">{formatDateShort(toOsloDate(rehearsal.start))}</span>
+                    <span className="block font-normal text-ink-faint">{formatTime(rehearsal.start)}</span>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className={`block text-[0.95rem] font-semibold leading-snug ${past ? 'text-ink-faint' : 'text-ink'}`}>
+                      {rehearsal.title}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-ink-soft">
+                      {[
+                        rehearsal.location,
+                        rehearsal.conductor ? `Dirigent: ${rehearsal.conductor}` : null,
+                        rehearsal.meetupMusicians ? `Oppmøte ${rehearsal.meetupMusicians}` : null,
+                        rehearsal.setlistCount > 0
+                          ? `${rehearsal.setlistCount} ${rehearsal.setlistCount === 1 ? 'punkt' : 'punkter'} i planen`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ') || 'Ingen plan lagt inn ennå'}
+                    </span>
+                    {!rehearsal.inCalendar && (
+                      <span className="mt-1 inline-block">
+                        <Stamp title="Hendelsen ligger utenfor de fire månedene vi viser, eller er slettet i Google Calendar">
+                          Ikke i kalenderen
+                        </Stamp>
+                      </span>
+                    )}
+                  </span>
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
   )
 }
 
