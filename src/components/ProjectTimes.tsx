@@ -69,11 +69,16 @@ export function ProjectTimesSection({
     const stamp = new Date()
     setNow({
       date: toOsloDate(stamp.getTime()),
+      // `.replace` er billig forsikring: `nextProjectTime` sammenligner mot
+      // lagrede `HH:MM`-strenger, og en ICU-versjon som skriver «19.05» i
+      // stedet for «19:05» ville gitt feil svar innenfor samme time.
       time: new Intl.DateTimeFormat('nb-NO', {
         hour: '2-digit',
         minute: '2-digit',
         timeZone: 'Europe/Oslo',
-      }).format(stamp),
+      })
+        .format(stamp)
+        .replace('.', ':'),
     })
   }, [])
 
