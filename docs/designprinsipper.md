@@ -59,13 +59,8 @@ lesing er åpnere; håndhevelsen ligger alltid i `src/server/*.ts`, aldri bare i
 | **Noter** / «Mine noter» | `src/routes/noter/index.tsx` (`getHome`) | Musikeren | Åpne egne stemmer + lytteeksempler til neste prosjekt | `requireMe()`; stemmefiltrering via `effectivePartIds` |
 | **Prosjekter** | `src/routes/noter/prosjekter/index.tsx`, `$projectId.tsx`, `$projectId_.slagverk.tsx` | Dirigent / prosjektansvarlig | Klikke sammen et program i rekkefølge og publisere det | `projects.manage`; upublisert er usynlig ellers. Deling: `shares.manage`. Slagverksoppsettet per stykke redigeres inline med samme gate, og har en utskriftsvennlig samleside. Tidsplanen (#9) skrives med `projects.manage`; øvingene i «Oppkjøring» er en LESEVISNING — koblingen settes på øvingen med `calendar.manage` |
 | **Arkiv** | `src/routes/noter/arkiv/index.tsx`, `$workId.tsx` | Arkivaren | Katalogisere et verk og laste opp PDF per stemme | Innsyn: `archive.viewAll` ∨ `works.manage`; skriving: `works.manage` |
-<<<<<<< HEAD
-| **Kalender** | `src/routes/kalender/index.tsx` (`getCalendar`), `kalender/$eventId.tsx` (`getEventDetail`) | Alle medlemmer | Se når neste øvelse og konsert er — og hva som skal øves på | `requireMe()` for lesing; feeden er en secret (`CALENDAR_ICS_URL`), aldri til klienten. Detaljruta hører til Kalender-området, ikke et nytt navnerom: øvingsplanen skrives med `calendar.manage`, oppmøtelista og registrert fravær med `attendance.manage` (gruppeleder ser og setter kun egen seksjon) |
-| **Medlemmer** | `src/routes/medlemmer/index.tsx` | Admin (seksjonsleder i redusert form) | Invitere et medlem og sette roller + stemme — og for alle andre: finne kontaktinfoen til den man trenger tak i | Lesing: `requireMe()`; skriving: `members.manage` / `members.manage.section`. Siden #48 er rolle et SETT: «Roller…» åpner avkryssingen, og «Samlet tilgang» viser unionen av rettighetene før lagring. Kontaktinfo (#14) er synlig for alle innloggede medlemmer, men fjernes server-side for deaktiverte (`redactContact` i `src/lib/member-profile.ts`). Egne profilfelt redigeres på `/min-profil`, andres med `members.manage` |
-=======
 | **Kalender** | `src/routes/kalender/index.tsx` (`getCalendar`), `kalender/$eventId.tsx` (`getEventDetail`) | Alle medlemmer | Se når neste øvelse og konsert er — og hva som skal øves på | `requireMe()` for lesing; feeden er en secret (`CALENDAR_ICS_URL`), aldri til klienten. Detaljruta hører til Kalender-området, ikke et nytt navnerom: øvingsplanen, den praktiske infoen (#10) og prosjektkoblingene skrives med `calendar.manage`, oppmøtelista og registrert fravær med `attendance.manage` (gruppeleder ser og setter kun egen seksjon) |
-| **Medlemmer** | `src/routes/medlemmer/index.tsx` | Admin (seksjonsleder i redusert form) | Invitere et medlem og sette rolle + stemme | Lesing: `requireMe()`; skriving: `members.manage` / `members.manage.section` |
->>>>>>> worktree-agent-a17cda9b9c28da38f
+| **Medlemmer** | `src/routes/medlemmer/index.tsx` | Admin (seksjonsleder i redusert form) | Invitere et medlem og sette roller + stemme — og for alle andre: finne kontaktinfoen til den man trenger tak i | Lesing: `requireMe()`; skriving: `members.manage` / `members.manage.section`. Siden #48 er rolle et SETT: «Roller…» åpner avkryssingen, og «Samlet tilgang» viser unionen av rettighetene før lagring. Kontaktinfo (#14) er synlig for alle innloggede medlemmer, men fjernes server-side for deaktiverte (`redactContact` i `src/lib/member-profile.ts`). Egne profilfelt redigeres på `/min-profil`, andres med `members.manage` |
 | **Gruppeledere** | `src/routes/gruppeledere/{route,index}.tsx`, `gruppeledere/chat/index.tsx` | Gruppelederen | Åpne kanalen og koordinere med de andre gruppelederne | `members.manage.section` **pluss** minst én aktiv `section_leaders`-rad (`isGroupLeader` i `src/lib/gruppeledere.ts`) — også for **lesing**. En admin uten leiarbinding kommer ikke inn |
 | **Styre** | `src/routes/styre/{index,$taskId}.tsx`, `styre/prosjekter/*`, `styre/moter/*`, `styre/chat/index.tsx`, `styre/dokumenter/index.tsx` | Styremedlemmet | Se åpne oppgaver og hake av / opprette en ny | `board.manage` — også for **lesing**; hele området er usynlig ellers. Dokumentbytene gates i `src/routes/api/board-files/$documentId.ts` |
 | **Utstyr** | `src/routes/utstyr/index.tsx`, `utstyr/$assetId.tsx` | Materialforvalteren | Registrere en gjenstand med bilde, eier og lånestatus | Lesing: `requireMe()` — hele korpset ser registeret. Skriving: `assets.manage`. Bildebytene gates i `src/routes/api/utstyr-images/$imageId.ts` |
@@ -312,7 +307,6 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 > det bør ta (b) opp til reell vurdering, med demotering av Filtilganger og
 > Innstillinger til brukermenyen som det billigste alternativet.
 
-<<<<<<< HEAD
 > **Notert 2. september 2026 (flere roller per medlem, #48):** modellen med ett
 > verv per person var i praksis en brems på menyen — «musiker som også sitter i
 > styret» kunne ikke finnes, og kombinasjonsradene i tabellen over var derfor
@@ -327,7 +321,7 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 > (b), eventuelt demotering av Innstillinger og Filtilganger til brukermenyen,
 > er fortsatt det som står igjen — som et eget produktvalg, ikke som en detalj i
 > rollearbeidet.
-=======
+>
 > **Fulgt opp 2. september 2026 (Utstyr, #13):** dette er det første området som
 > tar konsekvensen av terskelen over i stedet for å flytte den. Utstyr er lesbart
 > for HELE korpset, så en toppnivå-oppføring ville gitt et vanlig medlem **seks**
@@ -340,7 +334,6 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 > Det er fortsatt en utsettelse, ikke en løsning: hub-kortet skalerer like dårlig
 > som toppmenyen når det femte området må dit. Launcher-spørsmålet **(b)** står
 > dermed ubesvart for tredje gang, og bør avgjøres før neste område — ikke etter.
->>>>>>> worktree-agent-a06abad58f72276f9
 
 ## 7. Hva som ikke er avgjort
 
