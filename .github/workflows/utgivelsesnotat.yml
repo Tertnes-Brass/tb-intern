@@ -1,0 +1,59 @@
+# Må finnes på main for å kunne startes manuelt. Sender uten å deploye.
+name: Utgivelsesnotat
+
+"on":
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Hvor ligger det? (staging = test, prod = main)'
+        type: choice
+        options: [staging, prod]
+        default: staging
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    name: Post utgivelsesnotat
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Hent workflow-skriptet
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          path: tooling
+
+      - name: Hent miljøets utgivelsesnotat
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.mode == 'prod' && 'main' || 'test' }}
+          persist-credentials: false
+          fetch-depth: 0
+          path: release
+
+      - name: Sett opp Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+
+      - name: Test meldingsskriptet
+        run: node --test tooling/scripts/discord-release-note.test.mjs
+
+      - name: Post til Discord (#dev)
+        env:
+          DISCORD_DEV_WEBHOOK_URL: ${{ secrets.DISCORD_DEV_WEBHOOK_URL }}
+          MODE: ${{ inputs.mode }}
+          BRANCH: ${{ inputs.mode == 'prod' && 'main' || 'test' }}
+          NOTE_PATH: release/docs/utgivelser/neste.md
+          COMMITS_PATH: ${{ runner.temp }}/commits.txt
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$DISCORD_DEV_WEBHOOK_URL" ]; then
+            echo "::error::DISCORD_DEV_WEBHOOK_URL mangler; ingen melding kan sendes."
+            exit 1
+          fi
+          export SHA=$(git -C release rev-parse HEAD)
+          git -C release log --no-merges --format='%s' origin/main..HEAD > "$COMMITS_PATH"
+          node tooling/scripts/discord-release-note.mjs
