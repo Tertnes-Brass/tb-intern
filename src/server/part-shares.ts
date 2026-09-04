@@ -105,17 +105,23 @@ export const sharePart = createServerFn({ method: 'POST' })
     })
     if (rejection) throw new Error(rejection)
 
-    await d
+    // `returning()` gjør revisjonslogget ærlig: taper dette kallet et kappløp
+    // mot et identisk et, gjør `onConflictDoNothing` innsettingen til en no-op,
+    // og da skal det ikke stå to «delt»-linjer i loggen for én deling.
+    const inserted = await d
       .insert(partShares)
       .values({ fromUserId: me.id, toUserId: data.toUserId, partId: data.partId, createdAt: new Date() })
       .onConflictDoNothing()
+      .returning({ partId: partShares.partId })
 
-    await writeAudit({
-      action: 'member.part_shared',
-      actorUserId: me.id,
-      targetUserId: data.toUserId,
-      details: { partId: data.partId },
-    })
+    if (inserted.length > 0) {
+      await writeAudit({
+        action: 'member.part_shared',
+        actorUserId: me.id,
+        targetUserId: data.toUserId,
+        details: { partId: data.partId },
+      })
+    }
     return { ok: true }
   })
 

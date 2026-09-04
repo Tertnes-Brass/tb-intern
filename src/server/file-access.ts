@@ -54,11 +54,17 @@ function memberCanAccessPart(partId: string | null, ctx: AccessCtx): boolean {
  *
  * Egne stemmer går foran: har du selv fått 3. horn tildelt etter at Ingrid delte
  * den med deg, er nota din egen, og «Delt med deg av Ingrid» ville vært feil.
+ *
+ * ALLE delerne navngis, ikke den første som tilfeldigvis lå i lista: deler både
+ * Ingrid og Karim 3. horn med deg, ville ett navn gjort at nota ble stående
+ * uforklart igjen når du fjernet den ene delingen.
  */
 export function sharedFileFrom(file: FileLite, ctx: AccessCtx): string | null {
   if (file.kind !== 'part' || !file.partId) return null
   if (ctx.effectivePartIds.includes(file.partId)) return null
-  return ctx.sharedParts.find((s) => s.partId === file.partId)?.fromName ?? null
+  const names = ctx.sharedParts.filter((s) => s.partId === file.partId).map((s) => s.fromName)
+  if (names.length === 0) return null
+  return names.length === 1 ? names[0]! : `${names.slice(0, -1).join(', ')} og ${names[names.length - 1]}`
 }
 
 /** Kan en innlogget bruker laste ned denne filen? */

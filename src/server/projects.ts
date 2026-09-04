@@ -229,13 +229,14 @@ export const getHome = createServerFn().handler(async () => {
   // for en kornettist. Feltene fjernes derfor server-side for alle andre enn
   // slagverkerne og staben — UI-et skal ikke måtte huske regelen.
   //
-  // En LÅNT slagverksstemme (#16) teller med: har du fått Slagverk 2 delt med
-  // deg, er oppsettet nettopp det du trenger for å kunne bruke nota. Regelen er
-  // fortsatt en støyregel, ikke en hemmelighetsregel — den utvider ingen tilgang.
-  const showPercussion = showPercussionFor({
-    permissions: me.permissions,
-    parts: [...me.parts, ...me.sharedParts.map((s) => ({ section: s.partSection }))],
-  })
+  // En LÅNT slagverksstemme (#16) teller bevisst IKKE med. Det ble prøvd, fordi
+  // en lånt slagverksstemme uten oppsettet er en halv leveranse — men
+  // `showPercussion` er ikke avgrenset til den lånte stemmen: den åpner
+  // `percussionNotes` for HELE konserten og `percussionSetup` på ALLE verk, også
+  // dem låntakeren ikke har en eneste fil på. Da gir delingen mer enn
+  // stemme-lesing, og det er den ene tingen den aldri skal gjøre. Trenger en
+  // låntaker oppsettet, er riktig svar en stemmetildeling — ikke et lån.
+  const showPercussion = showPercussionFor(me)
 
   return {
     me: { name: me.name, parts: me.parts, roleNames: me.roles.map((r) => r.name) },

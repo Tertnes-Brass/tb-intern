@@ -155,6 +155,17 @@ describe('sharedFileFrom (hvem lånte meg denne?)', () => {
     expect(sharedFileFrom(file('part', 'tenor-horn-3'), alsoOwns)).toBeNull()
   })
 
+  it('navngir ALLE som deler samme stemme', () => {
+    const two = {
+      ...borrower,
+      sharedParts: [
+        { partId: 'tenor-horn-3', fromName: 'Ingrid Voll' },
+        { partId: 'tenor-horn-3', fromName: 'Karim Ask' },
+      ],
+    }
+    expect(sharedFileFrom(file('part', 'tenor-horn-3'), two)).toBe('Ingrid Voll og Karim Ask')
+  })
+
   it('null for udelte stemmer, partitur, lyd og uplassert', () => {
     expect(sharedFileFrom(file('part', 'solo-cornet'), borrower)).toBeNull()
     expect(sharedFileFrom(file('score'), borrower)).toBeNull()

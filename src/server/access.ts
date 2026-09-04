@@ -47,7 +47,6 @@ export type Me = {
   sharedParts: Array<{
     partId: string
     partNameNo: string
-    partSection: string
     fromUserId: string
     fromName: string
   }>
@@ -100,7 +99,6 @@ export async function currentUser(): Promise<Me | null> {
       .select({
         partId: partShares.partId,
         partNameNo: parts.nameNo,
-        partSection: parts.section,
         fromUserId: partShares.fromUserId,
         fromName: user.name,
       })

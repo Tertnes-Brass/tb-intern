@@ -396,17 +396,30 @@ fortsatt det tidsbegrensede verktøyet for folk uten konto.
   uansett bort av seg selv når deleren mister stemmen, og begge kan fjerne den
   med ett klikk. Trenger man et tidsbegrenset lån til noen uten konto, er det en
   vikarlenke. Taket `MAX_PART_SHARES` = 10 hindrer at «del stemmen din» blir
-  «del stemmen din med hele korpset».
+  «del stemmen din med hele korpset». Taket er en **veiledende skranke, ikke en
+  sikkerhetsgrense**: det telles og settes inn uten transaksjon, så mange
+  samtidige kall kan i teorien passere det. Konsekvensen er noen delinger for
+  mye av ens EGEN stemme — ikke tilgang til noe nytt — og en DB-side CHECK var
+  ikke verdt en ikke-additiv migrasjon.
 - **Delingen logges** som `member.part_shared` / `member.part_share_removed` i
   `audit_log`, med hvem som fjernet den (`sharer`/`recipient`).
 - **Mottakeren ser den i appen, ikke på e-post.** Stemmen dukker opp på «Mine
   noter» og på prosjektsiden i en egen seksjon — «Delt med deg av Navn» — aldri
   blandet inn blant egne stemmer. Har du senere selv fått stemmen tildelt, er
   nota din egen og merkes ikke lenger som lånt (`sharedFileFrom`).
-- **Et lånt slagverksoppsett følger med.** `showPercussionFor` teller lånte
-  stemmer med. Det utvider ingen tilgang — oppsettet er en støyregel, ikke en
-  hemmelighet (§ «Slagverksoppsett») — men uten det ville en lånt slagverksstemme
-  vært en halv leveranse.
+- **Slagverksoppsettet følger IKKE med et lån.** Det ble prøvd — en lånt
+  slagverksstemme uten oppsettet er en halv leveranse — men `showPercussion` er
+  ikke avgrenset til den lånte stemmen: den åpner `percussion_notes` for HELE
+  konserten og `percussion_setup` på ALLE verk, også dem låntakeren ikke har en
+  eneste fil på. Da gir delingen mer enn stemme-lesing, og det er den ene tingen
+  den aldri skal gjøre. Trenger en låntaker oppsettet, er riktig svar en
+  stemmetildeling, ikke et lån.
+- **En deling dør med stemmen den gjelder.** `updateMemberParts` sletter
+  `part_shares`-radene for stemmer medlemmet ikke lenger har, i samme batch som
+  `user_parts` skrives om. Join-en i `currentUser()` ville gjort dem uvirksomme
+  uansett, men en rad som ble liggende ville VÅKNET til live igjen dersom
+  stemmen senere ble tildelt på nytt — en tilgang ingen av partene hadde bedt om.
+  Delinger av stemmer medlemmet fortsatt har, står urørt.
 - **Vikarløypa er bevisst urørt.** `shareAllows` tar ikke `AccessCtx` i det hele
   tatt, og en test låser at en deling mellom medlemmer ikke kan lekke inn i
   token-grenen.
