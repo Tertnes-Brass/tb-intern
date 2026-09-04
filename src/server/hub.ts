@@ -8,8 +8,10 @@ import type { CalendarEvent } from '../lib/ical'
 import { postPlainText } from '../lib/markdown'
 import { type MentionUser, mentionPlainText } from '../lib/mentions'
 import { excerpt, postHeading } from '../lib/posts'
+import type { SocialListItem } from '../lib/social'
 import { hasPermission, requireMe } from './access'
 import { loadCalendar } from './calendar-feed'
+import { loadSocialEvents } from './social-feed'
 
 /**
  * Datagrunnlaget for hub-forsiden `/`. Hub-en er plattformflaten: den viser det
@@ -37,6 +39,14 @@ export type HubPayload = {
   /** Snarveiene brukeren har tilgang til, utledet av rettighetene (`areasFor`). */
   areas: HubArea[]
   calendar: HubCalendar
+  /**
+   * Sosiale arrangement (#31) i kalendervinduet. De flettes inn i «Kommende»
+   * sammen med feed-hendelsene (`mergeCalendarRows`) — hub-en får ikke en egen
+   * miniatyroversikt over området (docs/designprinsipper.md §4 og §7 pkt 3).
+   * Hero er fortsatt forbeholdt kalenderen: neste øvelse eller konsert er
+   * avtalen, puben etterpå er tillegget.
+   */
+  social: SocialListItem[]
   nextProject: HubProject | null
   upcomingProjects: Array<{ id: string; name: string; eventDate: string; venue: string | null }>
 }
@@ -66,8 +76,9 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
   const canSeeBoardPosts = hasPermission(me, 'posts.publish')
 
   // Kalender, prosjekter og beskjeder er uavhengige kilder — hent dem samtidig.
-  const [calendar, upcomingRows, postRows] = await Promise.all([
+  const [calendar, social, upcomingRows, postRows] = await Promise.all([
     loadCalendar(Date.now()),
+    loadSocialEvents(Date.now(), me.id),
     d
       .select({
         id: projects.id,
@@ -185,6 +196,7 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
       next: nextEvent,
       upcoming: eventsAfter(events, nextEvent, UPCOMING_EVENTS),
     },
+    social,
     nextProject: next ? { ...next, workCount } : null,
     upcomingProjects: upcoming.slice(1, 1 + UPCOMING_PROJECTS),
   }

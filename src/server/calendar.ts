@@ -2,8 +2,10 @@ import { createServerFn } from '@tanstack/react-start'
 import { db } from '../db'
 import { eventSetlist } from '../db/schema'
 import type { CalendarEvent } from '../lib/ical'
+import type { SocialListItem } from '../lib/social'
 import { requireMe } from './access'
 import { type CalendarPayload, loadCalendar } from './calendar-feed'
+import { loadSocialEvents } from './social-feed'
 
 /**
  * Serverfunksjonene for Kalender-området. Selve hentingen og tolkningen av
@@ -15,14 +17,20 @@ export type { CalendarPayload }
 
 /** Hele kalendervinduet: fra i går og fire måneder frem (`lib/calendar-window.ts`). */
 export const getCalendar = createServerFn().handler(
-  async (): Promise<CalendarPayload & { keysWithPlan: string[] }> => {
-    await requireMe()
-    const payload = await loadCalendar(Date.now())
-    // Nøklene med minst ett punkt i øvingsplanen — bare til den diskrete
-    // markøren i lista. Ingen innhold, ingen navn: markøren sier at det finnes
-    // en plan, og planen selv er uansett åpen for alle innloggede.
-    const rows = await db().selectDistinct({ occurrenceKey: eventSetlist.occurrenceKey }).from(eventSetlist)
-    return { ...payload, keysWithPlan: rows.map((r) => r.occurrenceKey) }
+  async (): Promise<CalendarPayload & { keysWithPlan: string[]; social: SocialListItem[] }> => {
+    const me = await requireMe()
+    const now = Date.now()
+    const [payload, rows, social] = await Promise.all([
+      loadCalendar(now),
+      // Nøklene med minst ett punkt i øvingsplanen — bare til den diskrete
+      // markøren i lista. Ingen innhold, ingen navn: markøren sier at det finnes
+      // en plan, og planen selv er uansett åpen for alle innloggede.
+      db().selectDistinct({ occurrenceKey: eventSetlist.occurrenceKey }).from(eventSetlist),
+      // De sosiale arrangementene (#31) er en egen, lokal kilde og hentes
+      // uavhengig av feeden — nettopp derfor overlever de at Google er nede.
+      loadSocialEvents(now, me.id),
+    ])
+    return { ...payload, keysWithPlan: rows.map((r) => r.occurrenceKey), social }
   },
 )
 

@@ -1,7 +1,8 @@
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
 import { EmptyState, Kicker, SectionHeading, Stamp } from '../components/ui'
-import { formatDate, formatDateTime, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../lib/format'
+import { formatDate, formatDateTime, formatTime, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../lib/format'
 import { type HubEvent, chooseHero } from '../lib/hub'
+import { mergeCalendarRows } from '../lib/social'
 import { getHub } from '../server/hub'
 
 /**
@@ -70,7 +71,12 @@ function HubPage() {
   const next = data.nextProject
   // Kalenderen er hovedkilden; uten den er «Kommende» prosjektene i stedet.
   const useCalendar = data.calendar.configured && !data.calendar.error
-  const upcomingEvents = data.calendar.upcoming
+  // Sosiale arrangement (#31) flettes inn i «Kommende» sammen med
+  // feed-hendelsene — samme funksjon og samme sortering som `/kalender`, så de
+  // to listene ikke kan si ulike ting. Hub-en får IKKE en egen oversikt over
+  // sosiale arrangement (docs/designprinsipper.md §4); hele området bor i
+  // kalenderen.
+  const upcomingRows = mergeCalendarRows(data.calendar.upcoming, data.social).slice(0, 4)
 
   return (
     <div className="space-y-14">
@@ -231,25 +237,51 @@ function HubPage() {
           }
         />
         {useCalendar ? (
-          upcomingEvents.length === 0 ? (
+          upcomingRows.length === 0 ? (
             <p className="text-sm text-ink-faint">Ingenting mer i kalenderen de neste åtte ukene.</p>
           ) : (
             <ul>
-              {upcomingEvents.map((event) => (
-                <li key={event.id} className="hairline-row flex items-center gap-4 py-3">
-                  <RowDate iso={toOsloDate(event.start)} />
-                  <div className="min-w-0 flex-1">
-                    <p className="display-title truncate text-base font-semibold text-ink">{event.title}</p>
-                    <p className="mt-0.5 truncate text-xs text-ink-soft">
-                      {timeLabel(event)}
-                      {event.location ? ` · ${event.location}` : ''}
-                    </p>
-                  </div>
-                  <span className="hidden shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-brass sm:inline">
-                    {relativeDays(toOsloDate(event.start))}
-                  </span>
-                </li>
-              ))}
+              {upcomingRows.map((row) =>
+                row.kind === 'feed' ? (
+                  <li key={`feed-${row.id}`} className="hairline-row flex items-center gap-4 py-3">
+                    <RowDate iso={toOsloDate(row.event.start)} />
+                    <div className="min-w-0 flex-1">
+                      <p className="display-title truncate text-base font-semibold text-ink">{row.event.title}</p>
+                      <p className="mt-0.5 truncate text-xs text-ink-soft">
+                        {timeLabel(row.event)}
+                        {row.event.location ? ` · ${row.event.location}` : ''}
+                      </p>
+                    </div>
+                    <span className="hidden shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-brass sm:inline">
+                      {relativeDays(toOsloDate(row.event.start))}
+                    </span>
+                  </li>
+                ) : (
+                  <li key={`social-${row.id}`} className="hairline-row">
+                    <Link
+                      to="/kalender/sosialt/$socialId"
+                      params={{ socialId: row.social.id }}
+                      className="link-quiet flex items-center gap-4 py-3"
+                    >
+                      <RowDate iso={toOsloDate(row.social.start)} />
+                      <div className="min-w-0 flex-1">
+                        <p className="display-title flex flex-wrap items-baseline gap-x-2 gap-y-1 text-base font-semibold text-ink">
+                          <span className="truncate">{row.social.title}</span>
+                          <Stamp tone="brass">Sosialt</Stamp>
+                          {row.social.cancelled && <Stamp tone="oxblood">Avlyst</Stamp>}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-ink-soft">
+                          {formatTime(row.social.start)}
+                          {row.social.location ? ` · ${row.social.location}` : ''}
+                        </p>
+                      </div>
+                      <span className="hidden shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-brass sm:inline">
+                        {relativeDays(toOsloDate(row.social.start))}
+                      </span>
+                    </Link>
+                  </li>
+                ),
+              )}
             </ul>
           )
         ) : data.upcomingProjects.length === 0 ? (

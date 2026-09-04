@@ -1,8 +1,9 @@
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
-import { EmptyState, Kicker, SectionHeading, Stamp } from '../../components/ui'
+import { Button, EmptyState, Kicker, SectionHeading, Stamp } from '../../components/ui'
 import { CALENDAR_WINDOW_LABEL } from '../../lib/calendar-window'
-import { formatDate, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../../lib/format'
+import { formatDate, formatTime, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../../lib/format'
 import type { CalendarEvent } from '../../lib/ical'
+import { type CalendarRow, type SocialListItem, mergeCalendarRows, socialSummary } from '../../lib/social'
 import { getCalendar } from '../../server/calendar'
 
 export const Route = createFileRoute('/kalender/')({
@@ -13,16 +14,24 @@ export const Route = createFileRoute('/kalender/')({
   component: CalendarPage,
 })
 
+/**
+ * Lista er ÉN liste med to kilder: Google-feeden og de lokale sosiale
+ * arrangementene (#31). Medlemmet har ett program selv om vi har to
+ * datakilder, og sammenslåingen skjer i `mergeCalendarRows` — den samme
+ * funksjonen hub-en bruker, så de to listene ikke kan sortere ulikt.
+ */
+type Row = CalendarRow<CalendarEvent>
+
 // Måned, ikke uke: med ukentlig øvelse gir uke-gruppering åtte overskrifter med
 // én rad under hver, mens måned samler øvelsene og lar konsertene skille seg ut.
 const monthFmt = new Intl.DateTimeFormat('nb-NO', { month: 'long', year: 'numeric', timeZone: 'Europe/Oslo' })
 
-function monthKey(event: CalendarEvent): string {
-  return toOsloDate(event.start).slice(0, 7)
+function monthKey(start: string): string {
+  return toOsloDate(start).slice(0, 7)
 }
 
-function monthLabel(event: CalendarEvent): string {
-  const label = monthFmt.format(new Date(event.start))
+function monthLabel(start: string): string {
+  const label = monthFmt.format(new Date(start))
   return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
@@ -34,19 +43,19 @@ function timeLabel(event: CalendarEvent): string {
   return `Til og med ${formatDate(lastDay)}`
 }
 
-function groupByMonth(events: CalendarEvent[]): Array<{ key: string; label: string; events: CalendarEvent[] }> {
-  const groups: Array<{ key: string; label: string; events: CalendarEvent[] }> = []
-  for (const event of events) {
-    const key = monthKey(event)
+function groupByMonth(rows: Row[]): Array<{ key: string; label: string; rows: Row[] }> {
+  const groups: Array<{ key: string; label: string; rows: Row[] }> = []
+  for (const row of rows) {
+    const key = monthKey(row.start)
     const last = groups[groups.length - 1]
-    if (last && last.key === key) last.events.push(event)
-    else groups.push({ key, label: monthLabel(event), events: [event] })
+    if (last && last.key === key) last.rows.push(row)
+    else groups.push({ key, label: monthLabel(row.start), rows: [row] })
   }
   return groups
 }
 
-function DateBlock({ event }: { event: CalendarEvent }) {
-  const date = toOsloDate(event.start)
+function DateBlock({ start }: { start: string }) {
+  const date = toOsloDate(start)
   return (
     <div className="flex w-14 shrink-0 flex-col items-center justify-center rounded-[9px] border border-line bg-paper-sunken/60 px-2 py-2">
       <span className="font-mono text-[0.55rem] uppercase tracking-[0.18em] text-ink-faint">
@@ -86,7 +95,7 @@ function EventRow({ event, hasPlan }: { event: CalendarEvent; hasPlan: boolean }
         params={{ eventId: event.occurrenceKey }}
         className="group flex items-center gap-4 py-3 transition-colors"
       >
-        <DateBlock event={event} />
+        <DateBlock start={event.start} />
         <div className="min-w-0 flex-1">
           <p className="display-title truncate text-base font-semibold text-ink transition-colors group-hover:text-brass-strong">
             {event.title}
@@ -107,12 +116,51 @@ function EventRow({ event, hasPlan }: { event: CalendarEvent; hasPlan: boolean }
   )
 }
 
+/**
+ * Et sosialt arrangement i lista. Tydelig merket «Sosialt» — det er et lokalt
+ * arrangement en av medlemmene har laget, ikke noe som står i korpsets
+ * Google-kalender, og det skal man kunne se uten å klikke seg inn.
+ */
+function SocialRow({ social }: { social: SocialListItem }) {
+  return (
+    <li className="hairline-row">
+      <Link
+        to="/kalender/sosialt/$socialId"
+        params={{ socialId: social.id }}
+        className="group flex items-center gap-4 py-3 transition-colors"
+      >
+        <DateBlock start={social.start} />
+        <div className="min-w-0 flex-1">
+          <p className="display-title flex flex-wrap items-baseline gap-x-2 gap-y-1 text-base font-semibold text-ink transition-colors group-hover:text-brass-strong">
+            <span className="truncate">{social.title}</span>
+            <Stamp tone="brass">Sosialt</Stamp>
+            {social.cancelled && <Stamp tone="oxblood">Avlyst</Stamp>}
+          </p>
+          <p className="mt-0.5 truncate text-xs text-ink-soft">
+            {formatTime(social.start)}
+            {social.location ? ` · ${social.location}` : ''}
+            {' · '}
+            {socialSummary({ going: social.going, waitlist: social.waitlist, notAttending: 0, unsure: 0 }, social.capacity)}
+            {social.myStatus === 'attending' ? ' · Du kommer' : ''}
+          </p>
+        </div>
+        <span className="hidden shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-brass sm:inline">
+          {relativeDays(toOsloDate(social.start))}
+        </span>
+      </Link>
+    </li>
+  )
+}
+
 function CalendarPage() {
   const data = Route.useLoaderData()
   const next = data.next
   // Hero-hendelsen gjentas ikke i lista under.
   const rest = next ? data.events.filter((e) => e.id !== next.id) : data.events
   const withPlan = new Set(data.keysWithPlan)
+  // Feed og sosialt i én sortert liste. Hero er fortsatt forbeholdt feeden:
+  // øvelsen eller konserten er avtalen, puben etterpå er tillegget.
+  const rows = mergeCalendarRows(rest, data.social)
 
   return (
     <div className="space-y-14">
@@ -177,23 +225,52 @@ function CalendarPage() {
         )}
       </section>
 
-      {data.configured && !data.error && rest.length > 0 && (
-        <section className="rise" style={{ animationDelay: '120ms' }}>
-          <SectionHeading kicker={CALENDAR_WINDOW_LABEL} title="Kommende" className="mb-6" />
+      {/*
+        Seksjonen står ALLTID, også når Google-feeden mangler eller feiler: de
+        sosiale arrangementene er en lokal kilde som ikke faller med den, og
+        «Nytt sosialt arrangement» er veien inn for alle medlemmer (#31). Uten
+        den betingelsen ville en nede feed også tatt bort muligheten til å legge
+        inn en pub etter øving.
+      */}
+      <section className="rise" style={{ animationDelay: '120ms' }}>
+        <SectionHeading
+          kicker={CALENDAR_WINDOW_LABEL}
+          title="Kommende"
+          className="mb-6"
+          action={
+            <Link to="/kalender/sosialt/ny">
+              <Button size="sm">Nytt sosialt arrangement</Button>
+            </Link>
+          }
+        />
+        {rows.length === 0 ? (
+          <p className="text-sm text-ink-faint">
+            Ingenting mer på programmet. Pub etter øving, fjelltur eller brettspillkveld — alle kan legge inn et
+            sosialt arrangement.
+          </p>
+        ) : (
           <div className="space-y-8">
-            {groupByMonth(rest).map((group) => (
+            {groupByMonth(rows).map((group) => (
               <div key={group.key}>
                 <h3 className="kicker mb-1">{group.label}</h3>
                 <ul>
-                  {group.events.map((event) => (
-                    <EventRow key={event.id} event={event} hasPlan={withPlan.has(event.occurrenceKey)} />
-                  ))}
+                  {group.rows.map((row) =>
+                    row.kind === 'feed' ? (
+                      <EventRow
+                        key={`feed-${row.id}`}
+                        event={row.event}
+                        hasPlan={withPlan.has(row.event.occurrenceKey)}
+                      />
+                    ) : (
+                      <SocialRow key={`social-${row.id}`} social={row.social} />
+                    ),
+                  )}
                 </ul>
               </div>
             ))}
           </div>
-        </section>
-      )}
+        )}
+      </section>
 
       {data.embedUrl && (
         <section className="rise" style={{ animationDelay: '200ms' }}>
