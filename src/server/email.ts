@@ -317,6 +317,111 @@ export function postMentionEmail({
   }
 }
 
+/**
+ * Varsel om at et prosjekt er publisert (#18). Sendes bare når den som
+ * publiserer huker av for det — avkryssingen er avslått som standard
+ * (`DEFAULT_PROJECT_NOTIFY`), og idempotensen ligger i `project_notifications`:
+ * avpubliser/republiser sender aldri det samme to ganger.
+ *
+ * Innholdet er det saken ber om og ikke mer: navn, dato, sted og de to lenkene
+ * medlemmet faktisk skal videre til — prosjektet og «Mine noter». Repertoaret
+ * følger ikke med: det er ofte ikke ferdig når prosjektet publiseres, og en
+ * e-post som er utdatert dagen etter er verre enn en kort en.
+ */
+export function projectPublishedEmail({
+  name,
+  kindLabel,
+  eventDate,
+  venue,
+  workCount,
+  url,
+  myNotesUrl,
+}: {
+  name: string
+  /** «Konsert», «Konkurranse» … — hva slags prosjekt det er, på norsk. */
+  kindLabel: string
+  /** ISO-dato, eller null når datoen ikke er satt ennå. */
+  eventDate: string | null
+  venue: string | null
+  /** Antall verk i programmet akkurat nå. 0 = programmet er ikke satt opp ennå. */
+  workCount: number
+  url: string
+  myNotesUrl: string
+}): { subject: string; html: string; text: string } {
+  const facts = [
+    eventDate ? `Dato: ${formatIsoDate(eventDate)}` : 'Dato: ikke satt ennå',
+    venue ? `Sted: ${venue}` : null,
+    // «verk» bøyes ikke i flertall på norsk — ett verk, fire verk.
+    workCount > 0 ? `Program: ${workCount} verk` : null,
+  ].filter((line): line is string => line !== null)
+
+  return {
+    subject: `Nytt prosjekt: ${name}`,
+    html: shell(
+      escapeHtml(name),
+      `<p style="margin:0 0 12px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#95762a;font-weight:700">${escapeHtml(kindLabel)}</p>
+       <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#5f5640">Prosjektet er lagt ut på internsiden.</p>
+       <p style="margin:0 0 24px;font-size:14px;line-height:1.7;color:#5f5640">${facts.map(escapeHtml).join('<br>')}</p>
+       <p style="margin:0 0 16px">${button(url, 'Åpne prosjektet')}</p>
+       <p style="margin:0 0 24px;font-size:14px;color:#5f5640">Stemmene dine finner du under <a href="${myNotesUrl}" style="color:#7a5f1d">Mine noter</a>.</p>
+       <p style="margin:0;font-size:12px;color:#8e8468">Vil du slippe denne e-posten, skru av «E-post om prosjekter» under «Min profil».</p>`,
+      MEMBER_FOOTER,
+    ),
+    text: `${kindLabel.toUpperCase()}\n\n${name}\n\n${facts.join('\n')}\n\nÅpne prosjektet:\n${url}\n\nStemmene dine ligger under «Mine noter»:\n${myNotesUrl}\n\nVil du slippe denne e-posten, skru av «E-post om prosjekter» under «Min profil».\n`,
+  }
+}
+
+/**
+ * Varsel om at noe er endret i et prosjekt som allerede er publisert (#51).
+ *
+ * ÉN e-post med ALT som er skjedd siden forrige varsel — ikke én per endring.
+ * Linjene kommer ferdig formulert og samlet fra `summarizeProjectChanges`
+ * (src/lib/project-notify.ts), som slår sammen gjentakelser og kutter lange
+ * lister. Det er hele poenget i saken: varsling som ikke blir så hyppig at folk
+ * slutter å lese den.
+ */
+export function projectUpdateEmail({
+  name,
+  eventDate,
+  lines,
+  more,
+  url,
+  myNotesUrl,
+}: {
+  name: string
+  eventDate: string | null
+  /** De ferdige setningene om hva som er nytt. Aldri tom — da sendes ingen e-post. */
+  lines: string[]
+  /** Endringer som ikke fikk plass i lista. 0 når alt er med. */
+  more: number
+  url: string
+  myNotesUrl: string
+}): { subject: string; html: string; text: string } {
+  const items = lines.map((line) => `<li style="margin:0 0 8px">${escapeHtml(line)}</li>`).join('')
+  const rest = more > 0 ? `… og ${more} ${more === 1 ? 'endring' : 'endringer'} til — se prosjektsiden.` : null
+  const when = eventDate ? `${formatIsoDate(eventDate)}` : null
+
+  return {
+    subject: `Endringer i ${name}`,
+    html: shell(
+      escapeHtml(name),
+      `<p style="margin:0 0 12px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#95762a;font-weight:700">Oppdatering</p>
+       <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#5f5640">Dette er nytt siden forrige varsel${
+         when ? ` om ${escapeHtml(when)}` : ''
+       }:</p>
+       <ul style="margin:0 0 ${rest ? '10' : '24'}px;padding:0 0 0 18px;font-size:14px;line-height:1.6;color:#5f5640">${items}</ul>
+       ${rest ? `<p style="margin:0 0 24px;font-size:13px;color:#8e8468">${escapeHtml(rest)}</p>` : ''}
+       <p style="margin:0 0 16px">${button(url, 'Se prosjektet')}</p>
+       <p style="margin:0 0 24px;font-size:14px;color:#5f5640">Stemmene dine finner du under <a href="${myNotesUrl}" style="color:#7a5f1d">Mine noter</a>.</p>
+       <p style="margin:0;font-size:12px;color:#8e8468">Vil du slippe denne e-posten, skru av «E-post om prosjekter» under «Min profil».</p>`,
+      MEMBER_FOOTER,
+    ),
+    text: `Endringer i ${name}${when ? ` (${when})` : ''}\n\nDette er nytt siden forrige varsel:\n\n${lines
+      .map((line) => `- ${line}`)
+      .join('\n')}\n${rest ? `\n${rest}\n` : ''}\nSe prosjektet:\n${url}\n\nStemmene dine ligger under «Mine noter»:\n${myNotesUrl}\n\nVil du slippe denne e-posten, skru av «E-post om prosjekter» under «Min profil».\n`,
+  }
+}
+
 export function inviteEmail(url: string, bandName = 'Tertnes Brass'): { subject: string; html: string; text: string } {
   return {
     subject: `Du er invitert til internsiden til ${bandName}`,
