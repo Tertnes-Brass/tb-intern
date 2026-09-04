@@ -14,11 +14,13 @@ import {
 import type { BoardTaskNotificationChoice } from '../lib/board'
 import type { MentionNotificationChoice } from '../lib/mentions'
 import type { PostNotificationChoice } from '../lib/posts'
+import type { ProjectNotificationChoice } from '../lib/project-notify'
 import {
   getMyProfile,
   updateMyBoardTaskNotifications,
   updateMyMentionNotifications,
   updateMyPostNotifications,
+  updateMyProjectNotifications,
   updateMyProfileDetails,
 } from '../server/profile'
 
@@ -155,6 +157,7 @@ function MyProfilePage() {
 
         <div className="space-y-6">
           <NotificationsCard current={profile.notifyPosts} />
+          <ProjectNotificationsCard current={profile.notifyProjects} />
           <MentionNotificationsCard current={profile.notifyMentions} />
           {/* Styreoppgaver angår bare styret — valget vises derfor kun for dem
               som har `board.manage` (avgjort server-side i `getMyProfile`). */}
@@ -221,6 +224,72 @@ function NotificationsCard({ current }: { current: PostNotificationChoice }) {
         <p className="mt-3 text-xs leading-relaxed text-ink-faint">
           «Bare viktige» betyr de beskjedene styret selv har merket som viktige. «Av» slår av all e-post om beskjeder —
           du finner dem fortsatt under Beskjeder.
+        </p>
+      </div>
+    </section>
+  )
+}
+
+const PROJECT_CHOICES: Array<{ value: ProjectNotificationChoice; label: string }> = [
+  { value: 'all', label: 'På' },
+  { value: 'off', label: 'Av' },
+]
+
+/**
+ * Varslingsvalget for prosjekter (#18 + #51). Ett valg for begge e-postene:
+ * varselet når et prosjekt publiseres, og oppdateringsvarselet om repertoar og
+ * tidsplan. To brytere for to e-poster fra samme sted ville vært én for mye —
+ * samme avveining som for styreoppgaver.
+ */
+function ProjectNotificationsCard({ current }: { current: ProjectNotificationChoice }) {
+  const router = useRouter()
+  const [choice, setChoice] = useState<ProjectNotificationChoice>(current)
+  const [busy, setBusy] = useState(false)
+
+  const save = async (next: ProjectNotificationChoice) => {
+    const previous = choice
+    setChoice(next)
+    setBusy(true)
+    try {
+      await updateMyProjectNotifications({ data: { projects: next } })
+      toast('Varslingsvalget er lagret')
+      await router.invalidate()
+    } catch (err) {
+      setChoice(previous)
+      toastError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="sheet rise overflow-hidden" style={{ animationDelay: '104ms' }}>
+      <div className="border-b border-line bg-paper-sunken/50 px-5 py-5 sm:px-6">
+        <Kicker className="mb-2">Varsler</Kicker>
+        <h2 className="display-title text-2xl font-semibold text-ink">E-post om prosjekter</h2>
+        <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+          Gjelder både når et nytt prosjekt legges ut, og når noen sender et samlet varsel om endringer i repertoar
+          eller tidsplan.
+        </p>
+      </div>
+      <div className="p-5 sm:p-6">
+        <div className="flex flex-wrap gap-2">
+          {PROJECT_CHOICES.map((option) => (
+            <Button
+              key={option.value}
+              type="button"
+              variant={choice === option.value ? 'primary' : 'secondary'}
+              size="sm"
+              disabled={busy}
+              onClick={() => void save(option.value)}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+        <p className="mt-3 text-xs leading-relaxed text-ink-faint">
+          Endringsvarselet samler alt som er nytt i én e-post — aldri én per endring. «Av» slår av begge; prosjektene
+          ligger fortsatt under Noter.
         </p>
       </div>
     </section>

@@ -342,6 +342,127 @@ export const projectTimes = sqliteTable(
   (t) => [index('project_times_project_idx').on(t.projectId, t.date, t.time)],
 )
 
+// ---------- Varsling om prosjekter (#18 + #51) ----------
+
+// Idempotensen for prosjektvarsler, bygget som `notification_log` for veggen:
+// én rad per (prosjekt, mottaker, varseltype). PK-en er hele poenget — uten den
+// ville en avpublisering og en ny publisering sendt den samme e-posten to
+// ganger, og «send på nytt» ville truffet alle.
+//
+// De to typene oppfører seg BEVISST ulikt, og det er derfor `kind` er en del av
+// nøkkelen og ikke en egen tabell:
+//
+// - `published` skrives ÉN gang per mottaker og røres aldri igjen. Publiseres
+//   prosjektet på nytt, finnes raden fortsatt, og ingen får varselet to ganger.
+//   «Send på nytt» går kun til dem som MANGLER en rad (nye medlemmer, eller de
+//   som feilet), nøyaktig som `resendPostNotifications`.
+// - `update` er derimot gjentakende av natur: repertoaret kan endres flere
+//   ganger fram mot konserten. Raden oppdateres da med nytt `sent_at`, og
+//   `sent_at` er selve nyttelasten: den sier hva «siden forrige varsel» betyr
+//   for akkurat denne mottakeren. Ett varsel per runde med endringer, aldri ett
+//   per endring.
+//
+// `outcome` er det samme som på veggen: `logged` betyr at e-post ikke er
+// aktivert her og at innholdet bare gikk til konsollen. Det skal aldri
+// presenteres som «sendt».
+export const projectNotifications = sqliteTable(
+  'project_notifications',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** `published` = varselet om at prosjektet ble publisert. `update` = siste endringsvarsel. */
+    kind: text('kind', { enum: ['published', 'update'] }).notNull(),
+    sentAt: integer('sent_at', { mode: 'timestamp_ms' }).notNull(),
+    outcome: text('outcome', { enum: ['sent', 'logged', 'failed'] }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.userId, t.kind] })],
+)
+
+// Hva som har endret seg i et PUBLISERT prosjekt siden sist noen ble varslet
+// (#51). Append-only, og grunnlaget for at endringsvarselet kan samle alt i ÉN
+// e-post i stedet for å sende én per endring.
+//
+// **Rader skrives kun for publiserte prosjekter.** Et utkast er ikke synlig for
+// noen, så det finnes ingen endring å varsle om — publiseringsvarselet er
+// nullpunktet. Uten den regelen ville det første endringsvarselet på et
+// prosjekt inneholdt hele oppbyggingen av programmet, som medlemmene aldri har
+// sett noe annet enn resultatet av.
+//
+// `kind` + `subject` + `detail` er STRUKTUR, ikke ferdig tekst: setningen
+// bygges av `describeProjectChange` i src/lib/project-notify.ts, slik at
+// formuleringen kan rettes uten en datamigrering, og slik at den kan testes
+// uten database. `actor_user_id` er SET NULL — hvem som gjorde endringen er en
+// opplysning, ikke en grunn til å miste historikken.
+export const projectChanges = sqliteTable(
+  'project_changes',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    /** Se PROJECT_CHANGE_KINDS i src/lib/project-notify.ts. */
+    kind: text('kind').notNull(),
+    /** Hva endringen gjelder: verkstittelen, navnet på tidspunktet. */
+    subject: text('subject'),
+    /** Den nye verdien, når den er verdt å si i klartekst («15. november 2026»). */
+    detail: text('detail'),
+    actorUserId: text('actor_user_id').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('project_changes_project_idx').on(t.projectId, t.createdAt)],
+)
+
+// ---------- Prosjektkommentarer (#27) ----------
+
+// Spørsmål og svar knyttet til ETT prosjekt — «kva tid er lastinga?», «treng me
+// dempar på nr. 3?». Bevisst ikke et forum: ingen kategorier, ingen egne sider,
+// ingen nøsting utover ett svarnivå. Tråden bor på prosjektsiden, der spørsmålet
+// oppstår.
+//
+// **Én tabell, to roller.** `parent_id = NULL` er en tråd (spørsmålet); en rad
+// med `parent_id` er et svar i den tråden. Ett nivå, aldri dypere — håndheves i
+// src/server/projects.ts, som nekter å svare på et svar. Selv-fremmednøkkelen
+// cascader: slettes spørsmålet, forsvinner svarene med det. Det er den ønskede
+// moderasjonssemantikken — en tråd fjernes som en tråd, ikke som et spørsmål med
+// foreldreløse svar etter seg.
+//
+// `resolved_at`/`resolved_by` gjelder KUN en tråd (`parent_id = NULL`) og settes
+// av `projects.manage`: «dette er besvart». Det er en status på spørsmålet, ikke
+// på et enkelt svar — derfor står de her og ikke på svaret som avklarte det.
+//
+// Teksten er REN TEKST, som kommentarene på veggen. Ingen markdown, ingen HTML,
+// ingen omtaler (#83 er ikke et krav her) — men modellen sperrer ikke for at de
+// kan komme senere: en `project_comment_mentions`-tabell ville kunne legges ved
+// siden av uten å røre denne.
+export const projectComments = sqliteTable(
+  'project_comments',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    /** NULL = tråden selv (spørsmålet). Ellers id-en til tråden svaret hører til. */
+    parentId: text('parent_id').references((): AnySQLiteColumn => projectComments.id, { onDelete: 'cascade' }),
+    // SET NULL, som på veggen: en historisk kommentar skal bli stående selv om
+    // kontoen forsvinner. Visningen sier «Ukjent» og ingenting går tapt.
+    authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
+    body: text('body').notNull(),
+    /** Satt når en med `projects.manage` markerer tråden som avklart. Kun på tråder. */
+    resolvedAt: integer('resolved_at', { mode: 'timestamp_ms' }),
+    resolvedBy: text('resolved_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    index('project_comments_project_idx').on(t.projectId, t.createdAt),
+    index('project_comments_parent_idx').on(t.parentId),
+  ],
+)
+
 // ---------- Vikardeling ----------
 
 export const shareLinks = sqliteTable(
@@ -795,6 +916,13 @@ export const notificationPreferences = sqliteTable('notification_preferences', {
   // direkte omtale er noe annet enn en beskjed til hele korpset — den som har
   // slått av beskjedvarslene vil som regel fortsatt vite at hen er spurt om noe.
   mentions: text('mentions', { enum: ['all', 'off'] })
+    .notNull()
+    .default('all'),
+  // E-post om prosjekter (#18 + #51): både varselet når et prosjekt publiseres
+  // og oppdateringsvarselet om repertoar/tidsplan. Ett valg for begge, av samme
+  // grunn som `board_tasks` dekker to e-poster: de kommer fra samme sted og
+  // handler om det samme, og to brytere ville vært én for mye.
+  projects: text('projects', { enum: ['all', 'off'] })
     .notNull()
     .default('all'),
 })

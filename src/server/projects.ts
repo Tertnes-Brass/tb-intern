@@ -1,5 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import { and, asc, desc, eq, gte, inArray, like, lt, lte, or, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/sqlite-core'
 import { z } from 'zod'
 import { db, type Db } from '../db'
 import {
@@ -7,6 +8,7 @@ import {
   eventProjects,
   memberProfiles,
   parts,
+  projectComments,
   projectTimes,
   projectWorks,
   projects,
@@ -18,6 +20,7 @@ import {
   works,
 } from '../db/schema'
 import { CALENDAR_PERMISSION } from '../lib/attendance'
+import { formatDate } from '../lib/format'
 import { newId } from '../lib/id'
 import { PERCUSSION_MAX_LENGTH, parsePercussionSetup, showPercussionFor } from '../lib/percussion'
 import {
@@ -29,8 +32,17 @@ import {
   PROJECT_TIME_AUDIENCES,
   PROJECT_TIME_KINDS,
   parseProjectTimeInput,
+  projectTimeTitle,
   sortProjectTimes,
 } from '../lib/practical'
+import {
+  PROJECT_COMMENT_MAX,
+  type ProjectCommentRow,
+  type ProjectCommentThread,
+  canDeleteProjectComment,
+  threadsFrom,
+} from '../lib/project-comments'
+import type { ProjectNotifyResult } from '../lib/project-notify'
 import {
   hasFullArchiveAccess,
   hasPermission,
@@ -40,6 +52,13 @@ import {
 } from './access'
 import { loadCalendar } from './calendar-feed'
 import { type AccessCtx, memberCanAccessFile, memberCanSeeFile } from './file-access'
+import {
+  type ProjectNotifyState,
+  notifyProjectPublished,
+  notifyProjectUpdate,
+  projectNotifyState,
+  recordProjectChange,
+} from './project-notify'
 import {
   DEFAULT_PROJECT_SORT,
   PROJECT_KINDS,
@@ -267,10 +286,11 @@ export const getProject = createServerFn()
 
     const inAccessibleProject =
       project.isPublished && !!project.eventDate && project.eventDate >= today
-    const [repertoire, times, rehearsals] = await Promise.all([
+    const [repertoire, times, rehearsals, comments] = await Promise.all([
       assembleRepertoire(d, project.id, memberFileAccessContext(me, inAccessibleProject)),
       loadProjectTimes(d, project.id),
       loadProjectRehearsals(d, project.id),
+      loadProjectComments(d, project.id),
     ])
 
     return {
@@ -278,12 +298,21 @@ export const getProject = createServerFn()
       repertoire,
       times,
       rehearsals,
+      comments,
       canManage,
       canManageCalendar: hasPermission(me, CALENDAR_PERMISSION),
       canShare: hasPermission(me, 'shares.manage'),
       myParts: me.parts,
+      meId: me.id,
+      // Varslingsstatus er et skriveverktøy: hvem som har fått e-post og hva et
+      // endringsvarsel ville sagt. Medlemmer skal ikke se mottakerlista, og
+      // spørringene kjøres derfor ikke i det hele tatt for dem.
+      notify: canManage && project.isPublished ? await projectNotifyState(project.id) : null,
     }
   })
+
+/** Statusen prosjektsiden viser om varsling. `null` for alle uten `projects.manage`. */
+export type { ProjectNotifyState }
 
 // ---------- Tidsplan (#9) ----------
 
@@ -484,27 +513,54 @@ export const updateProject = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    await requirePermission('projects.manage')
+    const me = await requirePermission('projects.manage')
     const d = db()
     const { id, ...patch } = data
-    await d
-      .update(projects)
-      .set({
-        ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
-        ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
-        // Ny dato ⇒ ny sesong. Uten dette ble et prosjekt som flyttes over
-        // vår/høst-grensen stående i den gamle sesongen for godt.
-        ...(patch.eventDate !== undefined
-          ? { eventDate: patch.eventDate, seasonId: await findOrCreateSeason(d, patch.eventDate) }
-          : {}),
-        ...(patch.venue !== undefined ? { venue: patch.venue?.trim() || null } : {}),
-        ...(patch.description !== undefined ? { description: patch.description?.trim() || null } : {}),
-        ...(patch.percussionNotes !== undefined
-          ? { percussionNotes: parsePercussionSetup(patch.percussionNotes) }
-          : {}),
-        ...(patch.isPublished !== undefined ? { isPublished: patch.isPublished } : {}),
+    // Verdiene FØR endringen: uten dem kan ikke endringsloggen (#51) si hva som
+    // faktisk ble annerledes, og et «lagre» uten endringer ville blitt en linje
+    // i neste varsel-e-post.
+    const before = (await d.select().from(projects).where(eq(projects.id, id)).limit(1))[0]
+    if (!before) throw new Error('Fant ikke prosjektet')
+
+    const next = {
+      ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+      ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
+      // Ny dato ⇒ ny sesong. Uten dette ble et prosjekt som flyttes over
+      // vår/høst-grensen stående i den gamle sesongen for godt.
+      ...(patch.eventDate !== undefined
+        ? { eventDate: patch.eventDate, seasonId: await findOrCreateSeason(d, patch.eventDate) }
+        : {}),
+      ...(patch.venue !== undefined ? { venue: patch.venue?.trim() || null } : {}),
+      ...(patch.description !== undefined ? { description: patch.description?.trim() || null } : {}),
+      ...(patch.percussionNotes !== undefined
+        ? { percussionNotes: parsePercussionSetup(patch.percussionNotes) }
+        : {}),
+      ...(patch.isPublished !== undefined ? { isPublished: patch.isPublished } : {}),
+    }
+    await d.update(projects).set(next).where(eq(projects.id, id))
+
+    // Endringsloggen skrives ETTER lagringen, og bare for det som faktisk er
+    // annerledes. `recordProjectChange` hopper selv over upubliserte prosjekter.
+    if (next.name !== undefined && next.name !== before.name) {
+      await recordProjectChange({ projectId: id, kind: 'name_changed', detail: next.name, actorUserId: me.id })
+    }
+    if (next.eventDate !== undefined && next.eventDate !== before.eventDate) {
+      await recordProjectChange({
+        projectId: id,
+        kind: 'date_changed',
+        detail: formatDate(next.eventDate),
+        actorUserId: me.id,
       })
-      .where(eq(projects.id, id))
+    }
+    if (next.venue !== undefined && next.venue !== before.venue) {
+      await recordProjectChange({ projectId: id, kind: 'venue_changed', detail: next.venue, actorUserId: me.id })
+    }
+    if (next.description !== undefined && next.description !== before.description) {
+      await recordProjectChange({ projectId: id, kind: 'info_changed', actorUserId: me.id })
+    }
+    if (next.percussionNotes !== undefined && next.percussionNotes !== before.percussionNotes) {
+      await recordProjectChange({ projectId: id, kind: 'percussion_notes', actorUserId: me.id })
+    }
     return { ok: true }
   })
 
@@ -544,7 +600,7 @@ export const searchWorksForPicker = createServerFn()
 export const addWorkToProject = createServerFn({ method: 'POST' })
   .validator(z.object({ projectId: z.string(), workId: z.string(), note: z.string().optional() }))
   .handler(async ({ data }) => {
-    await requirePermission('projects.manage')
+    const me = await requirePermission('projects.manage')
     const d = db()
     const max = await d
       .select({ m: sql<number>`coalesce(max(position), 0)` })
@@ -556,8 +612,20 @@ export const addWorkToProject = createServerFn({ method: 'POST' })
       position: (max[0]?.m ?? 0) + 1,
       note: data.note?.trim() || null,
     })
+    await recordProjectChange({
+      projectId: data.projectId,
+      kind: 'work_added',
+      subject: await workTitle(d, data.workId),
+      actorUserId: me.id,
+    })
     return { ok: true }
   })
+
+/** Tittelen på et verk, til endringsloggen. Null når verket er borte. */
+async function workTitle(d: Db, workId: string): Promise<string | null> {
+  const rows = await d.select({ title: works.title }).from(works).where(eq(works.id, workId)).limit(1)
+  return rows[0]?.title ?? null
+}
 
 /**
  * Slagverksoppsettet for ett stykke i ett prosjektet — «Timpani – Silje /
@@ -573,11 +641,28 @@ export const updateProjectWorkPercussion = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data }) => {
-    await requirePermission('projects.manage')
-    await db()
+    const me = await requirePermission('projects.manage')
+    const d = db()
+    const setup = parsePercussionSetup(data.percussionSetup)
+    const before = (
+      await d
+        .select({ percussionSetup: projectWorks.percussionSetup })
+        .from(projectWorks)
+        .where(and(eq(projectWorks.projectId, data.projectId), eq(projectWorks.workId, data.workId)))
+        .limit(1)
+    )[0]
+    await d
       .update(projectWorks)
-      .set({ percussionSetup: parsePercussionSetup(data.percussionSetup) })
+      .set({ percussionSetup: setup })
       .where(and(eq(projectWorks.projectId, data.projectId), eq(projectWorks.workId, data.workId)))
+    if (before && before.percussionSetup !== setup) {
+      await recordProjectChange({
+        projectId: data.projectId,
+        kind: 'work_percussion',
+        subject: await workTitle(d, data.workId),
+        actorUserId: me.id,
+      })
+    }
     return { ok: true }
   })
 
@@ -635,8 +720,21 @@ export const addProjectTime = createServerFn({ method: 'POST' })
       createdAt: now,
       updatedAt: now,
     })
+    await recordProjectChange({
+      projectId: data.projectId,
+      kind: 'time_added',
+      subject: projectTimeTitle(value),
+      detail: whenLabel(value),
+      actorUserId: me.id,
+    })
     return { ok: true }
   })
+
+/** «15. november 2026 kl. 09:00», eller bare datoen når klokkeslettet mangler. */
+function whenLabel(value: { date: string; time: string | null }): string {
+  const date = formatDate(value.date)
+  return value.time ? `${date} kl. ${value.time}` : date
+}
 
 /**
  * Hele raden skrives om — som `updateEventPractical`. Skjemaet er ett lite
@@ -646,7 +744,7 @@ export const addProjectTime = createServerFn({ method: 'POST' })
 export const updateProjectTime = createServerFn({ method: 'POST' })
   .validator(z.object({ id: z.string(), projectId: z.string(), ...projectTimeFields }))
   .handler(async ({ data }) => {
-    await requirePermission('projects.manage')
+    const me = await requirePermission('projects.manage')
     const d = db()
     const value = parseProjectTimeInput(data)
     await assertResponsibleMember(d, value.responsibleUserId)
@@ -656,16 +754,40 @@ export const updateProjectTime = createServerFn({ method: 'POST' })
       .update(projectTimes)
       .set({ ...value, updatedAt: new Date() })
       .where(and(eq(projectTimes.id, data.id), eq(projectTimes.projectId, data.projectId)))
+    await recordProjectChange({
+      projectId: data.projectId,
+      kind: 'time_changed',
+      subject: projectTimeTitle(value),
+      detail: whenLabel(value),
+      actorUserId: me.id,
+    })
     return { ok: true }
   })
 
 export const removeProjectTime = createServerFn({ method: 'POST' })
   .validator(z.object({ id: z.string(), projectId: z.string() }))
   .handler(async ({ data }) => {
-    await requirePermission('projects.manage')
-    await db()
+    const me = await requirePermission('projects.manage')
+    const d = db()
+    // Navnet hentes før slettingen — etterpå finnes det ikke.
+    const before = (
+      await d
+        .select({ kind: projectTimes.kind, label: projectTimes.label })
+        .from(projectTimes)
+        .where(and(eq(projectTimes.id, data.id), eq(projectTimes.projectId, data.projectId)))
+        .limit(1)
+    )[0]
+    await d
       .delete(projectTimes)
       .where(and(eq(projectTimes.id, data.id), eq(projectTimes.projectId, data.projectId)))
+    if (before) {
+      await recordProjectChange({
+        projectId: data.projectId,
+        kind: 'time_removed',
+        subject: projectTimeTitle(before),
+        actorUserId: me.id,
+      })
+    }
     return { ok: true }
   })
 
@@ -735,11 +857,20 @@ export const listProjectMembers = createServerFn().handler(async () => {
 export const removeWorkFromProject = createServerFn({ method: 'POST' })
   .validator(z.object({ projectId: z.string(), workId: z.string() }))
   .handler(async ({ data }) => {
-    await requirePermission('projects.manage')
+    const me = await requirePermission('projects.manage')
     const d = db()
+    // Tittelen hentes FØR slettingen — etterpå er koblingen borte, og
+    // endringsloggen ville stått igjen med «Et verk er tatt ut av programmet».
+    const title = await workTitle(d, data.workId)
     await d
       .delete(projectWorks)
       .where(and(eq(projectWorks.projectId, data.projectId), eq(projectWorks.workId, data.workId)))
+    await recordProjectChange({
+      projectId: data.projectId,
+      kind: 'work_removed',
+      subject: title,
+      actorUserId: me.id,
+    })
     // Tetter hull i rekkefølgen
     const remaining = await d
       .select({ workId: projectWorks.workId })
@@ -758,7 +889,7 @@ export const removeWorkFromProject = createServerFn({ method: 'POST' })
 export const moveWorkInProject = createServerFn({ method: 'POST' })
   .validator(z.object({ projectId: z.string(), workId: z.string(), direction: z.enum(['up', 'down']) }))
   .handler(async ({ data }) => {
-    await requirePermission('projects.manage')
+    const me = await requirePermission('projects.manage')
     const d = db()
     const rows = await d
       .select({ workId: projectWorks.workId, position: projectWorks.position })
@@ -768,6 +899,7 @@ export const moveWorkInProject = createServerFn({ method: 'POST' })
 
     const idx = rows.findIndex((r) => r.workId === data.workId)
     const swapWith = data.direction === 'up' ? idx - 1 : idx + 1
+    // Ingen endring skjedde (allerede øverst/nederst) ⇒ ingen linje i loggen.
     if (idx === -1 || swapWith < 0 || swapWith >= rows.length) return { ok: true }
 
     const a = rows[idx]!
@@ -780,5 +912,278 @@ export const moveWorkInProject = createServerFn({ method: 'POST' })
       .update(projectWorks)
       .set({ position: a.position })
       .where(and(eq(projectWorks.projectId, data.projectId), eq(projectWorks.workId, b.workId)))
+    // Uten emne: ti flyttinger blir én linje i varselet («Rekkefølgen i
+    // programmet er endret»), fordi `summarizeProjectChanges` deduperer på
+    // setningen. Ett varsel per klikk ville vært nøyaktig den spammingen #51
+    // ber oss unngå.
+    await recordProjectChange({ projectId: data.projectId, kind: 'work_order', actorUserId: me.id })
+    return { ok: true }
+  })
+
+// ---------- Publisering og varsling (#18 + #51) ----------
+
+/**
+ * Publiserer prosjektet, og sender (valgfritt) e-post til medlemmene.
+ *
+ * Egen funksjon i stedet for `updateProject({ isPublished: true })`, av samme
+ * grunn som `publishPost` er skilt fra `updatePost` på veggen: publisering er en
+ * handling med en konsekvens utenfor databasen, og den skal ha sin egen dialog,
+ * sitt eget svar og sin egen kvittering.
+ *
+ * Avkryssingen er AVSLÅTT som standard (`DEFAULT_PROJECT_NOTIFY`). Et prosjekt
+ * publiseres ofte lenge før programmet er ferdig — da skal det ikke være nok å
+ * overse en avkrysning for å sende e-post til hele korpset.
+ *
+ * Et prosjekt som allerede er publisert beholder sin status; kallet blir da en
+ * ren varsling, og loggen sørger for at ingen får e-posten to ganger.
+ */
+export const publishProject = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string(), notify: z.boolean().default(false) }))
+  .handler(async ({ data }): Promise<ProjectNotifyResult & { ok: true }> => {
+    await requirePermission('projects.manage')
+    const d = db()
+    const project = (await d.select({ id: projects.id }).from(projects).where(eq(projects.id, data.id)).limit(1))[0]
+    if (!project) throw new Error('Fant ikke prosjektet')
+
+    await d.update(projects).set({ isPublished: true }).where(eq(projects.id, data.id))
+
+    if (!data.notify) return { ok: true, sent: 0, logged: 0, failed: 0, skipped: 0 }
+    try {
+      return { ok: true, ...(await notifyProjectPublished(data.id)) }
+    } catch (err) {
+      // Prosjektet ER publisert — det er den viktige delen. En feilende
+      // utsending skal aldri rulle det tilbake, og den skal ikke se ut som en
+      // vellykket sending heller.
+      console.error('[prosjektvarsling] kunne ikke sende publiseringsvarsel:', err)
+      return { ok: true, sent: 0, logged: 0, failed: 0, skipped: 0 }
+    }
+  })
+
+/**
+ * Avpubliserer. `project_notifications` beholdes med vilje — publiseres
+ * prosjektet igjen, skal ingen få det samme varselet to ganger.
+ */
+export const unpublishProject = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string() }))
+  .handler(async ({ data }) => {
+    await requirePermission('projects.manage')
+    await db().update(projects).set({ isPublished: false }).where(eq(projects.id, data.id))
+    return { ok: true }
+  })
+
+/** Idempotent «send på nytt»: går kun til dem som mangler en `published`-rad. */
+export const resendProjectNotifications = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string() }))
+  .handler(async ({ data }): Promise<ProjectNotifyResult & { ok: true }> => {
+    await requirePermission('projects.manage')
+    return { ok: true, ...(await notifyProjectPublished(data.id)) }
+  })
+
+/**
+ * Endringsvarselet (#51): ÉN e-post med alt som er endret i repertoar, tidsplan
+ * og prosjektopplysninger siden forrige varsel.
+ *
+ * En bevisst handling, ikke en automatikk. Alternativet — å sende ved hver
+ * lagring — er nøyaktig det saken advarer mot: «dette må ikkje bli for mange
+ * meldingar, slik at medlemmene blir irriterte eller begynner å ignorere
+ * varsla». Stille lagring er standarden; dette er knappen for når det er verdt
+ * det.
+ */
+export const sendProjectUpdate = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string() }))
+  .handler(async ({ data }): Promise<ProjectNotifyResult & { ok: true; changes: number }> => {
+    await requirePermission('projects.manage')
+    return { ok: true, ...(await notifyProjectUpdate(data.id)) }
+  })
+
+// ---------- Kommentarer og spørsmål (#27) ----------
+
+/**
+ * Tråder med svar, klare til visning.
+ *
+ * Alle som ser prosjektet ser kommentarene — det er hele poenget med å legge
+ * dem her og ikke i et forum bak enda en innlogging. Tilgangen er derfor
+ * `getProject` sin: er du inne på siden, er tråden din også.
+ */
+async function loadProjectComments(d: Db, projectId: string): Promise<ProjectCommentThread[]> {
+  const resolver = alias(user, 'resolver')
+  const rows = await d
+    .select({
+      id: projectComments.id,
+      parentId: projectComments.parentId,
+      body: projectComments.body,
+      authorId: projectComments.authorId,
+      authorName: user.name,
+      createdAt: projectComments.createdAt,
+      resolvedAt: projectComments.resolvedAt,
+      resolvedByName: resolver.name,
+    })
+    .from(projectComments)
+    .leftJoin(user, eq(projectComments.authorId, user.id))
+    .leftJoin(resolver, eq(projectComments.resolvedBy, resolver.id))
+    .where(eq(projectComments.projectId, projectId))
+    .orderBy(asc(projectComments.createdAt))
+
+  return threadsFrom(
+    rows.map(
+      (r): ProjectCommentRow => ({
+        id: r.id,
+        parentId: r.parentId,
+        body: r.body,
+        // Navnet slås opp ferskt, som ellers i basen: bytter noen navn, følger
+        // kommentaren med. En slettet konto blir «Ukjent», aldri et gammelt navn.
+        author: { id: r.authorId, name: r.authorName ?? 'Ukjent' },
+        createdAt: r.createdAt.getTime(),
+        resolvedAt: r.resolvedAt?.getTime() ?? null,
+        resolvedByName: r.resolvedByName,
+      }),
+    ),
+  )
+}
+
+/**
+ * Prosjektet slik en kommentarhandling må se det: finnes det, og har DENNE
+ * brukeren lov til å se det?
+ *
+ * Gjentar synlighetsregelen fra `getProject` med vilje. Uten den ville en id i
+ * et rått kall vært nok til å kommentere — og dermed bekrefte eksistensen av —
+ * et upublisert prosjekt.
+ */
+async function readableProject(d: Db, projectId: string, canManage: boolean) {
+  const project = (
+    await d
+      .select({ id: projects.id, name: projects.name, isPublished: projects.isPublished })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1)
+  )[0]
+  // Samme feilmelding for «finnes ikke» og «ikke for deg».
+  if (!project || (!project.isPublished && !canManage)) throw new Error('Fant ikke prosjektet')
+  return project
+}
+
+/**
+ * Nytt spørsmål (`parentId` utelatt) eller et svar i en tråd.
+ *
+ * To regler håndheves her og ingen andre steder:
+ *
+ * 1. **Ett nivå.** Et svar kan ikke besvares — `parentId` må peke på en tråd.
+ *    Uten regelen ville modellen tålt vilkårlig dybde, og #27 ber uttrykkelig om
+ *    det lette alternativet til et forum.
+ * 2. **Svar er stabens handling.** Alle kan spørre; `projects.manage` svarer.
+ *    Den som spurte kan selvsagt skrive et nytt spørsmål, men ikke legge seg
+ *    inn i tråden som om det var et svar fra prosjektledelsen.
+ */
+export const addProjectComment = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      projectId: z.string().min(1),
+      parentId: z.string().min(1).nullish(),
+      body: z.string().trim().min(1, 'Skriv noe først').max(PROJECT_COMMENT_MAX, 'Teksten er for lang'),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const me = await requireMe()
+    const canManage = hasPermission(me, 'projects.manage')
+    const d = db()
+    await readableProject(d, data.projectId, canManage)
+
+    if (data.parentId) {
+      if (!canManage) throw new Error('Bare prosjektansvarlig kan svare i en tråd')
+      const parent = (
+        await d
+          .select({ id: projectComments.id, parentId: projectComments.parentId, projectId: projectComments.projectId })
+          .from(projectComments)
+          .where(eq(projectComments.id, data.parentId))
+          .limit(1)
+      )[0]
+      // `projectId` sjekkes også: id-en alene ville latt et rått kall henge et
+      // svar på en tråd i et helt annet prosjekt.
+      if (!parent || parent.projectId !== data.projectId) throw new Error('Fant ikke tråden')
+      if (parent.parentId !== null) throw new Error('Du kan ikke svare på et svar')
+    }
+
+    const ts = new Date()
+    const id = newId()
+    await d.insert(projectComments).values({
+      id,
+      projectId: data.projectId,
+      parentId: data.parentId ?? null,
+      authorId: me.id,
+      body: data.body,
+      createdAt: ts,
+      updatedAt: ts,
+    })
+    // Ingen e-post herfra: en kommentartråd som varsler hele korpset ville vært
+    // nøyaktig den kanalen #51 ber oss holde stille. Se AGENTS.md.
+    return { id }
+  })
+
+/**
+ * Sletting og moderering. Egen kommentar, eller `projects.manage`.
+ *
+ * Sletter du en TRÅD, følger svarene med (cascade i skjemaet). Det er den
+ * ønskede semantikken — en tråd modereres som en tråd — og UI-et sier fra om
+ * det før man trykker.
+ */
+export const deleteProjectComment = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    const me = await requireMe()
+    const canManage = hasPermission(me, 'projects.manage')
+    const d = db()
+    const comment = (
+      await d
+        .select({
+          id: projectComments.id,
+          projectId: projectComments.projectId,
+          authorId: projectComments.authorId,
+        })
+        .from(projectComments)
+        .where(eq(projectComments.id, data.id))
+        .limit(1)
+    )[0]
+    if (!comment) throw new Error('Fant ikke kommentaren')
+    await readableProject(d, comment.projectId, canManage)
+    if (!canDeleteProjectComment(me, { author: { id: comment.authorId } }, canManage)) {
+      throw new Error('Du kan bare slette dine egne kommentarer')
+    }
+    await d.delete(projectComments).where(eq(projectComments.id, data.id))
+    return { ok: true }
+  })
+
+/**
+ * «Avklart» / «Åpent» på en tråd — stabens markering av at spørsmålet er
+ * besvart. Krever `projects.manage`: uten skillet kunne den som spurte lukket
+ * sitt eget spørsmål før noen rakk å se det, og statusen ville sluttet å bety
+ * noe. Kun tråder kan avklares; et enkelt svar har ingen status.
+ */
+export const setProjectThreadResolved = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string().min(1), resolved: z.boolean() }))
+  .handler(async ({ data }) => {
+    const me = await requirePermission('projects.manage')
+    const d = db()
+    const thread = (
+      await d
+        .select({
+          id: projectComments.id,
+          projectId: projectComments.projectId,
+          parentId: projectComments.parentId,
+        })
+        .from(projectComments)
+        .where(eq(projectComments.id, data.id))
+        .limit(1)
+    )[0]
+    if (!thread) throw new Error('Fant ikke tråden')
+    if (thread.parentId !== null) throw new Error('Bare selve spørsmålet kan markeres som avklart')
+    await readableProject(d, thread.projectId, true)
+    await d
+      .update(projectComments)
+      .set({
+        resolvedAt: data.resolved ? new Date() : null,
+        resolvedBy: data.resolved ? me.id : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(projectComments.id, data.id))
     return { ok: true }
   })

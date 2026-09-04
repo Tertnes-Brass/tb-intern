@@ -6,6 +6,7 @@ import { account, notificationPreferences, parts, userParts } from '../db/schema
 import { BOARD_TASK_NOTIFICATION_CHOICES, type BoardTaskNotificationChoice } from '../lib/board'
 import { MENTION_NOTIFICATION_CHOICES, type MentionNotificationChoice } from '../lib/mentions'
 import { type PostNotificationChoice } from '../lib/posts'
+import { PROJECT_NOTIFICATION_CHOICES, type ProjectNotificationChoice } from '../lib/project-notify'
 import { hasPermission, requireMe } from './access'
 import { memberDetailsSchema, readMemberDetails, saveMemberDetails } from './member-details'
 
@@ -40,6 +41,7 @@ export const getMyProfile = createServerFn().handler(async () => {
         posts: notificationPreferences.posts,
         boardTasks: notificationPreferences.boardTasks,
         mentions: notificationPreferences.mentions,
+        projects: notificationPreferences.projects,
       })
       .from(notificationPreferences)
       .where(eq(notificationPreferences.userId, me.id))
@@ -69,6 +71,9 @@ export const getMyProfile = createServerFn().handler(async () => {
     // Omtaler (#83): standarden er på. Blir du spurt om noe direkte, skal du få
     // vite det uten å ha gjort et valg først.
     notifyMentions: (notificationRows[0]?.mentions ?? 'all') as MentionNotificationChoice,
+    // Prosjekter (#18 + #51): standarden er på. Et nytt prosjekt og en endring i
+    // repertoaret er noe et medlem trenger å vite for å møte forberedt.
+    notifyProjects: (notificationRows[0]?.projects ?? 'all') as ProjectNotificationChoice,
     // Valget for styreoppgaver angår bare dem som faktisk får slike oppgaver.
     // Avgjøres her, server-side — UI-et skal aldri utlede rettigheter selv.
     canManageBoard: hasPermission(me, 'board.manage'),
@@ -122,6 +127,23 @@ export const updateMyMentionNotifications = createServerFn({ method: 'POST' })
       .insert(notificationPreferences)
       .values({ userId: me.id, mentions: data.mentions })
       .onConflictDoUpdate({ target: notificationPreferences.userId, set: { mentions: data.mentions } })
+    return { ok: true }
+  })
+
+/**
+ * Varslingsvalget for prosjekter (#18 + #51). Dekker BÅDE e-posten når et
+ * prosjekt publiseres og oppdateringsvarselet om repertoar og tidsplan — ett
+ * valg, av samme grunn som `board_tasks` dekker to e-poster: de kommer fra samme
+ * sted og handler om det samme.
+ */
+export const updateMyProjectNotifications = createServerFn({ method: 'POST' })
+  .validator(z.object({ projects: z.enum(PROJECT_NOTIFICATION_CHOICES) }))
+  .handler(async ({ data }) => {
+    const me = await requireMe()
+    await db()
+      .insert(notificationPreferences)
+      .values({ userId: me.id, projects: data.projects })
+      .onConflictDoUpdate({ target: notificationPreferences.userId, set: { projects: data.projects } })
     return { ok: true }
   })
 

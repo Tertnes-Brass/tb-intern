@@ -1,7 +1,9 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { PercussionNotesField, PercussionSetupField } from '../../../components/Percussion'
+import { ProjectComments } from '../../../components/ProjectComments'
 import { ProjectFormModal } from '../../../components/ProjectForm'
+import { ProjectNotifySection, PublishProjectModal } from '../../../components/ProjectNotify'
 import { ProjectTimesSection } from '../../../components/ProjectTimes'
 import { RepertoireList } from '../../../components/Repertoire'
 import { toast, toastError } from '../../../components/toast'
@@ -24,7 +26,7 @@ import {
   moveWorkInProject,
   removeWorkFromProject,
   searchWorksForPicker,
-  updateProject,
+  unpublishProject,
 } from '../../../server/projects'
 import { createShare, listShares, revokeShare } from '../../../server/shares'
 
@@ -45,6 +47,7 @@ function ProjectPage() {
   const p = data.project
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmPublish, setConfirmPublish] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
 
@@ -63,11 +66,14 @@ function ProjectPage() {
     })),
   )
 
-  const togglePublish = async () => {
+  // Publisering går gjennom en dialog (#18): der ligger valget om e-post skal
+  // sendes, avslått som standard. Avpublisering har ingen konsekvens utenfor
+  // databasen og trenger derfor ingen dialog.
+  const unpublish = async () => {
     setPublishing(true)
     try {
-      await updateProject({ data: { id: p.id, isPublished: !p.isPublished } })
-      toast(p.isPublished ? 'Prosjektet er avpublisert' : 'Publisert! Medlemmene ser det nå')
+      await unpublishProject({ data: { id: p.id } })
+      toast('Prosjektet er avpublisert')
       await router.invalidate()
     } catch (err) {
       toastError(err)
@@ -110,9 +116,15 @@ function ProjectPage() {
 
           {data.canManage && (
             <div className="flex shrink-0 flex-wrap gap-2">
-              <Button variant={p.isPublished ? 'secondary' : 'primary'} onClick={togglePublish} loading={publishing}>
-                {p.isPublished ? 'Avpubliser' : 'Publiser'}
-              </Button>
+              {p.isPublished ? (
+                <Button variant="secondary" onClick={() => void unpublish()} loading={publishing}>
+                  Avpubliser
+                </Button>
+              ) : (
+                <Button variant="primary" onClick={() => setConfirmPublish(true)}>
+                  Publiser
+                </Button>
+              )}
               <Button onClick={() => setEditing(true)}>Rediger</Button>
               <Button variant="danger" onClick={() => setConfirmDelete(true)}>
                 Slett
@@ -224,6 +236,13 @@ function ProjectPage() {
         </section>
       )}
 
+      {/* Spørsmål og svar (#27) — synlig for alle som ser prosjektet. */}
+      <ProjectComments projectId={p.id} threads={data.comments} canManage={data.canManage} meId={data.meId} />
+
+      {/* Varslingsflaten (#18 + #51) er et skriveverktøy: `notify` er null for
+          alle uten `projects.manage`, og for et upublisert prosjekt. */}
+      {data.notify && <ProjectNotifySection projectId={p.id} state={data.notify} />}
+
       {data.canShare && <SharesSection projectId={p.id} myParts={data.myParts} repertoire={data.repertoire} />}
 
       <ProjectFormModal
@@ -237,6 +256,13 @@ function ProjectPage() {
       />
 
       <WorkPicker projectId={p.id} open={pickerOpen} onClose={() => setPickerOpen(false)} />
+
+      <PublishProjectModal
+        open={confirmPublish}
+        onClose={() => setConfirmPublish(false)}
+        projectId={p.id}
+        projectName={p.name}
+      />
 
       <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Slette prosjektet?" kicker={p.name}>
         <p className="mb-5 text-sm leading-relaxed text-ink-soft">
