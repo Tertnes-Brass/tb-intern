@@ -20,6 +20,7 @@ import {
   postCommentMentions,
   postComments,
   postMentions,
+  postTargets,
   postReactions,
   posts,
   projectTimes,
@@ -370,6 +371,14 @@ export async function seedWallDemo(): Promise<void> {
         .update(posts)
         .set({ authorId })
         .where(and(eq(posts.id, sp.id), isNull(posts.authorId)))
+    }
+    // Målrettingen (#28) seedes idempotent ved siden av innlegget: uten rader
+    // her er innlegget umålrettet, som alle de andre demoinnleggene.
+    if (sp.targets && sp.targets.length > 0) {
+      await d
+        .insert(postTargets)
+        .values(sp.targets.map((t) => ({ postId: sp.id, kind: t.kind, refId: t.refId })))
+        .onConflictDoNothing()
     }
     if (postMentionIds.length > 0) {
       await d.update(posts).set({ body }).where(eq(posts.id, sp.id))

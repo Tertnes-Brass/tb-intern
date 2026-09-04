@@ -1,5 +1,5 @@
 import { useNavigate, useRouter } from '@tanstack/react-router'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { markdownToHtml } from '../lib/markdown'
 import { type MentionUser, mentionDraft, toMarkers } from '../lib/mentions'
 import { postImageUrl, uploadPostImages } from '../lib/post-images-client'
@@ -7,14 +7,24 @@ import {
   DEFAULT_NOTIFY,
   DEFAULT_POST_FORMAT,
   MAX_POST_IMAGES,
+  MAX_POST_TARGETS,
   type PostAudience,
   type PostFormat,
   type PostImportance,
+  type PostTarget,
   imageRejectionReason,
   notifyLabel,
   notifyResultMessage,
+  targetLabel,
 } from '../lib/posts'
-import { createPost, deletePostImage, publishPost, searchMentionableForAudience, updatePost } from '../server/posts'
+import {
+  createPost,
+  deletePostImage,
+  listPostTargetOptions,
+  publishPost,
+  searchMentionableForAudience,
+  updatePost,
+} from '../server/posts'
 import { MentionTextarea } from './MentionTextarea'
 import { toast, toastError } from './toast'
 import { Button, Field } from './ui'
@@ -22,7 +32,8 @@ import { Button, Field } from './ui'
 /**
  * Skjemaet bak «Skriv innlegg» og «Rediger» på veggen (#28). Samme komponent
  * for alle: et vanlig medlem ser tekst, valgfri tittel og bilder, mens
- * `posts.publish` i tillegg får målgruppe, viktighet, «Fra styret» og e-post.
+ * `posts.publish` i tillegg får målgruppe, målretting, viktighet, «Fra styret»
+ * og e-post.
  *
  * Flyten er alltid opprett → last opp bilder → publiser, slik at et innlegg
  * aldri blir synlig halvferdig og bilder aldri blir foreldreløse.
@@ -48,6 +59,8 @@ export type PostFormValues = {
   body: string
   format: PostFormat
   audience: PostAudience
+  /** Stemmegruppene/prosjektene innlegget er snevret inn til. Tom = hele målgruppen. */
+  targets: PostTarget[]
   importance: PostImportance
   official: boolean
   publishedAt: number | null
@@ -92,6 +105,14 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
   const [format, setFormat] = useState<PostFormat>(post?.format ?? DEFAULT_POST_FORMAT)
   const [preview, setPreview] = useState(false)
   const [audience, setAudience] = useState<PostAudience>(post?.audience ?? 'all')
+  const [targets, setTargets] = useState<PostTarget[]>(post?.targets ?? [])
+  // Valgene hentes først når noen faktisk kan målrette. Tallene i dem er
+  // avledet server-side (prosjektdeltakelse finnes ikke som en egen tabell), og
+  // de skal stå i velgeren nettopp derfor: valget tas med tallet synlig.
+  const [targetChoices, setTargetChoices] = useState<{
+    sections: Array<{ refId: string; label: string; memberCount: number }>
+    projects: Array<{ refId: string; label: string; memberCount: number }>
+  } | null>(null)
   const [importance, setImportance] = useState<PostImportance>(post?.importance ?? 'normal')
   const [official, setOfficial] = useState(post?.official ?? false)
   // Avslått som standard (#85): publisering og masseutsending er to handlinger.
@@ -100,6 +121,44 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
   const [files, setFiles] = useState<File[]>([])
   const [busy, setBusy] = useState<'draft' | 'publish' | null>(null)
   const isPublished = post?.publishedAt != null
+
+  useEffect(() => {
+    if (!canPublish) return
+    let alive = true
+    listPostTargetOptions()
+      .then((options) => {
+        if (alive) setTargetChoices(options)
+      })
+      // En feilet henting skal ikke velte skjemaet: uten valgene er innlegget
+      // umålrettet, som er nøyaktig det det var før denne funksjonen fantes.
+      .catch(() => {
+        if (alive) setTargetChoices({ sections: [], projects: [] })
+      })
+    return () => {
+      alive = false
+    }
+  }, [canPublish])
+
+  const toggleTarget = (target: PostTarget) => {
+    setTargets((current) => {
+      const has = current.some((t) => t.kind === target.kind && t.refId === target.refId)
+      if (has) return current.filter((t) => !(t.kind === target.kind && t.refId === target.refId))
+      if (current.length >= MAX_POST_TARGETS) {
+        toast(`Maks ${MAX_POST_TARGETS} grupper per beskjed`, 'error')
+        return current
+      }
+      return [...current, target]
+    })
+  }
+
+  // Etikettene til de valgte gruppene — brukes i avkryssingen for e-post, slik
+  // at det står «Send e-post til Slagverk nå» og ikke «til hele korpset».
+  const targetNames = useMemo(() => {
+    const labels = new Map<string, string>()
+    for (const s of targetChoices?.sections ?? []) labels.set(`section:${s.refId}`, s.label)
+    for (const p of targetChoices?.projects ?? []) labels.set(`project:${p.refId}`, p.label)
+    return targetLabel(targets, labels)
+  }, [targets, targetChoices])
   const imageBudget = MAX_POST_IMAGES - existingImages.length - files.length
   // Samme rendrer som serveren og detaljsiden — forhåndsvisningen kan ikke
   // vise noe annet enn det som faktisk blir publisert.
@@ -147,6 +206,9 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
       body: toMarkers(body.trim(), chosen),
       format,
       audience,
+      // Serveren fjerner målrettingen for den som ikke kan publisere, akkurat
+      // som den tvinger `audience` til `all` (`sanitizePostTargets`).
+      targets,
       importance,
       official,
     }
@@ -277,7 +339,7 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
             onChosenChange={setChosen}
             // Målgruppen avgjør hvem som kan omtales — den er valgt her i
             // skjemaet, og innlegget har kanskje ingen id ennå.
-            search={(query) => searchMentionableForAudience({ data: { audience, query } })}
+            search={(query) => searchMentionableForAudience({ data: { audience, targets, query } })}
             // Ingen `onEnter`: her er enter et linjeskift, ikke «send».
             placement="below"
             placeholder={
@@ -389,6 +451,73 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
             </Field>
           </div>
 
+          <fieldset className="sheet px-4 py-3.5">
+            <legend className="px-1 text-[0.8rem] font-medium text-ink-soft">Snevre inn (valgfritt)</legend>
+            <p className="mb-3 text-xs leading-snug text-ink-soft">
+              Uten valg her går beskjeden til{' '}
+              {audience === 'board' ? 'alle som kan publisere beskjeder' : 'hele korpset'}. Velger du én eller flere
+              grupper, ser bare de den — på veggen, på forsiden og i e-posten.
+            </p>
+
+            {targetChoices === null ? (
+              <p className="text-xs text-ink-faint">Henter gruppene …</p>
+            ) : (
+              <div className="space-y-3">
+                {[
+                  { key: 'section' as const, title: 'Stemmegrupper', rows: targetChoices.sections },
+                  { key: 'project' as const, title: 'Prosjekter', rows: targetChoices.projects },
+                ].map((group) =>
+                  group.rows.length === 0 ? null : (
+                    <div key={group.key}>
+                      <p className="mb-1.5 text-xs font-medium text-ink-faint">{group.title}</p>
+                      <ul className="flex flex-wrap gap-1.5">
+                        {group.rows.map((row) => {
+                          const on = targets.some((t) => t.kind === group.key && t.refId === row.refId)
+                          return (
+                            <li key={row.refId}>
+                              <label
+                                className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brass ${
+                                  on
+                                    ? 'border-brass bg-[var(--brass-soft)] text-brass-strong'
+                                    : 'border-line text-ink-soft hover:border-brass hover:text-brass-strong'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="sr-only"
+                                  checked={on}
+                                  onChange={() => toggleTarget({ kind: group.key, refId: row.refId })}
+                                />
+                                {row.label}
+                                {/* Tallet er avledet (se post-audience.ts) og skal
+                                    stå her: et prosjekt med 0 medlemmer treffer ingen. */}
+                                <span className={on ? 'text-brass-strong/70' : 'text-ink-faint'}>
+                                  {row.memberCount}
+                                </span>
+                              </label>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  ),
+                )}
+                {targets.length > 0 && (
+                  <p className="text-xs text-ink-soft">
+                    Går til: <span className="font-medium text-ink">{targetNames}</span>.{' '}
+                    <button
+                      type="button"
+                      onClick={() => setTargets([])}
+                      className="cursor-pointer underline underline-offset-2 hover:text-brass-strong"
+                    >
+                      Fjern innsnevringen
+                    </button>
+                  </p>
+                )}
+              </div>
+            )}
+          </fieldset>
+
           <label className="sheet flex cursor-pointer items-start gap-3 px-4 py-3">
             <input
               type="checkbox"
@@ -412,7 +541,7 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
               onChange={(e) => setNotify(e.target.checked)}
             />
             <span>
-              <span className="block text-sm font-medium text-ink">{notifyLabel(audience)}</span>
+              <span className="block text-sm font-medium text-ink">{notifyLabel(audience, targetNames)}</span>
               <span className="mt-0.5 block text-xs leading-snug text-ink-soft">
                 Uten avkryssing publiseres innlegget uten at det sendes e-post.{' '}
                 {audience === 'board'

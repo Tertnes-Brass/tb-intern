@@ -735,6 +735,56 @@ export const postMentions = sqliteTable(
   (t) => [primaryKey({ columns: [t.postId, t.userId] }), index('post_mentions_user_idx').on(t.userId)],
 )
 
+// Målretting av en beskjed (#28). Rader her er en INNSNEVRING oppå `audience`,
+// aldri en utvidelse: `audience` avgjør fortsatt hele korpset vs. bare styret,
+// og målrettingen svarer på «hvem av dem». En beskjed UTEN rader her oppfører
+// seg nøyaktig som før målretting fantes — derfor er tabellen tom for alt som
+// finnes fra før, og derfor ble ikke `audience` gjort om til noe annet.
+//
+// `ref_id` har med vilje INGEN fremmednøkkel: kolonnen betyr to ting avhengig
+// av `kind`, og en FK kan ikke peke to steder. For `kind = 'section'` er den en
+// verdi fra `parts.section` (`SECTION_ORDER` i src/lib/taxonomy.ts) — som ikke
+// er en tabell i det hele tatt. For `kind = 'project'` er den `projects.id`, og
+// forsvinner prosjektet, blir raden foreldreløs: beskjeden treffer da ingen
+// (fail-closed), men står lesbar for forfatteren og `posts.publish`. Det er
+// samme linje som resten av basen — foreldreløse rader ryddes aldri automatisk,
+// for «slettet» og «utenfor vinduet» er ikke til å skille fra utsiden.
+export const postTargets = sqliteTable(
+  'post_targets',
+  {
+    postId: text('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    /** 'section' = stemmegruppe (parts.section), 'project' = prosjektets medlemmer. */
+    kind: text('kind', { enum: ['section', 'project'] }).notNull(),
+    refId: text('ref_id').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.kind, t.refId] })],
+)
+
+// Lest/sett (#28): én rad første gang et medlem åpner detaljsiden for en
+// beskjed. PK (postId, userId) gjør skrivingen idempotent, og `seen_at` er
+// FØRSTE gang — ikke siste. Et «sist åpnet» ville svart på et annet spørsmål
+// enn det saken stiller («hvem har sett den viktige kunngjøringen?»), og
+// oppdatering ved hvert besøk ville gjort hver visning til en skriving.
+//
+// Ingen e-post og ingen påminnelser henger på denne tabellen. Den svarer på ett
+// spørsmål, og tallet vises kun for forfatteren og `posts.publish` (navnelista
+// bare for VIKTIGE beskjeder — se canSeeSeenNames i src/lib/posts.ts).
+export const postSeen = sqliteTable(
+  'post_seen',
+  {
+    postId: text('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    seenAt: integer('seen_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.userId] }), index('post_seen_user_idx').on(t.userId)],
+)
+
 // Reaksjoner. `kind` er foreløpig alltid 'like'; kolonnen finnes så flere kan
 // komme uten en ny tabell. PK (postId, userId) = én reaksjon per person.
 export const postReactions = sqliteTable(

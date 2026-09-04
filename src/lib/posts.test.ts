@@ -3,19 +3,26 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_NOTIFY,
+  MAX_POST_TARGETS,
+  type PostReader,
   type PostRecipient,
   bodyToHtml,
   canDeleteComment,
   canEditPost,
   canReadPost,
+  canSeeSeenNames,
+  canSeeSeenStatus,
   commentCountLabel,
   escapeHtml,
   excerpt,
   imageExtension,
   imageRejectionReason,
+  inPostAudience,
+  matchesTargets,
   notifyLabel,
   notifyResultMessage,
   paragraphs,
+  postAudienceMembers,
   postEmailFrom,
   postEmailImageNote,
   postEmailSubject,
@@ -23,6 +30,9 @@ import {
   reactionLabel,
   recipientsFor,
   sanitizePostInput,
+  sanitizePostTargets,
+  seenLabel,
+  targetLabel,
   toggleReaction,
   tokenize,
 } from './posts'
@@ -127,11 +137,11 @@ describe('escapeHtml / bodyToHtml', () => {
 
 describe('recipientsFor', () => {
   const members: PostRecipient[] = [
-    { userId: 'medlem', email: 'medlem@tb.no', isActive: true, canPublish: false },
-    { userId: 'styret', email: 'styret@tb.no', isActive: true, canPublish: true },
-    { userId: 'sluttet', email: 'sluttet@tb.no', isActive: false, canPublish: false },
-    { userId: 'uten-epost', email: null, isActive: true, canPublish: false },
-    { userId: 'tom-epost', email: '   ', isActive: true, canPublish: false },
+    { userId: 'medlem', email: 'medlem@tb.no', isActive: true, canPublish: false, sectionIds: [], projectIds: []  },
+    { userId: 'styret', email: 'styret@tb.no', isActive: true, canPublish: true, sectionIds: [], projectIds: []  },
+    { userId: 'sluttet', email: 'sluttet@tb.no', isActive: false, canPublish: false, sectionIds: [], projectIds: []  },
+    { userId: 'uten-epost', email: null, isActive: true, canPublish: false, sectionIds: [], projectIds: []  },
+    { userId: 'tom-epost', email: '   ', isActive: true, canPublish: false, sectionIds: [], projectIds: []  },
   ]
   const normal = { audience: 'all', importance: 'normal' } as const
   const ids = (list: PostRecipient[]) => list.map((r) => r.userId)
@@ -405,5 +415,242 @@ describe('e-postvarsling ved publisering', () => {
       expect(source).toContain('useState(DEFAULT_NOTIFY)')
       expect(source).not.toMatch(/const \[notify, setNotify\] = useState\(true\)/)
     }
+  })
+})
+
+
+// ---------- Målretting og sett-status (#28) ----------
+
+/** En leser slik serveren setter den sammen. `perc` = slagverksgruppa. */
+const leser = (over: Partial<PostReader> = {}): PostReader => ({
+  canPublish: false,
+  sectionIds: [],
+  projectIds: [],
+  ...over,
+})
+
+describe('matchesTargets', () => {
+  it('INGEN målretting treffer alle — dagens oppførsel er uendret', () => {
+    expect(matchesTargets(undefined, leser())).toBe(true)
+    expect(matchesTargets([], leser())).toBe(true)
+  })
+
+  it('treffer den som spiller i stemmegruppa', () => {
+    const targets = [{ kind: 'section' as const, refId: 'perc' }]
+    expect(matchesTargets(targets, leser({ sectionIds: ['perc'] }))).toBe(true)
+    expect(matchesTargets(targets, leser({ sectionIds: ['cornet'] }))).toBe(false)
+  })
+
+  it('treffer den som er med i prosjektet', () => {
+    const targets = [{ kind: 'project' as const, refId: 'p1' }]
+    expect(matchesTargets(targets, leser({ projectIds: ['p1'] }))).toBe(true)
+    expect(matchesTargets(targets, leser({ projectIds: ['p2'] }))).toBe(false)
+  })
+
+  it('flere målrettinger er ELLER, ikke OG', () => {
+    const targets = [
+      { kind: 'section' as const, refId: 'perc' },
+      { kind: 'project' as const, refId: 'p1' },
+    ]
+    expect(matchesTargets(targets, leser({ sectionIds: ['perc'] }))).toBe(true)
+    expect(matchesTargets(targets, leser({ projectIds: ['p1'] }))).toBe(true)
+    expect(matchesTargets(targets, leser({ sectionIds: ['tuba'] }))).toBe(false)
+  })
+
+  it('en stemmegruppe-id kan ikke matche en prosjekt-id ved et uhell', () => {
+    const targets = [{ kind: 'project' as const, refId: 'perc' }]
+    expect(matchesTargets(targets, leser({ sectionIds: ['perc'] }))).toBe(false)
+  })
+})
+
+describe('canReadPost med målretting', () => {
+  const post = {
+    audience: 'all' as const,
+    publishedAt: 1,
+    targets: [{ kind: 'section' as const, refId: 'perc' }],
+  }
+
+  it('lar slagverkeren lese beskjeden til slagverk', () => {
+    expect(canReadPost(post, leser({ sectionIds: ['perc'] }))).toBe(true)
+  })
+
+  it('skjuler den for kornettisten', () => {
+    expect(canReadPost(post, leser({ sectionIds: ['cornet'] }))).toBe(false)
+  })
+
+  it('lar `posts.publish` lese alt — også det som ikke er målrettet mot dem', () => {
+    expect(canReadPost(post, leser({ canPublish: true, sectionIds: ['cornet'] }))).toBe(true)
+  })
+
+  it('en bar boolean er fail-closed: uten stemmer treffer ingen målretting', () => {
+    expect(canReadPost(post, false)).toBe(false)
+    // …men en umålrettet beskjed oppfører seg nøyaktig som før.
+    expect(canReadPost({ audience: 'all', publishedAt: 1 }, false)).toBe(true)
+  })
+
+  it('målretting overstyrer ikke utkast', () => {
+    expect(canReadPost({ ...post, publishedAt: null }, leser({ sectionIds: ['perc'] }))).toBe(false)
+  })
+})
+
+describe('inPostAudience', () => {
+  it('skiller mellom «kan lese» og «er mottaker»', () => {
+    const post = { audience: 'all' as const, targets: [{ kind: 'section' as const, refId: 'perc' }] }
+    const moderator = leser({ canPublish: true, sectionIds: ['cornet'] })
+    // Moderatoren kan lese beskjeden …
+    expect(canReadPost({ ...post, publishedAt: 1 }, moderator)).toBe(true)
+    // … men er ikke en av dem den var ment for.
+    expect(inPostAudience(post, moderator)).toBe(false)
+  })
+
+  it('styre-beskjeder er fortsatt bare for dem som kan publisere', () => {
+    expect(inPostAudience({ audience: 'board' }, leser({ canPublish: true }))).toBe(true)
+    expect(inPostAudience({ audience: 'board' }, leser())).toBe(false)
+  })
+})
+
+describe('recipientsFor med målretting', () => {
+  const members: PostRecipient[] = [
+    { userId: 'slagverk', email: 's@tb.no', isActive: true, canPublish: false, sectionIds: ['perc'], projectIds: [] },
+    { userId: 'kornett', email: 'k@tb.no', isActive: true, canPublish: false, sectionIds: ['cornet'], projectIds: [] },
+    { userId: 'styret', email: 'st@tb.no', isActive: true, canPublish: true, sectionIds: ['tuba'], projectIds: [] },
+    { userId: 'prosjekt', email: 'p@tb.no', isActive: true, canPublish: false, sectionIds: [], projectIds: ['p1'] },
+  ]
+  const ids = (list: PostRecipient[]) => list.map((r) => r.userId)
+
+  it('en beskjed til slagverksgruppa e-postes ikke til hele korpset', () => {
+    const post = { audience: 'all' as const, importance: 'normal' as const, targets: [{ kind: 'section' as const, refId: 'perc' }] }
+    expect(ids(recipientsFor(post, members, new Map()))).toEqual(['slagverk'])
+  })
+
+  it('en beskjed til et prosjekt går til prosjektets medlemmer', () => {
+    const post = { audience: 'all' as const, importance: 'normal' as const, targets: [{ kind: 'project' as const, refId: 'p1' }] }
+    expect(ids(recipientsFor(post, members, new Map()))).toEqual(['prosjekt'])
+  })
+
+  it('uten målretting går den til alle, som før', () => {
+    const post = { audience: 'all' as const, importance: 'normal' as const }
+    expect(ids(recipientsFor(post, members, new Map()))).toEqual(['slagverk', 'kornett', 'styret', 'prosjekt'])
+  })
+
+  it('varslingsvalget slår fortsatt ut innenfor målgruppen', () => {
+    const post = { audience: 'all' as const, importance: 'normal' as const, targets: [{ kind: 'section' as const, refId: 'perc' }] }
+    expect(ids(recipientsFor(post, members, { slagverk: 'off' }))).toEqual([])
+  })
+})
+
+describe('sanitizePostTargets', () => {
+  it('fjerner all målretting for den som ikke kan publisere', () => {
+    expect(sanitizePostTargets([{ kind: 'section', refId: 'perc' }], false)).toEqual([])
+  })
+
+  it('trimmer, fjerner tomme og dedupliserer', () => {
+    expect(
+      sanitizePostTargets(
+        [
+          { kind: 'section', refId: ' perc ' },
+          { kind: 'section', refId: 'perc' },
+          { kind: 'project', refId: '  ' },
+        ],
+        true,
+      ),
+    ).toEqual([{ kind: 'section', refId: 'perc' }])
+  })
+
+  it('har et tak', () => {
+    const many = Array.from({ length: MAX_POST_TARGETS + 5 }, (_, i) => ({ kind: 'project' as const, refId: `p${i}` }))
+    expect(sanitizePostTargets(many, true)).toHaveLength(MAX_POST_TARGETS)
+  })
+
+  it('avviser en ukjent type fra et rått kall', () => {
+    expect(sanitizePostTargets([{ kind: 'role' as never, refId: 'admin' }], true)).toEqual([])
+  })
+})
+
+describe('targetLabel', () => {
+  const labels = new Map([
+    ['section:perc', 'Slagverk'],
+    ['project:p1', 'Julekonserten'],
+  ])
+
+  it('er tom uten målretting', () => {
+    expect(targetLabel([], labels)).toBe('')
+  })
+
+  it('skriver én gruppe rett fram', () => {
+    expect(targetLabel([{ kind: 'section', refId: 'perc' }], labels)).toBe('Slagverk')
+  })
+
+  it('binder flere sammen på norsk', () => {
+    expect(
+      targetLabel(
+        [
+          { kind: 'section', refId: 'perc' },
+          { kind: 'project', refId: 'p1' },
+        ],
+        labels,
+      ),
+    ).toBe('Slagverk og Julekonserten')
+  })
+
+  it('viser aldri en rå id for noe som er slettet', () => {
+    expect(targetLabel([{ kind: 'project', refId: 'borte' }], labels)).toBe('ukjent gruppe')
+  })
+})
+
+describe('postAudienceMembers', () => {
+  const medlemmer = [
+    { userId: 'a', isActive: true, canPublish: false, sectionIds: ['perc'], projectIds: [] },
+    { userId: 'b', isActive: true, canPublish: false, sectionIds: ['perc'], projectIds: [] },
+    { userId: 'c', isActive: true, canPublish: false, sectionIds: ['cornet'], projectIds: [] },
+    { userId: 'sluttet', isActive: false, canPublish: false, sectionIds: ['perc'], projectIds: [] },
+    { userId: 'forfatter', isActive: true, canPublish: true, sectionIds: ['perc'], projectIds: [] },
+  ]
+
+  it('teller bare de aktive i målgruppen, uten forfatteren', () => {
+    const out = postAudienceMembers(
+      { audience: 'all', targets: [{ kind: 'section', refId: 'perc' }], authorId: 'forfatter' },
+      medlemmer,
+    )
+    expect(out.map((m) => m.userId)).toEqual(['a', 'b'])
+  })
+
+  it('uten målretting er nevneren hele korpset', () => {
+    const out = postAudienceMembers({ audience: 'all', authorId: 'forfatter' }, medlemmer)
+    expect(out.map((m) => m.userId)).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('sett-status', () => {
+  const me = { id: 'meg' }
+
+  it('tallet vises for forfatteren og for skrivere, ikke for andre', () => {
+    expect(canSeeSeenStatus(me, { authorId: 'meg' }, false)).toBe(true)
+    expect(canSeeSeenStatus(me, { authorId: 'andre' }, true)).toBe(true)
+    expect(canSeeSeenStatus(me, { authorId: 'andre' }, false)).toBe(false)
+    expect(canSeeSeenStatus(null, { authorId: 'meg' }, true)).toBe(false)
+  })
+
+  it('navnelista kun for VIKTIGE beskjeder', () => {
+    expect(canSeeSeenNames(me, { authorId: 'meg', importance: 'important' }, false)).toBe(true)
+    expect(canSeeSeenNames(me, { authorId: 'meg', importance: 'normal' }, false)).toBe(false)
+    // Viktig, men leseren er verken forfatter eller skriver.
+    expect(canSeeSeenNames(me, { authorId: 'andre', importance: 'important' }, false)).toBe(false)
+  })
+
+  it('seenLabel sier fra på norsk', () => {
+    expect(seenLabel(0, 0)).toBe('Ingen mottakere')
+    expect(seenLabel(0, 12)).toBe('Ingen av 12 har åpnet den ennå')
+    expect(seenLabel(5, 12)).toBe('Sett av 5 av 12')
+    expect(seenLabel(12, 12)).toBe('Sett av alle 12')
+    expect(seenLabel(1, 1)).toBe('Sett av mottakeren')
+  })
+})
+
+describe('notifyLabel med målretting', () => {
+  it('lyver ikke om hvem e-posten går til', () => {
+    expect(notifyLabel('all')).toBe('Send e-post til hele korpset nå')
+    expect(notifyLabel('all', 'Slagverk')).toBe('Send e-post til Slagverk nå')
+    expect(notifyLabel('board', 'Slagverk')).toBe('Send e-post til Slagverk nå')
   })
 })

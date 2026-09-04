@@ -28,7 +28,14 @@
  * tillegg hver markør før teksten lagres — tre steder, én regel
  * (`mentionRejection`).
  */
-import { type PostAudience, type PostToken, canReadPost, escapeHtml, tokenize } from './posts'
+import {
+  type PostReader,
+  type PostTargetingInput,
+  type PostToken,
+  canReadPost,
+  escapeHtml,
+  tokenize,
+} from './posts'
 
 /** Maks antall omtaler i én tekst. Håndheves server-side alle tre stedene. */
 export const MAX_MENTIONS = 10
@@ -342,14 +349,16 @@ export function rankMentionCandidates(members: MentionUser[], query: string, lim
 
 // ---------- Hvem kan omtales ----------
 
-/** Et medlem slik serveren henter det når en omtale skal vurderes. */
-export type MentionCandidate = {
+/**
+ * Et medlem slik serveren henter det når en omtale skal vurderes. `PostReader`
+ * er med fordi tilgangen til et innlegg ikke lenger bare er `posts.publish`:
+ * en målrettet beskjed leses av dem målrettingen treffer (#28).
+ */
+export type MentionCandidate = PostReader & {
   userId: string
   name: string
   email: string | null
   isActive: boolean
-  /** Har `posts.publish` — avgjør tilgang til `audience: 'board'`. */
-  canPublish: boolean
 }
 
 /**
@@ -358,11 +367,11 @@ export type MentionCandidate = {
  * funksjon (`canReadPost`) slik at de to aldri kan komme i utakt. Brukes både
  * til forslagslista og til valideringen i `addComment`; ett regelsted, to bruk.
  */
-export function mentionableMembers<T extends { isActive: boolean; canPublish: boolean }>(
-  post: { audience: PostAudience; publishedAt: number | null },
+export function mentionableMembers<T extends PostReader & { isActive: boolean }>(
+  post: PostTargetingInput & { publishedAt: number | null },
   members: T[],
 ): T[] {
-  return members.filter((m) => m.isActive && canReadPost(post, m.canPublish))
+  return members.filter((m) => m.isActive && canReadPost(post, m))
 }
 
 /** Et hvilket som helst satt publiseringstidspunkt. Se `mentionableForAudience`. */
@@ -373,16 +382,19 @@ const AS_IF_PUBLISHED = 1
  * uten spørsmålet om innlegget er publisert ennå: et utkast blir lesbart i det
  * øyeblikket det publiseres, og et nytt innlegg har ikke engang en id å slå opp.
  * Det som avgjør er målgruppen — `all` treffer alle aktive medlemmer, `board`
- * kun dem som selv kan publisere.
+ * kun dem som selv kan publisere — og siden #28 også MÅLRETTINGEN: er beskjeden
+ * snevret inn til slagverksgruppa, kan en kornettist ikke omtales i den.
  *
  * Regelen hentes fortsatt fra `canReadPost`, slik at forslagslista og
  * valideringen ikke kan komme i utakt med hvem som faktisk får se innlegget.
+ * Det betyr også at en `posts.publish`-holder fortsatt kan omtales i en
+ * målrettet beskjed: hen KAN lese den, uansett hvilken stemme hen spiller.
  */
-export function mentionableForAudience<T extends { isActive: boolean; canPublish: boolean }>(
-  audience: PostAudience,
+export function mentionableForAudience<T extends PostReader & { isActive: boolean }>(
+  post: PostTargetingInput,
   members: T[],
 ): T[] {
-  return members.filter((m) => m.isActive && canReadPost({ audience, publishedAt: AS_IF_PUBLISHED }, m.canPublish))
+  return members.filter((m) => m.isActive && canReadPost({ ...post, publishedAt: AS_IF_PUBLISHED }, m))
 }
 
 // ---------- Valideringen (felles for alle tre stedene) ----------

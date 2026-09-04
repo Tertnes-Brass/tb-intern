@@ -244,6 +244,9 @@ function PostPage() {
           {post.official && <Stamp tone="brass">Fra styret</Stamp>}
           {post.importance === 'important' && <Stamp tone="oxblood">Viktig</Stamp>}
           {post.audience === 'board' && <Stamp>Kun styret</Stamp>}
+          {/* Målrettingen (#28) står som et eget stempel: den som leser en
+              beskjed til slagverksgruppa skal se at den ikke gikk til alle. */}
+          {post.targetLabel && <Stamp>{post.targetLabel}</Stamp>}
           {isDraft && <Stamp tone="oxblood">Ikke publisert</Stamp>}
         </div>
 
@@ -314,6 +317,39 @@ function PostPage() {
               )}
             </p>
           </div>
+          {/* Lest/sett (#28). Serveren sender `seen: null` til alle som ikke skal
+              se tallet, og `names: null` når navnelista ikke er tillatt — her
+              filtreres ingenting, det er allerede avgjort. */}
+          {data.seen && (
+            <div className="border-t border-line pt-3">
+              <p className="text-sm text-ink">{data.seen.label}</p>
+              {data.seen.names ? (
+                <details className="mt-1.5">
+                  <summary className="cursor-pointer text-xs text-ink-soft transition-colors hover:text-brass-strong">
+                    Vis hvem
+                  </summary>
+                  <div className="mt-2 space-y-2 text-xs leading-relaxed">
+                    <p className="text-ink-soft">
+                      <span className="font-medium text-ink">Har åpnet den:</span>{' '}
+                      {data.seen.names.seen.length > 0 ? data.seen.names.seen.join(', ') : 'ingen ennå'}
+                    </p>
+                    <p className="text-ink-soft">
+                      <span className="font-medium text-ink">Har ikke åpnet den:</span>{' '}
+                      {data.seen.names.pending.length > 0 ? data.seen.names.pending.join(', ') : 'ingen'}
+                    </p>
+                    <p className="text-ink-faint">
+                      «Sett» betyr at beskjeden er åpnet på internsiden. Den som leste den i e-posten, står som ikke
+                      åpnet.
+                    </p>
+                  </div>
+                </details>
+              ) : (
+                <p className="mt-1 text-xs text-ink-faint">
+                  Navnelista vises bare for beskjeder merket «Viktig».
+                </p>
+              )}
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             {isDraft ? (
               <Button variant="primary" onClick={() => setConfirmPublish(true)}>
@@ -353,7 +389,8 @@ function PostPage() {
 
       <Modal open={confirmPublish} onClose={() => setConfirmPublish(false)} title="Publisere innlegget?" kicker="Veggen">
         <p className="text-sm leading-relaxed text-ink-soft">
-          Innlegget blir synlig for {post.audience === 'board' ? 'styret' : 'alle medlemmer'} med det samme.
+          Innlegget blir synlig for{' '}
+          {post.targetLabel || (post.audience === 'board' ? 'styret' : 'alle medlemmer')} med det samme.
         </p>
         {data.canPublish && (
           <label className="mt-4 flex cursor-pointer items-start gap-3">
@@ -364,7 +401,9 @@ function PostPage() {
               onChange={(e) => setNotify(e.target.checked)}
             />
             <span>
-              <span className="block text-sm font-medium text-ink">{notifyLabel(post.audience)}</span>
+              <span className="block text-sm font-medium text-ink">
+                {notifyLabel(post.audience, post.targetLabel)}
+              </span>
               <span className="mt-0.5 block text-xs leading-snug text-ink-soft">
                 Uten avkryssing publiseres innlegget uten at det sendes e-post. E-posten følger
                 varslingsvalget til hver enkelt, og ingen får den samme beskjeden to ganger.

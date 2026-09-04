@@ -121,15 +121,129 @@ export function bodyToHtml(body: string, paragraphStyle = ''): string {
     .join('')
 }
 
+// ---------- Målretting (#28) ----------
+
+/**
+ * Hva en beskjed kan snevres inn mot, i tillegg til `audience`.
+ *
+ * `section` er en stemmegruppe — verdien i `parts.section` (se `SECTION_ORDER` i
+ * `src/lib/taxonomy.ts`), ikke en enkeltstemme: «slagverk», ikke «Slagverk 2».
+ * Det er den gruppen folk snakker om når de sier stemmegruppe, og den overlever
+ * at noen bytter fra Slagverk 1 til Slagverk 3.
+ *
+ * `project` er ETT prosjekt; medlemmene i det er de som er satt opp på det (se
+ * `projectMemberIds` i `src/server/post-audience.ts`).
+ */
+export type PostTargetKind = 'section' | 'project'
+export const POST_TARGET_KINDS: PostTargetKind[] = ['section', 'project']
+
+export type PostTarget = { kind: PostTargetKind; refId: string }
+
+/**
+ * Tak på antall målrettinger per beskjed. Nok til «alle kornetter, horn og
+ * flygelhorn», lite nok til at raden ikke blir en spørring.
+ */
+export const MAX_POST_TARGETS = 12
+
+/**
+ * Det serveren vet om et MEDLEM når synlighet skal avgjøres: rettigheten som
+ * åpner styre-beskjeder, stemmegruppene medlemmet spiller i, og prosjektene
+ * medlemmet er satt opp på.
+ *
+ * Typen finnes for at regelen skal kunne stilles ÉN gang og brukes tre steder
+ * (lesing, e-postmottakere, omtaler). `boolean` godtas fortsatt der bare
+ * `posts.publish` er kjent — da er leseren uten stemmer og uten prosjekter, og
+ * en målrettet beskjed er dermed ikke for hen. Fail-closed med vilje.
+ */
+export type PostReader = {
+  /** Har `posts.publish` (styret, dirigent, admin) — avgjør `audience: 'board'`. */
+  canPublish: boolean
+  /** Stemmegruppene medlemmet har en tildelt stemme i (`parts.section`). */
+  sectionIds: readonly string[]
+  /** Prosjektene medlemmet er satt opp på. */
+  projectIds: readonly string[]
+}
+
+/** Normaliserer den gamle `canPublish`-boolean-en til en leser uten målgruppedata. */
+export function readerOf(reader: boolean | PostReader): PostReader {
+  return typeof reader === 'boolean' ? { canPublish: reader, sectionIds: [], projectIds: [] } : reader
+}
+
+/** Alt som trengs for å avgjøre hvem en beskjed er for. `targets` mangler = ingen innsnevring. */
+export type PostTargetingInput = { audience: PostAudience; targets?: readonly PostTarget[] }
+
+/**
+ * Treffer målrettingen dette medlemmet?
+ *
+ * INGEN målretting betyr ALLE — en beskjed uten rader i `post_targets` oppfører
+ * seg nøyaktig som før målretting fantes, og det er hele grunnen til at
+ * `audience` fortsatt er en egen kolonne. Flere målrettinger er et ELLER: en
+ * beskjed til «slagverk + Julekonserten» treffer den som er i én av dem.
+ */
+export function matchesTargets(targets: readonly PostTarget[] | undefined, reader: PostReader): boolean {
+  if (!targets || targets.length === 0) return true
+  return targets.some((t) =>
+    t.kind === 'section' ? reader.sectionIds.includes(t.refId) : reader.projectIds.includes(t.refId),
+  )
+}
+
+/**
+ * Er dette medlemmet i målgruppen for beskjeden? Ett regelsted for lesing,
+ * e-postmottakere og «Sett av N av M», slik at de tre aldri kan komme i utakt.
+ *
+ * Merk at dette IKKE er det samme som «kan lese»: en med `posts.publish` kan
+ * lese alt (moderasjon), men er ikke mottaker av en beskjed til slagverksgruppa
+ * med mindre hen selv spiller slagverk.
+ */
+export function inPostAudience(post: PostTargetingInput, member: PostReader): boolean {
+  if (post.audience === 'board' && !member.canPublish) return false
+  return matchesTargets(post.targets, member)
+}
+
+/**
+ * Fjerner målretting den som skriver ikke har lov til å sette, og rydder lista:
+ * ukjente typer ut, tomme id-er ut, duplikater ut, og et hardt tak.
+ *
+ * Hvem som kan målrette er samme rettighet som styre-målgruppen: `posts.publish`.
+ * Uten den blir lista tom — akkurat som `audience` tvinges til `all`.
+ */
+export function sanitizePostTargets(targets: readonly PostTarget[] | undefined, canPublish: boolean): PostTarget[] {
+  if (!canPublish || !targets) return []
+  const seen = new Set<string>()
+  const out: PostTarget[] = []
+  for (const t of targets) {
+    if (!POST_TARGET_KINDS.includes(t.kind)) continue
+    const refId = t.refId.trim()
+    if (!refId) continue
+    const key = `${t.kind}:${refId}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ kind: t.kind, refId })
+    if (out.length >= MAX_POST_TARGETS) break
+  }
+  return out
+}
+
+/**
+ * Én linje om hvem beskjeden er snevret inn til, til merkelappen i feeden og på
+ * detaljsiden. `labels` er oppslaget fra id til norsk navn (stemmegruppe eller
+ * prosjektnavn); en id uten navn vises som «ukjent gruppe» heller enn som en
+ * rå id — en slettet prosjektrad skal ikke lekke en base64-nøkkel til skjermen.
+ */
+export function targetLabel(targets: readonly PostTarget[], labels: ReadonlyMap<string, string>): string {
+  if (targets.length === 0) return ''
+  const names = targets.map((t) => labels.get(`${t.kind}:${t.refId}`) ?? 'ukjent gruppe')
+  if (names.length === 1) return names[0]!
+  return `${names.slice(0, -1).join(', ')} og ${names[names.length - 1]}`
+}
+
 // ---------- Mottakerutvalg ----------
 
 /** Et potensielt mottakende medlem, slik `publishPost` henter det fra databasen. */
-export type PostRecipient = {
+export type PostRecipient = PostReader & {
   userId: string
   email: string | null
   isActive: boolean
-  /** Har `posts.publish` (styret, dirigent, admin) — avgjør `audience: 'board'`. */
-  canPublish: boolean
 }
 
 /**
@@ -137,11 +251,13 @@ export type PostRecipient = {
  *
  * Fire krav, alle må være oppfylt: medlemmet er aktivt, har en e-postadresse,
  * preferansen tillater det (ingen preferanse = alle beskjeder), og målgruppen
- * omfatter dem. `audience: 'board'` går kun til dem som selv kan publisere.
+ * omfatter dem. `audience: 'board'` går kun til dem som selv kan publisere, og
+ * en målrettet beskjed går kun til dem målrettingen treffer — en beskjed til
+ * slagverksgruppa skal ikke e-postes til hele korpset.
  * Idempotens (allerede varslet) håndteres av `notification_log`, ikke her.
  */
 export function recipientsFor(
-  post: { audience: PostAudience; importance: PostImportance },
+  post: PostTargetingInput & { importance: PostImportance },
   members: PostRecipient[],
   prefs: Map<string, PostNotificationChoice> | Record<string, PostNotificationChoice>,
 ): PostRecipient[] {
@@ -151,7 +267,7 @@ export function recipientsFor(
   return members.filter((m) => {
     if (!m.isActive) return false
     if (!m.email || !m.email.trim()) return false
-    if (post.audience === 'board' && !m.canPublish) return false
+    if (!inPostAudience(post, m)) return false
     const choice = lookup(m.userId)
     if (choice === 'off') return false
     if (choice === 'important' && post.importance !== 'important') return false
@@ -159,13 +275,76 @@ export function recipientsFor(
   })
 }
 
-/** Kan denne beskjeden vises for en leser med/uten `posts.publish`? */
+/**
+ * Kan denne beskjeden vises for denne leseren?
+ *
+ * `posts.publish` ser alt (moderasjon og leveringsstatus krever det). Alle andre
+ * må ha en PUBLISERT beskjed som er i målgruppen deres — `audience` først, så
+ * målrettingen som en innsnevring oppå. En beskjed uten målretting oppfører seg
+ * nøyaktig som før.
+ *
+ * At forfatteren alltid ser sitt eget innlegg håndteres i `visibleTo` på
+ * serveren: det er en regel om eierskap, ikke om målgruppe.
+ */
 export function canReadPost(
-  post: { audience: PostAudience; publishedAt: number | null },
+  post: PostTargetingInput & { publishedAt: number | null },
+  reader: boolean | PostReader,
+): boolean {
+  const r = readerOf(reader)
+  if (r.canPublish) return true
+  return post.publishedAt !== null && inPostAudience(post, r)
+}
+
+// ---------- Lest/sett (#28) ----------
+
+/**
+ * Hvem TELLER som mottaker av beskjeden — nevneren i «Sett av N av M».
+ *
+ * Ikke det samme som «kan lese»: en moderator uten stemme i slagverksgruppa kan
+ * lese en beskjed til slagverk, men er ikke en av dem den skulle nå. Forfatteren
+ * telles heller ikke; hen har åpenbart sett sitt eget innlegg, og en teller som
+ * starter på «1 av 35» ville vært misvisende.
+ */
+export function postAudienceMembers<T extends PostReader & { userId: string; isActive: boolean }>(
+  post: PostTargetingInput & { authorId?: string | null },
+  members: readonly T[],
+): T[] {
+  return members.filter((m) => m.isActive && m.userId !== post.authorId && inPostAudience(post, m))
+}
+
+/**
+ * Hvem får se sett-status? Forfatteren og `posts.publish`-holdere — det er de
+ * samme som ser leveringsstatus for e-posten. For alle andre er tallet ikke bare
+ * uinteressant, det er en sosial opplysning om andre medlemmer.
+ */
+export function canSeeSeenStatus(
+  me: { id: string } | null,
+  post: { authorId: string | null },
   canPublish: boolean,
 ): boolean {
-  if (canPublish) return true
-  return post.publishedAt !== null && post.audience === 'all'
+  if (!me) return false
+  return canPublish || (post.authorId !== null && post.authorId === me.id)
+}
+
+/**
+ * NAVNELISTA er strengere enn tallet: kun for VIKTIGE beskjeder (issue-kravet er
+ * at admin/stab skal kunne se hvem som har sett en viktig kunngjøring — hvem som
+ * leste en trivelig hilsen er ingens sak).
+ */
+export function canSeeSeenNames(
+  me: { id: string } | null,
+  post: { authorId: string | null; importance: PostImportance },
+  canPublish: boolean,
+): boolean {
+  return post.importance === 'important' && canSeeSeenStatus(me, post, canPublish)
+}
+
+/** «Sett av 12 av 34», «Ingen har åpnet den ennå», «Sett av alle 34». */
+export function seenLabel(seen: number, total: number): string {
+  if (total <= 0) return 'Ingen mottakere'
+  if (seen <= 0) return `Ingen av ${total} har åpnet den ennå`
+  if (seen >= total) return total === 1 ? 'Sett av mottakeren' : `Sett av alle ${total}`
+  return `Sett av ${seen} av ${total}`
 }
 
 // ---------- Hvem får skrive hva ----------
@@ -240,8 +419,12 @@ export const DEFAULT_NOTIFY = false
  * Etiketten ved avkryssingen. «nå» og målgruppen står i selve etiketten, ikke
  * bare i hjelpeteksten under: det skal gå fram av det man huker av at det
  * sendes e-post, og til hvem.
+ *
+ * Er beskjeden målrettet, er DET mottakerlista — «hele korpset» ville vært en
+ * ren løgn på en beskjed til slagverksgruppa.
  */
-export function notifyLabel(audience: PostAudience): string {
+export function notifyLabel(audience: PostAudience, targets = ''): string {
+  if (targets) return `Send e-post til ${targets} nå`
   return audience === 'board' ? 'Send e-post til styret nå' : 'Send e-post til hele korpset nå'
 }
 

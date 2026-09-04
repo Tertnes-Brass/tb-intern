@@ -4,7 +4,6 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
 import {
-  memberProfiles,
   notificationLog,
   notificationPreferences,
   postCommentMentions,
@@ -12,6 +11,8 @@ import {
   postImages,
   postMentions,
   postReactions,
+  postSeen,
+  postTargets,
   posts,
   user,
 } from '../db/schema'
@@ -35,17 +36,32 @@ import {
   type PostFormat,
   type PostImportance,
   type PostNotificationChoice,
+  type PostReader,
   type PostRecipient,
+  type PostTarget,
   canDeleteComment,
   canEditPost,
   canReadPost,
+  canSeeSeenNames,
+  canSeeSeenStatus,
   excerpt,
+  postAudienceMembers,
   postHeading,
   recipientsFor,
   sanitizePostInput,
+  sanitizePostTargets,
+  seenLabel,
+  targetLabel,
 } from '../lib/posts'
-import { permissionsInclude } from '../lib/permissions'
-import { type Me, hasPermission, memberPermissionsByUser, requireMe, requirePermission } from './access'
+import { type Me, hasPermission, requireMe, requirePermission } from './access'
+import {
+  assertValidTargets,
+  memberDirectory,
+  postReaderFor,
+  postTargetsFor,
+  targetLabels,
+  targetOptions,
+} from './post-audience'
 import { canAttachImages } from './post-images'
 import { mentionEmail, postEmail, postMentionEmail, sendEmail } from './email'
 
@@ -79,6 +95,13 @@ const FEED_IMAGES = 3
 
 const idInput = z.object({ id: z.string().min(1) })
 
+/**
+ * Målrettingen slik klienten sender den. Validert mot hva som FINNES i
+ * `assertValidTargets`, og mot hva avsenderen har lov til i `sanitizePostTargets`
+ * — zod sier bare at formen er en form.
+ */
+const targetInput = z.array(z.object({ kind: z.enum(['section', 'project']), refId: z.string().min(1).max(64) })).default([])
+
 const postInput = z.object({
   title: z.string().trim().max(160, 'Tittelen er for lang').nullish(),
   body: z.string().trim().min(1, 'Teksten kan ikke være tom').max(20_000, 'Teksten er for lang'),
@@ -86,6 +109,8 @@ const postInput = z.object({
   // før, slik at et gammelt klientkall uten feltet oppfører seg som i dag.
   format: z.enum(['plain_text', 'markdown']).default('plain_text'),
   audience: z.enum(['all', 'board']).default('all'),
+  // Målretting (#28): en INNSNEVRING oppå `audience`. Tom liste = som før.
+  targets: targetInput,
   importance: z.enum(['normal', 'important']).default('normal'),
   official: z.boolean().default(false),
 })
@@ -108,6 +133,10 @@ export type PostListItem = {
   excerpt: string
   format: PostFormat
   audience: PostAudience
+  /** Stemmegruppene/prosjektene beskjeden er snevret inn til. Tom = hele målgruppen. */
+  targets: PostTarget[]
+  /** «Slagverk og Julekonserten» — ferdig oversatt, så klienten aldri slår opp en id. */
+  targetLabel: string
   importance: PostImportance
   official: boolean
   author: PostAuthor
@@ -149,6 +178,19 @@ export type PostDetail = Omit<PostListItem, 'images'> & { body: string; images: 
 /** Hvem som faktisk har fått e-post om en beskjed — grunnlaget for «Send på nytt». */
 export type PostDelivery = { sent: number; logged: number; failed: number; pending: number }
 
+/**
+ * «Sett av N av M» (#28). `names` er kun satt for VIKTIGE beskjeder, og kun for
+ * forfatteren og `posts.publish` — for alle andre er hele feltet `null`, ikke en
+ * tom liste: klienten skal ikke kunne skille «ingen har sett den» fra «du får
+ * ikke se hvem».
+ */
+export type PostSeenStatus = {
+  seen: number
+  total: number
+  label: string
+  names: { seen: string[]; pending: string[] } | null
+}
+
 /** Resultatet av én sendingsrunde. `skipped` = mottakere som allerede stod i loggen. */
 export type PostNotifyResult = { sent: number; logged: number; failed: number; skipped: number }
 
@@ -169,6 +211,8 @@ type Row = {
   publishedAt: Date | null
   createdAt: Date
   updatedAt: Date
+  /** Fylt av `withTargets`. Tom liste betyr «ingen innsnevring», aldri «ukjent». */
+  targets: PostTarget[]
 }
 
 function selectPosts() {
@@ -192,25 +236,39 @@ function selectPosts() {
 }
 
 /**
- * Ditt eget innlegg er alltid synlig for deg — også som utkast. Uten dette
- * ville et halvferdig innlegg (f.eks. hvis bildeopplastingen feilet) blitt
- * usynlig for den som skrev det, uten vei til å fullføre eller slette det.
+ * Målrettingen for et sett rader, i én spørring. Radene kommer alltid ut med en
+ * `targets`-liste — «vi har ikke sjekket» skal ikke kunne forveksles med «ingen
+ * innsnevring», for de to gir motsatt svar på hvem som får se beskjeden.
  */
-function visibleTo(row: Row, canPublish: boolean, me?: Me): boolean {
+async function withTargets<T extends { id: string }>(rows: T[]): Promise<Array<T & { targets: PostTarget[] }>> {
+  const byPost = await postTargetsFor(rows.map((r) => r.id))
+  return rows.map((r) => ({ ...r, targets: byPost.get(r.id) ?? [] }))
+}
+
+/**
+ * Ditt eget innlegg er alltid synlig for deg — også som utkast, og også når
+ * målrettingen ikke treffer deg selv. Uten dette ville et halvferdig innlegg
+ * (f.eks. hvis bildeopplastingen feilet) blitt usynlig for den som skrev det,
+ * uten vei til å fullføre eller slette det.
+ */
+function visibleTo(row: Row, reader: PostReader, me?: Me): boolean {
   if (me && row.authorId !== null && row.authorId === me.id) return true
-  return canReadPost({ audience: row.audience, publishedAt: row.publishedAt?.getTime() ?? null }, canPublish)
+  return canReadPost(
+    { audience: row.audience, targets: row.targets, publishedAt: row.publishedAt?.getTime() ?? null },
+    reader,
+  )
 }
 
 function authorOf(row: { authorId: string | null; authorName: string | null; official: boolean }): PostAuthor {
   return { id: row.authorId, name: row.authorName ?? (row.official ? OFFICIAL_AUTHOR : UNKNOWN_AUTHOR) }
 }
 
-/** Leser ett innlegg og avviser det leseren ikke har lov til å se. */
-async function readablePost(id: string, canPublish: boolean, me?: Me): Promise<Row> {
-  const row = (await selectPosts().where(eq(posts.id, id)).limit(1))[0]
+/** Leser ett innlegg (med målrettingen) og avviser det leseren ikke har lov til å se. */
+async function readablePost(id: string, reader: PostReader, me?: Me): Promise<Row> {
+  const row = (await withTargets(await selectPosts().where(eq(posts.id, id)).limit(1)))[0]
   // Samme feilmelding for «finnes ikke» og «ikke for deg»: et innlegg til
-  // styret skal ikke kunne bekreftes ved å prøve en id.
-  if (!row || !visibleTo(row, canPublish, me)) throw new Error('Fant ikke beskjeden')
+  // styret — eller til slagverksgruppa — skal ikke kunne bekreftes ved å prøve en id.
+  if (!row || !visibleTo(row, reader, me)) throw new Error('Fant ikke beskjeden')
   return row
 }
 
@@ -224,13 +282,21 @@ async function decorate(
   mine: Set<string>
   images: Map<string, PostImage[]>
   mentions: Map<string, MentionUser[]>
+  labels: Map<string, string>
 }> {
   const ids = rows.map((r) => r.id)
   if (ids.length === 0) {
-    return { comments: new Map(), likes: new Map(), mine: new Set(), images: new Map(), mentions: new Map() }
+    return {
+      comments: new Map(),
+      likes: new Map(),
+      mine: new Set(),
+      images: new Map(),
+      mentions: new Map(),
+      labels: new Map(),
+    }
   }
   const d = db()
-  const [commentRows, reactionRows, imageRows, mentions] = await Promise.all([
+  const [commentRows, reactionRows, imageRows, mentions, labels] = await Promise.all([
     d
       .select({ postId: postComments.postId, n: sql<number>`count(*)` })
       .from(postComments)
@@ -252,6 +318,10 @@ async function decorate(
       .where(inArray(postImages.postId, ids))
       .orderBy(asc(postImages.sortOrder), asc(postImages.createdAt)),
     postMentionsFor(ids),
+    // Navnene på stemmegruppene/prosjektene beskjedene er målrettet mot. Ett
+    // oppslag for hele feeden — de fleste innlegg har ingen målretting i det
+    // hele tatt, og da er lista tom.
+    targetLabels(rows.flatMap((r) => r.targets)),
   ])
 
   const likes = new Map<string, number>()
@@ -266,7 +336,7 @@ async function decorate(
     list.push({ id: img.id, fileName: img.fileName, width: img.width, height: img.height })
     images.set(img.postId, list)
   }
-  return { comments: new Map(commentRows.map((r) => [r.postId, r.n])), likes, mine, images, mentions }
+  return { comments: new Map(commentRows.map((r) => [r.postId, r.n])), likes, mine, images, mentions, labels }
 }
 
 /** Dagens navn på de omtalte i en håndfull innlegg. Én spørring. */
@@ -306,6 +376,8 @@ function toListItem(
     excerpt: excerpt(plain),
     format: row.format,
     audience: row.audience,
+    targets: row.targets,
+    targetLabel: targetLabel(row.targets, extra.labels),
     importance: row.importance,
     official: row.official,
     author: authorOf(row),
@@ -325,8 +397,12 @@ function toListItem(
 export const listPosts = createServerFn().handler(async () => {
   const me = await requireMe()
   const canPublish = hasPermission(me, PUBLISH_PERMISSION)
-  const rows = await selectPosts().orderBy(desc(posts.publishedAt), desc(posts.createdAt))
-  const visible = rows.filter((r) => visibleTo(r, canPublish, me))
+  const reader = await postReaderFor(me)
+  const rows = await withTargets(await selectPosts().orderBy(desc(posts.publishedAt), desc(posts.createdAt)))
+  // Filtreringen skjer HER, på serveren, før noe forlater Workeren — både
+  // utkast, styre-beskjeder og målrettingen. Klienten får aldri en beskjed den
+  // skal skjule selv.
+  const visible = rows.filter((r) => visibleTo(r, reader, me))
   const extra = await decorate(visible, me)
 
   return {
@@ -349,7 +425,12 @@ export const getPost = createServerFn()
   .handler(async ({ data }) => {
     const me = await requireMe()
     const canPublish = hasPermission(me, PUBLISH_PERMISSION)
-    const row = await readablePost(data.id, canPublish, me)
+    const reader = await postReaderFor(me)
+    const row = await readablePost(data.id, reader, me)
+    // «Sett» registreres her, ikke i en egen klienthandling: å ha åpnet
+    // detaljsiden ER å ha sett beskjeden, og en knapp «jeg har lest denne» ville
+    // målt noe annet (og blitt oversett).
+    await markSeen(row, me)
     const [extra, commentRows] = await Promise.all([
       decorate([row], me),
       db()
@@ -388,6 +469,9 @@ export const getPost = createServerFn()
       ),
       // Leveringsstatus er et skriveverktøy; medlemmer skal ikke se hvem som fikk e-post.
       delivery: canPublish && row.publishedAt ? await deliveryFor(row) : null,
+      // Sett-status følger samme linje: tallet til forfatteren og `posts.publish`,
+      // navnelista bare på VIKTIGE beskjeder.
+      seen: canSeeSeenStatus(me, row, canPublish) && row.publishedAt ? await seenStatusFor(row, me, canPublish) : null,
     }
   })
 
@@ -402,9 +486,14 @@ export const createPost = createServerFn({ method: 'POST' })
     const me = await requireMe()
     const canPublish = hasPermission(me, PUBLISH_PERMISSION)
     const safe = sanitizePostInput({ ...data, title: data.title ?? null }, canPublish)
+    // Å målrette er samme privilegium som å skrive til styret: uten
+    // `posts.publish` blir lista tom, akkurat som `audience` tvinges til `all`.
+    const targets = sanitizePostTargets(data.targets, canPublish)
+    await assertValidTargets(targets)
     // Omtalene valideres FØR innlegget lagres — mot målgruppen `sanitizePostInput`
-    // faktisk endte på, ikke den klienten påstod at den valgte.
-    const mentionIds = await checkedPostMentions(safe.body, safe.audience)
+    // faktisk endte på, ikke den klienten påstod at den valgte, og mot
+    // målrettingen: en omtalt må kunne lese innlegget hen er omtalt i.
+    const mentionIds = await checkedPostMentions(safe.body, { audience: safe.audience, targets })
     const ts = new Date()
     const id = newId()
     await db()
@@ -422,6 +511,7 @@ export const createPost = createServerFn({ method: 'POST' })
         createdAt: ts,
         updatedAt: ts,
       })
+    await syncPostTargets(id, targets)
     // Utkast varsler aldri: radene får `notified_at = null` og e-posten går
     // først når innlegget publiseres.
     await syncPostMentions(id, mentionIds)
@@ -433,17 +523,21 @@ export const updatePost = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const me = await requireMe()
     const canPublish = hasPermission(me, PUBLISH_PERMISSION)
-    const existing = (await selectPosts().where(eq(posts.id, data.id)).limit(1))[0]
-    if (!existing || !visibleTo(existing, canPublish, me)) throw new Error('Fant ikke beskjeden')
+    const reader = await postReaderFor(me)
+    const existing = (await withTargets(await selectPosts().where(eq(posts.id, data.id)).limit(1)))[0]
+    if (!existing || !visibleTo(existing, reader, me)) throw new Error('Fant ikke beskjeden')
     if (!canEditPost(me, existing, canPublish)) throw new Error('Du kan bare endre dine egne innlegg')
 
     const safe = sanitizePostInput({ ...data, title: data.title ?? null }, canPublish)
     // Målgruppen som faktisk kommer til å gjelde etter lagringen — uten
-    // `posts.publish` skrives den ikke, og da er det den gamle som teller.
-    // Omtalene valideres på NYTT mot den: flyttes et innlegg til «Bare styret»,
-    // kan en omtale av et vanlig medlem ikke bli stående.
+    // `posts.publish` skrives verken den eller målrettingen, og da er det de
+    // gamle som teller. Omtalene valideres på NYTT mot dem: flyttes et innlegg
+    // til «Bare styret» — eller snevres det inn til slagverksgruppa — kan en
+    // omtale av noen utenfor ikke bli stående.
     const audience = canPublish ? safe.audience : existing.audience
-    const mentionIds = await checkedPostMentions(safe.body, audience)
+    const targets = canPublish ? sanitizePostTargets(data.targets, canPublish) : existing.targets
+    if (canPublish) await assertValidTargets(targets)
+    const mentionIds = await checkedPostMentions(safe.body, { audience, targets })
 
     // Uten `posts.publish` endres kun tittel og tekst: et innlegg en moderator
     // har merket «Fra styret» skal ikke miste merket fordi eieren retter en skrivefeil.
@@ -465,6 +559,7 @@ export const updatePost = createServerFn({ method: 'POST' })
             { title: safe.title, body: safe.body, format: safe.format, updatedAt: new Date() },
       )
       .where(eq(posts.id, data.id))
+    if (canPublish) await syncPostTargets(data.id, targets)
     await syncPostMentions(data.id, mentionIds)
 
     // Er innlegget allerede publisert, er en ny omtale i teksten en ny beskjed
@@ -477,6 +572,7 @@ export const updatePost = createServerFn({ method: 'POST' })
         body: safe.body,
         format: safe.format,
         audience,
+        targets,
         importance: canPublish ? safe.importance : existing.importance,
         official: canPublish ? safe.official : existing.official,
       }
@@ -501,8 +597,8 @@ export const publishPost = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<PostNotifyResult & { ok: true }> => {
     const me = await requireMe()
     const canPublish = hasPermission(me, PUBLISH_PERMISSION)
-    const row = (await selectPosts().where(eq(posts.id, data.id)).limit(1))[0]
-    if (!row || !visibleTo(row, canPublish, me)) throw new Error('Fant ikke beskjeden')
+    const row = (await withTargets(await selectPosts().where(eq(posts.id, data.id)).limit(1)))[0]
+    if (!row || !visibleTo(row, await postReaderFor(me), me)) throw new Error('Fant ikke beskjeden')
     if (!canEditPost(me, row, canPublish)) throw new Error('Du kan bare publisere dine egne innlegg')
 
     if (!row.publishedAt) {
@@ -533,8 +629,8 @@ export const unpublishPost = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const me = await requireMe()
     const canPublish = hasPermission(me, PUBLISH_PERMISSION)
-    const row = (await selectPosts().where(eq(posts.id, data.id)).limit(1))[0]
-    if (!row || !visibleTo(row, canPublish, me)) throw new Error('Fant ikke beskjeden')
+    const row = (await withTargets(await selectPosts().where(eq(posts.id, data.id)).limit(1)))[0]
+    if (!row || !visibleTo(row, await postReaderFor(me), me)) throw new Error('Fant ikke beskjeden')
     if (!canEditPost(me, row, canPublish)) throw new Error('Du kan bare endre dine egne innlegg')
     // `notification_log` beholdes med vilje: publiseres innlegget igjen, skal
     // ingen få den samme e-posten to ganger.
@@ -547,8 +643,8 @@ export const deletePost = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const me = await requireMe()
     const canPublish = hasPermission(me, PUBLISH_PERMISSION)
-    const row = (await selectPosts().where(eq(posts.id, data.id)).limit(1))[0]
-    if (!row || !visibleTo(row, canPublish, me)) throw new Error('Fant ikke beskjeden')
+    const row = (await withTargets(await selectPosts().where(eq(posts.id, data.id)).limit(1)))[0]
+    if (!row || !visibleTo(row, await postReaderFor(me), me)) throw new Error('Fant ikke beskjeden')
     if (!canEditPost(me, row, canPublish)) throw new Error('Du kan bare slette dine egne innlegg')
 
     // R2 først: databaseraden er den eneste veien tilbake til nøkkelen, så
@@ -563,44 +659,23 @@ export const deletePost = createServerFn({ method: 'POST' })
 
 /**
  * Alle medlemmer med det en omtale trenger å vite: navn (til forslagslista og
- * chip-en), aktiv-status, e-post (kun for varslingen, aldri til klienten) og om
- * rollen deres har `posts.publish`. Samme grunnlag brukes til forslagslista og
- * til valideringen, så de to kan ikke komme i utakt.
+ * chip-en), aktiv-status, e-post (kun for varslingen, aldri til klienten), om
+ * rollene deres gir `posts.publish` — og siden #28 også stemmegruppene og
+ * prosjektene, siden en målrettet beskjed bare kan leses av dem den treffer.
+ * Samme grunnlag brukes til forslagslista og til valideringen, så de to kan
+ * ikke komme i utakt.
  */
 async function mentionCandidates(): Promise<{
   members: MentionCandidate[]
   prefs: Map<string, MentionNotificationChoice>
 }> {
-  const d = db()
-  const [memberRows, permissionsByUser, prefRows] = await Promise.all([
-    d
-      .select({
-        userId: memberProfiles.authUserId,
-        name: user.name,
-        email: user.email,
-        isActive: memberProfiles.isActive,
-      })
-      .from(memberProfiles)
-      .innerJoin(user, eq(memberProfiles.authUserId, user.id))
-      .orderBy(asc(user.name)),
-    // Unionen over ALLE rollene medlemmet har (#48) — en musiker som også sitter
-    // i styret kan publisere, selv om «Musiker» ikke gir det.
-    memberPermissionsByUser(),
-    d
+  const [members, prefRows] = await Promise.all([
+    memberDirectory(),
+    db()
       .select({ userId: notificationPreferences.userId, mentions: notificationPreferences.mentions })
       .from(notificationPreferences),
   ])
-
-  return {
-    members: memberRows.map((m) => ({
-      userId: m.userId,
-      name: m.name,
-      email: m.email,
-      isActive: m.isActive,
-      canPublish: permissionsInclude(permissionsByUser.get(m.userId) ?? [], PUBLISH_PERMISSION),
-    })),
-    prefs: new Map(prefRows.map((p) => [p.userId, p.mentions])),
-  }
+  return { members, prefs: new Map(prefRows.map((p) => [p.userId, p.mentions])) }
 }
 
 /** Dagens navn på de omtalte i en håndfull kommentarer. Én spørring. */
@@ -636,11 +711,10 @@ export const searchMentionableMembers = createServerFn({ method: 'POST' })
   .validator(z.object({ postId: z.string().min(1), query: z.string().max(60).default('') }))
   .handler(async ({ data }): Promise<MentionUser[]> => {
     const me = await requireMe()
-    const canPublish = hasPermission(me, PUBLISH_PERMISSION)
-    const row = await readablePost(data.postId, canPublish, me)
+    const row = await readablePost(data.postId, await postReaderFor(me), me)
     const { members } = await mentionCandidates()
     const allowed = mentionableMembers(
-      { audience: row.audience, publishedAt: row.publishedAt?.getTime() ?? null },
+      { audience: row.audience, targets: row.targets, publishedAt: row.publishedAt?.getTime() ?? null },
       members,
     )
     return rankMentionCandidates(
@@ -663,14 +737,24 @@ export const searchMentionableMembers = createServerFn({ method: 'POST' })
  * Returnerer KUN `{ id, name }`, som forslagslista i kommentarene.
  */
 export const searchMentionableForAudience = createServerFn({ method: 'POST' })
-  .validator(z.object({ audience: z.enum(['all', 'board']).default('all'), query: z.string().max(60).default('') }))
+  .validator(
+    z.object({
+      audience: z.enum(['all', 'board']).default('all'),
+      targets: targetInput,
+      query: z.string().max(60).default(''),
+    }),
+  )
   .handler(async ({ data }): Promise<MentionUser[]> => {
     const me = await requireMe()
     const canPublish = hasPermission(me, PUBLISH_PERMISSION)
     const audience: PostAudience = canPublish ? data.audience : 'all'
+    // Samme resonnement for målrettingen: uten `posts.publish` er den ikke et
+    // gyldig valg, og et rått kall skal ikke kunne bruke den som et filter over
+    // hvem som spiller hva.
+    const targets = sanitizePostTargets(data.targets, canPublish)
     const { members } = await mentionCandidates()
     return rankMentionCandidates(
-      mentionableForAudience(audience, members).map((m) => ({ id: m.userId, name: m.name })),
+      mentionableForAudience({ audience, targets }, members).map((m) => ({ id: m.userId, name: m.name })),
       data.query,
       MENTION_SUGGESTIONS,
     )
@@ -685,8 +769,7 @@ export const addComment = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data }) => {
     const me = await requireMe()
-    const canPublish = hasPermission(me, PUBLISH_PERMISSION)
-    const row = await readablePost(data.postId, canPublish, me)
+    const row = await readablePost(data.postId, await postReaderFor(me), me)
     if (!row.publishedAt) throw new Error('Utkast kan ikke kommenteres')
 
     // Omtalene valideres FØR kommentaren lagres. Klienten setter markørene, så
@@ -697,10 +780,10 @@ export const addComment = createServerFn({ method: 'POST' })
     if (mentionIds.length > 0) {
       const { members, prefs } = await mentionCandidates()
       const allowed = new Map(
-        mentionableMembers({ audience: row.audience, publishedAt: row.publishedAt.getTime() }, members).map((m) => [
-          m.userId,
-          m,
-        ]),
+        mentionableMembers(
+          { audience: row.audience, targets: row.targets, publishedAt: row.publishedAt.getTime() },
+          members,
+        ).map((m) => [m.userId, m]),
       )
       // Felles regel og ÉN felles feilmelding — se `MENTION_DENIED`.
       const error = mentionRejection(mentionIds, allowed, MENTION_DENIED)
@@ -778,7 +861,7 @@ export const deleteComment = createServerFn({ method: 'POST' })
     )[0]
     if (!comment) throw new Error('Fant ikke kommentaren')
     // Innlegget må være synlig for deg før du kan gjøre noe med tråden.
-    await readablePost(comment.postId, canPublish, me)
+    await readablePost(comment.postId, await postReaderFor(me), me)
     if (!canDeleteComment(me, comment, canPublish)) throw new Error('Du kan bare slette dine egne kommentarer')
     // Omtalene i `post_comment_mentions` forsvinner med kommentaren (cascade).
     // Brukerne står selvsagt urørt — det er koblingen som slettes, ikke folk.
@@ -792,8 +875,9 @@ export const toggleReaction = createServerFn({ method: 'POST' })
   .validator(z.object({ postId: z.string().min(1) }))
   .handler(async ({ data }) => {
     const me = await requireMe()
-    const canPublish = hasPermission(me, PUBLISH_PERMISSION)
-    const row = await readablePost(data.postId, canPublish)
+    // Bevisst UTEN `me`: et utkast skal ikke kunne likes, heller ikke av den som
+    // skrev det. Målrettingen gjelder som ellers — leseren må være i målgruppen.
+    const row = await readablePost(data.postId, await postReaderFor(me))
     const d = db()
     const existing = (
       await d
@@ -844,43 +928,25 @@ export const resendPostNotifications = createServerFn({ method: 'POST' })
   .validator(idInput)
   .handler(async ({ data }): Promise<PostNotifyResult & { ok: true }> => {
     await requirePermission(PUBLISH_PERMISSION)
-    const row = (await selectPosts().where(eq(posts.id, data.id)).limit(1))[0]
+    const row = (await withTargets(await selectPosts().where(eq(posts.id, data.id)).limit(1)))[0]
     if (!row) throw new Error('Fant ikke beskjeden')
     if (!row.publishedAt) throw new Error('Beskjeden er ikke publisert ennå')
     return { ok: true, ...(await notifyPost(row)).result }
   })
 
 /**
- * Alle medlemmer med det varslingen trenger å vite: aktiv-status, e-post og om
- * rollen deres har `posts.publish` (avgjør `audience: 'board'`).
+ * Alle medlemmer med det varslingen trenger å vite: aktiv-status, e-post, om
+ * rollene deres gir `posts.publish` (avgjør `audience: 'board'`) og hvilke
+ * stemmegrupper/prosjekter de hører til (avgjør målrettingen, #28).
  */
 async function candidates(): Promise<{ members: PostRecipient[]; prefs: Map<string, PostNotificationChoice> }> {
-  const d = db()
-  const [memberRows, permissionsByUser, prefRows] = await Promise.all([
-    d
-      .select({
-        userId: memberProfiles.authUserId,
-        isActive: memberProfiles.isActive,
-        email: user.email,
-      })
-      .from(memberProfiles)
-      .innerJoin(user, eq(memberProfiles.authUserId, user.id))
-      .orderBy(asc(user.name)),
-    memberPermissionsByUser(),
-    d
+  const [members, prefRows] = await Promise.all([
+    memberDirectory(),
+    db()
       .select({ userId: notificationPreferences.userId, posts: notificationPreferences.posts })
       .from(notificationPreferences),
   ])
-
-  return {
-    members: memberRows.map((m) => ({
-      userId: m.userId,
-      email: m.email,
-      isActive: m.isActive,
-      canPublish: permissionsInclude(permissionsByUser.get(m.userId) ?? [], PUBLISH_PERMISSION),
-    })),
-    prefs: new Map(prefRows.map((p) => [p.userId, p.posts])),
-  }
+  return { members, prefs: new Map(prefRows.map((p) => [p.userId, p.posts])) }
 }
 
 async function alreadyNotified(postId: string): Promise<Map<string, 'sent' | 'logged' | 'failed'>> {
@@ -983,11 +1049,11 @@ async function notifyPost(row: Row): Promise<{ result: PostNotifyResult; emailed
  * innlegg som ikke er publisert ennå har ingen lesere, så vi spør hvem som vil
  * kunne lese det med den målgruppen det får (`mentionableForAudience`).
  */
-async function checkedPostMentions(body: string, audience: PostAudience): Promise<string[]> {
+async function checkedPostMentions(body: string, post: { audience: PostAudience; targets: PostTarget[] }): Promise<string[]> {
   const ids = parseMentions(body)
   if (ids.length === 0) return []
   const { members } = await mentionCandidates()
-  const allowed = new Set(mentionableForAudience(audience, members).map((m) => m.userId))
+  const allowed = new Set(mentionableForAudience(post, members).map((m) => m.userId))
   const error = mentionRejection(ids, allowed, MENTION_DENIED)
   if (error) throw new Error(error)
   return ids
@@ -1037,7 +1103,7 @@ async function notifyPostMentions(row: Row, postEmailed: ReadonlySet<string>): P
   if (rows.length === 0) return
 
   const { members, prefs } = await mentionCandidates()
-  const readable = mentionableForAudience(row.audience, members)
+  const readable = mentionableForAudience({ audience: row.audience, targets: row.targets }, members)
   const { email, markNotified } = postMentionRecipients(
     rows.map((r) => r.userId),
     readable,
@@ -1078,5 +1144,103 @@ async function notifyPostMentions(row: Row, postEmailed: ReadonlySet<string>): P
       .update(postMentions)
       .set({ notifiedAt })
       .where(and(eq(postMentions.postId, row.id), inArray(postMentions.userId, batch)))
+  }
+}
+
+
+// ---------- Målretting (#28) ----------
+
+/**
+ * Skriver `post_targets` slik skjemaet nå ser ut. Full erstatning (slett det som
+ * er borte, sett inn det nye) — i motsetning til omtalene henger det ingen
+ * «varslet»-tilstand på en målretting, så det er ingenting å bevare.
+ *
+ * Kalles KUN når avsenderen har `posts.publish`; uten den røres ikke
+ * målrettingen i det hele tatt, av samme grunn som «Fra styret» ikke forsvinner
+ * når eieren retter en skrivefeil.
+ */
+async function syncPostTargets(postId: string, targets: PostTarget[]): Promise<void> {
+  const d = db()
+  await d.delete(postTargets).where(eq(postTargets.postId, postId))
+  if (targets.length === 0) return
+  await d
+    .insert(postTargets)
+    .values(targets.map((t) => ({ postId, kind: t.kind, refId: t.refId })))
+    .onConflictDoNothing()
+}
+
+/**
+ * Valgene i målrettingsvelgeren, med antall medlemmer hver av dem treffer.
+ *
+ * Tallet er hele poenget med at dette er en serverfunksjon og ikke en konstant i
+ * klienten: prosjektdeltakelse er AVLEDET (se `post-audience.ts`), og den som
+ * skal sende en beskjed skal se «12 medlemmer» før hen publiserer — ikke oppdage
+ * etterpå at halve korpset aldri fikk den.
+ *
+ * Gated på `posts.publish`: målretting er samme privilegium som styre-målgruppen,
+ * og lista over hvem som spiller hva er ikke noe et rått kall skal kunne telle.
+ */
+export const listPostTargetOptions = createServerFn().handler(async () => {
+  await requirePermission(PUBLISH_PERMISSION)
+  return await targetOptions()
+})
+
+// ---------- Lest/sett (#28) ----------
+
+/**
+ * Merker beskjeden som sett. Idempotent via PK-en: `seen_at` er FØRSTE gang, og
+ * et nytt besøk skriver ingenting (`onConflictDoNothing`).
+ *
+ * Tre ting registreres bevisst ikke:
+ * - **Utkast.** Det finnes ingen mottakere å telle mot ennå.
+ * - **Forfatterens eget besøk.** Hen er ikke i nevneren (`postAudienceMembers`),
+ *   så raden ville aldri blitt lest — bare skrevet ved hver forhåndsvisning.
+ * - **Feil.** En sett-rad er ikke verdt å velte visningen av beskjeden for;
+ *   verste utfall er at ett besøk ikke ble talt.
+ */
+async function markSeen(row: Row, me: Me): Promise<void> {
+  if (!row.publishedAt) return
+  if (row.authorId !== null && row.authorId === me.id) return
+  try {
+    await db().insert(postSeen).values({ postId: row.id, userId: me.id, seenAt: new Date() }).onConflictDoNothing()
+  } catch (err) {
+    console.error('[beskjeder] kunne ikke registrere sett-status:', err)
+  }
+}
+
+/**
+ * «Sett av N av M» — og for VIKTIGE beskjeder navnelista bak.
+ *
+ * Nevneren er `postAudienceMembers`: de aktive medlemmene beskjeden faktisk er
+ * for, uten forfatteren. Det er derfor en beskjed til slagverksgruppa viser
+ * «Sett av 2 av 3» og ikke «2 av 34» — tallet skal svare på om beskjeden nådde
+ * fram, ikke på hvor stort korpset er.
+ *
+ * Navnelista er strengere enn tallet (`canSeeSeenNames`): kun viktige beskjeder,
+ * kun forfatteren og `posts.publish`. Hvem som har lest en trivelig hilsen er
+ * ingens sak.
+ */
+async function seenStatusFor(row: Row, me: Me, canPublish: boolean): Promise<PostSeenStatus> {
+  const [directory, seenRows] = await Promise.all([
+    memberDirectory(),
+    db().select({ userId: postSeen.userId }).from(postSeen).where(eq(postSeen.postId, row.id)),
+  ])
+  const audience = postAudienceMembers(
+    { audience: row.audience, targets: row.targets, authorId: row.authorId },
+    directory,
+  )
+  const seenIds = new Set(seenRows.map((r) => r.userId))
+  const seen = audience.filter((m) => seenIds.has(m.userId))
+
+  return {
+    seen: seen.length,
+    total: audience.length,
+    label: seenLabel(seen.length, audience.length),
+    names: canSeeSeenNames(me, row, canPublish)
+      ? {
+          seen: seen.map((m) => m.name),
+          pending: audience.filter((m) => !seenIds.has(m.userId)).map((m) => m.name),
+        }
+      : null,
   }
 }

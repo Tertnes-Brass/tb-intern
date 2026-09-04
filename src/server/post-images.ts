@@ -3,6 +3,7 @@ import { db } from '../db'
 import { postImages, posts } from '../db/schema'
 import { canEditPost, canReadPost } from '../lib/posts'
 import { type Me, hasPermission } from './access'
+import { postReaderFor, postTargetsFor } from './post-audience'
 
 /**
  * Gaten for veggbilder, i en egen modul med vilje.
@@ -24,13 +25,13 @@ export async function postImageAccess(
   imageId: string,
   me: Me,
 ): Promise<{ r2Key: string; contentType: string; fileName: string } | null> {
-  const canPublish = hasPermission(me, PUBLISH_PERMISSION)
   const row = (
     await db()
       .select({
         r2Key: postImages.r2Key,
         contentType: postImages.contentType,
         fileName: postImages.fileName,
+        postId: postImages.postId,
         audience: posts.audience,
         publishedAt: posts.publishedAt,
         authorId: posts.authorId,
@@ -44,7 +45,12 @@ export async function postImageAccess(
   const publishedAt = row.publishedAt?.getTime() ?? null
   // Utkast: forfatteren skal se sine egne bilder mens hen skriver.
   const own = row.authorId !== null && row.authorId === me.id
-  if (!canReadPost({ audience: row.audience, publishedAt }, canPublish) && !own) return null
+  // Målrettingen (#28) gjentas her, som audience-regelen alltid har vært det:
+  // bilderuta er den eneste veien til bytene, og et bilde på en beskjed til
+  // slagverksgruppa skal ikke kunne hentes med en gjettet id.
+  const [reader, targets] = await Promise.all([postReaderFor(me), postTargetsFor([row.postId])])
+  const post = { audience: row.audience, targets: targets.get(row.postId) ?? [], publishedAt }
+  if (!canReadPost(post, reader) && !own) return null
   return { r2Key: row.r2Key, contentType: row.contentType, fileName: row.fileName }
 }
 
