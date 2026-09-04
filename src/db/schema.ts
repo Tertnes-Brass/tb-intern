@@ -1068,3 +1068,89 @@ export const eventAttendance = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.occurrenceKey, t.userId] }), index('event_attendance_user_idx').on(t.userId)],
 )
+
+// ---------- Sosiale arrangement (#31) ----------
+
+// Pub etter øving, julebord, fjelltur, dugnad, brettspillkveld. Dette er
+// LOKALE arrangement med en egen id — de kommer ikke fra Google-feeden, og de
+// har derfor bevisst INGEN `occurrence_key`. Å presse dem inn i
+// occurrenceKey-verdenen ville krevd en nøkkel uten en hendelse å utlede den
+// fra, og en «forekomst» som aldri kan flyttes av dirigenten.
+//
+// De vises likevel i kalenderområdets liste sammen med feed-hendelsene
+// (`src/lib/social.ts` → `mergeCalendarRows`), fordi det er ett program for
+// medlemmet selv om det er to kilder.
+//
+// **Ingen sletting.** Et arrangement avlyses (`cancelled_at`) og blir stående
+// merket «Avlyst» til det faller ut av kalendervinduet av seg selv. Den som
+// har svart «kommer» skal kunne se HVA som ble avlyst, ikke oppdage at raden
+// forsvant.
+//
+// **E-postvarsling kommer ikke i denne omgangen (#31).** Modellen er skrevet
+// så det blir additivt å legge til: mottakerlista er `social_signups`,
+// avsenderen er `host_user_id`, og idempotensen får sin egen loggtabell etter
+// mønsteret fra `notification_log` (PK `(social_event_id, user_id)`) pluss en
+// kolonne i `notification_preferences`. Ingen av delene krever at noe her
+// endres — derfor står det ingen ubrukt `notified_at` og venter.
+export const socialEvents = sqliteTable(
+  'social_events',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull(),
+    /** Praktisk info: pris, mat, transport, aldersgrense. Fri tekst, ren tekst. */
+    description: text('description'),
+    location: text('location'),
+    /** Start, dato + klokkeslett. Lagres i UTC; skjemaet snakker veggklokke i Oslo. */
+    startsAt: integer('starts_at', { mode: 'timestamp_ms' }).notNull(),
+    /** Valgfri påmeldingsfrist. Etter den kan man fortsatt melde avbud, ikke melde seg på. */
+    signupDeadline: integer('signup_deadline', { mode: 'timestamp_ms' }),
+    /**
+     * Valgfritt maks antall. Ingen hard grense i skrivepunktet: alle får svare
+     * «kommer», og de som ikke får plass havner på venteliste sortert på
+     * `attending_since`. Det er derfor D1s manglende interaktive transaksjoner
+     * ikke er et problem her — plassen deles ut ved LESING, ikke ved skriving.
+     */
+    capacity: integer('capacity'),
+    /** Arrangøren. SET NULL som ellers i modellen; UI-et viser «Ukjent» da. */
+    hostUserId: text('host_user_id').references(() => user.id, { onDelete: 'set null' }),
+    /** Satt når arrangementet er avlyst. Kan settes tilbake til null (angre). */
+    cancelledAt: integer('cancelled_at', { mode: 'timestamp_ms' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('social_events_start_idx').on(t.startsAt), index('social_events_host_idx').on(t.hostUserId)],
+)
+
+// Én rad per medlem per arrangement — siste svar vinner, som i
+// `event_attendance`. Statusene er de samme tre ordene, men tabellen er en
+// annen med vilje: et julebord er ikke en øvelse, og en påmelding har frist,
+// maks antall og venteliste som oppmøtet ikke har.
+//
+// `attending_since` er ventelistens sorteringsnøkkel, og settes KUN når svaret
+// blir «kommer» (og nullstilles når det slutter å være det). Hadde vi sortert
+// på `updated_at`, ville et medlem mistet plassen sin ved å rette en skrivefeil
+// i kommentaren; hadde vi sortert på `created_at`, ville en som meldte avbud og
+// ombestemte seg beholdt en plass hen hadde gitt fra seg.
+export const socialSignups = sqliteTable(
+  'social_signups',
+  {
+    socialEventId: text('social_event_id')
+      .notNull()
+      .references(() => socialEvents.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    status: text('status', { enum: ['attending', 'not_attending', 'unsure'] }).notNull(),
+    /** Kort, valgfri kommentar: kosthold, skyss, «kommer etter jobb». */
+    comment: text('comment'),
+    /** Tidspunktet svaret sist BLE «kommer». Null for alle andre statuser. */
+    attendingSince: integer('attending_since', { mode: 'timestamp_ms' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.socialEventId, t.userId] }),
+    index('social_signups_user_idx').on(t.userId),
+    index('social_signups_queue_idx').on(t.socialEventId, t.attendingSince),
+  ],
+)

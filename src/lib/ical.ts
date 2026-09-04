@@ -17,6 +17,7 @@
  */
 
 import { occurrenceKey } from './occurrence'
+import { floatingToUtc, zoneOffsetMs } from './wallclock'
 
 export type CalendarEvent = {
   /** Visnings- og listenøkkel (uid, evt. uid#start for gjentakelser). */
@@ -152,48 +153,9 @@ function splitUnquoted(input: string, sep: string): string[] {
 
 // ---------- Tidssoner ----------
 
-const formatterCache = new Map<string, Intl.DateTimeFormat>()
-
-function zoneFormatter(timeZone: string): Intl.DateTimeFormat {
-  let fmt = formatterCache.get(timeZone)
-  if (!fmt) {
-    fmt = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      hour12: false,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    })
-    formatterCache.set(timeZone, fmt)
-  }
-  return fmt
-}
-
-/** Tidssonens forskyvning fra UTC i ms på et gitt UTC-tidspunkt. */
-function zoneOffsetMs(utcMs: number, timeZone: string): number {
-  const parts = zoneFormatter(timeZone).formatToParts(new Date(utcMs))
-  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? '0')
-  // `hour` kan bli 24 for midnatt i noen ICU-versjoner; Date.UTC håndterer det.
-  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'))
-  return asUtc - utcMs
-}
-
-/**
- * Veggklokke i `timeZone` → UTC-millisekunder. `floatingMs` er tidspunktet
- * tolket som om det var UTC (dvs. `Date.UTC(...)` av felttallene).
- *
- * To iterasjoner: første gjetning bruker forskyvningen på feil side av en
- * eventuell omlegging, andre runde treffer. I DST-hullet (kl. 02:00–03:00 om
- * våren i Oslo) finnes ikke tidspunktet, og vi lander deterministisk på
- * tidspunktet rett etter hoppet — som er det Google også gjør.
- */
-function floatingToUtc(floatingMs: number, timeZone: string): number {
-  const first = floatingMs - zoneOffsetMs(floatingMs, timeZone)
-  return floatingMs - zoneOffsetMs(first, timeZone)
-}
+// Veggklokke → UTC bor i `src/lib/wallclock.ts`: skjemaet for sosiale
+// arrangement (#31) trenger nøyaktig samme omleggingsregning, og skal kunne
+// importere den uten å dra hele denne parseren inn i klientbygget.
 
 // ---------- Dato/tid-verdier ----------
 
