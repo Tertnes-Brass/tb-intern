@@ -74,13 +74,14 @@ describe('eventsAfter', () => {
 })
 
 describe('areasFor', () => {
-  it('gir et vanlig medlem de fem åpne områdene', () => {
+  it('gir et vanlig medlem de seks åpne områdene', () => {
     expect(areasFor(['scores.view']).map((a) => a.to)).toEqual([
       '/beskjeder',
       '/noter',
       '/kalender',
       '/medlemmer',
       '/utstyr',
+      '/media',
     ])
   })
 
@@ -88,6 +89,12 @@ describe('areasFor', () => {
   // kortet her er hovedveien inn, som for Filtilganger.
   it('gir Utstyr også uten assets.manage — lesing er åpen', () => {
     expect(areasFor([]).map((a) => a.to)).toContain('/utstyr')
+  })
+
+  // Media (#32) er lesbart for alle medlemmer (`intern` og «kandidat utad») og
+  // har heller ingen oppføring i toppmenyen (§6): kortet her er veien inn.
+  it('gir Media også uten media.manage — lesing er åpen', () => {
+    expect(areasFor([]).map((a) => a.to)).toContain('/media')
   })
 
   it('legger til Styre ved board.manage', () => {
@@ -114,6 +121,7 @@ describe('areasFor', () => {
       '/kalender',
       '/medlemmer',
       '/utstyr',
+      '/media',
       '/styre',
       '/innstillinger/nedlastinger',
       '/innstillinger',
@@ -152,6 +160,7 @@ describe('areasFor', () => {
       '/kalender',
       '/medlemmer',
       '/utstyr',
+      '/media',
       '/gruppeledere',
       '/styre',
       '/innstillinger/nedlastinger',
@@ -171,6 +180,7 @@ describe('areasFor', () => {
       '/kalender',
       '/medlemmer',
       '/utstyr',
+      '/media',
     ])
   })
 })

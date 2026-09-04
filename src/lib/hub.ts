@@ -104,6 +104,7 @@ export type HubAreaTo =
   | '/kalender'
   | '/medlemmer'
   | '/utstyr'
+  | '/media'
   | '/gruppeledere'
   | '/styre'
   | '/innstillinger/nedlastinger'
@@ -137,6 +138,18 @@ const BASE_AREAS: HubArea[] = [
     to: '/utstyr',
     label: 'Utstyr',
     description: 'Instrumenter og utstyr: hvem eier hva, og hva er lånt inn.',
+  },
+  // Media (#32) er åpent for lesing på samme måte som Utstyr — `intern` og
+  // «kandidat utad» leses av alle aktive medlemmer, og bare `styre`-elementer
+  // krever `board.manage`. Det står derfor blant grunnområdene, og har BEVISST
+  // ingen oppføring i toppmenyen: §6 i docs/designprinsipper.md er passert to
+  // ganger fra før, og et nytt punkt for et vanlig medlem ville skjøvet noe bak
+  // fade-gradienten på mobil uten at noen merket det. Samme løsning som
+  // Filtilganger (31. august 2026) og Utstyr (2. september 2026) fikk.
+  {
+    to: '/media',
+    label: 'Media',
+    description: 'Opptak, bilder og video fra øvinger, konserter og prosjekter.',
   },
 ]
 

@@ -1068,3 +1068,63 @@ export const eventAttendance = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.occurrenceKey, t.userId] }), index('event_attendance_user_idx').on(t.userId)],
 )
+
+// ---------- Mediearkivet (#32) ----------
+
+// Ett medieelement: ett opptak, ett bilde eller én video, med opplysningene om
+// hva det er og hvem som får se det. Filen ligger i R2 under prefikset
+// `media/`, og bytene nås KUN gjennom den gatede ruta `/api/media/$mediaId` —
+// aldri via note-gaten i `/api/files/$fileId` (docs/tilgangsstyring.md).
+//
+// Én fil per rad, ikke et album. Et medieelement er den tingen man deler en
+// lenke til og trykker «spill av» på; en samling er et prosjekt eller et verk,
+// og de finnes fra før. Skulle det senere trengs flere filer per element (en
+// video med et separat lydspor), er veien en `media_files`-tabell ved siden av
+// — ikke flere kolonner her.
+export const mediaItems = sqliteTable(
+  'media_items',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull(),
+    // Utledet av innholdstypen ved opplasting (`mediaKindFor` i
+    // src/lib/media.ts), aldri valgt fritt i et skjema: et element merket
+    // «lyd» som egentlig er en MP4 ville gitt en <audio> rundt en video.
+    // Kolonnen finnes for at lista skal kunne filtrere uten å parse MIME.
+    kind: text('kind', { enum: ['lyd', 'bilde', 'video'] }).notNull(),
+    // Datoen opptaket ble GJORT, ikke da det ble lastet opp. ISO-dato, valgfri
+    // — et opptak fra 2019 som legges inn i dag hører hjemme i 2019.
+    recordedOn: text('recorded_on'),
+    description: text('description'),
+    // Tilgangsnivået. `styre` er den eneste verdien som skjuler noe (krever
+    // `board.manage`, også for å se at raden finnes). `offentlig-kandidat` er
+    // en MERKING for senere PR-bruk og leses av nøyaktig de samme som
+    // `intern` — reglene bor i `canViewMedia` i src/lib/media.ts.
+    visibility: text('visibility', { enum: ['intern', 'styre', 'offentlig-kandidat'] })
+      .notNull()
+      .default('intern'),
+    // Valgfri kobling til prosjektet opptaket er FRA og verket det er AV.
+    // To nullbare kolonner og ikke to koblingstabeller: et medieelement har
+    // ETT opphav, i motsetning til en gjenstand i utstyrsregisteret, som har en
+    // historikk av prosjekter. SET NULL på begge — slettes prosjektet eller
+    // verket, står opptaket igjen uten sin kobling i stedet for å forsvinne.
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
+    workId: text('work_id').references(() => works.id, { onDelete: 'set null' }),
+    // Filen. `r2Key` bygges ALLTID av en fersk id og en endelse utledet av
+    // innholdstypen — aldri av `fileName`, som er brukerstyrt.
+    r2Key: text('r2_key').notNull(),
+    fileName: text('file_name').notNull(),
+    size: integer('size').notNull().default(0),
+    contentType: text('content_type').notNull(),
+    // Hvem som lastet opp. En OPPLYSNING om hvor filen kom fra, ikke en
+    // rettighet: skriving krever `media.manage` for alle rader (se
+    // `canEditMedia`). SET NULL, slik at raden overlever at kontoen slettes.
+    uploadedBy: text('uploaded_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    index('media_items_recorded_idx').on(t.recordedOn),
+    index('media_items_project_idx').on(t.projectId),
+    index('media_items_work_idx').on(t.workId),
+  ],
+)
