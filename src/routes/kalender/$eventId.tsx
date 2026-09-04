@@ -1,6 +1,7 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { EventPracticalSection } from '../../components/EventPractical'
+import { RigListSection } from '../../components/RigList'
 import { toast, toastError } from '../../components/toast'
 import { Button, EmptyState, Kicker, Modal, SectionHeading, Stamp } from '../../components/ui'
 import {
@@ -100,6 +101,12 @@ function EventDetailPage() {
         eventLocation={event.location}
       />
       <PlanSection data={data} occurrenceKey={eventId} />
+      <RigListSection
+        scope={{ occurrenceKey: eventId }}
+        items={data.rig.items}
+        memberOptions={data.rig.memberOptions}
+        canManage={data.canManageRig}
+      />
       <AttendanceSection data={data} occurrenceKey={eventId} />
     </div>
   )

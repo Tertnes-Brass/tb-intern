@@ -62,6 +62,7 @@ import { Route as StyreMoterIndexRouteImport } from './routes/styre/moter/index'
 import { Route as StyreMoterMeetingIdRouteImport } from './routes/styre/moter/$meetingId'
 import { Route as StyreProsjekterIndexRouteImport } from './routes/styre/prosjekter/index'
 import { Route as StyreProsjekterBoardProjectIdRouteImport } from './routes/styre/prosjekter/$boardProjectId'
+import { Route as NoterProsjekterProjectIdSceneoppsettRouteImport } from './routes/noter/prosjekter/$projectId_.sceneoppsett'
 import { Route as NoterProsjekterProjectIdSlagverkRouteImport } from './routes/noter/prosjekter/$projectId_.slagverk'
 
 const IndexRoute = IndexRouteImport.update({
@@ -332,6 +333,12 @@ const StyreProsjekterBoardProjectIdRoute =
     path: '/prosjekter/$boardProjectId',
     getParentRoute: () => StyreRouteRoute,
   } as any)
+const NoterProsjekterProjectIdSceneoppsettRoute =
+  NoterProsjekterProjectIdSceneoppsettRouteImport.update({
+    id: '/prosjekter/$projectId_/sceneoppsett',
+    path: '/prosjekter/$projectId/sceneoppsett',
+    getParentRoute: () => NoterRouteRoute,
+  } as any)
 const NoterProsjekterProjectIdSlagverkRoute =
   NoterProsjekterProjectIdSlagverkRouteImport.update({
     id: '/prosjekter/$projectId_/slagverk',
@@ -393,6 +400,7 @@ export interface FileRoutesByFullPath {
   '/styre/dokumenter/': typeof StyreDokumenterIndexRoute
   '/styre/moter/': typeof StyreMoterIndexRoute
   '/styre/prosjekter/': typeof StyreProsjekterIndexRoute
+  '/noter/prosjekter/$projectId/sceneoppsett': typeof NoterProsjekterProjectIdSceneoppsettRoute
   '/noter/prosjekter/$projectId/slagverk': typeof NoterProsjekterProjectIdSlagverkRoute
 }
 export interface FileRoutesByTo {
@@ -446,6 +454,7 @@ export interface FileRoutesByTo {
   '/styre/dokumenter': typeof StyreDokumenterIndexRoute
   '/styre/moter': typeof StyreMoterIndexRoute
   '/styre/prosjekter': typeof StyreProsjekterIndexRoute
+  '/noter/prosjekter/$projectId/sceneoppsett': typeof NoterProsjekterProjectIdSceneoppsettRoute
   '/noter/prosjekter/$projectId/slagverk': typeof NoterProsjekterProjectIdSlagverkRoute
 }
 export interface FileRoutesById {
@@ -503,6 +512,7 @@ export interface FileRoutesById {
   '/styre/dokumenter/': typeof StyreDokumenterIndexRoute
   '/styre/moter/': typeof StyreMoterIndexRoute
   '/styre/prosjekter/': typeof StyreProsjekterIndexRoute
+  '/noter/prosjekter/$projectId_/sceneoppsett': typeof NoterProsjekterProjectIdSceneoppsettRoute
   '/noter/prosjekter/$projectId_/slagverk': typeof NoterProsjekterProjectIdSlagverkRoute
 }
 export interface FileRouteTypes {
@@ -561,6 +571,7 @@ export interface FileRouteTypes {
     | '/styre/dokumenter/'
     | '/styre/moter/'
     | '/styre/prosjekter/'
+    | '/noter/prosjekter/$projectId/sceneoppsett'
     | '/noter/prosjekter/$projectId/slagverk'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -614,6 +625,7 @@ export interface FileRouteTypes {
     | '/styre/dokumenter'
     | '/styre/moter'
     | '/styre/prosjekter'
+    | '/noter/prosjekter/$projectId/sceneoppsett'
     | '/noter/prosjekter/$projectId/slagverk'
   id:
     | '__root__'
@@ -670,6 +682,7 @@ export interface FileRouteTypes {
     | '/styre/dokumenter/'
     | '/styre/moter/'
     | '/styre/prosjekter/'
+    | '/noter/prosjekter/$projectId_/sceneoppsett'
     | '/noter/prosjekter/$projectId_/slagverk'
   fileRoutesById: FileRoutesById
 }
@@ -1087,6 +1100,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StyreProsjekterBoardProjectIdRouteImport
       parentRoute: typeof StyreRouteRoute
     }
+    '/noter/prosjekter/$projectId_/sceneoppsett': {
+      id: '/noter/prosjekter/$projectId_/sceneoppsett'
+      path: '/prosjekter/$projectId/sceneoppsett'
+      fullPath: '/noter/prosjekter/$projectId/sceneoppsett'
+      preLoaderRoute: typeof NoterProsjekterProjectIdSceneoppsettRouteImport
+      parentRoute: typeof NoterRouteRoute
+    }
     '/noter/prosjekter/$projectId_/slagverk': {
       id: '/noter/prosjekter/$projectId_/slagverk'
       path: '/prosjekter/$projectId/slagverk'
@@ -1116,6 +1136,7 @@ interface NoterRouteRouteChildren {
   NoterProsjekterProjectIdRoute: typeof NoterProsjekterProjectIdRoute
   NoterArkivIndexRoute: typeof NoterArkivIndexRoute
   NoterProsjekterIndexRoute: typeof NoterProsjekterIndexRoute
+  NoterProsjekterProjectIdSceneoppsettRoute: typeof NoterProsjekterProjectIdSceneoppsettRoute
   NoterProsjekterProjectIdSlagverkRoute: typeof NoterProsjekterProjectIdSlagverkRoute
 }
 
@@ -1125,6 +1146,8 @@ const NoterRouteRouteChildren: NoterRouteRouteChildren = {
   NoterProsjekterProjectIdRoute: NoterProsjekterProjectIdRoute,
   NoterArkivIndexRoute: NoterArkivIndexRoute,
   NoterProsjekterIndexRoute: NoterProsjekterIndexRoute,
+  NoterProsjekterProjectIdSceneoppsettRoute:
+    NoterProsjekterProjectIdSceneoppsettRoute,
   NoterProsjekterProjectIdSlagverkRoute: NoterProsjekterProjectIdSlagverkRoute,
 }
 

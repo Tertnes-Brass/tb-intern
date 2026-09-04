@@ -19,6 +19,7 @@ import {
 } from '../db/schema'
 import { CALENDAR_PERMISSION } from '../lib/attendance'
 import { newId } from '../lib/id'
+import { canManageRigList } from '../lib/rigg'
 import { PERCUSSION_MAX_LENGTH, parsePercussionSetup, showPercussionFor } from '../lib/percussion'
 import {
   PRACTICAL_LABEL_MAX,
@@ -49,6 +50,9 @@ import {
   seasonForDate,
   sortProjects,
 } from './project-list'
+import { loadVisibleProject } from './project-access'
+import { loadRigItems } from './rig-store'
+import { loadStagePlotSummary } from './scene-store'
 
 export type ProjectWorkDetail = {
   workId: string
@@ -249,28 +253,30 @@ export const getProject = createServerFn()
   .handler(async ({ data }) => {
     const me = await requireMe()
     const d = db()
-    const project = (await d.select().from(projects).where(eq(projects.id, data.id)).limit(1))[0]
-    if (!project) throw new Error('Fant ikke prosjektet')
+    // Synlighetsregelen bor i `project-access.ts` — den deles nå med
+    // sceneoppsettet (#11) og riggelista (#12), og skal finnes ett sted.
+    const { project, canManage, inAccessibleProject } = await loadVisibleProject(d, data.id, me)
 
-    const canManage = hasPermission(me, 'projects.manage')
-    if (!project.isPublished && !canManage) throw new Error('Prosjektet er ikke publisert ennå')
-    const canBrowseArchive = hasFullArchiveAccess(me)
-    const today = new Date().toISOString().slice(0, 10)
-    if (
-      project.isPublished &&
-      (!project.eventDate || project.eventDate < today) &&
-      !canManage &&
-      !canBrowseArchive
-    ) {
-      throw new Error('Prosjektet er ikke lenger tilgjengelig')
-    }
-
-    const inAccessibleProject =
-      project.isPublished && !!project.eventDate && project.eventDate >= today
-    const [repertoire, times, rehearsals] = await Promise.all([
+    const canManageRig = canManageRigList(me.permissions)
+    const [repertoire, times, rehearsals, rigItemRows, stage, rigMembers] = await Promise.all([
       assembleRepertoire(d, project.id, memberFileAccessContext(me, inAccessibleProject)),
       loadProjectTimes(d, project.id),
       loadProjectRehearsals(d, project.id),
+      // Riggelista (#12) og sceneoppsettet (#11) hentes i SAMME runde som
+      // resten av dashboardet. To ekstra serverkall ville kostet to rundturer
+      // for to seksjoner som uansett alltid vises sammen med programmet.
+      loadRigItems(d, { kind: 'project', projectId: project.id }),
+      loadStagePlotSummary(d, project.id),
+      // Velgerlista sendes kun til den som kan skrive — en medlemsliste er
+      // data, ikke pynt (samme regel som i `utstyr.ts` og `rigg.ts`).
+      canManageRig
+        ? d
+            .select({ id: user.id, name: user.name })
+            .from(memberProfiles)
+            .innerJoin(user, eq(memberProfiles.authUserId, user.id))
+            .where(eq(memberProfiles.isActive, true))
+            .orderBy(asc(user.name))
+        : Promise.resolve([] as Array<{ id: string; name: string }>),
     ])
 
     return {
@@ -278,8 +284,11 @@ export const getProject = createServerFn()
       repertoire,
       times,
       rehearsals,
+      rig: { items: rigItemRows, memberOptions: rigMembers },
+      stage,
       canManage,
       canManageCalendar: hasPermission(me, CALENDAR_PERMISSION),
+      canManageRig,
       canShare: hasPermission(me, 'shares.manage'),
       myParts: me.parts,
     }

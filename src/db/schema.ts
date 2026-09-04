@@ -1068,3 +1068,98 @@ export const eventAttendance = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.occurrenceKey, t.userId] }), index('event_attendance_user_idx').on(t.userId)],
 )
+
+// ---------- Riggeliste (#12) ----------
+
+// «Ta med»-lista for ett prosjekt ELLER én øving: småperc, muter, reservedeler,
+// notestativ, bannere — alt som ikke er et sceneoppsett, men som likevel må i
+// bilen. Én rad = én ting å ha kontroll på.
+//
+// Fire ting er avgjort i modellen:
+//
+// **Nøyaktig ÉN eier.** `project_id` og `occurrence_key` er begge nullbare, og
+// nøyaktig én av dem skal være satt (`parseRigScope` i src/lib/rigg.ts
+// håndhever det). En SQLite-CHECK er utelatt med vilje: den kan ikke legges til
+// på en eksisterende tabell uten rebuild, og rebuild i D1 cascader til
+// barnetabellene (se AGENTS.md). Alternativet — én tabell per sted — ville gitt
+// to spørringer, to sett serverfunksjoner og to UI-er for den samme sjekklista.
+//
+// **`name` er ALLTID satt, også når raden peker på utstyrsregisteret.**
+// Kolonnen er snapshotet, som `event_meta.summary`: `asset_id` er SET NULL, og
+// uten navnet ville en slettet gjenstand etterlatt en tom linje midt i lista
+// rett før avreise. Ved visning slås dagens navn opp mot `assets` og vinner
+// over snapshotet (samme regel som `responsible_name` i `project_times`).
+// Serveren tar snapshotet fra `assets.name`, aldri fra klienten.
+//
+// **Ansvarlig er ENTEN et medlem ELLER en fritekst-gruppe.** «Riggegruppa» har
+// ingen rad noe sted, og skal ikke få en tabell for å kunne stå på en linje.
+//
+// **To avkryssinger, ikke én status.** «Tatt med fra Tertnes» og «kommet
+// tilbake» er to hendelser med hver sin tid og hver sin person — hele
+// trackingen saken ber om. Én `status`-kolonne ville mistet hvem som gjorde hva
+// når. Invarianten «kommet tilbake ⇒ tatt med» håndheves i `applyRigCheck`.
+export const rigItems = sqliteTable(
+  'rig_items',
+  {
+    id: text('id').primaryKey(),
+    /** Settes når lista hører til et prosjekt. Utelukker `occurrence_key`. */
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+    /** Settes når lista hører til én kalenderforekomst. Utelukker `project_id`. */
+    occurrenceKey: text('occurrence_key').references(() => eventMeta.occurrenceKey, { onDelete: 'cascade' }),
+    /** Referanse til utstyrsregisteret (#13). SET NULL: gjenstanden kan slettes uten at lista mister linja. */
+    assetId: text('asset_id').references(() => assets.id, { onDelete: 'set null' }),
+    /** Navnet slik det ble skrevet inn, eller snapshotet av gjenstandens navn. Aldri tomt. */
+    name: text('name').notNull(),
+    /** Ansvarlig medlem. SET NULL: slutter hen i korpset, står linja igjen uten ansvarlig. */
+    responsibleUserId: text('responsible_user_id').references(() => user.id, { onDelete: 'set null' }),
+    /** Ansvarlig gruppe eller person uten konto — «riggegruppa», «Kim sin bil». */
+    responsibleName: text('responsible_name'),
+    /** Kryss 1: tatt med fra Tertnes. Tidspunkt + hvem. */
+    takenAt: integer('taken_at', { mode: 'timestamp_ms' }),
+    takenBy: text('taken_by').references(() => user.id, { onDelete: 'set null' }),
+    /** Kryss 2: kommet tilbake etter rigging. Aldri satt uten `taken_at`. */
+    returnedAt: integer('returned_at', { mode: 'timestamp_ms' }),
+    returnedBy: text('returned_by').references(() => user.id, { onDelete: 'set null' }),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    index('rig_items_project_idx').on(t.projectId),
+    index('rig_items_occurrence_idx').on(t.occurrenceKey),
+    index('rig_items_asset_idx').on(t.assetId),
+  ],
+)
+
+// ---------- Sceneoppsett (#11) ----------
+
+// Den grafiske riggen for ETT prosjekt: hvor stolene, notestativene,
+// dirigentpodiet og slagverket skal stå. Primærnøkkelen ER `project_id` — ett
+// prosjekt har ett sceneoppsett. Trenger et prosjekt to (kirken og
+// konserthuset), er det to prosjekter eller to nedlastede filer, ikke en
+// usynlig liste med varianter det ikke finnes UI for å velge mellom.
+//
+// **Layouten er JSON, ikke en rad per element.** Elementene har ingen identitet
+// utenfor tegningen: ingenting peker på «stol 14», og ingen spørring spør
+// «hvilke prosjekter har en stol på x=300». En tabell med seksti rader per
+// prosjekt ville kostet en join og en sorteringsregel for null gevinst — samme
+// begrunnelse som `invitations.part_ids` og `member_profiles.interests`.
+// Formatet valideres av `parseStagePlot` i src/lib/scene.ts ved BÅDE lesing og
+// skriving: en rad skrevet av en eldre versjon skal aldri kunne velte
+// tegneflaten, og et rått kall skal ikke kunne finne opp egne elementtyper.
+//
+// **`updated_at` ER versjonen.** Ingen historikk: sceneoppsettet er en skisse
+// som endres til den stemmer, og spørsmålet folk faktisk stiller er «hvem
+// endret dette sist, og er det fra i fjor?».
+export const stagePlots = sqliteTable('stage_plots', {
+  projectId: text('project_id')
+    .primaryKey()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  /** JSON: `{ "elements": [...] }`. Leses og skrives alltid via `parseStagePlot`. */
+  layout: text('layout').notNull(),
+  /** Fri merknad under tegningen — «lån 4 stativ av Fana», «podiet står bakerst». */
+  note: text('note'),
+  updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+})
