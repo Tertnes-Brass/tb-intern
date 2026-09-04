@@ -21,6 +21,11 @@ import { CALENDAR_PERMISSION } from '../lib/attendance'
 import { newId } from '../lib/id'
 import { PERCUSSION_MAX_LENGTH, parsePercussionSetup, showPercussionFor } from '../lib/percussion'
 import {
+  PROJECT_VISIBILITY_MESSAGES,
+  isActiveProject,
+  projectVisibility,
+} from '../lib/project-access'
+import {
   PRACTICAL_LABEL_MAX,
   PRACTICAL_LOCATION_MAX,
   PRACTICAL_NAME_MAX,
@@ -40,6 +45,9 @@ import {
 } from './access'
 import { loadCalendar } from './calendar-feed'
 import { type AccessCtx, memberCanAccessFile, memberCanSeeFile } from './file-access'
+import { loadProjectPractice } from './practice'
+import { loadProjectSoloists } from './soloists'
+import { loadProjectPercussionNeeds } from './work-percussion'
 import {
   DEFAULT_PROJECT_SORT,
   PROJECT_KINDS,
@@ -253,24 +261,22 @@ export const getProject = createServerFn()
     if (!project) throw new Error('Fant ikke prosjektet')
 
     const canManage = hasPermission(me, 'projects.manage')
-    if (!project.isPublished && !canManage) throw new Error('Prosjektet er ikke publisert ennå')
     const canBrowseArchive = hasFullArchiveAccess(me)
     const today = new Date().toISOString().slice(0, 10)
-    if (
-      project.isPublished &&
-      (!project.eventDate || project.eventDate < today) &&
-      !canManage &&
-      !canBrowseArchive
-    ) {
-      throw new Error('Prosjektet er ikke lenger tilgjengelig')
-    }
+    // Synlighetstrappen er én ren funksjon (`src/lib/project-access.ts`), delt
+    // med skrivestien for øvingsstatus (#30) — to steder som gjentok den samme
+    // rekken betingelser ville før eller siden gitt hvert sitt svar.
+    const visibility = projectVisibility(project, { canManage, canBrowseArchive }, today)
+    if (visibility !== 'ok') throw new Error(PROJECT_VISIBILITY_MESSAGES[visibility])
 
-    const inAccessibleProject =
-      project.isPublished && !!project.eventDate && project.eventDate >= today
-    const [repertoire, times, rehearsals] = await Promise.all([
+    const inAccessibleProject = isActiveProject(project, today)
+    const [repertoire, times, rehearsals, soloists, percussionNeeds, practice] = await Promise.all([
       assembleRepertoire(d, project.id, memberFileAccessContext(me, inAccessibleProject)),
       loadProjectTimes(d, project.id),
       loadProjectRehearsals(d, project.id),
+      loadProjectSoloists(d, project.id),
+      loadProjectPercussionNeeds(d, project.id),
+      loadProjectPractice(d, me, project.id),
     ])
 
     return {
@@ -278,6 +284,13 @@ export const getProject = createServerFn()
       repertoire,
       times,
       rehearsals,
+      // #50: solistene per verk, gruppert på workId. Lesing er åpen for alle som
+      // ser prosjektet; redigering krever `projects.manage` (src/server/soloists.ts).
+      soloists,
+      // #34: det samlede slagverksbehovet for hele repertoaret — riggelista.
+      percussionNeeds,
+      // #30: min egen status, tallene, og navnene leseren faktisk får se.
+      practice,
       canManage,
       canManageCalendar: hasPermission(me, CALENDAR_PERMISSION),
       canShare: hasPermission(me, 'shares.manage'),

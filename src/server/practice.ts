@@ -1,0 +1,257 @@
+import { createServerFn } from '@tanstack/react-start'
+import { and, eq } from 'drizzle-orm'
+import { z } from 'zod'
+import { db, type Db } from '../db'
+import { parts, projectWorkPractice, projectWorks, projects, user, userParts } from '../db/schema'
+import {
+  PRACTICE_COMMENT_MAX,
+  PRACTICE_STATUSES,
+  canSeeMemberPractice,
+  countPractice,
+  normalizePracticeComment,
+  practiceScope,
+  type PracticeCounts,
+  type PracticeStatus,
+} from '../lib/practice'
+import { PROJECT_VISIBILITY_MESSAGES, projectVisibility } from '../lib/project-access'
+import { hasFullArchiveAccess, hasPermission, requireMe, type Me } from './access'
+
+/**
+ * Frivillig øvingsstatus per medlem per prosjektverk (#30).
+ *
+ * **Ingen rettighet gater skrivingen.** Alle innloggede kan sette og fjerne SIN
+ * EGEN status på et prosjekt de ser — det er hele poenget med funksjonen, og
+ * `user_id` settes alltid fra `requireMe()`, aldri fra klienten. Det finnes
+ * ingen serverfunksjon her som skriver for noen andre; skulle en dirigent ville
+ * det, er svaret å spørre musikeren, ikke å føre for hen.
+ *
+ * **Rettighetene gater INNSYNET, ikke registreringen.** `practiceScope` i
+ * `src/lib/practice.ts` avgjør hvem som får se navn: `projects.manage` eller
+ * `calendar.manage` ser alle, en gruppeleder med aktiv `section_leaders`-binding
+ * ser sine egne stemmer, og alle andre ser bare tallene og sin egen rad. Samme
+ * trapp som `attendanceScope`, med prosjektets rettigheter.
+ *
+ * **Det som IKKE sendes til klienten:** antall aktive medlemmer. Uten det tallet
+ * kan ingen skjerm regne ut «hvem mangler status», og en «purreliste» kan ikke
+ * bygges av data den ikke har.
+ */
+
+const practiceKey = { projectId: z.string(), workId: z.string() }
+
+/** Statusen leseren får se for ETT medlem på ETT verk. */
+export type PracticeName = {
+  userId: string
+  name: string
+  status: PracticeStatus
+  comment: string | null
+  /** Primærstemmen, så gruppelederen ser hvem det er uten å slå opp. */
+  partName: string | null
+}
+
+export type ProjectPractice = {
+  /** Min egen status per verk. Alltid med — man skal kunne lese sitt eget svar. */
+  mine: Record<string, { status: PracticeStatus; comment: string | null }>
+  /** Tallene per verk. Åpne for alle: «4 øver på den» er oppmuntring, ikke tilsyn. */
+  counts: Record<string, PracticeCounts>
+  /**
+   * Navnene per verk, allerede filtrert på leserens omfang. `null` for den som
+   * bare skal se tall — skjermen filtrerer ingenting, slik som `groups: null` i
+   * `getEventDetail`.
+   */
+  names: Record<string, PracticeName[]> | null
+  /** Hvor mye leseren ser. Brukes til å velge overskrift, ikke til filtrering. */
+  scope: 'all' | 'sections' | 'self'
+}
+
+/**
+ * Øvingsstatusen for hele programmet, sett med `me` sine øyne.
+ *
+ * Navnelista bygges ferskt: dagens navn fra `user`, dagens stemmer fra
+ * `user_parts`. En gruppeleder som mister bindingen ser navnene forsvinne ved
+ * neste lasting, fordi `leadsPartIds` regnes ut i `currentUser()` hver gang.
+ */
+export async function loadProjectPractice(d: Db, me: Me, projectId: string): Promise<ProjectPractice> {
+  const rows = await d
+    .select({
+      workId: projectWorkPractice.workId,
+      userId: projectWorkPractice.userId,
+      status: projectWorkPractice.status,
+      comment: projectWorkPractice.comment,
+      name: user.name,
+      partId: userParts.partId,
+      partName: parts.nameNo,
+      partSort: parts.sortOrder,
+      isPrimary: userParts.isPrimary,
+    })
+    .from(projectWorkPractice)
+    .innerJoin(user, eq(projectWorkPractice.userId, user.id))
+    .leftJoin(userParts, eq(userParts.userId, projectWorkPractice.userId))
+    .leftJoin(parts, eq(userParts.partId, parts.id))
+    .where(eq(projectWorkPractice.projectId, projectId))
+
+  // Én rad per (verk, medlem) — join-en mot `user_parts` multipliserer dem opp.
+  type Entry = {
+    workId: string
+    userId: string
+    status: PracticeStatus
+    comment: string | null
+    name: string
+    partIds: string[]
+    partName: string | null
+    /** Rangen til stemmen `partName` kom fra — primærstemmen først. */
+    primaryRank: number
+  }
+  const entries = new Map<string, Entry>()
+  for (const row of rows) {
+    const key = `${row.workId}\u0000${row.userId}`
+    const entry = entries.get(key) ?? {
+      workId: row.workId,
+      userId: row.userId,
+      status: row.status,
+      comment: row.comment,
+      name: row.name,
+      partIds: [],
+      partName: null,
+      primaryRank: Number.POSITIVE_INFINITY,
+    }
+    if (row.partId) {
+      entry.partIds.push(row.partId)
+      // Samme regel som medlemslista og oppmøtelista, så et medlem ikke får to
+      // ulike stemmer to steder i appen.
+      const rank = (row.isPrimary ? 0 : 1) * 10_000 + (row.partSort ?? 999)
+      if (rank < entry.primaryRank) {
+        entry.primaryRank = rank
+        entry.partName = row.partName
+      }
+    }
+    entries.set(key, entry)
+  }
+
+  const scope = practiceScope(me)
+  const mine: ProjectPractice['mine'] = {}
+  const perWork = new Map<string, Entry[]>()
+  for (const entry of entries.values()) {
+    const list = perWork.get(entry.workId) ?? []
+    list.push(entry)
+    perWork.set(entry.workId, list)
+    if (entry.userId === me.id) mine[entry.workId] = { status: entry.status, comment: entry.comment }
+  }
+
+  const counts: ProjectPractice['counts'] = {}
+  const names: Record<string, PracticeName[]> = {}
+  for (const [workId, list] of perWork) {
+    counts[workId] = countPractice(list)
+    if (scope.kind === 'self') continue
+    const visible = list
+      .filter((entry) => canSeeMemberPractice(me, { id: entry.userId, partIds: entry.partIds }, scope))
+      .map((entry) => ({
+        userId: entry.userId,
+        name: entry.name,
+        status: entry.status,
+        comment: entry.comment,
+        partName: entry.partName,
+      }))
+      // «Vil øve med noen» først: det er den ene raden noen skal gjøre noe med.
+      .sort(
+        (a, b) =>
+          Number(b.status === 'needs_help') - Number(a.status === 'needs_help') ||
+          a.name.localeCompare(b.name, 'nb'),
+      )
+    if (visible.length > 0) names[workId] = visible
+  }
+
+  return { mine, counts, names: scope.kind === 'self' ? null : names, scope: scope.kind }
+}
+
+/**
+ * Prosjektet må være synlig for `me` FØR en status kan skrives. Samme rene
+ * regel som `getProject` bruker (`projectVisibility`), slik at et rått kall
+ * ikke kan bekrefte at et upublisert prosjekt finnes — eller henge en rad på
+ * det.
+ */
+async function assertVisibleProject(d: Db, me: Me, projectId: string): Promise<void> {
+  const project = (
+    await d
+      .select({ isPublished: projects.isPublished, eventDate: projects.eventDate })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1)
+  )[0]
+  if (!project) throw new Error('Fant ikke prosjektet')
+  const visibility = projectVisibility(
+    project,
+    { canManage: hasPermission(me, 'projects.manage'), canBrowseArchive: hasFullArchiveAccess(me) },
+    new Date().toISOString().slice(0, 10),
+  )
+  if (visibility !== 'ok') throw new Error(PROJECT_VISIBILITY_MESSAGES[visibility])
+}
+
+/** Verket må stå i programmet — ellers finnes ikke raden statusen henger på. */
+async function assertProjectWork(d: Db, projectId: string, workId: string): Promise<void> {
+  const rows = await d
+    .select({ workId: projectWorks.workId })
+    .from(projectWorks)
+    .where(and(eq(projectWorks.projectId, projectId), eq(projectWorks.workId, workId)))
+    .limit(1)
+  if (!rows[0]) throw new Error('Verket står ikke i dette programmet')
+}
+
+/**
+ * Setter MIN status. `userId` kommer fra sesjonen, aldri fra `data` — det er
+ * grunnen til at det ikke finnes noe bruker-felt i validatoren i det hele tatt.
+ * Ny status på samme verk overskriver den forrige (PK-en er (prosjekt, verk,
+ * medlem)), så det finnes aldri to svar fra samme person på samme stykke.
+ */
+export const setMyPracticeStatus = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      ...practiceKey,
+      status: z.enum(PRACTICE_STATUSES),
+      comment: z.string().max(PRACTICE_COMMENT_MAX * 4).nullish(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const me = await requireMe()
+    const d = db()
+    await assertVisibleProject(d, me, data.projectId)
+    await assertProjectWork(d, data.projectId, data.workId)
+
+    const now = new Date()
+    const comment = normalizePracticeComment(data.comment)
+    await d
+      .insert(projectWorkPractice)
+      .values({
+        projectId: data.projectId,
+        workId: data.workId,
+        userId: me.id,
+        status: data.status,
+        comment,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [projectWorkPractice.projectId, projectWorkPractice.workId, projectWorkPractice.userId],
+        set: { status: data.status, comment, updatedAt: now },
+      })
+    return { ok: true }
+  })
+
+/**
+ * Fjerner MIN status. Raden slettes i stedet for å få en «ingen»-verdi: en
+ * status man har tatt bort, skal ikke bli stående som et svar.
+ */
+export const clearMyPracticeStatus = createServerFn({ method: 'POST' })
+  .validator(z.object(practiceKey))
+  .handler(async ({ data }) => {
+    const me = await requireMe()
+    await db()
+      .delete(projectWorkPractice)
+      .where(
+        and(
+          eq(projectWorkPractice.projectId, data.projectId),
+          eq(projectWorkPractice.workId, data.workId),
+          eq(projectWorkPractice.userId, me.id),
+        ),
+      )
+    return { ok: true }
+  })

@@ -1,5 +1,6 @@
 import {
   type AnySQLiteColumn,
+  foreignKey,
   index,
   integer,
   primaryKey,
@@ -248,6 +249,44 @@ export const workLinks = sqliteTable(
   (t) => [index('work_links_work_idx').on(t.workId)],
 )
 
+// Slagverksinstrumentene stykket krever (#34) — den gjenbrukbare lista som
+// slipper slagverkerne for å lese den ut av PDF-ene på nytt hver gang.
+//
+// Lista henger på VERKET og ikke på prosjektverket, fordi «Gaelforce trenger
+// pauker» er sant uansett hvem som spiller det og når. Fordelingen for én
+// konsert («Timpani – Silje») er noe annet og bor fortsatt i
+// `project_works.percussion_setup`. To kolonner med samme navn ville før eller
+// siden gitt to svar på hva korpset må ha med seg.
+//
+// `part_id` er hvilken slagverksstemme instrumentet står i, og er valgfri:
+// arkivaren vet ofte at det trengs en marimba lenge før noen har fordelt
+// stemmene. SET NULL, ikke CASCADE — endres besetningen, skal instrumentet bli
+// stående uten stemme i stedet for å forsvinne fra riggelista. Serveren
+// håndhever at stemmen faktisk er en slagverksstemme (`isPercussionPart`).
+//
+// Skriving krever `works.manage`; lesing følger verket. Registreringen er
+// manuell nå — et framtidig PDF-/OCR-forslag (#34) skriver de samme radene og
+// trenger ingen skjemaendring.
+export const workPercussion = sqliteTable(
+  'work_percussion',
+  {
+    id: text('id').primaryKey(),
+    workId: text('work_id')
+      .notNull()
+      .references(() => works.id, { onDelete: 'cascade' }),
+    /** Fritekst med forslagsliste i src/lib/work-percussion.ts — aldri en enum i SQLite. */
+    instrument: text('instrument').notNull(),
+    /** «deles med perc 2», «må lånes», «kan erstattes med vibrafon». */
+    note: text('note'),
+    partId: text('part_id').references(() => parts.id, { onDelete: 'set null' }),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('work_percussion_work_idx').on(t.workId, t.sortOrder)],
+)
+
 // ---------- Sesonger og prosjekter ----------
 
 export const seasons = sqliteTable('seasons', {
@@ -292,6 +331,81 @@ export const projectWorks = sqliteTable(
     percussionSetup: text('percussion_setup'),
   },
   (t) => [primaryKey({ columns: [t.projectId, t.workId] })],
+)
+
+// Solister på ETT verk i ETT prosjekt (#50). Fremmednøkkelen er sammensatt og
+// peker på `project_works`, ikke på `works`: solisten hører til at stykket
+// spilles denne gangen. Tas verket ut av programmet, forsvinner solistene med
+// koblingen (CASCADE), mens verket i arkivet er urørt — og neste gang stykket
+// settes opp, starter man blankt, slik det skal være.
+//
+// **Intern eller ekstern.** `user_id` peker på medlemslista og navnet slås opp
+// ferskt ved lesing (aldri lagret som kopi); `external_name` er vikaren, den
+// innleide solisten eller en gruppe («Trombonegruppa»). Reglene — blant annet
+// at et valgt medlem slår ut fritekstnavnet — bor i `src/lib/soloists.ts`.
+//
+// `user_id` er SET NULL av samme grunn som `project_times.responsible_user_id`:
+// slutter solisten i korpset, skal programmet bli stående. Radene her slettes
+// aldri av seg selv.
+export const projectWorkSoloists = sqliteTable(
+  'project_work_soloists',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id').notNull(),
+    workId: text('work_id').notNull(),
+    userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
+    /** Navnet på en solist som ikke er medlem — eller på en solistgruppe. */
+    externalName: text('external_name'),
+    /** Valgfri gruppe-/rolletekst: «Kornettsolist», «Duett», «Slagverksgruppa». */
+    role: text('role'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.projectId, t.workId],
+      foreignColumns: [projectWorks.projectId, projectWorks.workId],
+    }).onDelete('cascade'),
+    index('project_work_soloists_work_idx').on(t.projectId, t.workId, t.sortOrder),
+  ],
+)
+
+// Frivillig øvingsstatus per medlem per prosjektverk (#30).
+//
+// **Medlemmet eier sin egen rad.** PK er (prosjekt, verk, medlem), og det
+// finnes bevisst INGEN `source`/`registered_by` slik `event_attendance` har:
+// ingen kan sette en status for noen andre. Fraværsføring er en oppgave noen
+// har fått; øvingsstatus er noe man sier om seg selv, og en «registrer for»-vei
+// ville gjort det til et kontrollverktøy — det saken uttrykkelig ba om at det
+// ikke skulle bli.
+//
+// Statusen slettes når medlemmet fjerner den (raden forsvinner), og cascader
+// med prosjektverket og med brukeren. Innsynsregelen — tall til alle, navn til
+// dirigent og egen gruppeleder — bor i `src/lib/practice.ts`.
+export const projectWorkPractice = sqliteTable(
+  'project_work_practice',
+  {
+    projectId: text('project_id').notNull(),
+    workId: text('work_id').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    status: text('status', { enum: ['looked_at', 'practicing', 'needs_help'] }).notNull(),
+    /** Kort, valgfri merknad: «takt 40 og utover». Ikke et skjema. */
+    comment: text('comment'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.projectId, t.workId, t.userId] }),
+    foreignKey({
+      columns: [t.projectId, t.workId],
+      foreignColumns: [projectWorks.projectId, projectWorks.workId],
+    }).onDelete('cascade'),
+    index('project_work_practice_user_idx').on(t.userId),
+  ],
 )
 
 // Tidsplanen for ett prosjekt (#9): oppmøte for lasting, avreise, oppmøte for

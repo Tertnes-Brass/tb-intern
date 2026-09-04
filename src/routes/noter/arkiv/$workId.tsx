@@ -2,6 +2,7 @@ import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-rout
 import { useRef, useState } from 'react'
 import { PdfSplitterLauncher } from '../../../components/PdfSplitter'
 import { WorkFormModal } from '../../../components/WorkForm'
+import { WorkPercussionSection } from '../../../components/WorkPercussion'
 import { toast, toastError } from '../../../components/toast'
 import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
 import { ZipDownloadButton } from '../../../components/ZipDownload'
@@ -119,6 +120,13 @@ function WorkPage() {
       {data.canManage && <PdfSplitterLauncher work={w} allParts={data.allParts} files={data.files} />}
 
       <FilesSection data={data} />
+
+      <WorkPercussionSection
+        workId={w.id}
+        items={data.percussion}
+        allParts={data.allParts}
+        canEdit={data.canManage}
+      />
 
       <LinksSection data={data} />
 

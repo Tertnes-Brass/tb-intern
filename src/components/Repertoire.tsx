@@ -117,6 +117,7 @@ export function RepertoireRow({
   index,
   manage,
   percussion,
+  extra,
   shareToken,
 }: {
   item: ProjectWorkDetail
@@ -128,6 +129,12 @@ export function RepertoireRow({
    * ikke skal se det. Prosjektsiden sender inn den redigerbare varianten.
    */
   percussion?: ReactNode
+  /**
+   * Alt annet raden skal bære: solister (#50) og min egen øvingsstatus (#30).
+   * Ett slot og ikke to props per funksjon — raden skal ikke vokse en ny
+   * parameter hver gang prosjektsiden får noe mer å vise.
+   */
+  extra?: ReactNode
   shareToken?: string
 }) {
   const tokenSuffix = shareToken ? `?t=${shareToken}` : ''
@@ -156,6 +163,7 @@ export function RepertoireRow({
           </p>
         )}
         {percussion ?? (item.percussionSetup ? <PercussionLine text={item.percussionSetup} /> : null)}
+        {extra}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {item.myFiles.map((f) => (
@@ -204,12 +212,14 @@ export function RepertoireList({
   items,
   manage,
   percussion,
+  extra,
   shareToken,
   className = '',
 }: {
   items: ProjectWorkDetail[]
   manage?: (item: ProjectWorkDetail, index: number) => ReactNode
   percussion?: (item: ProjectWorkDetail, index: number) => ReactNode
+  extra?: (item: ProjectWorkDetail, index: number) => ReactNode
   shareToken?: string
   className?: string
 }) {
@@ -222,6 +232,7 @@ export function RepertoireList({
           index={i + 1}
           manage={manage?.(item, i)}
           percussion={percussion?.(item, i)}
+          extra={extra?.(item, i)}
           shareToken={shareToken}
         />
       ))}
