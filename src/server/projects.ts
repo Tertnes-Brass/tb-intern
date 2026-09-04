@@ -6,6 +6,7 @@ import {
   eventMeta,
   eventProjects,
   memberProfiles,
+  partShares,
   parts,
   projectTimes,
   projectWorks,
@@ -19,6 +20,7 @@ import {
 } from '../db/schema'
 import { CALENDAR_PERMISSION } from '../lib/attendance'
 import { newId } from '../lib/id'
+import { type PartShareRow, sortPartShares } from '../lib/part-shares'
 import { PERCUSSION_MAX_LENGTH, parsePercussionSetup, showPercussionFor } from '../lib/percussion'
 import {
   PRACTICAL_LABEL_MAX,
@@ -39,7 +41,7 @@ import {
   requirePermission,
 } from './access'
 import { loadCalendar } from './calendar-feed'
-import { type AccessCtx, memberCanAccessFile, memberCanSeeFile } from './file-access'
+import { type AccessCtx, memberCanAccessFile, memberCanSeeFile, sharedFileFrom } from './file-access'
 import {
   DEFAULT_PROJECT_SORT,
   PROJECT_KINDS,
@@ -65,6 +67,19 @@ export type ProjectWorkDetail = {
   partFiles: Array<{ id: string; partId: string | null; partName: string | null; partSort: number; pageCount: number | null }>
   // fileName er med for at ZIP-nedlastingen skal kunne beholde filendelsen.
   myFiles: Array<{ id: string; partName: string | null; fileName: string; pageCount: number | null }>
+  /**
+   * Stemmefiler et annet medlem har delt med meg (#16). Egen liste, ikke slått
+   * sammen med `myFiles`: en lånt stemme skal vises som lånt, med navnet på den
+   * som lånte den bort. Alltid tom i vikarvisningen — den løypa har ingen konto
+   * og dermed ingen delinger.
+   */
+  sharedFiles: Array<{
+    id: string
+    partName: string | null
+    fileName: string
+    pageCount: number | null
+    fromName: string
+  }>
   scoreFileId: string | null
   audioFiles: Array<{ id: string; label: string | null; fileName: string }>
 }
@@ -135,6 +150,14 @@ export async function assembleRepertoire(
             memberCanSeeFile(f, access),
         )
         .map((f) => ({ id: f.id, partName: f.partName, fileName: f.fileName, pageCount: f.pageCount })),
+      // Lånte stemmer (#16). `sharedFileFrom` er den samme kilden som gaten
+      // bruker, så lista kan ikke vise en fil nedlastings-API-et ville avvist —
+      // og den kan heller ikke skrive feil navn på den som delte.
+      sharedFiles: wf.flatMap((f) => {
+        const fromName = sharedFileFrom(f, access)
+        if (!fromName || !memberCanSeeFile(f, access)) return []
+        return [{ id: f.id, partName: f.partName, fileName: f.fileName, pageCount: f.pageCount, fromName }]
+      }),
       scoreFileId: score && memberCanAccessFile(score, access) ? score.id : null,
       audioFiles: wf
         .filter((f) => f.kind === 'audio' && memberCanSeeFile(f, access))
@@ -143,17 +166,48 @@ export async function assembleRepertoire(
   })
 }
 
+/**
+ * Delingene DU har gitt bort (#16) — motstykket til mottakersiden, som
+ * `currentUser()` allerede har slått opp. Mottakerens navn slås alltid opp
+ * ferskt mot `user`, som ellers i basen.
+ *
+ * En deaktivert mottaker mister tilgangen uansett (`requireMe()` avviser hen),
+ * men raden skal fortsatt vises for deleren — ellers ville en deling forsvunnet
+ * fra oversikten uten at noen fjernet den, og da kunne den ikke fjernes heller.
+ *
+ * Ligger her, ikke i `part-shares.ts`: den modulen importeres av en
+ * rutekomponent, og en levende eksport der ville dratt `cloudflare:workers` inn
+ * i klientbygget.
+ */
+async function loadSharesGivenBy(d: Db, userId: string): Promise<PartShareRow[]> {
+  const rows = await d
+    .select({
+      memberId: partShares.toUserId,
+      memberName: user.name,
+      partId: partShares.partId,
+      partName: parts.nameNo,
+    })
+    .from(partShares)
+    .innerJoin(user, eq(user.id, partShares.toUserId))
+    .innerJoin(parts, eq(parts.id, partShares.partId))
+    .where(eq(partShares.fromUserId, userId))
+  return sortPartShares(rows)
+}
+
 export const getHome = createServerFn().handler(async () => {
   const me = await requireMe()
   const d = db()
   const today = new Date().toISOString().slice(0, 10)
   const canBrowseArchive = hasFullArchiveAccess(me)
 
-  const upcoming = await d
-    .select()
-    .from(projects)
-    .where(and(eq(projects.isPublished, true), gte(projects.eventDate, today)))
-    .orderBy(asc(projects.eventDate))
+  const [upcoming, sharesGiven] = await Promise.all([
+    d
+      .select()
+      .from(projects)
+      .where(and(eq(projects.isPublished, true), gte(projects.eventDate, today)))
+      .orderBy(asc(projects.eventDate)),
+    loadSharesGivenBy(d, me.id),
+  ])
 
   const next = upcoming[0] ?? null
   const repertoire = next
@@ -174,7 +228,14 @@ export const getHome = createServerFn().handler(async () => {
   // «Mine noter» er musikerens egen side, og et slagverksoppsett er ren støy
   // for en kornettist. Feltene fjernes derfor server-side for alle andre enn
   // slagverkerne og staben — UI-et skal ikke måtte huske regelen.
-  const showPercussion = showPercussionFor(me)
+  //
+  // En LÅNT slagverksstemme (#16) teller med: har du fått Slagverk 2 delt med
+  // deg, er oppsettet nettopp det du trenger for å kunne bruke nota. Regelen er
+  // fortsatt en støyregel, ikke en hemmelighetsregel — den utvider ingen tilgang.
+  const showPercussion = showPercussionFor({
+    permissions: me.permissions,
+    parts: [...me.parts, ...me.sharedParts.map((s) => ({ section: s.partSection }))],
+  })
 
   return {
     me: { name: me.name, parts: me.parts, roleNames: me.roles.map((r) => r.name) },
@@ -183,6 +244,24 @@ export const getHome = createServerFn().handler(async () => {
     showPercussion,
     upcoming: upcoming.slice(1),
     archive,
+    /**
+     * Stemmedeling (#16). `received` kommer fra `currentUser()`, som allerede
+     * har slått opp delingene for fil-gaten — panelet og gaten ser dermed
+     * nøyaktig de samme delingene, og en deling som har sluttet å virke fordi
+     * deleren mistet stemmen, forsvinner begge steder samtidig.
+     */
+    partShares: {
+      given: sharesGiven,
+      received: sortPartShares(
+        me.sharedParts.map((s) => ({
+          memberId: s.fromUserId,
+          memberName: s.fromName,
+          partId: s.partId,
+          partName: s.partNameNo,
+        })),
+      ),
+    },
+    meId: me.id,
   }
 })
 

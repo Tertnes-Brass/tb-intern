@@ -5,17 +5,32 @@
  * så den kan enhetstestes i node.
  *
  * Hard tilgangsstyring: en innlogget bruker når en stemmefil hvis stemma er i
- * `effectivePartIds` (egne tildelte stemmer ekspandert nedover treet), eller i
- * det eksplisitte løv-omfanget hen leder OG hen fortsatt har
- * `members.manage.section`. Verket må være med i et publisert, kommende
- * prosjekt. Fullt arkivinnsyn omgår prosjektkravet. Partitur styres ortogonalt
- * av `scores.view`. Uplassert ('other') krever fullt arkivinnsyn.
+ * `effectivePartIds` (egne tildelte stemmer ekspandert nedover treet), er delt
+ * med hen av et annet medlem (#16), eller er i det eksplisitte løv-omfanget hen
+ * leder OG hen fortsatt har `members.manage.section`. Verket må være med i et
+ * publisert, kommende prosjekt. Fullt arkivinnsyn omgår prosjektkravet.
+ * Partitur styres ortogonalt av `scores.view`. Uplassert ('other') krever fullt
+ * arkivinnsyn.
  */
 
 export type FileLite = { kind: string; partId: string | null }
 
+/**
+ * En stemme et ANNET medlem har delt med denne brukeren (#16). Navnet følger
+ * med fordi «Delt med deg av Ingrid» skal kunne skrives fra samme kilde som
+ * avgjør tilgangen — ellers ville lista og gaten kunnet komme i utakt om hvem
+ * delingen kom fra.
+ */
+export type SharedPart = { partId: string; fromName: string }
+
 export type AccessCtx = {
   effectivePartIds: string[]
+  /**
+   * Stemmer delt av andre medlemmer, ekspandert nedover treet som egne stemmer.
+   * Holdt SEPARAT fra `effectivePartIds` med vilje: en lånt stemme er ikke din,
+   * og «Mine noter» skal kunne vise den i sin egen seksjon uten å gjette.
+   */
+  sharedParts: SharedPart[]
   sectionLeaderPartIds: string[] // løv-stemmer i eksplisitt section_leaders-scope
   canManageSection: boolean // members.manage.section; scope-rader alene er ikke nok
   canViewScore: boolean // scores.view
@@ -27,8 +42,23 @@ function memberCanAccessPart(partId: string | null, ctx: AccessCtx): boolean {
   if (!partId) return false
   return (
     ctx.effectivePartIds.includes(partId) ||
+    ctx.sharedParts.some((s) => s.partId === partId) ||
     (ctx.canManageSection && ctx.sectionLeaderPartIds.includes(partId))
   )
+}
+
+/**
+ * Er DENNE fila synlig for meg fordi noen delte stemmen sin — og i så fall hvem?
+ * `null` når fila ikke er en stemmefil, når stemma er min egen (da er den ikke
+ * lånt), eller når ingen har delt den.
+ *
+ * Egne stemmer går foran: har du selv fått 3. horn tildelt etter at Ingrid delte
+ * den med deg, er nota din egen, og «Delt med deg av Ingrid» ville vært feil.
+ */
+export function sharedFileFrom(file: FileLite, ctx: AccessCtx): string | null {
+  if (file.kind !== 'part' || !file.partId) return null
+  if (ctx.effectivePartIds.includes(file.partId)) return null
+  return ctx.sharedParts.find((s) => s.partId === file.partId)?.fromName ?? null
 }
 
 /** Kan en innlogget bruker laste ned denne filen? */

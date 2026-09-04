@@ -18,6 +18,10 @@ export type AuditAction =
   | 'member.role_changed'
   | 'member.roles_changed'
   | 'member.section_leadership_changed'
+  // Deling av egen stemme til et annet medlem (#16). Ikke det samme som
+  // `member.parts_changed`: ingen tildeling endres, bare en leserett.
+  | 'member.part_shared'
+  | 'member.part_share_removed'
   | 'member.password_reset_requested_by_admin'
 
 type AuditDetails = Record<string, unknown>

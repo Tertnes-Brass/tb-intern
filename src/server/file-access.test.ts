@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { type AccessCtx, memberCanAccessFile, memberCanSeeFile, shareAllows } from './file-access'
+import {
+  type AccessCtx,
+  memberCanAccessFile,
+  memberCanSeeFile,
+  shareAllows,
+  sharedFileFrom,
+} from './file-access'
 
 const file = (kind: string, partId: string | null = null) => ({ kind, partId })
 
 // Vanlig medlem med Slagverk 1, kan se partitur, ikke fullt arkivinnsyn.
 const member: AccessCtx = {
   effectivePartIds: ['percussion-1'],
+  sharedParts: [],
   sectionLeaderPartIds: [],
   canManageSection: false,
   canViewScore: true,
@@ -15,6 +22,7 @@ const member: AccessCtx = {
 // Stab/dirigent: fullt arkivinnsyn.
 const viewAll: AccessCtx = {
   effectivePartIds: [],
+  sharedParts: [],
   sectionLeaderPartIds: [],
   canManageSection: false,
   canViewScore: true,
@@ -24,11 +32,18 @@ const viewAll: AccessCtx = {
 // Medlem uten partitur-rett.
 const noScore: AccessCtx = {
   effectivePartIds: ['percussion-1'],
+  sharedParts: [],
   sectionLeaderPartIds: [],
   canManageSection: false,
   canViewScore: false,
   canViewAll: false,
   inAccessibleProject: true,
+}
+// Barytonist som har fått 3. horn delt av Ingrid (#16).
+const borrower: AccessCtx = {
+  ...member,
+  effectivePartIds: ['euphonium'],
+  sharedParts: [{ partId: 'tenor-horn-3', fromName: 'Ingrid Voll' }],
 }
 const outsideProject: AccessCtx = { ...member, inAccessibleProject: false }
 const sectionLeader: AccessCtx = {
@@ -88,6 +103,64 @@ describe('memberCanAccessFile (nedlasting)', () => {
   it('medlem uten stemme når ingen part-filer', () => {
     const none: AccessCtx = { ...member, effectivePartIds: [] }
     expect(memberCanAccessFile(file('part', 'percussion-1'), none)).toBe(false)
+  })
+})
+
+describe('delt stemme mellom medlemmer (#16)', () => {
+  it('den delte stemmen kan lastes ned', () => {
+    expect(memberCanAccessFile(file('part', 'tenor-horn-3'), borrower)).toBe(true)
+    expect(memberCanAccessFile(file('part', 'euphonium'), borrower)).toBe(true)
+  })
+
+  it('gir INGEN andre stemmer enn den ene som er delt', () => {
+    expect(memberCanAccessFile(file('part', 'tenor-horn-1'), borrower)).toBe(false)
+    expect(memberCanAccessFile(file('part', 'solo-cornet'), borrower)).toBe(false)
+  })
+
+  it('gir ikke partitur, uplassert eller arkivinnsyn', () => {
+    const noScoreBorrower = { ...borrower, canViewScore: false }
+    expect(memberCanAccessFile(file('score'), noScoreBorrower)).toBe(false)
+    expect(memberCanAccessFile(file('other'), borrower)).toBe(false)
+    expect(borrower.canViewAll).toBe(false)
+  })
+
+  it('følger prosjektkravet som alle andre stemmer', () => {
+    expect(
+      memberCanAccessFile(file('part', 'tenor-horn-3'), { ...borrower, inAccessibleProject: false }),
+    ).toBe(false)
+  })
+
+  it('metadata vises for den delte stemmen, ikke for de andre', () => {
+    expect(memberCanSeeFile(file('part', 'tenor-horn-3'), borrower)).toBe(true)
+    expect(memberCanSeeFile(file('part', 'tenor-horn-1'), borrower)).toBe(false)
+  })
+
+  it('en tom delingsliste endrer ingenting', () => {
+    expect(memberCanAccessFile(file('part', 'tenor-horn-3'), { ...borrower, sharedParts: [] })).toBe(false)
+  })
+
+  it('vikarlenka er urørt av delinger mellom medlemmer', () => {
+    // `shareAllows` tar ikke AccessCtx i det hele tatt — det er poenget.
+    expect(shareAllows(file('part', 'tenor-horn-3'), [])).toBe(false)
+  })
+})
+
+describe('sharedFileFrom (hvem lånte meg denne?)', () => {
+  it('navngir deleren for en lånt stemme', () => {
+    expect(sharedFileFrom(file('part', 'tenor-horn-3'), borrower)).toBe('Ingrid Voll')
+  })
+
+  it('egen stemme er ikke lånt, selv om den også er delt', () => {
+    const alsoOwns = { ...borrower, effectivePartIds: ['euphonium', 'tenor-horn-3'] }
+    expect(sharedFileFrom(file('part', 'tenor-horn-3'), alsoOwns)).toBeNull()
+  })
+
+  it('null for udelte stemmer, partitur, lyd og uplassert', () => {
+    expect(sharedFileFrom(file('part', 'solo-cornet'), borrower)).toBeNull()
+    expect(sharedFileFrom(file('score'), borrower)).toBeNull()
+    expect(sharedFileFrom(file('audio'), borrower)).toBeNull()
+    expect(sharedFileFrom(file('other'), borrower)).toBeNull()
+    expect(sharedFileFrom(file('part', null), borrower)).toBeNull()
   })
 })
 

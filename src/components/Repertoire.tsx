@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import type { ProjectWorkDetail } from '../server/projects'
 import { formatDuration, toRoman } from '../lib/format'
+import { groupSharedFiles, sharedWithYouLabel } from '../lib/part-shares'
 import { youTubeEmbedUrl, youTubeVideoId } from '../lib/youtube'
 import { PercussionLine } from './Percussion'
 import { Modal, Stamp } from './ui'
@@ -164,12 +165,29 @@ export function RepertoireRow({
           {item.scoreFileId && <FileChip fileId={item.scoreFileId} label="Partitur" />}
           <ListenButton item={item} />
           {!shareToken && item.partFiles.length > 0 && <AllPartsDisclosure item={item} />}
-          {item.myFiles.length === 0 && !item.scoreFileId && item.partFiles.length === 0 && (
-            <span className="font-mono text-[0.66rem] uppercase tracking-[0.12em] text-ink-faint">
-              Ingen noter lastet opp ennå
-            </span>
-          )}
+          {item.myFiles.length === 0 &&
+            item.sharedFiles.length === 0 &&
+            !item.scoreFileId &&
+            item.partFiles.length === 0 && (
+              <span className="font-mono text-[0.66rem] uppercase tracking-[0.12em] text-ink-faint">
+                Ingen noter lastet opp ennå
+              </span>
+            )}
         </div>
+
+        {/* Lånte stemmer (#16) står for seg selv, ikke blandet inn blant egne:
+            en stemme du har fått låne er ikke din, og hvem som lånte den bort
+            er en del av opplysningen. */}
+        {groupSharedFiles(item.sharedFiles).map((group) => (
+          <div key={group.fromName} className="mt-2.5 flex flex-wrap items-center gap-2">
+            <span className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint">
+              {sharedWithYouLabel(group.fromName)}
+            </span>
+            {group.files.map((f) => (
+              <FileChip key={f.id} fileId={f.id} label={f.partName ?? 'Delt stemme'} />
+            ))}
+          </div>
+        ))}
       </div>
       {manage && <div className="flex shrink-0 items-start gap-1.5 opacity-100 transition-opacity can-hover:opacity-0 can-hover:group-hover/row:opacity-100">{manage}</div>}
     </li>

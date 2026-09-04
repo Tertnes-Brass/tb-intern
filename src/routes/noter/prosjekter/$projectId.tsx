@@ -56,8 +56,12 @@ function ProjectPage() {
   // Egne stemmer for hele prosjektet, i programrekkefølge:
   // «01 - Where Eagles Sing - 2. kornett.pdf». Serveren har allerede filtrert
   // myFiles på det medlemmet faktisk har tilgang til.
+  //
+  // Lånte stemmer (#16) er med: det er nettopp dem man skal øve på, og gaten
+  // har allerede sagt ja til hver enkelt fil. De står etter egne stemmer på
+  // hvert verk, og stemmenavnet i filnavnet skiller dem fra hverandre.
   const myProjectFiles = data.repertoire.flatMap((r, i) =>
-    r.myFiles.map((f) => ({
+    [...r.myFiles, ...r.sharedFiles].map((f) => ({
       fileId: f.id,
       name: zipEntryName([String(i + 1).padStart(2, '0'), r.title, f.partName], f.fileName),
     })),
