@@ -505,3 +505,53 @@ angår, er at brukerstyrt tekst nå blir markering, og der gjelder én regel:
   skjemaet kan aldri vise noe annet enn det som faktisk publiseres.
 - Angrepsforsøkene ligger i `src/lib/markdown.test.ts`. Faller en av dem, er det
   et hull — ikke en kosmetisk endring.
+
+## 5f. Riggeliste og sceneoppsett (#12 + #11, 5. september 2026)
+
+Begge er nye skriveflater på et prosjekt (og riggelista dessuten på én
+kalenderforekomst). Ingen av dem fikk en ny rettighet, og avkryssingen på
+riggelista er den mest liberale skrivetilgangen i plattformen. Begge deler er
+bevisste valg, ikke forglemmelser.
+
+- **Redigering: `projects.manage` ∨ `assets.manage`.** Reglene er
+  `canManageRigList` og `canManageStagePlot` (`src/lib/rigg.ts` /
+  `src/lib/scene.ts`), begge over `permissionsInclude`, så `*` behandles likt
+  som overalt ellers. Grunnen til at det er en ELLER og ikke en ny rettighet:
+  lista og tegningen har to naturlige eiere. Prosjektansvarlig vet hva konserten
+  trenger; materialforvalteren vet hva korpset eier. En `rig.manage` ville
+  betydd at begge måtte be om en rettighet til, og en sjekkliste ingen får
+  redigert er en sjekkliste ingen bruker.
+- **Avkryssing: `requireMe()` alene — og det er poenget i #12.** «Tatt med fra
+  Tertnes» og «kommet tilbake» kan settes av ALLE aktive medlemmer. Riggegruppa
+  er tre personer på et gulv med en kasse i hendene, ofte uten en eneste
+  rettighet i rollematrisen. En sjekkliste bare stab kan hake av, er et regneark
+  med ekstra steg. `currentUser()` returnerer allerede `null` for deaktiverte
+  medlemmer, så `requireMe()` ER regelen — det finnes ikke noe strengere krav å
+  legge på uten å ødelegge funksjonen.
+  - **Sporbarheten er ivaretatt i stedet for tilgangen.** Hver avkryssing lagrer
+    `taken_by`/`taken_at` og `returned_by`/`returned_at`. Man vet altså alltid
+    hvem som sa hva, selv om hvem som helst kan si det. Klienten sender KUN
+    hvilket kryss og av/på; tidsstempel og person settes server-side, og
+    tilstanden leses fra databasen før `applyRigCheck` kjøres. Et rått kall kan
+    ikke datere en avkryssing eller skrive den på en annen person.
+- **Synlighet arves fra prosjektet, ikke fra lista.** `loadVisibleProject` i
+  `src/server/project-access.ts` er nå felles for `getProject`, sceneoppsettet og
+  riggelista: er prosjektet upublisert (eller gammelt og du mangler arkivinnsyn),
+  får du verken tegningen eller riggelista. Uten den delingen ville riggelista
+  vært en bakvei til navnet på et upublisert prosjekt — samme hull som
+  utstyrskoblingen måtte tette i #13.
+- **Avkryssing krever samme synlighet som lesing.** `setRigCheck` slår opp
+  linjas eierskap og kjører den gjennom `resolveScope` før den skriver: en linje
+  på et prosjekt du ikke får se, kan du heller ikke hake av.
+- **Velgerlister er data, ikke pynt.** `memberOptions` (både i `getRigList`,
+  `getProject` og `getEventDetail`) sendes kun til den som faktisk kan redigere
+  lista. Det samme gjelder utstyrssøket `searchAssetsForRig`, som er gated på
+  skriveretten til riggelista.
+- **Gjenstandens navn tas fra registeret, aldri fra klienten.** Velger man en
+  gjenstand, slår `addRigItem` opp `assets.name` og lagrer DET som snapshot.
+  Ellers kunne et rått kall lagt inn linja «Sølvfat» med en `asset_id` som peker
+  på et notestativ, og lista ville løyet om hva som skulle med.
+- **Eierskapet til en linje kan ikke endres.** `updateRigItem` skriver kun navn
+  og ansvarlig. En linje som kunne flyttes mellom to lister ville tatt
+  avkryssingene sine med seg, og «tatt med» ville plutselig gjeldt en annen
+  konsert.

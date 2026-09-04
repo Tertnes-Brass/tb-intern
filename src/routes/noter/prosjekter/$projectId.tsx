@@ -9,6 +9,7 @@ import { ProjectFormModal } from '../../../components/ProjectForm'
 import { ProjectNotifySection, PublishProjectModal } from '../../../components/ProjectNotify'
 import { ProjectTimesSection } from '../../../components/ProjectTimes'
 import { RepertoireList } from '../../../components/Repertoire'
+import { RigListSection } from '../../../components/RigList'
 import { toast, toastError } from '../../../components/toast'
 import { Button, EmptyState, Field, Kicker, Modal, SectionHeading, Stamp } from '../../../components/ui'
 import { ZipDownloadButton } from '../../../components/ZipDownload'
@@ -237,6 +238,16 @@ function ProjectPage() {
 
       <RehearsalsSection rehearsals={data.rehearsals} canManageCalendar={data.canManageCalendar} />
 
+      <RigListSection
+        scope={{ projectId: p.id }}
+        items={data.rig.items}
+        memberOptions={data.rig.memberOptions}
+        canManage={data.canManageRig}
+        animationDelay="165ms"
+      />
+
+      <StageSummarySection projectId={p.id} stage={data.stage} canManage={data.canManageRig} />
+
       {(hasPercussion || data.canManage) && (
         <section className="rise" style={{ animationDelay: '130ms' }}>
           <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
@@ -330,6 +341,70 @@ function ProjectPage() {
         </div>
       </Modal>
     </div>
+  )
+}
+
+// ---------- Sceneoppsett: bare tallene (#11) ----------
+
+/**
+ * Opptellingen per elementtype, som saken ber om — og en vei inn til tegningen.
+ *
+ * Dashboardet tegner IKKE scenen i miniatyr. Det ville vært en kopi som blir
+ * gammel, og §4 i docs/designprinsipper.md advarer mot nettopp det: seksjonen
+ * her svarer «hvor mange stoler trenger vi», tegneflaten eier resten. Serveren
+ * sender derfor bare tallene (`loadStagePlotSummary`), ikke elementlista.
+ */
+function StageSummarySection({
+  projectId,
+  stage,
+  canManage,
+}: {
+  projectId: string
+  stage: Awaited<ReturnType<typeof getProject>>['stage']
+  canManage: boolean
+}) {
+  // Ingen tegning og ingen skriverett: da er seksjonen bare støy.
+  if (stage.total === 0 && !canManage) return null
+
+  return (
+    <section className="rise" style={{ animationDelay: '175ms' }}>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="kicker">Sceneoppsett</h2>
+        <Link
+          to="/noter/prosjekter/$projectId/sceneoppsett"
+          params={{ projectId }}
+          className="link-brass font-mono text-[0.66rem] uppercase tracking-[0.14em]"
+        >
+          {stage.total === 0 && canManage ? 'Tegn oppsettet →' : 'Åpne tegningen →'}
+        </Link>
+      </div>
+      <div className="sheet px-5 py-4">
+        {stage.total === 0 ? (
+          <p className="text-sm text-ink-soft">
+            Ingen scene tegnet ennå. Plasser stoler, notestativ og slagverk så alle vet hvor de skal sitte —
+            og så oppriggingen kan telles opp.
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-baseline gap-x-5 gap-y-2">
+              {stage.counts.map((count) => (
+                <span key={count.type} className="text-sm text-ink-soft">
+                  <strong className="display-title text-[1.15rem] font-semibold text-ink">{count.count}</strong>{' '}
+                  {count.label.replace(`${count.count} `, '')}
+                  {count.labels.length > 0 && <span className="text-ink-faint"> ({count.labels.join(', ')})</span>}
+                </span>
+              ))}
+            </div>
+            {stage.updatedAt && (
+              <p className="mt-3 font-mono text-[0.64rem] uppercase tracking-[0.12em] text-ink-faint">
+                Sist endret {formatDateShort(toOsloDate(stage.updatedAt))}
+                {stage.updatedByName ? ` av ${stage.updatedByName}` : ''}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </section>
   )
 }
 

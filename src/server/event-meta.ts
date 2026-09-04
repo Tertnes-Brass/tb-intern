@@ -38,9 +38,11 @@ import {
   PRACTICAL_URL_MAX,
   parseEventPracticalInput,
 } from '../lib/practical'
+import { canManageRigList } from '../lib/rigg'
 import { SETLIST_NOTE_MAX, SETLIST_TITLE_MAX, parseSetlistInput } from '../lib/setlist'
 import { type Me, hasFullArchiveAccess, hasPermission, requireMe, requirePermission } from './access'
-import { loadCalendar } from './calendar-feed'
+import { ensureEventMeta, feedOccurrence } from './event-meta-row'
+import { type RigItemRow, loadRigItems } from './rig-store'
 
 /**
  * Øvingsplan, prosjektkobling og oppmøte på ÉN kalenderforekomst (#82 + #24).
@@ -145,52 +147,14 @@ async function partIdsFor(d: Db, userId: string): Promise<string[] | null> {
   return rows.map((r) => r.partId)
 }
 
-/** Forekomsten fra feeden, eller null når den ikke finnes i vinduet. */
-async function feedOccurrence(occurrenceKey: string) {
-  const calendar = await loadCalendar(Date.now())
-  return {
-    calendar,
-    event: calendar.events.find((e) => e.occurrenceKey === occurrenceKey) ?? null,
-  }
-}
-
 /**
- * Henter (eller oppretter lazily) `event_meta` for en forekomst. Raden lages
- * FØRSTE gang noen skriver noe lokalt — en hendelse ingen har rørt har ingen
- * rad, og kalenderen forblir en ren lesekopi.
- *
- * Snapshotet (`summary`, `start`, `uid`) tas alltid fra FEEDEN, aldri fra
- * klienten: et rått kall skal ikke kunne dikte opp en hendelse med valgfri
- * tittel. Finnes ikke forekomsten i feeden, kan man bare skrive videre på en
- * rad som allerede finnes (den foreldreløse hendelsen) — ikke lage en ny.
+ * `feedOccurrence` og `ensureMeta` bor i `event-meta-row.ts`: riggelista (#12)
+ * skriver også på en forekomst og trenger nøyaktig den samme lazy-opprettelsen.
+ * De kunne ikke bare eksporteres herfra — denne modulen importeres av
+ * rutekomponenter, og en levende eksport ville dratt `cloudflare:workers` inn i
+ * klientbygget (samme felle som `post-images.ts`).
  */
-async function ensureMeta(d: Db, occurrenceKey: string, me: Me): Promise<void> {
-  const existing = await d
-    .select({ occurrenceKey: eventMeta.occurrenceKey })
-    .from(eventMeta)
-    .where(eq(eventMeta.occurrenceKey, occurrenceKey))
-    .limit(1)
-  const now = new Date()
-  if (existing[0]) {
-    await d.update(eventMeta).set({ updatedAt: now }).where(eq(eventMeta.occurrenceKey, occurrenceKey))
-    return
-  }
-  const { event } = await feedOccurrence(occurrenceKey)
-  if (!event) throw new Error('Hendelsen finnes ikke i kalenderen')
-  await d
-    .insert(eventMeta)
-    .values({
-      occurrenceKey,
-      uid: event.uid,
-      summary: event.title,
-      start: new Date(event.start),
-      linkedProjectId: null,
-      createdBy: me.id,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoNothing()
-}
+const ensureMeta = (d: Db, occurrenceKey: string, me: Me) => ensureEventMeta(d, occurrenceKey, me.id)
 
 // ---------- Lesing ----------
 
@@ -302,6 +266,8 @@ export const getEventDetail = createServerFn()
           eventDate: string | null
           isPublished: boolean
         }>,
+        rig: { items: [] as RigItemRow[], memberOptions: [] as Array<{ id: string; name: string }> },
+        canManageRig: false,
         projectOptions: [] as Array<{ id: string; name: string; eventDate: string | null }>,
         myAttendance: null as { status: AttendanceStatus; comment: string | null } | null,
         counts: countAttendance([]),
@@ -309,7 +275,8 @@ export const getEventDetail = createServerFn()
       }
     }
 
-    const [setlistRows, attendanceRows, roster, projectOptions, linkedProjects] = await Promise.all([
+    const canManageRig = canManageRigList(me.permissions)
+    const [setlistRows, attendanceRows, roster, projectOptions, linkedProjects, rigItemRows] = await Promise.all([
       d
         .select({
           id: eventSetlist.id,
@@ -364,6 +331,10 @@ export const getEventDetail = createServerFn()
             : and(eq(eventProjects.occurrenceKey, key), eq(projects.isPublished, true)),
         )
         .orderBy(asc(projects.eventDate)),
+      // Riggelista for DENNE øvingen (#12). Hentes i samme runde som resten:
+      // seksjonen står alltid på siden, og et eget kall ville vært en rundtur
+      // til for noe som uansett alltid vises.
+      loadRigItems(d, { kind: 'event', occurrenceKey: key }),
     ])
 
     const nameById = new Map(roster.map((m) => [m.id, m.name]))
@@ -434,6 +405,14 @@ export const getEventDetail = createServerFn()
       practical: practicalOf(meta),
       linkedProjects,
       projectOptions,
+      // Riggelista (#12). `memberOptions` gjenbruker rosteret vi allerede har
+      // hentet — en ekstra medlemsspørring her ville vært den samme lista to
+      // ganger — og sendes kun til den som faktisk kan redigere lista.
+      rig: {
+        items: rigItemRows,
+        memberOptions: canManageRig ? roster.map((m) => ({ id: m.id, name: m.name })) : [],
+      },
+      canManageRig,
       myAttendance: mine ? { status: mine.status, comment: mine.comment } : null,
       counts,
       groups,

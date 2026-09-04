@@ -144,12 +144,76 @@ Den skal ikke gjengi områdenes oversikter i miniatyr — se
     datokolonne — de to kan da aldri komme i utakt. Kun PUBLISERTE prosjekter kan
     kobles, og en kobling til et upublisert prosjekt filtreres bort for lesere
     uten `projects.manage`/`assets.manage`: en utstyrskobling skal ikke være en
-    bakvei til navnet. **Riggelister (#12) er bevisst ikke bygget** — de kommer
-    som egen sak og kan referere `assets.id` direkte uten å endre modellen.
+    bakvei til navnet. Riggelister (#12) ble bygget etterpå og refererer
+    `assets.id` direkte — modellen her trengte ingen endring, slik det var
+    forutsatt.
   Navigasjon: Utstyr har **ingen oppføring i toppmenyen**. §6 i
   `docs/designprinsipper.md` er på taket, og et sjette punkt for et vanlig medlem
   ville forsvunnet bak fade-gradienten på mobil. Området nås fra «Områder» på
   hub-en (`areasFor` i `src/lib/hub.ts`) — samme løsning som Filtilganger fikk.
+- **Riggeliste (#12) og sceneoppsett (#11), 5. september 2026:** de to tingene
+  som må på plass mellom «programmet er klart» og «konserten kan begynne».
+  Migrasjon `0017_riggeliste-og-sceneoppsett.sql` er rent additiv (to CREATE
+  TABLE, tre CREATE INDEX, ingen seeding). Reglene er rene funksjoner i
+  `src/lib/rigg.ts` og `src/lib/scene.ts` med tester; serverfunksjonene i
+  `src/server/rigg.ts` og `src/server/scene.ts`.
+  - **Én rettighetsregel for begge: `projects.manage` ∨ `assets.manage`**
+    (`canManageRigList` / `canManageStagePlot`). Ingen ny rettighet, med vilje:
+    begge tingene har to naturlige eiere — prosjektansvarlig vet hva konserten
+    trenger, materialforvalteren vet hva korpset eier — og en `rig.manage` ville
+    betydd at begge måtte be om en rettighet til for å bruke en sjekkliste.
+  - **AVKRYSSING på riggelista krever bare `requireMe()`.** Det er det viktigste
+    valget i #12: riggegruppa er tre personer på et gulv, ikke en rolle i
+    rollematrisen, og en sjekkliste bare stab kan hake av er en sjekkliste ingen
+    bruker. `currentUser()` returnerer allerede `null` for deaktiverte, så
+    `requireMe()` ER regelen.
+  - **`rig_items` hører til ENTEN et prosjekt ELLER en forekomst**, aldri begge
+    (`parseRigScope`). To nullbare kolonner og én ren funksjon, ikke to tabeller:
+    to tabeller ville gitt to spørringer, to sett serverfunksjoner og to UI-er
+    for den samme lista. Ingen SQLite-CHECK — den kan ikke legges til senere uten
+    rebuild, og rebuild i D1 cascader (se punktet om tabell-rebuild under).
+  - **To avkryssinger, ikke én status.** «Tatt med fra Tertnes» og «kommet
+    tilbake» har hver sin tid og hver sin person. Invarianten «kommet tilbake ⇒
+    tatt med» bor i `applyRigCheck`: krysser du av «tilbake» først, settes begge
+    (en ting som kom tilbake VAR med, og å kreve to trykk av noen som står i en
+    varebil er måten lista slutter å bli brukt på), og fjerner du «tatt med»,
+    forsvinner begge. Å krysse av på nytt endrer aldri hvem/når — første
+    avkryssing er den som gjelder.
+  - **`rig_items.name` er alltid satt, også med `asset_id`.** Snapshot, som
+    `event_meta.summary`: `asset_id` er SET NULL, og uten navnet ville en slettet
+    gjenstand etterlatt en tom linje rett før avreise. Dagens navn fra `assets`
+    vinner ved visning; snapshotet er fallbacken. Serveren tar snapshotet fra
+    `assets.name`, ALDRI fra klienten — samme disiplin som `ensureEventMeta`.
+  - **`stage_plots` er JSON, én rad per prosjekt.** Elementene har ingen
+    identitet utenfor tegningen (ingenting peker på «stol 14»), så en tabell med
+    seksti rader per prosjekt ville kostet en join for null gevinst — samme
+    begrunnelse som `invitations.part_ids`. `parseStagePlot` kjøres ved BÅDE
+    lesing og skriving og er **tolerant, ikke tillitsfull**: søppel gir et tomt
+    oppsett i stedet for et kast (en ødelagt rad skal ikke gjøre prosjektsiden
+    utilgjengelig), mens ukjente elementtyper, koordinater utenfor scenen og for
+    lange etiketter forsvinner. `updated_at` ER versjonen; ingen historikk.
+  - **Tegneflaten er egen SVG med pointer events — ingen ny avhengighet.**
+    `src/components/StagePlot.tsx`. Fargene er `var(--ink)` og venner rett i
+    SVG-attributtene, så tegningen arver tema og utskrifts-CSS uten en eneste
+    egen farge. **«Last ned SVG»** kloner flaten, fjerner `[data-editor-only]`,
+    serialiserer med `XMLSerializer` og sender markeringen gjennom
+    `standaloneStageSvg`, som legger på `xmlns` og skriver token-verdiene
+    (lest av `:root` der og da) inn i et `<style>`-element. Ingen serverjobb og
+    ingen hardkodede farger. Utskrift er `@media print` på samme rute.
+  - **Fire nye server-moduler, tre av dem for klientbygget sin skyld.**
+    `rig-store.ts` og `scene-store.ts` har de levende `load*`-eksportene og
+    importeres KUN fra `src/server/*.ts` (`projects.ts` og `event-meta.ts` bruker
+    dem for å fylle sidene i én runde) — samme grense som
+    `board.ts`/`board-files.ts`. `event-meta-row.ts` finnes fordi riggelista
+    trenger nøyaktig samme lazy `ensureMeta` som øvingsplanen; å eksportere den
+    fra `event-meta.ts` ville dratt `cloudflare:workers` inn i klientbygget.
+    `project-access.ts` (`loadVisibleProject`) er synlighetsregelen for et
+    prosjekt, nå delt av `getProject`, sceneoppsettet og riggelista — tre kopier
+    av en tilgangsregel er måten den ene som blir glemt blir hullet.
+  - **Ikke et nytt område.** Begge er sider i Prosjekter (og riggelista dessuten
+    en seksjon på `/kalender/$eventId`), ikke egne navnerom med egen toppmeny —
+    §6 i `docs/designprinsipper.md` er på taket, og ingen av dem har en egen
+    primærbruker som logger inn nettopp for dette.
 - **Cron og worker-entry:** `wrangler.jsonc` peker `main` på `src/worker.ts` i
   stedet for `@tanstack/react-start/server-entry`, fordi Start sin entry bare
   eksporterer `fetch` og vi trenger en `scheduled`-handler ved siden av.

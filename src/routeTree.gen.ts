@@ -9,87 +9,73 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as GlemtPassordRouteImport } from './routes/glemt-passord'
-import { Route as GruppeledereRouteRouteImport } from './routes/gruppeledere/route'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as MinProfilRouteImport } from './routes/min-profil'
-import { Route as NoterRouteRouteImport } from './routes/noter/route'
-import { Route as StyreRouteRouteImport } from './routes/styre/route'
 import { Route as TilbakestillPassordRouteImport } from './routes/tilbakestill-passord'
-import { Route as ApiDevLoginRouteImport } from './routes/api/dev-login'
-import { Route as ApiDevSeedRouteImport } from './routes/api/dev-seed'
-import { Route as ArkivIndexRouteImport } from './routes/arkiv/index'
-import { Route as ArkivWorkIdRouteImport } from './routes/arkiv/$workId'
-import { Route as BeskjederIndexRouteImport } from './routes/beskjeder/index'
-import { Route as BeskjederNyRouteImport } from './routes/beskjeder/ny'
-import { Route as GruppeledereIndexRouteImport } from './routes/gruppeledere/index'
-import { Route as InnstillingerIndexRouteImport } from './routes/innstillinger/index'
-import { Route as InnstillingerNedlastingerRouteImport } from './routes/innstillinger/nedlastinger'
-import { Route as KalenderIndexRouteImport } from './routes/kalender/index'
-import { Route as KalenderEventIdRouteImport } from './routes/kalender/$eventId'
-import { Route as MediaIndexRouteImport } from './routes/media/index'
-import { Route as MediaMediaIdRouteImport } from './routes/media/$mediaId'
-import { Route as MedlemmerIndexRouteImport } from './routes/medlemmer/index'
-import { Route as NoterIndexRouteImport } from './routes/noter/index'
-import { Route as ProsjekterIndexRouteImport } from './routes/prosjekter/index'
-import { Route as ProsjekterProjectIdRouteImport } from './routes/prosjekter/$projectId'
-import { Route as StyreIndexRouteImport } from './routes/styre/index'
-import { Route as StyreTaskIdRouteImport } from './routes/styre/$taskId'
+import { Route as MinProfilRouteImport } from './routes/min-profil'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as GlemtPassordRouteImport } from './routes/glemt-passord'
+import { Route as StyreRouteRouteImport } from './routes/styre/route'
+import { Route as NoterRouteRouteImport } from './routes/noter/route'
+import { Route as GruppeledereRouteRouteImport } from './routes/gruppeledere/route'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as UtstyrIndexRouteImport } from './routes/utstyr/index'
-import { Route as UtstyrAssetIdRouteImport } from './routes/utstyr/$assetId'
+import { Route as StyreIndexRouteImport } from './routes/styre/index'
+import { Route as ProsjekterIndexRouteImport } from './routes/prosjekter/index'
+import { Route as NoterIndexRouteImport } from './routes/noter/index'
+import { Route as MedlemmerIndexRouteImport } from './routes/medlemmer/index'
+import { Route as MediaIndexRouteImport } from './routes/media/index'
+import { Route as KalenderIndexRouteImport } from './routes/kalender/index'
+import { Route as InnstillingerIndexRouteImport } from './routes/innstillinger/index'
+import { Route as GruppeledereIndexRouteImport } from './routes/gruppeledere/index'
+import { Route as BeskjederIndexRouteImport } from './routes/beskjeder/index'
+import { Route as ArkivIndexRouteImport } from './routes/arkiv/index'
 import { Route as VTokenRouteImport } from './routes/v/$token'
-import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
-import { Route as ApiBoardFilesDocumentIdRouteImport } from './routes/api/board-files/$documentId'
-import { Route as ApiBoardFilesUploadRouteImport } from './routes/api/board-files/upload'
-import { Route as ApiFilesFileIdRouteImport } from './routes/api/files/$fileId'
-import { Route as ApiMediaMediaIdRouteImport } from './routes/api/media/$mediaId'
-import { Route as ApiMediaUploadRouteImport } from './routes/api/media/upload'
-import { Route as ApiPostImagesImageIdRouteImport } from './routes/api/post-images/$imageId'
-import { Route as ApiPostImagesUploadRouteImport } from './routes/api/post-images/upload'
-import { Route as ApiUploadAbortRouteImport } from './routes/api/upload/abort'
-import { Route as ApiUploadCompleteRouteImport } from './routes/api/upload/complete'
-import { Route as ApiUploadPartRouteImport } from './routes/api/upload/part'
-import { Route as ApiUploadStartRouteImport } from './routes/api/upload/start'
-import { Route as ApiUtstyrImagesImageIdRouteImport } from './routes/api/utstyr-images/$imageId'
-import { Route as ApiUtstyrImagesUploadRouteImport } from './routes/api/utstyr-images/upload'
-import { Route as BeskjederPostIdIndexRouteImport } from './routes/beskjeder/$postId/index'
-import { Route as BeskjederPostIdRedigerRouteImport } from './routes/beskjeder/$postId/rediger'
-import { Route as GruppeledereChatIndexRouteImport } from './routes/gruppeledere/chat/index'
-import { Route as KalenderSosialtIndexRouteImport } from './routes/kalender/sosialt/index'
-import { Route as KalenderSosialtNyRouteImport } from './routes/kalender/sosialt/ny'
-import { Route as NoterArkivIndexRouteImport } from './routes/noter/arkiv/index'
-import { Route as NoterArkivWorkIdRouteImport } from './routes/noter/arkiv/$workId'
-import { Route as NoterProsjekterIndexRouteImport } from './routes/noter/prosjekter/index'
-import { Route as NoterProsjekterProjectIdRouteImport } from './routes/noter/prosjekter/$projectId'
-import { Route as StyreChatIndexRouteImport } from './routes/styre/chat/index'
-import { Route as StyreDokumenterIndexRouteImport } from './routes/styre/dokumenter/index'
-import { Route as StyreMoterIndexRouteImport } from './routes/styre/moter/index'
-import { Route as StyreMoterMeetingIdRouteImport } from './routes/styre/moter/$meetingId'
+import { Route as UtstyrAssetIdRouteImport } from './routes/utstyr/$assetId'
+import { Route as StyreTaskIdRouteImport } from './routes/styre/$taskId'
+import { Route as ProsjekterProjectIdRouteImport } from './routes/prosjekter/$projectId'
+import { Route as MediaMediaIdRouteImport } from './routes/media/$mediaId'
+import { Route as KalenderEventIdRouteImport } from './routes/kalender/$eventId'
+import { Route as InnstillingerNedlastingerRouteImport } from './routes/innstillinger/nedlastinger'
+import { Route as BeskjederNyRouteImport } from './routes/beskjeder/ny'
+import { Route as ArkivWorkIdRouteImport } from './routes/arkiv/$workId'
+import { Route as ApiDevSeedRouteImport } from './routes/api/dev-seed'
+import { Route as ApiDevLoginRouteImport } from './routes/api/dev-login'
 import { Route as StyreProsjekterIndexRouteImport } from './routes/styre/prosjekter/index'
+import { Route as StyreMoterIndexRouteImport } from './routes/styre/moter/index'
+import { Route as StyreDokumenterIndexRouteImport } from './routes/styre/dokumenter/index'
+import { Route as StyreChatIndexRouteImport } from './routes/styre/chat/index'
+import { Route as NoterProsjekterIndexRouteImport } from './routes/noter/prosjekter/index'
+import { Route as NoterArkivIndexRouteImport } from './routes/noter/arkiv/index'
+import { Route as KalenderSosialtIndexRouteImport } from './routes/kalender/sosialt/index'
+import { Route as GruppeledereChatIndexRouteImport } from './routes/gruppeledere/chat/index'
+import { Route as BeskjederPostIdIndexRouteImport } from './routes/beskjeder/$postId/index'
 import { Route as StyreProsjekterBoardProjectIdRouteImport } from './routes/styre/prosjekter/$boardProjectId'
+import { Route as StyreMoterMeetingIdRouteImport } from './routes/styre/moter/$meetingId'
+import { Route as NoterProsjekterProjectIdRouteImport } from './routes/noter/prosjekter/$projectId'
+import { Route as NoterArkivWorkIdRouteImport } from './routes/noter/arkiv/$workId'
+import { Route as KalenderSosialtNyRouteImport } from './routes/kalender/sosialt/ny'
+import { Route as BeskjederPostIdRedigerRouteImport } from './routes/beskjeder/$postId/rediger'
+import { Route as ApiUtstyrImagesUploadRouteImport } from './routes/api/utstyr-images/upload'
+import { Route as ApiUtstyrImagesImageIdRouteImport } from './routes/api/utstyr-images/$imageId'
+import { Route as ApiUploadStartRouteImport } from './routes/api/upload/start'
+import { Route as ApiUploadPartRouteImport } from './routes/api/upload/part'
+import { Route as ApiUploadCompleteRouteImport } from './routes/api/upload/complete'
+import { Route as ApiUploadAbortRouteImport } from './routes/api/upload/abort'
+import { Route as ApiPostImagesUploadRouteImport } from './routes/api/post-images/upload'
+import { Route as ApiPostImagesImageIdRouteImport } from './routes/api/post-images/$imageId'
+import { Route as ApiMediaUploadRouteImport } from './routes/api/media/upload'
+import { Route as ApiMediaMediaIdRouteImport } from './routes/api/media/$mediaId'
+import { Route as ApiFilesFileIdRouteImport } from './routes/api/files/$fileId'
+import { Route as ApiBoardFilesUploadRouteImport } from './routes/api/board-files/upload'
+import { Route as ApiBoardFilesDocumentIdRouteImport } from './routes/api/board-files/$documentId'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as KalenderSosialtSocialIdIndexRouteImport } from './routes/kalender/sosialt/$socialId/index'
-import { Route as KalenderSosialtSocialIdRedigerRouteImport } from './routes/kalender/sosialt/$socialId/rediger'
 import { Route as NoterProsjekterProjectIdSlagverkRouteImport } from './routes/noter/prosjekter/$projectId_.slagverk'
+import { Route as NoterProsjekterProjectIdSceneoppsettRouteImport } from './routes/noter/prosjekter/$projectId_.sceneoppsett'
+import { Route as KalenderSosialtSocialIdRedigerRouteImport } from './routes/kalender/sosialt/$socialId/rediger'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GlemtPassordRoute = GlemtPassordRouteImport.update({
-  id: '/glemt-passord',
-  path: '/glemt-passord',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GruppeledereRouteRoute = GruppeledereRouteRouteImport.update({
-  id: '/gruppeledere',
-  path: '/gruppeledere',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+const TilbakestillPassordRoute = TilbakestillPassordRouteImport.update({
+  id: '/tilbakestill-passord',
+  path: '/tilbakestill-passord',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MinProfilRoute = MinProfilRouteImport.update({
@@ -97,9 +83,14 @@ const MinProfilRoute = MinProfilRouteImport.update({
   path: '/min-profil',
   getParentRoute: () => rootRouteImport,
 } as any)
-const NoterRouteRoute = NoterRouteRouteImport.update({
-  id: '/noter',
-  path: '/noter',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GlemtPassordRoute = GlemtPassordRouteImport.update({
+  id: '/glemt-passord',
+  path: '/glemt-passord',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StyreRouteRoute = StyreRouteRouteImport.update({
@@ -107,39 +98,59 @@ const StyreRouteRoute = StyreRouteRouteImport.update({
   path: '/styre',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TilbakestillPassordRoute = TilbakestillPassordRouteImport.update({
-  id: '/tilbakestill-passord',
-  path: '/tilbakestill-passord',
+const NoterRouteRoute = NoterRouteRouteImport.update({
+  id: '/noter',
+  path: '/noter',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiDevLoginRoute = ApiDevLoginRouteImport.update({
-  id: '/api/dev-login',
-  path: '/api/dev-login',
+const GruppeledereRouteRoute = GruppeledereRouteRouteImport.update({
+  id: '/gruppeledere',
+  path: '/gruppeledere',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiDevSeedRoute = ApiDevSeedRouteImport.update({
-  id: '/api/dev-seed',
-  path: '/api/dev-seed',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ArkivIndexRoute = ArkivIndexRouteImport.update({
-  id: '/arkiv/',
-  path: '/arkiv/',
+const UtstyrIndexRoute = UtstyrIndexRouteImport.update({
+  id: '/utstyr/',
+  path: '/utstyr/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ArkivWorkIdRoute = ArkivWorkIdRouteImport.update({
-  id: '/arkiv/$workId',
-  path: '/arkiv/$workId',
+const StyreIndexRoute = StyreIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => StyreRouteRoute,
+} as any)
+const ProsjekterIndexRoute = ProsjekterIndexRouteImport.update({
+  id: '/prosjekter/',
+  path: '/prosjekter/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BeskjederIndexRoute = BeskjederIndexRouteImport.update({
-  id: '/beskjeder/',
-  path: '/beskjeder/',
+const NoterIndexRoute = NoterIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => NoterRouteRoute,
+} as any)
+const MedlemmerIndexRoute = MedlemmerIndexRouteImport.update({
+  id: '/medlemmer/',
+  path: '/medlemmer/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BeskjederNyRoute = BeskjederNyRouteImport.update({
-  id: '/beskjeder/ny',
-  path: '/beskjeder/ny',
+const MediaIndexRoute = MediaIndexRouteImport.update({
+  id: '/media/',
+  path: '/media/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KalenderIndexRoute = KalenderIndexRouteImport.update({
+  id: '/kalender/',
+  path: '/kalender/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InnstillingerIndexRoute = InnstillingerIndexRouteImport.update({
+  id: '/innstillinger/',
+  path: '/innstillinger/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GruppeledereIndexRoute = GruppeledereIndexRouteImport.update({
@@ -147,9 +158,44 @@ const GruppeledereIndexRoute = GruppeledereIndexRouteImport.update({
   path: '/',
   getParentRoute: () => GruppeledereRouteRoute,
 } as any)
-const InnstillingerIndexRoute = InnstillingerIndexRouteImport.update({
-  id: '/innstillinger/',
-  path: '/innstillinger/',
+const BeskjederIndexRoute = BeskjederIndexRouteImport.update({
+  id: '/beskjeder/',
+  path: '/beskjeder/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ArkivIndexRoute = ArkivIndexRouteImport.update({
+  id: '/arkiv/',
+  path: '/arkiv/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VTokenRoute = VTokenRouteImport.update({
+  id: '/v/$token',
+  path: '/v/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UtstyrAssetIdRoute = UtstyrAssetIdRouteImport.update({
+  id: '/utstyr/$assetId',
+  path: '/utstyr/$assetId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StyreTaskIdRoute = StyreTaskIdRouteImport.update({
+  id: '/$taskId',
+  path: '/$taskId',
+  getParentRoute: () => StyreRouteRoute,
+} as any)
+const ProsjekterProjectIdRoute = ProsjekterProjectIdRouteImport.update({
+  id: '/prosjekter/$projectId',
+  path: '/prosjekter/$projectId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MediaMediaIdRoute = MediaMediaIdRouteImport.update({
+  id: '/media/$mediaId',
+  path: '/media/$mediaId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KalenderEventIdRoute = KalenderEventIdRouteImport.update({
+  id: '/kalender/$eventId',
+  path: '/kalender/$eventId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InnstillingerNedlastingerRoute =
@@ -158,195 +204,29 @@ const InnstillingerNedlastingerRoute =
     path: '/innstillinger/nedlastinger',
     getParentRoute: () => rootRouteImport,
   } as any)
-const KalenderIndexRoute = KalenderIndexRouteImport.update({
-  id: '/kalender/',
-  path: '/kalender/',
+const BeskjederNyRoute = BeskjederNyRouteImport.update({
+  id: '/beskjeder/ny',
+  path: '/beskjeder/ny',
   getParentRoute: () => rootRouteImport,
 } as any)
-const KalenderEventIdRoute = KalenderEventIdRouteImport.update({
-  id: '/kalender/$eventId',
-  path: '/kalender/$eventId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MediaIndexRoute = MediaIndexRouteImport.update({
-  id: '/media/',
-  path: '/media/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MediaMediaIdRoute = MediaMediaIdRouteImport.update({
-  id: '/media/$mediaId',
-  path: '/media/$mediaId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MedlemmerIndexRoute = MedlemmerIndexRouteImport.update({
-  id: '/medlemmer/',
-  path: '/medlemmer/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const NoterIndexRoute = NoterIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => NoterRouteRoute,
-} as any)
-const ProsjekterIndexRoute = ProsjekterIndexRouteImport.update({
-  id: '/prosjekter/',
-  path: '/prosjekter/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProsjekterProjectIdRoute = ProsjekterProjectIdRouteImport.update({
-  id: '/prosjekter/$projectId',
-  path: '/prosjekter/$projectId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const StyreIndexRoute = StyreIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => StyreRouteRoute,
-} as any)
-const StyreTaskIdRoute = StyreTaskIdRouteImport.update({
-  id: '/$taskId',
-  path: '/$taskId',
-  getParentRoute: () => StyreRouteRoute,
-} as any)
-const UtstyrIndexRoute = UtstyrIndexRouteImport.update({
-  id: '/utstyr/',
-  path: '/utstyr/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const UtstyrAssetIdRoute = UtstyrAssetIdRouteImport.update({
-  id: '/utstyr/$assetId',
-  path: '/utstyr/$assetId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const VTokenRoute = VTokenRouteImport.update({
-  id: '/v/$token',
-  path: '/v/$token',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
-  id: '/api/auth/$',
-  path: '/api/auth/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiBoardFilesDocumentIdRoute = ApiBoardFilesDocumentIdRouteImport.update({
-  id: '/api/board-files/$documentId',
-  path: '/api/board-files/$documentId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiBoardFilesUploadRoute = ApiBoardFilesUploadRouteImport.update({
-  id: '/api/board-files/upload',
-  path: '/api/board-files/upload',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiFilesFileIdRoute = ApiFilesFileIdRouteImport.update({
-  id: '/api/files/$fileId',
-  path: '/api/files/$fileId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiMediaMediaIdRoute = ApiMediaMediaIdRouteImport.update({
-  id: '/api/media/$mediaId',
-  path: '/api/media/$mediaId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiMediaUploadRoute = ApiMediaUploadRouteImport.update({
-  id: '/api/media/upload',
-  path: '/api/media/upload',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPostImagesImageIdRoute = ApiPostImagesImageIdRouteImport.update({
-  id: '/api/post-images/$imageId',
-  path: '/api/post-images/$imageId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPostImagesUploadRoute = ApiPostImagesUploadRouteImport.update({
-  id: '/api/post-images/upload',
-  path: '/api/post-images/upload',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiUploadAbortRoute = ApiUploadAbortRouteImport.update({
-  id: '/api/upload/abort',
-  path: '/api/upload/abort',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiUploadCompleteRoute = ApiUploadCompleteRouteImport.update({
-  id: '/api/upload/complete',
-  path: '/api/upload/complete',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiUploadPartRoute = ApiUploadPartRouteImport.update({
-  id: '/api/upload/part',
-  path: '/api/upload/part',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiUploadStartRoute = ApiUploadStartRouteImport.update({
-  id: '/api/upload/start',
-  path: '/api/upload/start',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiUtstyrImagesImageIdRoute = ApiUtstyrImagesImageIdRouteImport.update({
-  id: '/api/utstyr-images/$imageId',
-  path: '/api/utstyr-images/$imageId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiUtstyrImagesUploadRoute = ApiUtstyrImagesUploadRouteImport.update({
-  id: '/api/utstyr-images/upload',
-  path: '/api/utstyr-images/upload',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BeskjederPostIdIndexRoute = BeskjederPostIdIndexRouteImport.update({
-  id: '/beskjeder/$postId/',
-  path: '/beskjeder/$postId/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BeskjederPostIdRedigerRoute = BeskjederPostIdRedigerRouteImport.update({
-  id: '/beskjeder/$postId/rediger',
-  path: '/beskjeder/$postId/rediger',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GruppeledereChatIndexRoute = GruppeledereChatIndexRouteImport.update({
-  id: '/chat/',
-  path: '/chat/',
-  getParentRoute: () => GruppeledereRouteRoute,
-} as any)
-const KalenderSosialtIndexRoute = KalenderSosialtIndexRouteImport.update({
-  id: '/kalender/sosialt/',
-  path: '/kalender/sosialt/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const KalenderSosialtNyRoute = KalenderSosialtNyRouteImport.update({
-  id: '/kalender/sosialt/ny',
-  path: '/kalender/sosialt/ny',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const NoterArkivIndexRoute = NoterArkivIndexRouteImport.update({
-  id: '/arkiv/',
-  path: '/arkiv/',
-  getParentRoute: () => NoterRouteRoute,
-} as any)
-const NoterArkivWorkIdRoute = NoterArkivWorkIdRouteImport.update({
+const ArkivWorkIdRoute = ArkivWorkIdRouteImport.update({
   id: '/arkiv/$workId',
   path: '/arkiv/$workId',
-  getParentRoute: () => NoterRouteRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-const NoterProsjekterIndexRoute = NoterProsjekterIndexRouteImport.update({
+const ApiDevSeedRoute = ApiDevSeedRouteImport.update({
+  id: '/api/dev-seed',
+  path: '/api/dev-seed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDevLoginRoute = ApiDevLoginRouteImport.update({
+  id: '/api/dev-login',
+  path: '/api/dev-login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StyreProsjekterIndexRoute = StyreProsjekterIndexRouteImport.update({
   id: '/prosjekter/',
   path: '/prosjekter/',
-  getParentRoute: () => NoterRouteRoute,
-} as any)
-const NoterProsjekterProjectIdRoute =
-  NoterProsjekterProjectIdRouteImport.update({
-    id: '/prosjekter/$projectId',
-    path: '/prosjekter/$projectId',
-    getParentRoute: () => NoterRouteRoute,
-  } as any)
-const StyreChatIndexRoute = StyreChatIndexRouteImport.update({
-  id: '/chat/',
-  path: '/chat/',
-  getParentRoute: () => StyreRouteRoute,
-} as any)
-const StyreDokumenterIndexRoute = StyreDokumenterIndexRouteImport.update({
-  id: '/dokumenter/',
-  path: '/dokumenter/',
   getParentRoute: () => StyreRouteRoute,
 } as any)
 const StyreMoterIndexRoute = StyreMoterIndexRouteImport.update({
@@ -354,15 +234,40 @@ const StyreMoterIndexRoute = StyreMoterIndexRouteImport.update({
   path: '/moter/',
   getParentRoute: () => StyreRouteRoute,
 } as any)
-const StyreMoterMeetingIdRoute = StyreMoterMeetingIdRouteImport.update({
-  id: '/moter/$meetingId',
-  path: '/moter/$meetingId',
+const StyreDokumenterIndexRoute = StyreDokumenterIndexRouteImport.update({
+  id: '/dokumenter/',
+  path: '/dokumenter/',
   getParentRoute: () => StyreRouteRoute,
 } as any)
-const StyreProsjekterIndexRoute = StyreProsjekterIndexRouteImport.update({
+const StyreChatIndexRoute = StyreChatIndexRouteImport.update({
+  id: '/chat/',
+  path: '/chat/',
+  getParentRoute: () => StyreRouteRoute,
+} as any)
+const NoterProsjekterIndexRoute = NoterProsjekterIndexRouteImport.update({
   id: '/prosjekter/',
   path: '/prosjekter/',
-  getParentRoute: () => StyreRouteRoute,
+  getParentRoute: () => NoterRouteRoute,
+} as any)
+const NoterArkivIndexRoute = NoterArkivIndexRouteImport.update({
+  id: '/arkiv/',
+  path: '/arkiv/',
+  getParentRoute: () => NoterRouteRoute,
+} as any)
+const KalenderSosialtIndexRoute = KalenderSosialtIndexRouteImport.update({
+  id: '/kalender/sosialt/',
+  path: '/kalender/sosialt/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GruppeledereChatIndexRoute = GruppeledereChatIndexRouteImport.update({
+  id: '/chat/',
+  path: '/chat/',
+  getParentRoute: () => GruppeledereRouteRoute,
+} as any)
+const BeskjederPostIdIndexRoute = BeskjederPostIdIndexRouteImport.update({
+  id: '/beskjeder/$postId/',
+  path: '/beskjeder/$postId/',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const StyreProsjekterBoardProjectIdRoute =
   StyreProsjekterBoardProjectIdRouteImport.update({
@@ -370,16 +275,106 @@ const StyreProsjekterBoardProjectIdRoute =
     path: '/prosjekter/$boardProjectId',
     getParentRoute: () => StyreRouteRoute,
   } as any)
+const StyreMoterMeetingIdRoute = StyreMoterMeetingIdRouteImport.update({
+  id: '/moter/$meetingId',
+  path: '/moter/$meetingId',
+  getParentRoute: () => StyreRouteRoute,
+} as any)
+const NoterProsjekterProjectIdRoute =
+  NoterProsjekterProjectIdRouteImport.update({
+    id: '/prosjekter/$projectId',
+    path: '/prosjekter/$projectId',
+    getParentRoute: () => NoterRouteRoute,
+  } as any)
+const NoterArkivWorkIdRoute = NoterArkivWorkIdRouteImport.update({
+  id: '/arkiv/$workId',
+  path: '/arkiv/$workId',
+  getParentRoute: () => NoterRouteRoute,
+} as any)
+const KalenderSosialtNyRoute = KalenderSosialtNyRouteImport.update({
+  id: '/kalender/sosialt/ny',
+  path: '/kalender/sosialt/ny',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BeskjederPostIdRedigerRoute = BeskjederPostIdRedigerRouteImport.update({
+  id: '/beskjeder/$postId/rediger',
+  path: '/beskjeder/$postId/rediger',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUtstyrImagesUploadRoute = ApiUtstyrImagesUploadRouteImport.update({
+  id: '/api/utstyr-images/upload',
+  path: '/api/utstyr-images/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUtstyrImagesImageIdRoute = ApiUtstyrImagesImageIdRouteImport.update({
+  id: '/api/utstyr-images/$imageId',
+  path: '/api/utstyr-images/$imageId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUploadStartRoute = ApiUploadStartRouteImport.update({
+  id: '/api/upload/start',
+  path: '/api/upload/start',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUploadPartRoute = ApiUploadPartRouteImport.update({
+  id: '/api/upload/part',
+  path: '/api/upload/part',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUploadCompleteRoute = ApiUploadCompleteRouteImport.update({
+  id: '/api/upload/complete',
+  path: '/api/upload/complete',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUploadAbortRoute = ApiUploadAbortRouteImport.update({
+  id: '/api/upload/abort',
+  path: '/api/upload/abort',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPostImagesUploadRoute = ApiPostImagesUploadRouteImport.update({
+  id: '/api/post-images/upload',
+  path: '/api/post-images/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPostImagesImageIdRoute = ApiPostImagesImageIdRouteImport.update({
+  id: '/api/post-images/$imageId',
+  path: '/api/post-images/$imageId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMediaUploadRoute = ApiMediaUploadRouteImport.update({
+  id: '/api/media/upload',
+  path: '/api/media/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMediaMediaIdRoute = ApiMediaMediaIdRouteImport.update({
+  id: '/api/media/$mediaId',
+  path: '/api/media/$mediaId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiFilesFileIdRoute = ApiFilesFileIdRouteImport.update({
+  id: '/api/files/$fileId',
+  path: '/api/files/$fileId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBoardFilesUploadRoute = ApiBoardFilesUploadRouteImport.update({
+  id: '/api/board-files/upload',
+  path: '/api/board-files/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBoardFilesDocumentIdRoute = ApiBoardFilesDocumentIdRouteImport.update({
+  id: '/api/board-files/$documentId',
+  path: '/api/board-files/$documentId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const KalenderSosialtSocialIdIndexRoute =
   KalenderSosialtSocialIdIndexRouteImport.update({
     id: '/kalender/sosialt/$socialId/',
     path: '/kalender/sosialt/$socialId/',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const KalenderSosialtSocialIdRedigerRoute =
-  KalenderSosialtSocialIdRedigerRouteImport.update({
-    id: '/kalender/sosialt/$socialId/rediger',
-    path: '/kalender/sosialt/$socialId/rediger',
     getParentRoute: () => rootRouteImport,
   } as any)
 const NoterProsjekterProjectIdSlagverkRoute =
@@ -387,6 +382,18 @@ const NoterProsjekterProjectIdSlagverkRoute =
     id: '/prosjekter/$projectId_/slagverk',
     path: '/prosjekter/$projectId/slagverk',
     getParentRoute: () => NoterRouteRoute,
+  } as any)
+const NoterProsjekterProjectIdSceneoppsettRoute =
+  NoterProsjekterProjectIdSceneoppsettRouteImport.update({
+    id: '/prosjekter/$projectId_/sceneoppsett',
+    path: '/prosjekter/$projectId/sceneoppsett',
+    getParentRoute: () => NoterRouteRoute,
+  } as any)
+const KalenderSosialtSocialIdRedigerRoute =
+  KalenderSosialtSocialIdRedigerRouteImport.update({
+    id: '/kalender/sosialt/$socialId/rediger',
+    path: '/kalender/sosialt/$socialId/rediger',
+    getParentRoute: () => rootRouteImport,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -450,6 +457,7 @@ export interface FileRoutesByFullPath {
   '/styre/moter/': typeof StyreMoterIndexRoute
   '/styre/prosjekter/': typeof StyreProsjekterIndexRoute
   '/kalender/sosialt/$socialId/rediger': typeof KalenderSosialtSocialIdRedigerRoute
+  '/noter/prosjekter/$projectId/sceneoppsett': typeof NoterProsjekterProjectIdSceneoppsettRoute
   '/noter/prosjekter/$projectId/slagverk': typeof NoterProsjekterProjectIdSlagverkRoute
   '/kalender/sosialt/$socialId/': typeof KalenderSosialtSocialIdIndexRoute
 }
@@ -511,6 +519,7 @@ export interface FileRoutesByTo {
   '/styre/moter': typeof StyreMoterIndexRoute
   '/styre/prosjekter': typeof StyreProsjekterIndexRoute
   '/kalender/sosialt/$socialId/rediger': typeof KalenderSosialtSocialIdRedigerRoute
+  '/noter/prosjekter/$projectId/sceneoppsett': typeof NoterProsjekterProjectIdSceneoppsettRoute
   '/noter/prosjekter/$projectId/slagverk': typeof NoterProsjekterProjectIdSlagverkRoute
   '/kalender/sosialt/$socialId': typeof KalenderSosialtSocialIdIndexRoute
 }
@@ -576,6 +585,7 @@ export interface FileRoutesById {
   '/styre/moter/': typeof StyreMoterIndexRoute
   '/styre/prosjekter/': typeof StyreProsjekterIndexRoute
   '/kalender/sosialt/$socialId/rediger': typeof KalenderSosialtSocialIdRedigerRoute
+  '/noter/prosjekter/$projectId_/sceneoppsett': typeof NoterProsjekterProjectIdSceneoppsettRoute
   '/noter/prosjekter/$projectId_/slagverk': typeof NoterProsjekterProjectIdSlagverkRoute
   '/kalender/sosialt/$socialId/': typeof KalenderSosialtSocialIdIndexRoute
 }
@@ -642,6 +652,7 @@ export interface FileRouteTypes {
     | '/styre/moter/'
     | '/styre/prosjekter/'
     | '/kalender/sosialt/$socialId/rediger'
+    | '/noter/prosjekter/$projectId/sceneoppsett'
     | '/noter/prosjekter/$projectId/slagverk'
     | '/kalender/sosialt/$socialId/'
   fileRoutesByTo: FileRoutesByTo
@@ -703,6 +714,7 @@ export interface FileRouteTypes {
     | '/styre/moter'
     | '/styre/prosjekter'
     | '/kalender/sosialt/$socialId/rediger'
+    | '/noter/prosjekter/$projectId/sceneoppsett'
     | '/noter/prosjekter/$projectId/slagverk'
     | '/kalender/sosialt/$socialId'
   id:
@@ -767,6 +779,7 @@ export interface FileRouteTypes {
     | '/styre/moter/'
     | '/styre/prosjekter/'
     | '/kalender/sosialt/$socialId/rediger'
+    | '/noter/prosjekter/$projectId_/sceneoppsett'
     | '/noter/prosjekter/$projectId_/slagverk'
     | '/kalender/sosialt/$socialId/'
   fileRoutesById: FileRoutesById
@@ -822,32 +835,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/glemt-passord': {
-      id: '/glemt-passord'
-      path: '/glemt-passord'
-      fullPath: '/glemt-passord'
-      preLoaderRoute: typeof GlemtPassordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/gruppeledere': {
-      id: '/gruppeledere'
-      path: '/gruppeledere'
-      fullPath: '/gruppeledere'
-      preLoaderRoute: typeof GruppeledereRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
+    '/tilbakestill-passord': {
+      id: '/tilbakestill-passord'
+      path: '/tilbakestill-passord'
+      fullPath: '/tilbakestill-passord'
+      preLoaderRoute: typeof TilbakestillPassordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/min-profil': {
@@ -857,11 +849,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MinProfilRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/noter': {
-      id: '/noter'
-      path: '/noter'
-      fullPath: '/noter'
-      preLoaderRoute: typeof NoterRouteRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/glemt-passord': {
+      id: '/glemt-passord'
+      path: '/glemt-passord'
+      fullPath: '/glemt-passord'
+      preLoaderRoute: typeof GlemtPassordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/styre': {
@@ -871,130 +870,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StyreRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/tilbakestill-passord': {
-      id: '/tilbakestill-passord'
-      path: '/tilbakestill-passord'
-      fullPath: '/tilbakestill-passord'
-      preLoaderRoute: typeof TilbakestillPassordRouteImport
+    '/noter': {
+      id: '/noter'
+      path: '/noter'
+      fullPath: '/noter'
+      preLoaderRoute: typeof NoterRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/dev-login': {
-      id: '/api/dev-login'
-      path: '/api/dev-login'
-      fullPath: '/api/dev-login'
-      preLoaderRoute: typeof ApiDevLoginRouteImport
+    '/gruppeledere': {
+      id: '/gruppeledere'
+      path: '/gruppeledere'
+      fullPath: '/gruppeledere'
+      preLoaderRoute: typeof GruppeledereRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/dev-seed': {
-      id: '/api/dev-seed'
-      path: '/api/dev-seed'
-      fullPath: '/api/dev-seed'
-      preLoaderRoute: typeof ApiDevSeedRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/arkiv/': {
-      id: '/arkiv/'
-      path: '/arkiv'
-      fullPath: '/arkiv/'
-      preLoaderRoute: typeof ArkivIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/arkiv/$workId': {
-      id: '/arkiv/$workId'
-      path: '/arkiv/$workId'
-      fullPath: '/arkiv/$workId'
-      preLoaderRoute: typeof ArkivWorkIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/beskjeder/': {
-      id: '/beskjeder/'
-      path: '/beskjeder'
-      fullPath: '/beskjeder/'
-      preLoaderRoute: typeof BeskjederIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/beskjeder/ny': {
-      id: '/beskjeder/ny'
-      path: '/beskjeder/ny'
-      fullPath: '/beskjeder/ny'
-      preLoaderRoute: typeof BeskjederNyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/gruppeledere/': {
-      id: '/gruppeledere/'
+    '/': {
+      id: '/'
       path: '/'
-      fullPath: '/gruppeledere/'
-      preLoaderRoute: typeof GruppeledereIndexRouteImport
-      parentRoute: typeof GruppeledereRouteRoute
-    }
-    '/innstillinger/': {
-      id: '/innstillinger/'
-      path: '/innstillinger'
-      fullPath: '/innstillinger/'
-      preLoaderRoute: typeof InnstillingerIndexRouteImport
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/innstillinger/nedlastinger': {
-      id: '/innstillinger/nedlastinger'
-      path: '/innstillinger/nedlastinger'
-      fullPath: '/innstillinger/nedlastinger'
-      preLoaderRoute: typeof InnstillingerNedlastingerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/kalender/': {
-      id: '/kalender/'
-      path: '/kalender'
-      fullPath: '/kalender/'
-      preLoaderRoute: typeof KalenderIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/kalender/$eventId': {
-      id: '/kalender/$eventId'
-      path: '/kalender/$eventId'
-      fullPath: '/kalender/$eventId'
-      preLoaderRoute: typeof KalenderEventIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/media/': {
-      id: '/media/'
-      path: '/media'
-      fullPath: '/media/'
-      preLoaderRoute: typeof MediaIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/media/$mediaId': {
-      id: '/media/$mediaId'
-      path: '/media/$mediaId'
-      fullPath: '/media/$mediaId'
-      preLoaderRoute: typeof MediaMediaIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/medlemmer/': {
-      id: '/medlemmer/'
-      path: '/medlemmer'
-      fullPath: '/medlemmer/'
-      preLoaderRoute: typeof MedlemmerIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/noter/': {
-      id: '/noter/'
-      path: '/'
-      fullPath: '/noter/'
-      preLoaderRoute: typeof NoterIndexRouteImport
-      parentRoute: typeof NoterRouteRoute
-    }
-    '/prosjekter/': {
-      id: '/prosjekter/'
-      path: '/prosjekter'
-      fullPath: '/prosjekter/'
-      preLoaderRoute: typeof ProsjekterIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/prosjekter/$projectId': {
-      id: '/prosjekter/$projectId'
-      path: '/prosjekter/$projectId'
-      fullPath: '/prosjekter/$projectId'
-      preLoaderRoute: typeof ProsjekterProjectIdRouteImport
+    '/utstyr/': {
+      id: '/utstyr/'
+      path: '/utstyr'
+      fullPath: '/utstyr/'
+      preLoaderRoute: typeof UtstyrIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/styre/': {
@@ -1004,25 +905,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StyreIndexRouteImport
       parentRoute: typeof StyreRouteRoute
     }
-    '/styre/$taskId': {
-      id: '/styre/$taskId'
-      path: '/$taskId'
-      fullPath: '/styre/$taskId'
-      preLoaderRoute: typeof StyreTaskIdRouteImport
-      parentRoute: typeof StyreRouteRoute
-    }
-    '/utstyr/': {
-      id: '/utstyr/'
-      path: '/utstyr'
-      fullPath: '/utstyr/'
-      preLoaderRoute: typeof UtstyrIndexRouteImport
+    '/prosjekter/': {
+      id: '/prosjekter/'
+      path: '/prosjekter'
+      fullPath: '/prosjekter/'
+      preLoaderRoute: typeof ProsjekterIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/utstyr/$assetId': {
-      id: '/utstyr/$assetId'
-      path: '/utstyr/$assetId'
-      fullPath: '/utstyr/$assetId'
-      preLoaderRoute: typeof UtstyrAssetIdRouteImport
+    '/noter/': {
+      id: '/noter/'
+      path: '/'
+      fullPath: '/noter/'
+      preLoaderRoute: typeof NoterIndexRouteImport
+      parentRoute: typeof NoterRouteRoute
+    }
+    '/medlemmer/': {
+      id: '/medlemmer/'
+      path: '/medlemmer'
+      fullPath: '/medlemmer/'
+      preLoaderRoute: typeof MedlemmerIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/media/': {
+      id: '/media/'
+      path: '/media'
+      fullPath: '/media/'
+      preLoaderRoute: typeof MediaIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kalender/': {
+      id: '/kalender/'
+      path: '/kalender'
+      fullPath: '/kalender/'
+      preLoaderRoute: typeof KalenderIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/innstillinger/': {
+      id: '/innstillinger/'
+      path: '/innstillinger'
+      fullPath: '/innstillinger/'
+      preLoaderRoute: typeof InnstillingerIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gruppeledere/': {
+      id: '/gruppeledere/'
+      path: '/'
+      fullPath: '/gruppeledere/'
+      preLoaderRoute: typeof GruppeledereIndexRouteImport
+      parentRoute: typeof GruppeledereRouteRoute
+    }
+    '/beskjeder/': {
+      id: '/beskjeder/'
+      path: '/beskjeder'
+      fullPath: '/beskjeder/'
+      preLoaderRoute: typeof BeskjederIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/arkiv/': {
+      id: '/arkiv/'
+      path: '/arkiv'
+      fullPath: '/arkiv/'
+      preLoaderRoute: typeof ArkivIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/v/$token': {
@@ -1032,179 +975,81 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/auth/$': {
-      id: '/api/auth/$'
-      path: '/api/auth/$'
-      fullPath: '/api/auth/$'
-      preLoaderRoute: typeof ApiAuthSplatRouteImport
+    '/utstyr/$assetId': {
+      id: '/utstyr/$assetId'
+      path: '/utstyr/$assetId'
+      fullPath: '/utstyr/$assetId'
+      preLoaderRoute: typeof UtstyrAssetIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/board-files/$documentId': {
-      id: '/api/board-files/$documentId'
-      path: '/api/board-files/$documentId'
-      fullPath: '/api/board-files/$documentId'
-      preLoaderRoute: typeof ApiBoardFilesDocumentIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/board-files/upload': {
-      id: '/api/board-files/upload'
-      path: '/api/board-files/upload'
-      fullPath: '/api/board-files/upload'
-      preLoaderRoute: typeof ApiBoardFilesUploadRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/files/$fileId': {
-      id: '/api/files/$fileId'
-      path: '/api/files/$fileId'
-      fullPath: '/api/files/$fileId'
-      preLoaderRoute: typeof ApiFilesFileIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/media/$mediaId': {
-      id: '/api/media/$mediaId'
-      path: '/api/media/$mediaId'
-      fullPath: '/api/media/$mediaId'
-      preLoaderRoute: typeof ApiMediaMediaIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/media/upload': {
-      id: '/api/media/upload'
-      path: '/api/media/upload'
-      fullPath: '/api/media/upload'
-      preLoaderRoute: typeof ApiMediaUploadRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/post-images/$imageId': {
-      id: '/api/post-images/$imageId'
-      path: '/api/post-images/$imageId'
-      fullPath: '/api/post-images/$imageId'
-      preLoaderRoute: typeof ApiPostImagesImageIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/post-images/upload': {
-      id: '/api/post-images/upload'
-      path: '/api/post-images/upload'
-      fullPath: '/api/post-images/upload'
-      preLoaderRoute: typeof ApiPostImagesUploadRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/upload/abort': {
-      id: '/api/upload/abort'
-      path: '/api/upload/abort'
-      fullPath: '/api/upload/abort'
-      preLoaderRoute: typeof ApiUploadAbortRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/upload/complete': {
-      id: '/api/upload/complete'
-      path: '/api/upload/complete'
-      fullPath: '/api/upload/complete'
-      preLoaderRoute: typeof ApiUploadCompleteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/upload/part': {
-      id: '/api/upload/part'
-      path: '/api/upload/part'
-      fullPath: '/api/upload/part'
-      preLoaderRoute: typeof ApiUploadPartRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/upload/start': {
-      id: '/api/upload/start'
-      path: '/api/upload/start'
-      fullPath: '/api/upload/start'
-      preLoaderRoute: typeof ApiUploadStartRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/utstyr-images/$imageId': {
-      id: '/api/utstyr-images/$imageId'
-      path: '/api/utstyr-images/$imageId'
-      fullPath: '/api/utstyr-images/$imageId'
-      preLoaderRoute: typeof ApiUtstyrImagesImageIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/utstyr-images/upload': {
-      id: '/api/utstyr-images/upload'
-      path: '/api/utstyr-images/upload'
-      fullPath: '/api/utstyr-images/upload'
-      preLoaderRoute: typeof ApiUtstyrImagesUploadRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/beskjeder/$postId/': {
-      id: '/beskjeder/$postId/'
-      path: '/beskjeder/$postId'
-      fullPath: '/beskjeder/$postId/'
-      preLoaderRoute: typeof BeskjederPostIdIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/beskjeder/$postId/rediger': {
-      id: '/beskjeder/$postId/rediger'
-      path: '/beskjeder/$postId/rediger'
-      fullPath: '/beskjeder/$postId/rediger'
-      preLoaderRoute: typeof BeskjederPostIdRedigerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/gruppeledere/chat/': {
-      id: '/gruppeledere/chat/'
-      path: '/chat'
-      fullPath: '/gruppeledere/chat/'
-      preLoaderRoute: typeof GruppeledereChatIndexRouteImport
-      parentRoute: typeof GruppeledereRouteRoute
-    }
-    '/kalender/sosialt/': {
-      id: '/kalender/sosialt/'
-      path: '/kalender/sosialt'
-      fullPath: '/kalender/sosialt/'
-      preLoaderRoute: typeof KalenderSosialtIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/kalender/sosialt/ny': {
-      id: '/kalender/sosialt/ny'
-      path: '/kalender/sosialt/ny'
-      fullPath: '/kalender/sosialt/ny'
-      preLoaderRoute: typeof KalenderSosialtNyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/noter/arkiv/': {
-      id: '/noter/arkiv/'
-      path: '/arkiv'
-      fullPath: '/noter/arkiv/'
-      preLoaderRoute: typeof NoterArkivIndexRouteImport
-      parentRoute: typeof NoterRouteRoute
-    }
-    '/noter/arkiv/$workId': {
-      id: '/noter/arkiv/$workId'
-      path: '/arkiv/$workId'
-      fullPath: '/noter/arkiv/$workId'
-      preLoaderRoute: typeof NoterArkivWorkIdRouteImport
-      parentRoute: typeof NoterRouteRoute
-    }
-    '/noter/prosjekter/': {
-      id: '/noter/prosjekter/'
-      path: '/prosjekter'
-      fullPath: '/noter/prosjekter/'
-      preLoaderRoute: typeof NoterProsjekterIndexRouteImport
-      parentRoute: typeof NoterRouteRoute
-    }
-    '/noter/prosjekter/$projectId': {
-      id: '/noter/prosjekter/$projectId'
-      path: '/prosjekter/$projectId'
-      fullPath: '/noter/prosjekter/$projectId'
-      preLoaderRoute: typeof NoterProsjekterProjectIdRouteImport
-      parentRoute: typeof NoterRouteRoute
-    }
-    '/styre/chat/': {
-      id: '/styre/chat/'
-      path: '/chat'
-      fullPath: '/styre/chat/'
-      preLoaderRoute: typeof StyreChatIndexRouteImport
+    '/styre/$taskId': {
+      id: '/styre/$taskId'
+      path: '/$taskId'
+      fullPath: '/styre/$taskId'
+      preLoaderRoute: typeof StyreTaskIdRouteImport
       parentRoute: typeof StyreRouteRoute
     }
-    '/styre/dokumenter/': {
-      id: '/styre/dokumenter/'
-      path: '/dokumenter'
-      fullPath: '/styre/dokumenter/'
-      preLoaderRoute: typeof StyreDokumenterIndexRouteImport
+    '/prosjekter/$projectId': {
+      id: '/prosjekter/$projectId'
+      path: '/prosjekter/$projectId'
+      fullPath: '/prosjekter/$projectId'
+      preLoaderRoute: typeof ProsjekterProjectIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/media/$mediaId': {
+      id: '/media/$mediaId'
+      path: '/media/$mediaId'
+      fullPath: '/media/$mediaId'
+      preLoaderRoute: typeof MediaMediaIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kalender/$eventId': {
+      id: '/kalender/$eventId'
+      path: '/kalender/$eventId'
+      fullPath: '/kalender/$eventId'
+      preLoaderRoute: typeof KalenderEventIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/innstillinger/nedlastinger': {
+      id: '/innstillinger/nedlastinger'
+      path: '/innstillinger/nedlastinger'
+      fullPath: '/innstillinger/nedlastinger'
+      preLoaderRoute: typeof InnstillingerNedlastingerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/beskjeder/ny': {
+      id: '/beskjeder/ny'
+      path: '/beskjeder/ny'
+      fullPath: '/beskjeder/ny'
+      preLoaderRoute: typeof BeskjederNyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/arkiv/$workId': {
+      id: '/arkiv/$workId'
+      path: '/arkiv/$workId'
+      fullPath: '/arkiv/$workId'
+      preLoaderRoute: typeof ArkivWorkIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/dev-seed': {
+      id: '/api/dev-seed'
+      path: '/api/dev-seed'
+      fullPath: '/api/dev-seed'
+      preLoaderRoute: typeof ApiDevSeedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/dev-login': {
+      id: '/api/dev-login'
+      path: '/api/dev-login'
+      fullPath: '/api/dev-login'
+      preLoaderRoute: typeof ApiDevLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/styre/prosjekter/': {
+      id: '/styre/prosjekter/'
+      path: '/prosjekter'
+      fullPath: '/styre/prosjekter/'
+      preLoaderRoute: typeof StyreProsjekterIndexRouteImport
       parentRoute: typeof StyreRouteRoute
     }
     '/styre/moter/': {
@@ -1214,19 +1059,54 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StyreMoterIndexRouteImport
       parentRoute: typeof StyreRouteRoute
     }
-    '/styre/moter/$meetingId': {
-      id: '/styre/moter/$meetingId'
-      path: '/moter/$meetingId'
-      fullPath: '/styre/moter/$meetingId'
-      preLoaderRoute: typeof StyreMoterMeetingIdRouteImport
+    '/styre/dokumenter/': {
+      id: '/styre/dokumenter/'
+      path: '/dokumenter'
+      fullPath: '/styre/dokumenter/'
+      preLoaderRoute: typeof StyreDokumenterIndexRouteImport
       parentRoute: typeof StyreRouteRoute
     }
-    '/styre/prosjekter/': {
-      id: '/styre/prosjekter/'
-      path: '/prosjekter'
-      fullPath: '/styre/prosjekter/'
-      preLoaderRoute: typeof StyreProsjekterIndexRouteImport
+    '/styre/chat/': {
+      id: '/styre/chat/'
+      path: '/chat'
+      fullPath: '/styre/chat/'
+      preLoaderRoute: typeof StyreChatIndexRouteImport
       parentRoute: typeof StyreRouteRoute
+    }
+    '/noter/prosjekter/': {
+      id: '/noter/prosjekter/'
+      path: '/prosjekter'
+      fullPath: '/noter/prosjekter/'
+      preLoaderRoute: typeof NoterProsjekterIndexRouteImport
+      parentRoute: typeof NoterRouteRoute
+    }
+    '/noter/arkiv/': {
+      id: '/noter/arkiv/'
+      path: '/arkiv'
+      fullPath: '/noter/arkiv/'
+      preLoaderRoute: typeof NoterArkivIndexRouteImport
+      parentRoute: typeof NoterRouteRoute
+    }
+    '/kalender/sosialt/': {
+      id: '/kalender/sosialt/'
+      path: '/kalender/sosialt'
+      fullPath: '/kalender/sosialt/'
+      preLoaderRoute: typeof KalenderSosialtIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gruppeledere/chat/': {
+      id: '/gruppeledere/chat/'
+      path: '/chat'
+      fullPath: '/gruppeledere/chat/'
+      preLoaderRoute: typeof GruppeledereChatIndexRouteImport
+      parentRoute: typeof GruppeledereRouteRoute
+    }
+    '/beskjeder/$postId/': {
+      id: '/beskjeder/$postId/'
+      path: '/beskjeder/$postId'
+      fullPath: '/beskjeder/$postId/'
+      preLoaderRoute: typeof BeskjederPostIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/styre/prosjekter/$boardProjectId': {
       id: '/styre/prosjekter/$boardProjectId'
@@ -1235,18 +1115,144 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StyreProsjekterBoardProjectIdRouteImport
       parentRoute: typeof StyreRouteRoute
     }
+    '/styre/moter/$meetingId': {
+      id: '/styre/moter/$meetingId'
+      path: '/moter/$meetingId'
+      fullPath: '/styre/moter/$meetingId'
+      preLoaderRoute: typeof StyreMoterMeetingIdRouteImport
+      parentRoute: typeof StyreRouteRoute
+    }
+    '/noter/prosjekter/$projectId': {
+      id: '/noter/prosjekter/$projectId'
+      path: '/prosjekter/$projectId'
+      fullPath: '/noter/prosjekter/$projectId'
+      preLoaderRoute: typeof NoterProsjekterProjectIdRouteImport
+      parentRoute: typeof NoterRouteRoute
+    }
+    '/noter/arkiv/$workId': {
+      id: '/noter/arkiv/$workId'
+      path: '/arkiv/$workId'
+      fullPath: '/noter/arkiv/$workId'
+      preLoaderRoute: typeof NoterArkivWorkIdRouteImport
+      parentRoute: typeof NoterRouteRoute
+    }
+    '/kalender/sosialt/ny': {
+      id: '/kalender/sosialt/ny'
+      path: '/kalender/sosialt/ny'
+      fullPath: '/kalender/sosialt/ny'
+      preLoaderRoute: typeof KalenderSosialtNyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/beskjeder/$postId/rediger': {
+      id: '/beskjeder/$postId/rediger'
+      path: '/beskjeder/$postId/rediger'
+      fullPath: '/beskjeder/$postId/rediger'
+      preLoaderRoute: typeof BeskjederPostIdRedigerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/utstyr-images/upload': {
+      id: '/api/utstyr-images/upload'
+      path: '/api/utstyr-images/upload'
+      fullPath: '/api/utstyr-images/upload'
+      preLoaderRoute: typeof ApiUtstyrImagesUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/utstyr-images/$imageId': {
+      id: '/api/utstyr-images/$imageId'
+      path: '/api/utstyr-images/$imageId'
+      fullPath: '/api/utstyr-images/$imageId'
+      preLoaderRoute: typeof ApiUtstyrImagesImageIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/upload/start': {
+      id: '/api/upload/start'
+      path: '/api/upload/start'
+      fullPath: '/api/upload/start'
+      preLoaderRoute: typeof ApiUploadStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/upload/part': {
+      id: '/api/upload/part'
+      path: '/api/upload/part'
+      fullPath: '/api/upload/part'
+      preLoaderRoute: typeof ApiUploadPartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/upload/complete': {
+      id: '/api/upload/complete'
+      path: '/api/upload/complete'
+      fullPath: '/api/upload/complete'
+      preLoaderRoute: typeof ApiUploadCompleteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/upload/abort': {
+      id: '/api/upload/abort'
+      path: '/api/upload/abort'
+      fullPath: '/api/upload/abort'
+      preLoaderRoute: typeof ApiUploadAbortRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/post-images/upload': {
+      id: '/api/post-images/upload'
+      path: '/api/post-images/upload'
+      fullPath: '/api/post-images/upload'
+      preLoaderRoute: typeof ApiPostImagesUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/post-images/$imageId': {
+      id: '/api/post-images/$imageId'
+      path: '/api/post-images/$imageId'
+      fullPath: '/api/post-images/$imageId'
+      preLoaderRoute: typeof ApiPostImagesImageIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/media/upload': {
+      id: '/api/media/upload'
+      path: '/api/media/upload'
+      fullPath: '/api/media/upload'
+      preLoaderRoute: typeof ApiMediaUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/media/$mediaId': {
+      id: '/api/media/$mediaId'
+      path: '/api/media/$mediaId'
+      fullPath: '/api/media/$mediaId'
+      preLoaderRoute: typeof ApiMediaMediaIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/files/$fileId': {
+      id: '/api/files/$fileId'
+      path: '/api/files/$fileId'
+      fullPath: '/api/files/$fileId'
+      preLoaderRoute: typeof ApiFilesFileIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/board-files/upload': {
+      id: '/api/board-files/upload'
+      path: '/api/board-files/upload'
+      fullPath: '/api/board-files/upload'
+      preLoaderRoute: typeof ApiBoardFilesUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/board-files/$documentId': {
+      id: '/api/board-files/$documentId'
+      path: '/api/board-files/$documentId'
+      fullPath: '/api/board-files/$documentId'
+      preLoaderRoute: typeof ApiBoardFilesDocumentIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/kalender/sosialt/$socialId/': {
       id: '/kalender/sosialt/$socialId/'
       path: '/kalender/sosialt/$socialId'
       fullPath: '/kalender/sosialt/$socialId/'
       preLoaderRoute: typeof KalenderSosialtSocialIdIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/kalender/sosialt/$socialId/rediger': {
-      id: '/kalender/sosialt/$socialId/rediger'
-      path: '/kalender/sosialt/$socialId/rediger'
-      fullPath: '/kalender/sosialt/$socialId/rediger'
-      preLoaderRoute: typeof KalenderSosialtSocialIdRedigerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/noter/prosjekter/$projectId_/slagverk': {
@@ -1255,6 +1261,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/noter/prosjekter/$projectId/slagverk'
       preLoaderRoute: typeof NoterProsjekterProjectIdSlagverkRouteImport
       parentRoute: typeof NoterRouteRoute
+    }
+    '/noter/prosjekter/$projectId_/sceneoppsett': {
+      id: '/noter/prosjekter/$projectId_/sceneoppsett'
+      path: '/prosjekter/$projectId/sceneoppsett'
+      fullPath: '/noter/prosjekter/$projectId/sceneoppsett'
+      preLoaderRoute: typeof NoterProsjekterProjectIdSceneoppsettRouteImport
+      parentRoute: typeof NoterRouteRoute
+    }
+    '/kalender/sosialt/$socialId/rediger': {
+      id: '/kalender/sosialt/$socialId/rediger'
+      path: '/kalender/sosialt/$socialId/rediger'
+      fullPath: '/kalender/sosialt/$socialId/rediger'
+      preLoaderRoute: typeof KalenderSosialtSocialIdRedigerRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -1278,6 +1298,7 @@ interface NoterRouteRouteChildren {
   NoterProsjekterProjectIdRoute: typeof NoterProsjekterProjectIdRoute
   NoterArkivIndexRoute: typeof NoterArkivIndexRoute
   NoterProsjekterIndexRoute: typeof NoterProsjekterIndexRoute
+  NoterProsjekterProjectIdSceneoppsettRoute: typeof NoterProsjekterProjectIdSceneoppsettRoute
   NoterProsjekterProjectIdSlagverkRoute: typeof NoterProsjekterProjectIdSlagverkRoute
 }
 
@@ -1287,6 +1308,8 @@ const NoterRouteRouteChildren: NoterRouteRouteChildren = {
   NoterProsjekterProjectIdRoute: NoterProsjekterProjectIdRoute,
   NoterArkivIndexRoute: NoterArkivIndexRoute,
   NoterProsjekterIndexRoute: NoterProsjekterIndexRoute,
+  NoterProsjekterProjectIdSceneoppsettRoute:
+    NoterProsjekterProjectIdSceneoppsettRoute,
   NoterProsjekterProjectIdSlagverkRoute: NoterProsjekterProjectIdSlagverkRoute,
 }
 
@@ -1371,13 +1394,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
