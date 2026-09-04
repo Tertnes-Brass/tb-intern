@@ -56,6 +56,8 @@ import { Route as ApiUtstyrImagesUploadRouteImport } from './routes/api/utstyr-i
 import { Route as BeskjederPostIdIndexRouteImport } from './routes/beskjeder/$postId/index'
 import { Route as BeskjederPostIdRedigerRouteImport } from './routes/beskjeder/$postId/rediger'
 import { Route as GruppeledereChatIndexRouteImport } from './routes/gruppeledere/chat/index'
+import { Route as KalenderSosialtIndexRouteImport } from './routes/kalender/sosialt/index'
+import { Route as KalenderSosialtNyRouteImport } from './routes/kalender/sosialt/ny'
 import { Route as NoterArkivIndexRouteImport } from './routes/noter/arkiv/index'
 import { Route as NoterArkivWorkIdRouteImport } from './routes/noter/arkiv/$workId'
 import { Route as NoterProsjekterIndexRouteImport } from './routes/noter/prosjekter/index'
@@ -66,6 +68,8 @@ import { Route as StyreMoterIndexRouteImport } from './routes/styre/moter/index'
 import { Route as StyreMoterMeetingIdRouteImport } from './routes/styre/moter/$meetingId'
 import { Route as StyreProsjekterIndexRouteImport } from './routes/styre/prosjekter/index'
 import { Route as StyreProsjekterBoardProjectIdRouteImport } from './routes/styre/prosjekter/$boardProjectId'
+import { Route as KalenderSosialtSocialIdIndexRouteImport } from './routes/kalender/sosialt/$socialId/index'
+import { Route as KalenderSosialtSocialIdRedigerRouteImport } from './routes/kalender/sosialt/$socialId/rediger'
 import { Route as NoterProsjekterProjectIdSlagverkRouteImport } from './routes/noter/prosjekter/$projectId_.slagverk'
 
 const IndexRoute = IndexRouteImport.update({
@@ -304,6 +308,16 @@ const GruppeledereChatIndexRoute = GruppeledereChatIndexRouteImport.update({
   path: '/chat/',
   getParentRoute: () => GruppeledereRouteRoute,
 } as any)
+const KalenderSosialtIndexRoute = KalenderSosialtIndexRouteImport.update({
+  id: '/kalender/sosialt/',
+  path: '/kalender/sosialt/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KalenderSosialtNyRoute = KalenderSosialtNyRouteImport.update({
+  id: '/kalender/sosialt/ny',
+  path: '/kalender/sosialt/ny',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NoterArkivIndexRoute = NoterArkivIndexRouteImport.update({
   id: '/arkiv/',
   path: '/arkiv/',
@@ -355,6 +369,18 @@ const StyreProsjekterBoardProjectIdRoute =
     id: '/prosjekter/$boardProjectId',
     path: '/prosjekter/$boardProjectId',
     getParentRoute: () => StyreRouteRoute,
+  } as any)
+const KalenderSosialtSocialIdIndexRoute =
+  KalenderSosialtSocialIdIndexRouteImport.update({
+    id: '/kalender/sosialt/$socialId/',
+    path: '/kalender/sosialt/$socialId/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const KalenderSosialtSocialIdRedigerRoute =
+  KalenderSosialtSocialIdRedigerRouteImport.update({
+    id: '/kalender/sosialt/$socialId/rediger',
+    path: '/kalender/sosialt/$socialId/rediger',
+    getParentRoute: () => rootRouteImport,
   } as any)
 const NoterProsjekterProjectIdSlagverkRoute =
   NoterProsjekterProjectIdSlagverkRouteImport.update({
@@ -409,19 +435,23 @@ export interface FileRoutesByFullPath {
   '/api/utstyr-images/$imageId': typeof ApiUtstyrImagesImageIdRoute
   '/api/utstyr-images/upload': typeof ApiUtstyrImagesUploadRoute
   '/beskjeder/$postId/rediger': typeof BeskjederPostIdRedigerRoute
+  '/kalender/sosialt/ny': typeof KalenderSosialtNyRoute
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
   '/beskjeder/$postId/': typeof BeskjederPostIdIndexRoute
   '/gruppeledere/chat/': typeof GruppeledereChatIndexRoute
+  '/kalender/sosialt/': typeof KalenderSosialtIndexRoute
   '/noter/arkiv/': typeof NoterArkivIndexRoute
   '/noter/prosjekter/': typeof NoterProsjekterIndexRoute
   '/styre/chat/': typeof StyreChatIndexRoute
   '/styre/dokumenter/': typeof StyreDokumenterIndexRoute
   '/styre/moter/': typeof StyreMoterIndexRoute
   '/styre/prosjekter/': typeof StyreProsjekterIndexRoute
+  '/kalender/sosialt/$socialId/rediger': typeof KalenderSosialtSocialIdRedigerRoute
   '/noter/prosjekter/$projectId/slagverk': typeof NoterProsjekterProjectIdSlagverkRoute
+  '/kalender/sosialt/$socialId/': typeof KalenderSosialtSocialIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -466,19 +496,23 @@ export interface FileRoutesByTo {
   '/api/utstyr-images/$imageId': typeof ApiUtstyrImagesImageIdRoute
   '/api/utstyr-images/upload': typeof ApiUtstyrImagesUploadRoute
   '/beskjeder/$postId/rediger': typeof BeskjederPostIdRedigerRoute
+  '/kalender/sosialt/ny': typeof KalenderSosialtNyRoute
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
   '/beskjeder/$postId': typeof BeskjederPostIdIndexRoute
   '/gruppeledere/chat': typeof GruppeledereChatIndexRoute
+  '/kalender/sosialt': typeof KalenderSosialtIndexRoute
   '/noter/arkiv': typeof NoterArkivIndexRoute
   '/noter/prosjekter': typeof NoterProsjekterIndexRoute
   '/styre/chat': typeof StyreChatIndexRoute
   '/styre/dokumenter': typeof StyreDokumenterIndexRoute
   '/styre/moter': typeof StyreMoterIndexRoute
   '/styre/prosjekter': typeof StyreProsjekterIndexRoute
+  '/kalender/sosialt/$socialId/rediger': typeof KalenderSosialtSocialIdRedigerRoute
   '/noter/prosjekter/$projectId/slagverk': typeof NoterProsjekterProjectIdSlagverkRoute
+  '/kalender/sosialt/$socialId': typeof KalenderSosialtSocialIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -527,19 +561,23 @@ export interface FileRoutesById {
   '/api/utstyr-images/$imageId': typeof ApiUtstyrImagesImageIdRoute
   '/api/utstyr-images/upload': typeof ApiUtstyrImagesUploadRoute
   '/beskjeder/$postId/rediger': typeof BeskjederPostIdRedigerRoute
+  '/kalender/sosialt/ny': typeof KalenderSosialtNyRoute
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
   '/beskjeder/$postId/': typeof BeskjederPostIdIndexRoute
   '/gruppeledere/chat/': typeof GruppeledereChatIndexRoute
+  '/kalender/sosialt/': typeof KalenderSosialtIndexRoute
   '/noter/arkiv/': typeof NoterArkivIndexRoute
   '/noter/prosjekter/': typeof NoterProsjekterIndexRoute
   '/styre/chat/': typeof StyreChatIndexRoute
   '/styre/dokumenter/': typeof StyreDokumenterIndexRoute
   '/styre/moter/': typeof StyreMoterIndexRoute
   '/styre/prosjekter/': typeof StyreProsjekterIndexRoute
+  '/kalender/sosialt/$socialId/rediger': typeof KalenderSosialtSocialIdRedigerRoute
   '/noter/prosjekter/$projectId_/slagverk': typeof NoterProsjekterProjectIdSlagverkRoute
+  '/kalender/sosialt/$socialId/': typeof KalenderSosialtSocialIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -589,19 +627,23 @@ export interface FileRouteTypes {
     | '/api/utstyr-images/$imageId'
     | '/api/utstyr-images/upload'
     | '/beskjeder/$postId/rediger'
+    | '/kalender/sosialt/ny'
     | '/noter/arkiv/$workId'
     | '/noter/prosjekter/$projectId'
     | '/styre/moter/$meetingId'
     | '/styre/prosjekter/$boardProjectId'
     | '/beskjeder/$postId/'
     | '/gruppeledere/chat/'
+    | '/kalender/sosialt/'
     | '/noter/arkiv/'
     | '/noter/prosjekter/'
     | '/styre/chat/'
     | '/styre/dokumenter/'
     | '/styre/moter/'
     | '/styre/prosjekter/'
+    | '/kalender/sosialt/$socialId/rediger'
     | '/noter/prosjekter/$projectId/slagverk'
+    | '/kalender/sosialt/$socialId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -646,19 +688,23 @@ export interface FileRouteTypes {
     | '/api/utstyr-images/$imageId'
     | '/api/utstyr-images/upload'
     | '/beskjeder/$postId/rediger'
+    | '/kalender/sosialt/ny'
     | '/noter/arkiv/$workId'
     | '/noter/prosjekter/$projectId'
     | '/styre/moter/$meetingId'
     | '/styre/prosjekter/$boardProjectId'
     | '/beskjeder/$postId'
     | '/gruppeledere/chat'
+    | '/kalender/sosialt'
     | '/noter/arkiv'
     | '/noter/prosjekter'
     | '/styre/chat'
     | '/styre/dokumenter'
     | '/styre/moter'
     | '/styre/prosjekter'
+    | '/kalender/sosialt/$socialId/rediger'
     | '/noter/prosjekter/$projectId/slagverk'
+    | '/kalender/sosialt/$socialId'
   id:
     | '__root__'
     | '/'
@@ -706,19 +752,23 @@ export interface FileRouteTypes {
     | '/api/utstyr-images/$imageId'
     | '/api/utstyr-images/upload'
     | '/beskjeder/$postId/rediger'
+    | '/kalender/sosialt/ny'
     | '/noter/arkiv/$workId'
     | '/noter/prosjekter/$projectId'
     | '/styre/moter/$meetingId'
     | '/styre/prosjekter/$boardProjectId'
     | '/beskjeder/$postId/'
     | '/gruppeledere/chat/'
+    | '/kalender/sosialt/'
     | '/noter/arkiv/'
     | '/noter/prosjekter/'
     | '/styre/chat/'
     | '/styre/dokumenter/'
     | '/styre/moter/'
     | '/styre/prosjekter/'
+    | '/kalender/sosialt/$socialId/rediger'
     | '/noter/prosjekter/$projectId_/slagverk'
+    | '/kalender/sosialt/$socialId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -763,7 +813,11 @@ export interface RootRouteChildren {
   ApiUtstyrImagesImageIdRoute: typeof ApiUtstyrImagesImageIdRoute
   ApiUtstyrImagesUploadRoute: typeof ApiUtstyrImagesUploadRoute
   BeskjederPostIdRedigerRoute: typeof BeskjederPostIdRedigerRoute
+  KalenderSosialtNyRoute: typeof KalenderSosialtNyRoute
   BeskjederPostIdIndexRoute: typeof BeskjederPostIdIndexRoute
+  KalenderSosialtIndexRoute: typeof KalenderSosialtIndexRoute
+  KalenderSosialtSocialIdRedigerRoute: typeof KalenderSosialtSocialIdRedigerRoute
+  KalenderSosialtSocialIdIndexRoute: typeof KalenderSosialtSocialIdIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1097,6 +1151,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GruppeledereChatIndexRouteImport
       parentRoute: typeof GruppeledereRouteRoute
     }
+    '/kalender/sosialt/': {
+      id: '/kalender/sosialt/'
+      path: '/kalender/sosialt'
+      fullPath: '/kalender/sosialt/'
+      preLoaderRoute: typeof KalenderSosialtIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kalender/sosialt/ny': {
+      id: '/kalender/sosialt/ny'
+      path: '/kalender/sosialt/ny'
+      fullPath: '/kalender/sosialt/ny'
+      preLoaderRoute: typeof KalenderSosialtNyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/noter/arkiv/': {
       id: '/noter/arkiv/'
       path: '/arkiv'
@@ -1166,6 +1234,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/styre/prosjekter/$boardProjectId'
       preLoaderRoute: typeof StyreProsjekterBoardProjectIdRouteImport
       parentRoute: typeof StyreRouteRoute
+    }
+    '/kalender/sosialt/$socialId/': {
+      id: '/kalender/sosialt/$socialId/'
+      path: '/kalender/sosialt/$socialId'
+      fullPath: '/kalender/sosialt/$socialId/'
+      preLoaderRoute: typeof KalenderSosialtSocialIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kalender/sosialt/$socialId/rediger': {
+      id: '/kalender/sosialt/$socialId/rediger'
+      path: '/kalender/sosialt/$socialId/rediger'
+      fullPath: '/kalender/sosialt/$socialId/rediger'
+      preLoaderRoute: typeof KalenderSosialtSocialIdRedigerRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/noter/prosjekter/$projectId_/slagverk': {
       id: '/noter/prosjekter/$projectId_/slagverk'
@@ -1280,7 +1362,11 @@ const rootRouteChildren: RootRouteChildren = {
   ApiUtstyrImagesImageIdRoute: ApiUtstyrImagesImageIdRoute,
   ApiUtstyrImagesUploadRoute: ApiUtstyrImagesUploadRoute,
   BeskjederPostIdRedigerRoute: BeskjederPostIdRedigerRoute,
+  KalenderSosialtNyRoute: KalenderSosialtNyRoute,
   BeskjederPostIdIndexRoute: BeskjederPostIdIndexRoute,
+  KalenderSosialtIndexRoute: KalenderSosialtIndexRoute,
+  KalenderSosialtSocialIdRedigerRoute: KalenderSosialtSocialIdRedigerRoute,
+  KalenderSosialtSocialIdIndexRoute: KalenderSosialtSocialIdIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
