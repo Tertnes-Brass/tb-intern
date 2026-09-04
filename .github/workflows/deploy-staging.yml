@@ -33,6 +33,8 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+          # Hele historikken: utgivelsesnotatet lister commits utover `main`.
+          fetch-depth: 0
 
       - name: Sett opp pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
@@ -65,3 +67,20 @@ jobs:
 
       - name: Verifiser staging
         run: curl -sSf -o /dev/null --retry 3 --retry-delay 5 https://test.tertnesbrass.com/
+
+      # Utgivelsesnotatet til #dev: hva som ligger på staging og skal testes
+      # før merge til main. Se docs/utgivelser/README.md. Feiler aldri deployen.
+      - name: Utgivelsesnotat til Discord (#dev)
+        if: success()
+        continue-on-error: true
+        env:
+          DISCORD_DEV_WEBHOOK_URL: ${{ secrets.DISCORD_DEV_WEBHOOK_URL }}
+          MODE: staging
+          SHA: ${{ github.sha }}
+          BRANCH: test
+          COMMITS_PATH: ${{ runner.temp }}/commits.txt
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          git fetch --no-tags origin main
+          git log --no-merges --format='%s' origin/main..HEAD > "$COMMITS_PATH" || true
+          node scripts/discord-release-note.mjs

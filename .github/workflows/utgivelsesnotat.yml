@@ -1,0 +1,45 @@
+# Poster docs/utgivelser/neste.md til Discord-kanalen #dev på nytt — uten å
+# deploye noe. Brukes når notatet er oppdatert etter en deploy, eller når
+# webhooken nettopp er satt opp. Se docs/utgivelser/README.md.
+name: Utgivelsesnotat
+
+"on":
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Hvor ligger det? (staging = test.tertnesbrass.com, prod = intern.tertnesbrass.com)'
+        type: choice
+        options: [staging, prod]
+        default: staging
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    name: Post utgivelsesnotat
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Hent repoet
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Sett opp Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+
+      - name: Post til Discord (#dev)
+        env:
+          DISCORD_DEV_WEBHOOK_URL: ${{ secrets.DISCORD_DEV_WEBHOOK_URL }}
+          MODE: ${{ inputs.mode }}
+          SHA: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+          COMMITS_PATH: ${{ runner.temp }}/commits.txt
+        run: |
+          git fetch --no-tags origin main
+          git log --no-merges --format='%s' origin/main..HEAD > "$COMMITS_PATH" || true
+          node scripts/discord-release-note.mjs

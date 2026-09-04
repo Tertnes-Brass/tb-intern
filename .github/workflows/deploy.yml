@@ -148,3 +148,15 @@ jobs:
             --header "Content-Type: application/json" \
             --data "{\"content\": \"$MSG\"}" \
             "$DISCORD_WEBHOOK_URL"
+
+      # Samme utgivelsesnotat til #dev, nå som «ute i prod» (docs/utgivelser).
+      - name: Utgivelsesnotat til Discord (#dev)
+        if: success()
+        continue-on-error: true
+        env:
+          DISCORD_DEV_WEBHOOK_URL: ${{ secrets.DISCORD_DEV_WEBHOOK_URL }}
+          MODE: prod
+          SHA: ${{ github.sha }}
+          BRANCH: main
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/discord-release-note.mjs
