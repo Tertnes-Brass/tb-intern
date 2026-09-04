@@ -69,6 +69,12 @@ export const SEED_ROLE_PERMISSIONS: Array<{ roleId: string; permission: string }
   // rettigheten er egen nettopp for at hen kan få den uten resten av
   // styretilgangen. Administrator har `*` og trenger ingen rad.
   { roleId: 'board', permission: 'assets.manage' },
+  // Mediearkivet (#32). Skriving er `media.manage`; lesing av det interne
+  // krever ingen rettighet, og `styre`-elementene henger på `board.manage`,
+  // som allerede finnes. Rollene her må stemme med migrasjonen
+  // (0017_mediearkiv.sql seeder admin + board): prod seedes ikke av seg selv,
+  // så en rolle bare ETT av stedene ville gitt ulik tilgang i dev og prod.
+  { roleId: 'board', permission: 'media.manage' },
   { roleId: 'member', permission: 'scores.view' },
 ]
 

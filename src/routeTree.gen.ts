@@ -28,6 +28,8 @@ import { Route as InnstillingerIndexRouteImport } from './routes/innstillinger/i
 import { Route as InnstillingerNedlastingerRouteImport } from './routes/innstillinger/nedlastinger'
 import { Route as KalenderIndexRouteImport } from './routes/kalender/index'
 import { Route as KalenderEventIdRouteImport } from './routes/kalender/$eventId'
+import { Route as MediaIndexRouteImport } from './routes/media/index'
+import { Route as MediaMediaIdRouteImport } from './routes/media/$mediaId'
 import { Route as MedlemmerIndexRouteImport } from './routes/medlemmer/index'
 import { Route as NoterIndexRouteImport } from './routes/noter/index'
 import { Route as ProsjekterIndexRouteImport } from './routes/prosjekter/index'
@@ -41,6 +43,8 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiBoardFilesDocumentIdRouteImport } from './routes/api/board-files/$documentId'
 import { Route as ApiBoardFilesUploadRouteImport } from './routes/api/board-files/upload'
 import { Route as ApiFilesFileIdRouteImport } from './routes/api/files/$fileId'
+import { Route as ApiMediaMediaIdRouteImport } from './routes/api/media/$mediaId'
+import { Route as ApiMediaUploadRouteImport } from './routes/api/media/upload'
 import { Route as ApiPostImagesImageIdRouteImport } from './routes/api/post-images/$imageId'
 import { Route as ApiPostImagesUploadRouteImport } from './routes/api/post-images/upload'
 import { Route as ApiUploadAbortRouteImport } from './routes/api/upload/abort'
@@ -160,6 +164,16 @@ const KalenderEventIdRoute = KalenderEventIdRouteImport.update({
   path: '/kalender/$eventId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MediaIndexRoute = MediaIndexRouteImport.update({
+  id: '/media/',
+  path: '/media/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MediaMediaIdRoute = MediaMediaIdRouteImport.update({
+  id: '/media/$mediaId',
+  path: '/media/$mediaId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MedlemmerIndexRoute = MedlemmerIndexRouteImport.update({
   id: '/medlemmer/',
   path: '/medlemmer/',
@@ -223,6 +237,16 @@ const ApiBoardFilesUploadRoute = ApiBoardFilesUploadRouteImport.update({
 const ApiFilesFileIdRoute = ApiFilesFileIdRouteImport.update({
   id: '/api/files/$fileId',
   path: '/api/files/$fileId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMediaMediaIdRoute = ApiMediaMediaIdRouteImport.update({
+  id: '/api/media/$mediaId',
+  path: '/api/media/$mediaId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMediaUploadRoute = ApiMediaUploadRouteImport.update({
+  id: '/api/media/upload',
+  path: '/api/media/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPostImagesImageIdRoute = ApiPostImagesImageIdRouteImport.update({
@@ -354,6 +378,7 @@ export interface FileRoutesByFullPath {
   '/beskjeder/ny': typeof BeskjederNyRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
   '/kalender/$eventId': typeof KalenderEventIdRoute
+  '/media/$mediaId': typeof MediaMediaIdRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
   '/styre/$taskId': typeof StyreTaskIdRoute
   '/utstyr/$assetId': typeof UtstyrAssetIdRoute
@@ -363,6 +388,7 @@ export interface FileRoutesByFullPath {
   '/gruppeledere/': typeof GruppeledereIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
   '/kalender/': typeof KalenderIndexRoute
+  '/media/': typeof MediaIndexRoute
   '/medlemmer/': typeof MedlemmerIndexRoute
   '/noter/': typeof NoterIndexRoute
   '/prosjekter/': typeof ProsjekterIndexRoute
@@ -372,6 +398,8 @@ export interface FileRoutesByFullPath {
   '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
   '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/media/$mediaId': typeof ApiMediaMediaIdRoute
+  '/api/media/upload': typeof ApiMediaUploadRoute
   '/api/post-images/$imageId': typeof ApiPostImagesImageIdRoute
   '/api/post-images/upload': typeof ApiPostImagesUploadRoute
   '/api/upload/abort': typeof ApiUploadAbortRoute
@@ -407,6 +435,7 @@ export interface FileRoutesByTo {
   '/beskjeder/ny': typeof BeskjederNyRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
   '/kalender/$eventId': typeof KalenderEventIdRoute
+  '/media/$mediaId': typeof MediaMediaIdRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
   '/styre/$taskId': typeof StyreTaskIdRoute
   '/utstyr/$assetId': typeof UtstyrAssetIdRoute
@@ -416,6 +445,7 @@ export interface FileRoutesByTo {
   '/gruppeledere': typeof GruppeledereIndexRoute
   '/innstillinger': typeof InnstillingerIndexRoute
   '/kalender': typeof KalenderIndexRoute
+  '/media': typeof MediaIndexRoute
   '/medlemmer': typeof MedlemmerIndexRoute
   '/noter': typeof NoterIndexRoute
   '/prosjekter': typeof ProsjekterIndexRoute
@@ -425,6 +455,8 @@ export interface FileRoutesByTo {
   '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
   '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/media/$mediaId': typeof ApiMediaMediaIdRoute
+  '/api/media/upload': typeof ApiMediaUploadRoute
   '/api/post-images/$imageId': typeof ApiPostImagesImageIdRoute
   '/api/post-images/upload': typeof ApiPostImagesUploadRoute
   '/api/upload/abort': typeof ApiUploadAbortRoute
@@ -464,6 +496,7 @@ export interface FileRoutesById {
   '/beskjeder/ny': typeof BeskjederNyRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
   '/kalender/$eventId': typeof KalenderEventIdRoute
+  '/media/$mediaId': typeof MediaMediaIdRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
   '/styre/$taskId': typeof StyreTaskIdRoute
   '/utstyr/$assetId': typeof UtstyrAssetIdRoute
@@ -473,6 +506,7 @@ export interface FileRoutesById {
   '/gruppeledere/': typeof GruppeledereIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
   '/kalender/': typeof KalenderIndexRoute
+  '/media/': typeof MediaIndexRoute
   '/medlemmer/': typeof MedlemmerIndexRoute
   '/noter/': typeof NoterIndexRoute
   '/prosjekter/': typeof ProsjekterIndexRoute
@@ -482,6 +516,8 @@ export interface FileRoutesById {
   '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
   '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/media/$mediaId': typeof ApiMediaMediaIdRoute
+  '/api/media/upload': typeof ApiMediaUploadRoute
   '/api/post-images/$imageId': typeof ApiPostImagesImageIdRoute
   '/api/post-images/upload': typeof ApiPostImagesUploadRoute
   '/api/upload/abort': typeof ApiUploadAbortRoute
@@ -522,6 +558,7 @@ export interface FileRouteTypes {
     | '/beskjeder/ny'
     | '/innstillinger/nedlastinger'
     | '/kalender/$eventId'
+    | '/media/$mediaId'
     | '/prosjekter/$projectId'
     | '/styre/$taskId'
     | '/utstyr/$assetId'
@@ -531,6 +568,7 @@ export interface FileRouteTypes {
     | '/gruppeledere/'
     | '/innstillinger/'
     | '/kalender/'
+    | '/media/'
     | '/medlemmer/'
     | '/noter/'
     | '/prosjekter/'
@@ -540,6 +578,8 @@ export interface FileRouteTypes {
     | '/api/board-files/$documentId'
     | '/api/board-files/upload'
     | '/api/files/$fileId'
+    | '/api/media/$mediaId'
+    | '/api/media/upload'
     | '/api/post-images/$imageId'
     | '/api/post-images/upload'
     | '/api/upload/abort'
@@ -575,6 +615,7 @@ export interface FileRouteTypes {
     | '/beskjeder/ny'
     | '/innstillinger/nedlastinger'
     | '/kalender/$eventId'
+    | '/media/$mediaId'
     | '/prosjekter/$projectId'
     | '/styre/$taskId'
     | '/utstyr/$assetId'
@@ -584,6 +625,7 @@ export interface FileRouteTypes {
     | '/gruppeledere'
     | '/innstillinger'
     | '/kalender'
+    | '/media'
     | '/medlemmer'
     | '/noter'
     | '/prosjekter'
@@ -593,6 +635,8 @@ export interface FileRouteTypes {
     | '/api/board-files/$documentId'
     | '/api/board-files/upload'
     | '/api/files/$fileId'
+    | '/api/media/$mediaId'
+    | '/api/media/upload'
     | '/api/post-images/$imageId'
     | '/api/post-images/upload'
     | '/api/upload/abort'
@@ -631,6 +675,7 @@ export interface FileRouteTypes {
     | '/beskjeder/ny'
     | '/innstillinger/nedlastinger'
     | '/kalender/$eventId'
+    | '/media/$mediaId'
     | '/prosjekter/$projectId'
     | '/styre/$taskId'
     | '/utstyr/$assetId'
@@ -640,6 +685,7 @@ export interface FileRouteTypes {
     | '/gruppeledere/'
     | '/innstillinger/'
     | '/kalender/'
+    | '/media/'
     | '/medlemmer/'
     | '/noter/'
     | '/prosjekter/'
@@ -649,6 +695,8 @@ export interface FileRouteTypes {
     | '/api/board-files/$documentId'
     | '/api/board-files/upload'
     | '/api/files/$fileId'
+    | '/api/media/$mediaId'
+    | '/api/media/upload'
     | '/api/post-images/$imageId'
     | '/api/post-images/upload'
     | '/api/upload/abort'
@@ -688,6 +736,7 @@ export interface RootRouteChildren {
   BeskjederNyRoute: typeof BeskjederNyRoute
   InnstillingerNedlastingerRoute: typeof InnstillingerNedlastingerRoute
   KalenderEventIdRoute: typeof KalenderEventIdRoute
+  MediaMediaIdRoute: typeof MediaMediaIdRoute
   ProsjekterProjectIdRoute: typeof ProsjekterProjectIdRoute
   UtstyrAssetIdRoute: typeof UtstyrAssetIdRoute
   VTokenRoute: typeof VTokenRoute
@@ -695,6 +744,7 @@ export interface RootRouteChildren {
   BeskjederIndexRoute: typeof BeskjederIndexRoute
   InnstillingerIndexRoute: typeof InnstillingerIndexRoute
   KalenderIndexRoute: typeof KalenderIndexRoute
+  MediaIndexRoute: typeof MediaIndexRoute
   MedlemmerIndexRoute: typeof MedlemmerIndexRoute
   ProsjekterIndexRoute: typeof ProsjekterIndexRoute
   UtstyrIndexRoute: typeof UtstyrIndexRoute
@@ -702,6 +752,8 @@ export interface RootRouteChildren {
   ApiBoardFilesDocumentIdRoute: typeof ApiBoardFilesDocumentIdRoute
   ApiBoardFilesUploadRoute: typeof ApiBoardFilesUploadRoute
   ApiFilesFileIdRoute: typeof ApiFilesFileIdRoute
+  ApiMediaMediaIdRoute: typeof ApiMediaMediaIdRoute
+  ApiMediaUploadRoute: typeof ApiMediaUploadRoute
   ApiPostImagesImageIdRoute: typeof ApiPostImagesImageIdRoute
   ApiPostImagesUploadRoute: typeof ApiPostImagesUploadRoute
   ApiUploadAbortRoute: typeof ApiUploadAbortRoute
@@ -849,6 +901,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KalenderEventIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/media/': {
+      id: '/media/'
+      path: '/media'
+      fullPath: '/media/'
+      preLoaderRoute: typeof MediaIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/media/$mediaId': {
+      id: '/media/$mediaId'
+      path: '/media/$mediaId'
+      fullPath: '/media/$mediaId'
+      preLoaderRoute: typeof MediaMediaIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/medlemmer/': {
       id: '/medlemmer/'
       path: '/medlemmer'
@@ -938,6 +1004,20 @@ declare module '@tanstack/react-router' {
       path: '/api/files/$fileId'
       fullPath: '/api/files/$fileId'
       preLoaderRoute: typeof ApiFilesFileIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/media/$mediaId': {
+      id: '/api/media/$mediaId'
+      path: '/api/media/$mediaId'
+      fullPath: '/api/media/$mediaId'
+      preLoaderRoute: typeof ApiMediaMediaIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/media/upload': {
+      id: '/api/media/upload'
+      path: '/api/media/upload'
+      fullPath: '/api/media/upload'
+      preLoaderRoute: typeof ApiMediaUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/post-images/$imageId': {
@@ -1173,6 +1253,7 @@ const rootRouteChildren: RootRouteChildren = {
   BeskjederNyRoute: BeskjederNyRoute,
   InnstillingerNedlastingerRoute: InnstillingerNedlastingerRoute,
   KalenderEventIdRoute: KalenderEventIdRoute,
+  MediaMediaIdRoute: MediaMediaIdRoute,
   ProsjekterProjectIdRoute: ProsjekterProjectIdRoute,
   UtstyrAssetIdRoute: UtstyrAssetIdRoute,
   VTokenRoute: VTokenRoute,
@@ -1180,6 +1261,7 @@ const rootRouteChildren: RootRouteChildren = {
   BeskjederIndexRoute: BeskjederIndexRoute,
   InnstillingerIndexRoute: InnstillingerIndexRoute,
   KalenderIndexRoute: KalenderIndexRoute,
+  MediaIndexRoute: MediaIndexRoute,
   MedlemmerIndexRoute: MedlemmerIndexRoute,
   ProsjekterIndexRoute: ProsjekterIndexRoute,
   UtstyrIndexRoute: UtstyrIndexRoute,
@@ -1187,6 +1269,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiBoardFilesDocumentIdRoute: ApiBoardFilesDocumentIdRoute,
   ApiBoardFilesUploadRoute: ApiBoardFilesUploadRoute,
   ApiFilesFileIdRoute: ApiFilesFileIdRoute,
+  ApiMediaMediaIdRoute: ApiMediaMediaIdRoute,
+  ApiMediaUploadRoute: ApiMediaUploadRoute,
   ApiPostImagesImageIdRoute: ApiPostImagesImageIdRoute,
   ApiPostImagesUploadRoute: ApiPostImagesUploadRoute,
   ApiUploadAbortRoute: ApiUploadAbortRoute,

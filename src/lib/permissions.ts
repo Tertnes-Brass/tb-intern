@@ -38,6 +38,11 @@ export const PERMISSION_CATALOG: PermissionInfo[] = [
     label: 'Utstyr',
     hint: 'Registrere og endre utstyr, bilder, eierskap og lån. Alle medlemmer kan se registeret',
   },
+  {
+    key: 'media.manage',
+    label: 'Mediearkiv',
+    hint: 'Legge inn og endre opptak, bilder og video. Alle medlemmer kan se og spille av det interne',
+  },
   { key: 'settings.manage', label: 'Innstillinger', hint: 'Administrere besetning og roller' },
 ]
 
