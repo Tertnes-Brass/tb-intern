@@ -417,6 +417,12 @@ export type SeedPostData = {
   authorEmail: string
   /** Dager tilbake i tid. `null` = utkast (aldri publisert). */
   publishedDaysAgo: number | null
+  /**
+   * Målretting (#28). Utelatt = ingen innsnevring, som alle innlegg var før.
+   * `section` peker på en `parts.section`-verdi; prosjekter seedes ikke her,
+   * siden prosjekt-id-ene lages ferskt ved hver full seeding.
+   */
+  targets?: Array<{ kind: 'section'; refId: string }>
 }
 
 /**
@@ -456,6 +462,19 @@ export const SEED_POSTS: SeedPostData[] = [
     official: true,
     authorEmail: 'sindre@demo.tertnesbrass.no',
     publishedDaysAgo: 4,
+  },
+  {
+    // Målretting (#28): denne går KUN til slagverksgruppa. Logger du inn som en
+    // kornettist i dev, finnes den ikke på veggen — det er hele poenget.
+    id: 'demo-post-slagverk',
+    title: 'Slagverk: rigg og transport til julekonserten',
+    body: 'Vi trenger to som kan møte 17.00 for å laste pauker og klokkespill.\n\nSi fra i kommentarfeltet hvem som kan. Resten av korpset møter som vanlig 18.30.',
+    audience: 'all',
+    importance: 'normal',
+    official: true,
+    authorEmail: 'sindre@demo.tertnesbrass.no',
+    publishedDaysAgo: 3,
+    targets: [{ kind: 'section', refId: 'perc' }],
   },
   {
     id: 'demo-post-uniform',

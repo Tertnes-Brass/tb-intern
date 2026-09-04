@@ -238,9 +238,9 @@ describe('rankMentionCandidates', () => {
 
 describe('mentionableMembers', () => {
   const members = [
-    { userId: 'aktiv', isActive: true, canPublish: false },
-    { userId: 'sluttet', isActive: false, canPublish: false },
-    { userId: 'styret', isActive: true, canPublish: true },
+    { userId: 'aktiv', isActive: true, canPublish: false, sectionIds: [], projectIds: []  },
+    { userId: 'sluttet', isActive: false, canPublish: false, sectionIds: [], projectIds: []  },
+    { userId: 'styret', isActive: true, canPublish: true, sectionIds: [], projectIds: []  },
   ]
 
   it('utelater deaktiverte medlemmer', () => {
@@ -256,10 +256,10 @@ describe('mentionableMembers', () => {
 
 describe('mentionRecipients', () => {
   const members: MentionCandidate[] = [
-    { userId: 'meg', name: 'Meg Selv', email: 'meg@x.no', isActive: true, canPublish: false },
-    { userId: 'ola', name: 'Ola', email: 'ola@x.no', isActive: true, canPublish: false },
-    { userId: 'stille', name: 'Stille', email: 'stille@x.no', isActive: true, canPublish: false },
-    { userId: 'uten', name: 'Uten E-post', email: null, isActive: true, canPublish: false },
+    { userId: 'meg', name: 'Meg Selv', email: 'meg@x.no', isActive: true, canPublish: false, sectionIds: [], projectIds: []  },
+    { userId: 'ola', name: 'Ola', email: 'ola@x.no', isActive: true, canPublish: false, sectionIds: [], projectIds: []  },
+    { userId: 'stille', name: 'Stille', email: 'stille@x.no', isActive: true, canPublish: false, sectionIds: [], projectIds: []  },
+    { userId: 'uten', name: 'Uten E-post', email: null, isActive: true, canPublish: false, sectionIds: [], projectIds: []  },
   ]
   const prefs = new Map<string, 'all' | 'off'>([['stille', 'off']])
 
@@ -294,19 +294,19 @@ describe('taket på antall omtaler', () => {
 
 describe('mentionableForAudience', () => {
   const members = [
-    { userId: 'aktiv', isActive: true, canPublish: false },
-    { userId: 'sluttet', isActive: false, canPublish: false },
-    { userId: 'styret', isActive: true, canPublish: true },
+    { userId: 'aktiv', isActive: true, canPublish: false, sectionIds: [], projectIds: []  },
+    { userId: 'sluttet', isActive: false, canPublish: false, sectionIds: [], projectIds: []  },
+    { userId: 'styret', isActive: true, canPublish: true, sectionIds: [], projectIds: []  },
   ]
 
   it('lar et UTKAST omtale alle som vil kunne lese det når det publiseres', () => {
     // Uten denne regelen ville et nytt innlegg (publishedAt = null) ikke kunnet
     // omtale noen som helst utenom styret.
-    expect(mentionableForAudience('all', members).map((m) => m.userId)).toEqual(['aktiv', 'styret'])
+    expect(mentionableForAudience({ audience: 'all' }, members).map((m) => m.userId)).toEqual(['aktiv', 'styret'])
   })
 
   it('slipper bare styret til når målgruppen er styret', () => {
-    expect(mentionableForAudience('board', members).map((m) => m.userId)).toEqual(['styret'])
+    expect(mentionableForAudience({ audience: 'board' }, members).map((m) => m.userId)).toEqual(['styret'])
   })
 })
 
@@ -380,9 +380,9 @@ describe('mentionDraft', () => {
 
 describe('postMentionRecipients', () => {
   const members: MentionCandidate[] = [
-    { userId: 'forfatter', name: 'Forfatter', email: 'f@x.no', isActive: true, canPublish: true },
-    { userId: 'ola', name: 'Ola', email: 'ola@x.no', isActive: true, canPublish: false },
-    { userId: 'kari', name: 'Kari', email: 'kari@x.no', isActive: true, canPublish: false },
+    { userId: 'forfatter', name: 'Forfatter', email: 'f@x.no', isActive: true, canPublish: true, sectionIds: [], projectIds: []  },
+    { userId: 'ola', name: 'Ola', email: 'ola@x.no', isActive: true, canPublish: false, sectionIds: [], projectIds: []  },
+    { userId: 'kari', name: 'Kari', email: 'kari@x.no', isActive: true, canPublish: false, sectionIds: [], projectIds: []  },
   ]
   const prefs = new Map<string, 'all' | 'off'>()
   const base = { authorId: 'forfatter', prefs, alreadyNotified: new Set<string>(), postEmailed: new Set<string>() }

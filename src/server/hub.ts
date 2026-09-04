@@ -10,6 +10,7 @@ import { type MentionUser, mentionPlainText } from '../lib/mentions'
 import { excerpt, postHeading } from '../lib/posts'
 import { hasPermission, requireMe } from './access'
 import { loadCalendar } from './calendar-feed'
+import { postReaderFor, targetsAllowReader } from './post-audience'
 
 /**
  * Datagrunnlaget for hub-forsiden `/`. Hub-en er plattformflaten: den viser det
@@ -64,6 +65,11 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
   // `posts.publish` gir også innsyn i beskjeder merket for styret. Utkast
   // (published_at IS NULL) kommer aldri på hub-en, uansett rettighet.
   const canSeeBoardPosts = hasPermission(me, 'posts.publish')
+  // Målrettingen (#28) filtreres i SQL, ikke etterpå: hub-en henter et fast lite
+  // antall rader, og et JS-filter oppå ville gjort «de tre siste beskjedene» til
+  // to eller null for den som ikke er i målgruppen. `posts.publish` ser alt og
+  // trenger ingen betingelse.
+  const reader = await postReaderFor(me)
 
   // Kalender, prosjekter og beskjeder er uavhengige kilder — hent dem samtidig.
   const [calendar, upcomingRows, postRows] = await Promise.all([
@@ -97,6 +103,7 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
         and(
           isNotNull(posts.publishedAt),
           canSeeBoardPosts ? undefined : eq(posts.audience, 'all'),
+          canSeeBoardPosts ? undefined : targetsAllowReader(reader),
         ),
       )
       .orderBy(desc(posts.publishedAt))

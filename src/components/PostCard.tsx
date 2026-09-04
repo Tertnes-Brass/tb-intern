@@ -120,6 +120,9 @@ export function PostCard({ post, draft }: { post: PostListItem; draft?: boolean 
           {post.official && <Stamp tone="brass">Fra styret</Stamp>}
           {post.importance === 'important' && <Stamp tone="oxblood">Viktig</Stamp>}
           {post.audience === 'board' && <Stamp>Kun styret</Stamp>}
+          {/* Målrettingen (#28): en beskjed til en stemmegruppe eller et
+              prosjekt skal se annerledes ut enn en til hele korpset. */}
+          {post.targetLabel && <Stamp>{post.targetLabel}</Stamp>}
         </div>
       </div>
 
