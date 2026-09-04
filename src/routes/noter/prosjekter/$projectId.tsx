@@ -1,6 +1,9 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { PercussionNotesField, PercussionSetupField } from '../../../components/Percussion'
+import { PracticeControl, PracticeOverview } from '../../../components/PracticeStatus'
+import { SoloistsField } from '../../../components/Soloists'
+import { PercussionNeedsList } from '../../../components/WorkPercussion'
 import { ProjectFormModal } from '../../../components/ProjectForm'
 import { ProjectTimesSection } from '../../../components/ProjectTimes'
 import { RepertoireList } from '../../../components/Repertoire'
@@ -51,7 +54,8 @@ function ProjectPage() {
   const totalDuration = data.repertoire.reduce((acc, r) => acc + (r.durationSec ?? 0), 0)
   // Slagverksseksjonen vises når det finnes noe å vise — eller når den som ser
   // siden er den som skal fylle den ut.
-  const hasPercussion = !!p.percussionNotes || data.repertoire.some((r) => r.percussionSetup)
+  const hasPercussion =
+    !!p.percussionNotes || data.repertoire.some((r) => r.percussionSetup) || data.percussionNeeds.length > 0
 
   // Egne stemmer for hele prosjektet, i programrekkefølge:
   // «01 - Where Eagles Sing - 2. kornett.pdf». Serveren har allerede filtrert
@@ -180,6 +184,23 @@ function ProjectPage() {
                   )
                 : undefined
             }
+            extra={(item) => (
+              <>
+                <SoloistsField
+                  projectId={p.id}
+                  workId={item.workId}
+                  workTitle={item.title}
+                  soloists={data.soloists[item.workId] ?? []}
+                  canEdit={data.canManage}
+                />
+                <PracticeControl
+                  projectId={p.id}
+                  workId={item.workId}
+                  mine={data.practice.mine[item.workId] ?? null}
+                  counts={data.practice.counts[item.workId] ?? null}
+                />
+              </>
+            )}
             manage={
               data.canManage
                 ? (item, i) => (
@@ -196,6 +217,8 @@ function ProjectPage() {
         )}
       </section>
 
+      <PracticeOverview repertoire={data.repertoire} practice={data.practice} />
+
       <RehearsalsSection rehearsals={data.rehearsals} canManageCalendar={data.canManageCalendar} />
 
       {(hasPercussion || data.canManage) && (
@@ -211,8 +234,22 @@ function ProjectPage() {
             </Link>
           </div>
           <div className="sheet px-5 py-4">
+            {/* #34: instrumentbehovet for hele repertoaret, slått sammen fra
+                verkenes egne lister. Redigeres på verket i arkivet — det er der
+                lista hører hjemme, og der den gjenbrukes neste gang. */}
+            {data.percussionNeeds.length > 0 && (
+              <div className="mb-4 border-b border-line pb-4">
+                <p className="mb-2 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-brass">
+                  Instrumenter i repertoaret
+                </p>
+                <PercussionNeedsList needs={data.percussionNeeds} />
+                <p className="mt-2 text-[0.74rem] leading-snug text-ink-faint">
+                  Hentet fra instrumentlista på hvert verk i arkivet.
+                </p>
+              </div>
+            )}
             <PercussionNotesField projectId={p.id} value={p.percussionNotes} canEdit={data.canManage} />
-            {!p.percussionNotes && !data.canManage && (
+            {!p.percussionNotes && !data.canManage && data.percussionNeeds.length === 0 && (
               <p className="text-sm text-ink-faint">Ingen notater ennå.</p>
             )}
             {data.canManage && (

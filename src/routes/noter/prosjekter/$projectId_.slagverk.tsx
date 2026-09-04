@@ -1,5 +1,6 @@
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
 import { Button, EmptyState, Kicker } from '../../../components/ui'
+import { PercussionNeedsList } from '../../../components/WorkPercussion'
 import { formatDate, formatWeekday, toRoman } from '../../../lib/format'
 import { percussionLines } from '../../../lib/percussion'
 import { getProject } from '../../../server/projects'
@@ -71,6 +72,18 @@ function PercussionSheetPage() {
         </section>
       )}
 
+      {/* #34: riggelista — hvert instrument én gang, med verkene det trengs i.
+          Den står FØR programmet med vilje: under rigging leser man den som en
+          huskeliste over hva som skal på scenen, ikke stykke for stykke. */}
+      {data.percussionNeeds.length > 0 && (
+        <section className="print-block mt-7">
+          <h2 className="kicker">Instrumenter</h2>
+          <div className="mt-2">
+            <PercussionNeedsList needs={data.percussionNeeds} />
+          </div>
+        </section>
+      )}
+
       <section className="mt-8">
         <h2 className="kicker">Program</h2>
         {data.repertoire.length === 0 ? (
@@ -114,7 +127,7 @@ function PercussionSheetPage() {
         )}
       </section>
 
-      {withSetup.length === 0 && notes.length === 0 && (
+      {withSetup.length === 0 && notes.length === 0 && data.percussionNeeds.length === 0 && (
         <p className="print-hidden mt-8 text-sm leading-relaxed text-ink-soft">
           Ingenting er satt opp ennå.{' '}
           {data.canManage ? (

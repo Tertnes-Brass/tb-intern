@@ -15,6 +15,7 @@ import {
 } from '../lib/work-filter'
 import { normalizeWorkMetadata, workMetadataInput } from '../lib/work-metadata'
 import { hasFullArchiveAccess, hasPermission, requireMe, requirePermission } from './access'
+import { loadWorkPercussion } from './work-percussion'
 
 export const listWorks = createServerFn()
   .validator(archiveSearchInput.optional())
@@ -117,7 +118,7 @@ export const getWork = createServerFn()
     const workRow = (await d.select().from(works).where(eq(works.id, data.id)).limit(1))[0]
     if (!workRow) throw new Error('Fant ikke verket')
 
-    const [files, links, allParts, usedIn] = await Promise.all([
+    const [files, links, allParts, usedIn, percussion] = await Promise.all([
       d
         .select({
           id: workFiles.id,
@@ -143,6 +144,7 @@ export const getWork = createServerFn()
         .innerJoin(projects, eq(projectWorks.projectId, projects.id))
         .where(eq(projectWorks.workId, data.id))
         .orderBy(desc(projects.eventDate)),
+      loadWorkPercussion(d, data.id),
     ])
 
     files.sort((a, b) => (a.partSort ?? 900) - (b.partSort ?? 900))
@@ -153,6 +155,10 @@ export const getWork = createServerFn()
       links,
       allParts,
       usedIn,
+      // #34: slagverksinstrumentene stykket krever. Lista følger verket og
+      // gjenbrukes neste gang det spilles; skriving krever `works.manage`
+      // (src/server/work-percussion.ts).
+      percussion,
       canManage: hasPermission(me, 'works.manage'),
       canViewScore: hasPermission(me, 'scores.view'),
       effectivePartIds: me.effectivePartIds,

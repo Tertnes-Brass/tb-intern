@@ -120,6 +120,13 @@
       "when": 1788386463028,
       "tag": "0016_backlog-runde-1",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1788387132251,
+      "tag": "0017_solister-slagverk-ovingsstatus",
+      "breakpoints": true
     }
   ]
 }
