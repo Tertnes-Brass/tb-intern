@@ -2,9 +2,10 @@ import { readFileSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { ROUND2_STUB_SCHEMA } from './migration-test-stubs'
 
 /**
- * Migrasjon `0017_mediearkiv.sql` (#32) kjørt mot ekte SQLite.
+ * Migrasjon `0017_backlog-runde-2.sql` (#32) kjørt mot ekte SQLite.
  *
  * Tre ting skal bevises her, og ingen av dem er synlige ved lesing:
  *
@@ -22,7 +23,7 @@ import { describe, expect, it } from 'vitest'
  */
 
 const MIGRATION = readFileSync(
-  fileURLToPath(new URL('../../migrations/0017_mediearkiv.sql', import.meta.url)),
+  fileURLToPath(new URL('../../migrations/0017_backlog-runde-2.sql', import.meta.url)),
   'utf8',
 )
 
@@ -86,6 +87,7 @@ function migratedDb(seed = DATA_BEFORE): DatabaseSync {
   // ikke i produksjon.
   db.exec('PRAGMA foreign_keys = ON;')
   db.exec(SCHEMA_BEFORE)
+  db.exec(ROUND2_STUB_SCHEMA)
   if (seed) db.exec(seed)
   applyMigration(db)
   return db

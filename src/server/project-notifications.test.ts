@@ -2,9 +2,10 @@ import { readFileSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { ROUND2_STUB_SCHEMA } from './migration-test-stubs'
 
 /**
- * Migrasjon `0017_prosjektvarsling-og-kommentarer.sql` kjørt mot ekte SQLite —
+ * Migrasjon `0017_backlog-runde-2.sql` kjørt mot ekte SQLite —
  * prosjektvarsling (#18 + #51) og prosjektkommentarer (#27).
  *
  * Fem ting skal bevises, og ingen av dem er synlige ved å lese skjemaet:
@@ -24,7 +25,7 @@ import { describe, expect, it } from 'vitest'
  */
 
 const MIGRATION = readFileSync(
-  fileURLToPath(new URL('../../migrations/0017_prosjektvarsling-og-kommentarer.sql', import.meta.url)),
+  fileURLToPath(new URL('../../migrations/0017_backlog-runde-2.sql', import.meta.url)),
   'utf8',
 )
 
@@ -51,6 +52,7 @@ function migratedDb(): DatabaseSync {
   const db = new DatabaseSync(':memory:')
   db.exec('PRAGMA foreign_keys = ON;')
   db.exec(SCHEMA_BEFORE)
+  db.exec(ROUND2_STUB_SCHEMA)
   db.exec(`
     INSERT INTO user (id, name) VALUES ('u1', 'Ingrid Vik'), ('u2', 'Jonas Helle');
     INSERT INTO projects (id, name, is_published) VALUES ('p1', 'Julekonsert 2026', 1);
