@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
-import { and, asc, desc, eq, gte, inArray } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, notInArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
 import {
@@ -10,6 +10,7 @@ import {
   memberInstruments,
   memberProfiles,
   memberRoles,
+  partShares,
   parts,
   rolePermissions,
   roles,
@@ -276,6 +277,18 @@ export const updateMemberParts = createServerFn({ method: 'POST' })
       return { ok: true }
     }
     const remove = d.delete(userParts).where(eq(userParts.userId, data.userId))
+    // Mister medlemmet en stemme, skal delingene av NETTOPP den stemmen dø med
+    // den (#16). Join-en i `currentUser()` gjør dem uvirksomme uansett, men en
+    // rad som blir liggende ville våknet til live igjen dersom stemmen senere
+    // ble tildelt på nytt — en tilgang ingen av partene har bedt om. Delinger
+    // av stemmer medlemmet fortsatt har, står urørt.
+    const dropStaleShares = d
+      .delete(partShares)
+      .where(
+        data.partIds.length > 0
+          ? and(eq(partShares.fromUserId, data.userId), notInArray(partShares.partId, data.partIds))
+          : eq(partShares.fromUserId, data.userId),
+      )
     const audit = auditInsert(d, {
       action: 'member.parts_changed',
       actorUserId: me.id,
@@ -288,10 +301,11 @@ export const updateMemberParts = createServerFn({ method: 'POST' })
         d
           .insert(userParts)
           .values(data.partIds.map((partId, i) => ({ userId: data.userId, partId, isPrimary: i === 0 }))),
+        dropStaleShares,
         audit,
       ])
     } else {
-      await d.batch([remove, audit])
+      await d.batch([remove, dropStaleShares, audit])
     }
     return { ok: true }
   })

@@ -145,6 +145,7 @@ reverter `$fileId.ts` + serverfunksjons-filtre. Ingen destruktive steg.
 | Medlem uten stemme | Ja (scores.view) | — | Nei | Ja | Nei |
 | Forelder-tildelt (`percussion`) | Ja | Ja for 1/2/3 | Nei | Ja | Nei |
 | Seksjonsleder | Ja* | Ja egne | Nei | Ja | Nei |
+| Medlem med **lånt** stemme (#16) | Ja (scores.view) | Ja egne + den lånte | **Nei** | Ja | **Nei** |
 | Dirigent/Arkivar (`archive.viewAll`) | Ja | Ja | **Ja** | Ja | **Ja** |
 | Arkivforvalter (`works.manage`) | Ja | Ja | Ja | Ja | Ja |
 | Admin (`*`) | Ja | Ja | Ja | Ja | Ja |
@@ -349,6 +350,82 @@ trengte en ny rettighet — men to ting måtte avgjøres eksplisitt.
   skjemasjekken og godtar kun `http(s):` — samme disiplin som `safeHref` i
   markdown-rendringen (§8). En `javascript:`-lenke skal ikke kunne lagres av
   stab og senere klikkes av et medlem.
+
+## 5e. Delte stemmer mellom medlemmer (`part_shares`, #16, 5. september 2026)
+
+Saken spurte om «noe lavt i horn som ønskes flyttet til bariton». Den inneholdt
+to ulike features med hver sin trusselmodell, og valget er nå tatt: dette er
+**medlem låner til medlem**. Stab-til-vikar er allerede dekket av vikarlenkene
+(`share_links`, `/v/$token`), og de er **urørt** av dette arbeidet — de er
+fortsatt det tidsbegrensede verktøyet for folk uten konto.
+
+- **En deling er en trippel:** FRA et medlem, AV én av medlemmets EGNE tildelte
+  stemmer, TIL ett navngitt, aktivt medlem. `part_shares` har sammensatt
+  primærnøkkel `(from_user_id, to_user_id, part_id)` — en deling *er* trippelen,
+  så den samme stemmen kan ikke deles to ganger til samme medlem. Alle tre
+  fremmednøklene er `ON DELETE CASCADE`.
+- **Delingen er ALLTID avledet av delerens egen tilgang.** Raden er en intensjon;
+  delerens `user_parts` er fasiten. `currentUser()` join-er delingene mot
+  `user_parts` og `member_profiles.is_active`, så en deling slutter å virke i det
+  øyeblikket deleren mister stemmen eller blir deaktivert — uten at noen rad må
+  ryddes, og uten et opprydningssteg som kunne slettet feil. Dette er join-en,
+  ikke en etterkontroll: glemmer man den, faller regelen bort i stillhet.
+- **Håndhevelsen ligger ETT sted.** Den delte stemmen kommer inn som
+  `AccessCtx.sharedParts` og vurderes av `memberCanAccessPart` i
+  `src/server/file-access.ts`, side om side med egne stemmer og lederomfang.
+  Fil-gaten (`api/files/$fileId.ts`), `assembleRepertoire` og `memberCanSeeFile`
+  arver den derfor gratis — det finnes ingen parallell sjekk i UI-laget.
+  Prosjektkravet (`inAccessibleProject`) gjelder som for alle andre stemmer.
+- **En deling gir ALDRI mer enn stemme-lesing.** Den rører kun `part`-grenen i
+  `memberCanAccessFile`. Partitur følger fortsatt `scores.view`, uplassert
+  (`other`) fortsatt `archive.viewAll`, og ingen rettighet, rolle eller
+  forvaltningstilgang følger med. Har deleren fullt arkivinnsyn, arves ikke det:
+  `canViewAll` leses av MOTTAKERENS kontekst, aldri av delerens.
+- **Ingen kjede.** Man kan bare dele stemmer i sin egen `user_parts`. En mottatt
+  deling står aldri der, så Anne → Bjørn → Carl kan ikke oppstå. En seksjonsleder
+  kan heller ikke dele stemmene hen *leder* — bare dem hen selv er tildelt.
+- **Ingen ny rettighet.** Å dele sin egen stemme er en medlemshandling, som å
+  legge ut noe på veggen; gaten er eierskapet. En rettighet ville dessuten vært
+  feil verktøy — den ville gitt noen retten til å dele *andres* stemmer.
+- **Begge parter kan fjerne delingen når som helst.** `removePartShare` krever at
+  den innloggede er én av de to, og både `from_user_id` og `to_user_id` står i
+  `WHERE` — id-ene alene ville latt et rått kall rive ned en deling mellom to
+  andre. Mottakeren skal kunne takke nei til en stemme hen ikke vil ha liggende.
+- **Ingen utløpsdato.** Saken ba om tidsbegrensning, men en dato som tømmer
+  notestativet midt i en prosjektperiode er verre enn ingen: delingen faller
+  uansett bort av seg selv når deleren mister stemmen, og begge kan fjerne den
+  med ett klikk. Trenger man et tidsbegrenset lån til noen uten konto, er det en
+  vikarlenke. Taket `MAX_PART_SHARES` = 10 hindrer at «del stemmen din» blir
+  «del stemmen din med hele korpset». Taket er en **veiledende skranke, ikke en
+  sikkerhetsgrense**: det telles og settes inn uten transaksjon, så mange
+  samtidige kall kan i teorien passere det. Konsekvensen er noen delinger for
+  mye av ens EGEN stemme — ikke tilgang til noe nytt — og en DB-side CHECK var
+  ikke verdt en ikke-additiv migrasjon.
+- **Delingen logges** som `member.part_shared` / `member.part_share_removed` i
+  `audit_log`, med hvem som fjernet den (`sharer`/`recipient`).
+- **Mottakeren ser den i appen, ikke på e-post.** Stemmen dukker opp på «Mine
+  noter» og på prosjektsiden i en egen seksjon — «Delt med deg av Navn» — aldri
+  blandet inn blant egne stemmer. Har du senere selv fått stemmen tildelt, er
+  nota din egen og merkes ikke lenger som lånt (`sharedFileFrom`).
+- **Slagverksoppsettet følger IKKE med et lån.** Det ble prøvd — en lånt
+  slagverksstemme uten oppsettet er en halv leveranse — men `showPercussion` er
+  ikke avgrenset til den lånte stemmen: den åpner `percussion_notes` for HELE
+  konserten og `percussion_setup` på ALLE verk, også dem låntakeren ikke har en
+  eneste fil på. Da gir delingen mer enn stemme-lesing, og det er den ene tingen
+  den aldri skal gjøre. Trenger en låntaker oppsettet, er riktig svar en
+  stemmetildeling, ikke et lån.
+- **En deling dør med stemmen den gjelder.** `updateMemberParts` sletter
+  `part_shares`-radene for stemmer medlemmet ikke lenger har, i samme batch som
+  `user_parts` skrives om. Join-en i `currentUser()` ville gjort dem uvirksomme
+  uansett, men en rad som ble liggende ville VÅKNET til live igjen dersom
+  stemmen senere ble tildelt på nytt — en tilgang ingen av partene hadde bedt om.
+  Delinger av stemmer medlemmet fortsatt har, står urørt.
+- **Vikarløypa er bevisst urørt.** `shareAllows` tar ikke `AccessCtx` i det hele
+  tatt, og en test låser at en deling mellom medlemmer ikke kan lekke inn i
+  token-grenen.
+
+Reglene er testet i `src/server/file-access.test.ts` (tilgangen) og
+`src/lib/part-shares.test.ts` (hva som er en gyldig deling).
 
 ## 6. Produktvalg før fase 4 (avgjort — historikk)
 

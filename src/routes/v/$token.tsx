@@ -63,6 +63,9 @@ function ShareViewPage() {
     myFiles: r.files
       .filter((f) => f.kind === 'part')
       .map((f) => ({ id: f.id, partName: f.partName, fileName: f.fileName, pageCount: f.pageCount })),
+    // Vikaren har ingen konto, og stemmedeling mellom medlemmer (#16) finnes
+    // ikke i denne løypa. Tokenet gir nøyaktig det snapshottet sa, som før.
+    sharedFiles: [],
     scoreFileId: null,
     audioFiles: r.files.filter((f) => f.kind === 'audio').map((f) => ({ id: f.id, label: null, fileName: f.fileName })),
   }))

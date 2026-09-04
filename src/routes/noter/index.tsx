@@ -1,4 +1,5 @@
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
+import { PartSharesPanel } from '../../components/PartShares'
 import { RepertoireList } from '../../components/Repertoire'
 import { EmptyState, Kicker, SectionHeading, Stamp } from '../../components/ui'
 import { formatDate, formatWeekday, relativeDays } from '../../lib/format'
@@ -110,6 +111,13 @@ function HomePage() {
           </EmptyState>
         </section>
       )}
+
+      <PartSharesPanel
+        given={data.partShares.given}
+        received={data.partShares.received}
+        meId={data.meId}
+        myPartCount={data.me.parts.length}
+      />
 
       <div className={data.archive ? 'grid gap-10 md:grid-cols-2' : 'max-w-2xl'}>
         <section className="rise" style={{ animationDelay: '120ms' }}>

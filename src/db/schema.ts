@@ -190,6 +190,51 @@ export const sectionLeaders = sqliteTable(
   (t) => [primaryKey({ columns: [t.userId, t.partId] })],
 )
 
+/**
+ * Delte stemmer mellom medlemmer (#16) — «noe lavt i horn som skal prøves på
+ * baryton». Et medlem lar et annet medlem LESE notene til én av sine egne
+ * tildelte stemmer.
+ *
+ * Dette er en leserett, ikke en tildeling. `user_parts` er fortsatt det eneste
+ * som gjør deg til 3. horn, og det eneste medlemslista, seksjonslederomfanget
+ * og oppmøtegruppene leser. En deling gir kun `part`-filer: partitur følger
+ * `scores.view`, uplassert følger `archive.viewAll`, og ingen rettighet endres.
+ *
+ * **Delingen er alltid AVLEDET av delerens egen tilgang.** `currentUser()`
+ * join-er mot `user_parts` og `member_profiles.is_active`, så en deling slutter
+ * å virke i samme øyeblikk deleren mister stemmen eller blir deaktivert — uten
+ * at noen rad må ryddes. Raden er en intensjon; delerens tilgang er fasiten.
+ *
+ * Ingen `expires_at`: begge parter kan fjerne delingen når som helst, og en
+ * automatisk utløpsdato ville tømt notestativet midt i en prosjektperiode.
+ * Vikarlenkene (`share_links`) er det tidsbegrensede verktøyet for folk uten
+ * konto, og de er urørt av dette.
+ *
+ * Sammensatt primærnøkkel i stedet for en surrogat-id: en deling ER trippelen,
+ * og da kan den samme stemmen ikke deles to ganger til samme medlem.
+ */
+export const partShares = sqliteTable(
+  'part_shares',
+  {
+    fromUserId: text('from_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    toUserId: text('to_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    partId: text('part_id')
+      .notNull()
+      .references(() => parts.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.fromUserId, t.toUserId, t.partId] }),
+    // Mottakersiden slås opp i `currentUser()` på HVER forespørsel; primærnøkkelen
+    // starter på deleren og hjelper ikke der.
+    index('part_shares_to_idx').on(t.toUserId),
+  ],
+)
+
 // ---------- Verkskatalog ----------
 
 export const works = sqliteTable(

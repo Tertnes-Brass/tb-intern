@@ -1,8 +1,18 @@
-import { asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import { redirect } from '@tanstack/react-router'
 import { getRequest } from '@tanstack/react-start/server'
 import { db } from '../db'
-import { memberProfiles, memberRoles, parts, rolePermissions, roles, sectionLeaders, userParts } from '../db/schema'
+import {
+  memberProfiles,
+  memberRoles,
+  partShares,
+  parts,
+  rolePermissions,
+  roles,
+  sectionLeaders,
+  user,
+  userParts,
+} from '../db/schema'
 import { effectiveRoleIds, orderRoles, unionRolePermissions } from '../lib/roles'
 import { getAuth } from './auth-instance'
 import type { AccessCtx } from './file-access'
@@ -29,6 +39,23 @@ export type Me = {
   // Kun konkrete løvstemmer i det ekspanderte lederomfanget. Brukes til
   // notetilgang; forelder-rader er grupper og gir ikke en egen notefiltilgang.
   leadsLeafPartIds: string[]
+  /**
+   * Stemmer ANDRE medlemmer har delt med meg (#16), slik de faktisk ble delt —
+   * uekspandert, én rad per deling. Til visning: «Delt med deg av Ingrid».
+   * Dette er ALDRI mine egne stemmer, og de havner aldri i `parts`.
+   */
+  sharedParts: Array<{
+    partId: string
+    partNameNo: string
+    fromUserId: string
+    fromName: string
+  }>
+  /**
+   * De samme delingene ekspandert nedover treet, klare for fil-gaten. Navnet
+   * følger med, så `AccessCtx` har én kilde til både «får du lese denne?» og
+   * «hvem lånte den til deg?».
+   */
+  sharedPartAccess: Array<{ partId: string; fromName: string }>
 }
 
 export async function currentUser(): Promise<Me | null> {
@@ -42,7 +69,7 @@ export async function currentUser(): Promise<Me | null> {
   // Alt som ikke avhenger av HVILKE roller brukeren har, hentes i én runde.
   // Rollene måtte ellers vært slått opp før rettighetene, og `currentUser()`
   // kjører på hver eneste forespørsel — én rundtur ekstra her koster overalt.
-  const [rows, linkedRoles, allRoles, myParts, allPartRows, leaderRows] = await Promise.all([
+  const [rows, linkedRoles, allRoles, myParts, allPartRows, leaderRows, sharedRows] = await Promise.all([
     d
       .select({
         // DEPRECATED-kolonnen, kun som fallback for et medlem uten koblingsrader
@@ -62,6 +89,28 @@ export async function currentUser(): Promise<Me | null> {
       .where(eq(userParts.userId, authUserId)),
     d.select({ id: parts.id, parentId: parts.parentId }).from(parts),
     d.select({ partId: sectionLeaders.partId }).from(sectionLeaders).where(eq(sectionLeaders.userId, authUserId)),
+    // Stemmer andre har delt med meg (#16). Join-ene ER regelen, ikke pynt:
+    // `user_parts` sikrer at deleren FORTSATT er tildelt stemmen hen delte, og
+    // `member_profiles.is_active` at hen fortsatt er medlem. En deling kan
+    // dermed aldri gi mer enn deleren selv har akkurat nå, og den slutter å
+    // virke uten at noen rad må ryddes. Beregnes på hver forespørsel, som
+    // `leadsPartIds` — aldri fra en cache eller et token.
+    d
+      .select({
+        partId: partShares.partId,
+        partNameNo: parts.nameNo,
+        fromUserId: partShares.fromUserId,
+        fromName: user.name,
+      })
+      .from(partShares)
+      .innerJoin(
+        userParts,
+        and(eq(userParts.userId, partShares.fromUserId), eq(userParts.partId, partShares.partId)),
+      )
+      .innerJoin(memberProfiles, eq(memberProfiles.authUserId, partShares.fromUserId))
+      .innerJoin(user, eq(user.id, partShares.fromUserId))
+      .innerJoin(parts, eq(parts.id, partShares.partId))
+      .where(and(eq(partShares.toUserId, authUserId), eq(memberProfiles.isActive, true))),
   ])
 
   const profile = rows[0]
@@ -96,6 +145,12 @@ export async function currentUser(): Promise<Me | null> {
     effectivePartIds: expandPartIds(myParts.map((p) => p.id), childrenMap),
     leadsPartIds,
     leadsLeafPartIds: leadsPartIds.filter((id) => !childrenMap.has(id)),
+    sharedParts: sharedRows,
+    // Én deling av en forelder-stemme dekker barna, akkurat som en egen
+    // tildeling gjør: mottakeren skal ha nøyaktig det deleren har.
+    sharedPartAccess: sharedRows.flatMap((row) =>
+      expandPartIds([row.partId], childrenMap).map((partId) => ({ partId, fromName: row.fromName })),
+    ),
   }
 }
 
@@ -164,6 +219,7 @@ export function hasFullArchiveAccess(me: Me | null): boolean {
 export function memberFileAccessContext(me: Me, inAccessibleProject: boolean): AccessCtx {
   return {
     effectivePartIds: me.effectivePartIds,
+    sharedParts: me.sharedPartAccess,
     sectionLeaderPartIds: me.leadsLeafPartIds,
     canManageSection: hasPermission(me, 'members.manage.section'),
     canViewScore: hasPermission(me, 'scores.view'),
