@@ -1,5 +1,16 @@
 # Diskusjonsforum
 
+**Levert i [sak #90](https://github.com/Tertnes-Brass/tb-intern/issues/90).**
+Publisert 26. september 2026 i [commit c1c1e93](https://github.com/Tertnes-Brass/tb-intern/commit/c1c1e937b2c5fbd38cadb833fa31451613c346a9)
+via [vellykket produksjonsdeploy](https://github.com/Tertnes-Brass/tb-intern/actions/runs/36257216131).
+
+Relatert til [#27](https://github.com/Tertnes-Brass/tb-intern/issues/27), men
+prosjektbundne kommentarer, prosjektavgrenset innsyn, avklart-status og sletting
+står fortsatt igjen i den saken. Forumet leverer heller ikke påmelding fra
+[#31](https://github.com/Tertnes-Brass/tb-intern/issues/31) eller emneknagger og
+ressurskoblinger fra [#89](https://github.com/Tertnes-Brass/tb-intern/issues/89).
+Medlemsomtaler gjenbruker løsningen fra [#83](https://github.com/Tertnes-Brass/tb-intern/issues/83).
+
 Områdevalg (dokumentert før implementasjon og oppdatert etter brukerens avklaringer):
 
 - Navn: Forum.
