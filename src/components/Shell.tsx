@@ -112,7 +112,7 @@ function UserMenu({ me }: { me: Me }) {
 }
 
 type NavItem = {
-  to: '/' | '/beskjeder' | '/noter' | '/kalender' | '/medlemmer' | '/gruppeledere' | '/styre' | '/innstillinger'
+  to: '/' | '/forum' | '/beskjeder' | '/noter' | '/kalender' | '/medlemmer' | '/gruppeledere' | '/styre' | '/innstillinger'
   label: string
   exact?: boolean
 }
@@ -121,13 +121,12 @@ type NavItem = {
 // (a) i docs/designprinsipper.md §6). «Noter» er aktiv for hele /noter/*, så
 // Prosjekter og Arkiv hører hjemme i områdemenyen, ikke her.
 //
-// Filtilganger ble tatt UT av toppmenyen da Beskjeder kom (§6): fem faste
-// oppføringer + Innstillinger er taket, og en sjuende ville forsvunnet bak
-// fade-gradienten på mobil uten at noen merket det. URL-en
-// `/innstillinger/nedlastinger` består, og området nås fra /innstillinger og
-// fra «Områder» på hub-en (`areasFor` i src/lib/hub.ts).
+// Forum er en fast oppføring etter Hjem, etter brukerens ønske (26. september).
+// Filtilganger nås fortsatt fra Innstillinger og områdesnarveien på Hjem.
+// Lange menyer kan rulles vannrett uten å presse logoen og brukermenyen ut.
 const BASE_NAV: NavItem[] = [
   { to: '/', label: 'Hjem', exact: true },
+  { to: '/forum', label: 'Forum' },
   { to: '/beskjeder', label: 'Beskjeder' },
   { to: '/noter', label: 'Noter' },
   { to: '/kalender', label: 'Kalender' },
@@ -151,7 +150,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
     <div className="flex min-h-dvh flex-col">
       <header className="print-hidden sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur-md">
         <div className="mx-auto flex h-[60px] w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-          <Link to="/" className="link-quiet group flex items-baseline gap-2.5">
+          <Link to="/" className="link-quiet group flex shrink-0 items-baseline gap-2.5">
             <span className="font-mono text-[0.66rem] font-semibold uppercase tracking-[0.24em] text-ink">
               Tertnes Brass
             </span>
@@ -160,20 +159,20 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
             </span>
           </Link>
 
-          <nav className="hidden items-center gap-6 md:flex" aria-label="Hovedmeny">
+          <nav className="hidden min-w-0 items-center gap-5 overflow-x-auto md:flex" aria-label="Hovedmeny">
             {NAV.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
                 activeOptions={{ exact: item.exact ?? false }}
-                className="nav-link text-[0.86rem] font-medium text-ink-soft transition-colors hover:text-ink [&[data-status=active]]:text-ink"
+                className="nav-link shrink-0 whitespace-nowrap text-[0.86rem] font-medium text-ink-soft transition-colors hover:text-ink [&[data-status=active]]:text-ink"
               >
                 {item.label}
               </Link>
             ))}
           </nav>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
             <ThemeToggle />
             <UserMenu me={me} />
           </div>

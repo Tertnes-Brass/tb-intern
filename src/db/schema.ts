@@ -774,3 +774,30 @@ export const eventAttendance = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.occurrenceKey, t.userId] }), index('event_attendance_user_idx').on(t.userId)],
 )
+
+// ---------- Diskusjonsforum ----------
+export const forumTopics = sqliteTable('forum_topics', {
+  id: text('id').primaryKey(),
+  authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  locked: integer('locked', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  activityAt: integer('activity_at').notNull(),
+}, (t) => [index('forum_topics_activity_idx').on(t.activityAt)])
+
+export const forumReplies = sqliteTable('forum_replies', {
+  id: text('id').primaryKey(),
+  topicId: text('topic_id').notNull().references(() => forumTopics.id, { onDelete: 'cascade' }),
+  authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
+  body: text('body').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, (t) => [index('forum_replies_topic_idx').on(t.topicId, t.createdAt)])
+
+// Exact reply receipts: opening one page never clears unread replies on another.
+export const forumReplyReads = sqliteTable('forum_reply_reads', {
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  replyId: text('reply_id').notNull().references(() => forumReplies.id, { onDelete: 'cascade' }),
+}, (t) => [primaryKey({ columns: [t.userId, t.replyId] }), index('forum_reply_reads_reply_idx').on(t.replyId)])

@@ -99,6 +99,7 @@ export function eventsAfter(events: HubEvent[], next: HubEvent | null, limit: nu
 
 /** Rutene hub-en kan lenke til. Holdes som union så `Link to` forblir typet. */
 export type HubAreaTo =
+  | '/forum'
   | '/beskjeder'
   | '/noter'
   | '/kalender'
@@ -122,6 +123,7 @@ export type HubArea = {
 }
 
 const BASE_AREAS: HubArea[] = [
+  { to: '/forum', label: 'Forum', description: 'Start en diskusjon og bli med i samtalen.' },
   { to: '/beskjeder', label: 'Beskjeder', description: 'Veggen: beskjeder fra styret og alt korpset deler.' },
   { to: '/noter', label: 'Noter', description: 'Åpne stemmene dine, se programmet og bla i arkivet.' },
   { to: '/kalender', label: 'Kalender', description: 'Øvelser, konserter og oppmøtetider fremover.' },

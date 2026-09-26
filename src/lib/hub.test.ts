@@ -76,6 +76,7 @@ describe('eventsAfter', () => {
 describe('areasFor', () => {
   it('gir et vanlig medlem de fire åpne områdene', () => {
     expect(areasFor(['scores.view']).map((a) => a.to)).toEqual([
+      '/forum',
       '/beskjeder',
       '/noter',
       '/kalender',
@@ -102,6 +103,7 @@ describe('areasFor', () => {
 
   it('gir admin (*) alle områdene, i rekkefølgen fra toppmenyen', () => {
     expect(areasFor(['*']).map((a) => a.to)).toEqual([
+      '/forum',
       '/beskjeder',
       '/noter',
       '/kalender',
@@ -139,6 +141,7 @@ describe('areasFor', () => {
 
   it('plasserer Gruppeledere mellom Medlemmer og Styre, som i toppmenyen', () => {
     expect(areasFor(['*'], { leadsPartIds: ['flugel'] }).map((a) => a.to)).toEqual([
+      '/forum',
       '/beskjeder',
       '/noter',
       '/kalender',
@@ -156,6 +159,6 @@ describe('areasFor', () => {
 
   it('muterer ikke grunnlista mellom kall', () => {
     areasFor(['*'])
-    expect(areasFor([]).map((a) => a.to)).toEqual(['/beskjeder', '/noter', '/kalender', '/medlemmer'])
+    expect(areasFor([]).map((a) => a.to)).toEqual(['/forum', '/beskjeder', '/noter', '/kalender', '/medlemmer'])
   })
 })

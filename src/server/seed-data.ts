@@ -60,6 +60,7 @@ export const SEED_ROLE_PERMISSIONS: Array<{ roleId: string; permission: string }
   { roleId: 'board', permission: 'scores.view' },
   { roleId: 'board', permission: 'board.manage' },
   { roleId: 'board', permission: 'posts.publish' },
+  { roleId: 'board', permission: 'forum.moderate' },
   { roleId: 'member', permission: 'scores.view' },
 ]
 

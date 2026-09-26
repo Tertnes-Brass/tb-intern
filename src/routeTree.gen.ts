@@ -23,6 +23,9 @@ import { Route as ArkivIndexRouteImport } from './routes/arkiv/index'
 import { Route as ArkivWorkIdRouteImport } from './routes/arkiv/$workId'
 import { Route as BeskjederIndexRouteImport } from './routes/beskjeder/index'
 import { Route as BeskjederNyRouteImport } from './routes/beskjeder/ny'
+import { Route as ForumIndexRouteImport } from './routes/forum/index'
+import { Route as ForumTopicIdRouteImport } from './routes/forum/$topicId'
+import { Route as ForumNyRouteImport } from './routes/forum/ny'
 import { Route as GruppeledereIndexRouteImport } from './routes/gruppeledere/index'
 import { Route as InnstillingerIndexRouteImport } from './routes/innstillinger/index'
 import { Route as InnstillingerNedlastingerRouteImport } from './routes/innstillinger/nedlastinger'
@@ -129,6 +132,21 @@ const BeskjederIndexRoute = BeskjederIndexRouteImport.update({
 const BeskjederNyRoute = BeskjederNyRouteImport.update({
   id: '/beskjeder/ny',
   path: '/beskjeder/ny',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForumIndexRoute = ForumIndexRouteImport.update({
+  id: '/forum/',
+  path: '/forum/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForumTopicIdRoute = ForumTopicIdRouteImport.update({
+  id: '/forum/$topicId',
+  path: '/forum/$topicId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForumNyRoute = ForumNyRouteImport.update({
+  id: '/forum/ny',
+  path: '/forum/ny',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GruppeledereIndexRoute = GruppeledereIndexRouteImport.update({
@@ -334,6 +352,8 @@ export interface FileRoutesByFullPath {
   '/api/dev-seed': typeof ApiDevSeedRoute
   '/arkiv/$workId': typeof ArkivWorkIdRoute
   '/beskjeder/ny': typeof BeskjederNyRoute
+  '/forum/$topicId': typeof ForumTopicIdRoute
+  '/forum/ny': typeof ForumNyRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
   '/kalender/$eventId': typeof KalenderEventIdRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
@@ -341,6 +361,7 @@ export interface FileRoutesByFullPath {
   '/v/$token': typeof VTokenRoute
   '/arkiv/': typeof ArkivIndexRoute
   '/beskjeder/': typeof BeskjederIndexRoute
+  '/forum/': typeof ForumIndexRoute
   '/gruppeledere/': typeof GruppeledereIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
   '/kalender/': typeof KalenderIndexRoute
@@ -384,6 +405,8 @@ export interface FileRoutesByTo {
   '/api/dev-seed': typeof ApiDevSeedRoute
   '/arkiv/$workId': typeof ArkivWorkIdRoute
   '/beskjeder/ny': typeof BeskjederNyRoute
+  '/forum/$topicId': typeof ForumTopicIdRoute
+  '/forum/ny': typeof ForumNyRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
   '/kalender/$eventId': typeof KalenderEventIdRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
@@ -391,6 +414,7 @@ export interface FileRoutesByTo {
   '/v/$token': typeof VTokenRoute
   '/arkiv': typeof ArkivIndexRoute
   '/beskjeder': typeof BeskjederIndexRoute
+  '/forum': typeof ForumIndexRoute
   '/gruppeledere': typeof GruppeledereIndexRoute
   '/innstillinger': typeof InnstillingerIndexRoute
   '/kalender': typeof KalenderIndexRoute
@@ -438,6 +462,8 @@ export interface FileRoutesById {
   '/api/dev-seed': typeof ApiDevSeedRoute
   '/arkiv/$workId': typeof ArkivWorkIdRoute
   '/beskjeder/ny': typeof BeskjederNyRoute
+  '/forum/$topicId': typeof ForumTopicIdRoute
+  '/forum/ny': typeof ForumNyRoute
   '/innstillinger/nedlastinger': typeof InnstillingerNedlastingerRoute
   '/kalender/$eventId': typeof KalenderEventIdRoute
   '/prosjekter/$projectId': typeof ProsjekterProjectIdRoute
@@ -445,6 +471,7 @@ export interface FileRoutesById {
   '/v/$token': typeof VTokenRoute
   '/arkiv/': typeof ArkivIndexRoute
   '/beskjeder/': typeof BeskjederIndexRoute
+  '/forum/': typeof ForumIndexRoute
   '/gruppeledere/': typeof GruppeledereIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
   '/kalender/': typeof KalenderIndexRoute
@@ -493,6 +520,8 @@ export interface FileRouteTypes {
     | '/api/dev-seed'
     | '/arkiv/$workId'
     | '/beskjeder/ny'
+    | '/forum/$topicId'
+    | '/forum/ny'
     | '/innstillinger/nedlastinger'
     | '/kalender/$eventId'
     | '/prosjekter/$projectId'
@@ -500,6 +529,7 @@ export interface FileRouteTypes {
     | '/v/$token'
     | '/arkiv/'
     | '/beskjeder/'
+    | '/forum/'
     | '/gruppeledere/'
     | '/innstillinger/'
     | '/kalender/'
@@ -543,6 +573,8 @@ export interface FileRouteTypes {
     | '/api/dev-seed'
     | '/arkiv/$workId'
     | '/beskjeder/ny'
+    | '/forum/$topicId'
+    | '/forum/ny'
     | '/innstillinger/nedlastinger'
     | '/kalender/$eventId'
     | '/prosjekter/$projectId'
@@ -550,6 +582,7 @@ export interface FileRouteTypes {
     | '/v/$token'
     | '/arkiv'
     | '/beskjeder'
+    | '/forum'
     | '/gruppeledere'
     | '/innstillinger'
     | '/kalender'
@@ -596,6 +629,8 @@ export interface FileRouteTypes {
     | '/api/dev-seed'
     | '/arkiv/$workId'
     | '/beskjeder/ny'
+    | '/forum/$topicId'
+    | '/forum/ny'
     | '/innstillinger/nedlastinger'
     | '/kalender/$eventId'
     | '/prosjekter/$projectId'
@@ -603,6 +638,7 @@ export interface FileRouteTypes {
     | '/v/$token'
     | '/arkiv/'
     | '/beskjeder/'
+    | '/forum/'
     | '/gruppeledere/'
     | '/innstillinger/'
     | '/kalender/'
@@ -650,12 +686,15 @@ export interface RootRouteChildren {
   ApiDevSeedRoute: typeof ApiDevSeedRoute
   ArkivWorkIdRoute: typeof ArkivWorkIdRoute
   BeskjederNyRoute: typeof BeskjederNyRoute
+  ForumTopicIdRoute: typeof ForumTopicIdRoute
+  ForumNyRoute: typeof ForumNyRoute
   InnstillingerNedlastingerRoute: typeof InnstillingerNedlastingerRoute
   KalenderEventIdRoute: typeof KalenderEventIdRoute
   ProsjekterProjectIdRoute: typeof ProsjekterProjectIdRoute
   VTokenRoute: typeof VTokenRoute
   ArkivIndexRoute: typeof ArkivIndexRoute
   BeskjederIndexRoute: typeof BeskjederIndexRoute
+  ForumIndexRoute: typeof ForumIndexRoute
   InnstillingerIndexRoute: typeof InnstillingerIndexRoute
   KalenderIndexRoute: typeof KalenderIndexRoute
   MedlemmerIndexRoute: typeof MedlemmerIndexRoute
@@ -773,6 +812,27 @@ declare module '@tanstack/react-router' {
       path: '/beskjeder/ny'
       fullPath: '/beskjeder/ny'
       preLoaderRoute: typeof BeskjederNyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forum/': {
+      id: '/forum/'
+      path: '/forum'
+      fullPath: '/forum/'
+      preLoaderRoute: typeof ForumIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forum/$topicId': {
+      id: '/forum/$topicId'
+      path: '/forum/$topicId'
+      fullPath: '/forum/$topicId'
+      preLoaderRoute: typeof ForumTopicIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forum/ny': {
+      id: '/forum/ny'
+      path: '/forum/ny'
+      fullPath: '/forum/ny'
+      preLoaderRoute: typeof ForumNyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/gruppeledere/': {
@@ -1111,12 +1171,15 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDevSeedRoute: ApiDevSeedRoute,
   ArkivWorkIdRoute: ArkivWorkIdRoute,
   BeskjederNyRoute: BeskjederNyRoute,
+  ForumTopicIdRoute: ForumTopicIdRoute,
+  ForumNyRoute: ForumNyRoute,
   InnstillingerNedlastingerRoute: InnstillingerNedlastingerRoute,
   KalenderEventIdRoute: KalenderEventIdRoute,
   ProsjekterProjectIdRoute: ProsjekterProjectIdRoute,
   VTokenRoute: VTokenRoute,
   ArkivIndexRoute: ArkivIndexRoute,
   BeskjederIndexRoute: BeskjederIndexRoute,
+  ForumIndexRoute: ForumIndexRoute,
   InnstillingerIndexRoute: InnstillingerIndexRoute,
   KalenderIndexRoute: KalenderIndexRoute,
   MedlemmerIndexRoute: MedlemmerIndexRoute,
