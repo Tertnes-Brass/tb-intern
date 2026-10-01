@@ -2,6 +2,7 @@ import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-rout
 import { useEffect, useState } from 'react'
 import { PercussionNotesField, PercussionSetupField } from '../../../components/Percussion'
 import { ProjectFormModal } from '../../../components/ProjectForm'
+import { ProjectOrderEditor } from '../../../components/ProjectOrderEditor'
 import { RepertoireList } from '../../../components/Repertoire'
 import { toast, toastError } from '../../../components/toast'
 import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
@@ -38,6 +39,7 @@ function ProjectPage() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [ordering, setOrdering] = useState(false)
 
   const totalDuration = data.repertoire.reduce((acc, r) => acc + (r.durationSec ?? 0), 0)
   // Slagverksseksjonen vises når det finnes noe å vise — eller når den som ser
@@ -125,9 +127,14 @@ function ProjectPage() {
               files={myProjectFiles}
             />
             {data.canManage && (
-              <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
-                + Legg til verk
-              </Button>
+              <>
+                {data.repertoire.length > 1 && (
+                  <Button size="sm" onClick={() => setOrdering(true)}>Endre rekkefølge</Button>
+                )}
+                <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
+                  + Legg til verk
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -149,6 +156,8 @@ function ProjectPage() {
                 : 'Repertoaret er ikke satt opp ennå.'}
             </EmptyState>
           </div>
+        ) : ordering ? (
+          <ProjectOrderEditor projectId={p.id} items={data.repertoire} onClose={() => setOrdering(false)} />
         ) : (
           <RepertoireList
             items={data.repertoire}

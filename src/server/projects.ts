@@ -462,3 +462,22 @@ export const moveWorkInProject = createServerFn({ method: 'POST' })
       .where(and(eq(projectWorks.projectId, data.projectId), eq(projectWorks.workId, b.workId)))
     return { ok: true }
   })
+
+/** Save a complete program in one atomic D1 batch. Reject stale/invented lists. */
+export const reorderProjectWorks = createServerFn({ method: 'POST' })
+  .validator(z.object({ projectId: z.string(), workIds: z.array(z.string()).min(1) }))
+  .handler(async ({ data }) => {
+    await requirePermission('projects.manage')
+    const d = db()
+    const rows = await d.select({ workId: projectWorks.workId }).from(projectWorks)
+      .where(eq(projectWorks.projectId, data.projectId))
+    const ids = new Set(data.workIds)
+    if (ids.size !== data.workIds.length || rows.length !== ids.size || rows.some(r => !ids.has(r.workId))) {
+      throw new Error('Programmet er endret. Last siden på nytt og prøv igjen.')
+    }
+    const updates = data.workIds.map((workId, position) => d.update(projectWorks)
+      .set({ position: position + 1 })
+      .where(and(eq(projectWorks.projectId, data.projectId), eq(projectWorks.workId, workId))))
+    await d.batch([updates[0]!, ...updates.slice(1)])
+    return { ok: true }
+  })
