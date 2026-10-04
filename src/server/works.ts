@@ -177,6 +177,18 @@ export const createWorkEdition = createServerFn({ method: 'POST' })
     return { id }
   })
 
+export const updateWorkEditionNotes = createServerFn({ method: 'POST' })
+  .validator(z.object({ workId: z.string().min(1), editionId: z.string().min(1), notes: z.string().trim().max(2000) }))
+  .handler(async ({ data }) => {
+    await requirePermission('works.manage')
+    const d = db()
+    await resolveEdition(d, data.workId, data.editionId)
+    await d.update(workEditions).set({ notes: data.notes || null })
+      .where(and(eq(workEditions.id, data.editionId), eq(workEditions.workId, data.workId)))
+    await d.update(works).set({ updatedAt: new Date() }).where(eq(works.id, data.workId))
+    return { ok: true }
+  })
+
 export const setCurrentWorkEdition = createServerFn({ method: 'POST' })
   .validator(z.object({ workId: z.string().min(1), editionId: z.string().min(1).nullable() }))
   .handler(async ({ data }) => {

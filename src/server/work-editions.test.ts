@@ -27,7 +27,7 @@ import { Route as startRoute } from '../routes/api/upload/start'
 import { Route as completeRoute } from '../routes/api/upload/complete'
 import { Route as fileRoute } from '../routes/api/files/$fileId'
 import { resolveEdition } from './work-editions-store'
-import { createWorkEdition, deleteWork, getWork, listWorks, setCurrentWorkEdition } from './works'
+import { createWorkEdition, deleteWork, getWork, listWorks, setCurrentWorkEdition, updateWorkEditionNotes } from './works'
 import { addWorkToProject, assembleRepertoire, setProjectWorkEdition } from './projects'
 import { getShareView } from './shares'
 import { signUploadTicket, verifyUploadTicket } from './upload-token'
@@ -83,6 +83,23 @@ describe('utgaver med eksisterende data', () => {
     expect(work.files.map((f) => f.id)).toEqual(['old-file'])
     expect(work.editions.map((e) => e.name)).toEqual(['Utgave 1'])
     expect((await assembleRepertoire(d, 'old-project', access))[0]?.myFiles.map((f) => f.id)).toEqual(['old-file'])
+  })
+  it('redigerer og fjerner kommentaren på en eksisterende utgave', async () => {
+    const id = await newEdition()
+    await updateWorkEditionNotes({ data: { workId: 'work-a', editionId: id, notes: '  Rettet kommentar  ' } })
+    const work = await getWork({ data: { id: 'work-a', editionId: id } })
+    expect(work.editions.find((e) => e.id === id)?.notes).toBe('Rettet kommentar')
+    expect(work.files.map((f) => f.id)).toEqual(['new-file'])
+    await updateWorkEditionNotes({ data: { workId: 'work-a', editionId: id, notes: '' } })
+    expect((await getWork({ data: { id: 'work-a', editionId: id } })).editions.find((e) => e.id === id)?.notes).toBeNull()
+  })
+  it('avviser kommentarendring uten rettighet eller med utgave fra et annet verk', async () => {
+    const id = await newEdition()
+    await expect(updateWorkEditionNotes({ data: { workId: 'work-b', editionId: id, notes: 'Feil verk' } })).rejects.toThrow('tilhører ikke')
+    state.permission.mockRejectedValueOnce(new Error('Ingen tilgang'))
+    await expect(updateWorkEditionNotes({ data: { workId: 'work-a', editionId: id, notes: 'Avvist' } })).rejects.toThrow('Ingen tilgang')
+    expect(state.permission).toHaveBeenLastCalledWith('works.manage')
+    expect((await getWork({ data: { id: 'work-a', editionId: id } })).editions.find((e) => e.id === id)?.notes).toBe('Nye stemmer')
   })
   it('holder gamle og nye filer atskilt og lar arkivaren åpne begge', async () => {
     const id = await newEdition()
