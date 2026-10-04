@@ -141,6 +141,13 @@
       "when": 1791138130978,
       "tag": "0019_gammel-arkivliste",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1791141563000,
+      "tag": "0020_notearkivar-beskjeder",
+      "breakpoints": true
     }
   ]
 }

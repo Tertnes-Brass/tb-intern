@@ -184,6 +184,7 @@ export type PostWriterInput = {
   audience: PostAudience
   importance: PostImportance
   official: boolean
+  fromArchive?: boolean
 }
 
 /**
@@ -191,14 +192,32 @@ export type PostWriterInput = {
  * denne på både opprettelse og redigering, så et privilegert felt aldri kan
  * snikes inn via et rått kall — UI-et skjuler dem bare.
  */
-export function sanitizePostInput(input: PostWriterInput, canPublish: boolean): PostWriterInput {
+export function sanitizePostInput(input: PostWriterInput, canPublish: boolean, canArchive = false): PostWriterInput {
   const title = input.title?.trim() ? input.title.trim() : null
   const body = input.body.trim()
   // Formatet er ikke et privilegium: et medlem som skriver en lang beskjed skal
   // kunne strukturere den, akkurat som styret.
   const format: PostFormat = input.format === 'markdown' ? 'markdown' : DEFAULT_POST_FORMAT
-  if (canPublish) return { ...input, title, body, format }
+  if (canPublish) {
+    return { ...input, title, body, format,
+      ...(input.fromArchive !== undefined
+        ? { fromArchive: input.fromArchive, official: input.fromArchive ? false : input.official }
+        : {}),
+    }
+  }
+  if (canArchive) return { title, body, format, audience: 'all', importance: input.importance, official: false, fromArchive: input.fromArchive }
+  if (input.fromArchive !== undefined) return { title, body, format, audience: 'all', importance: 'normal', official: false, fromArchive: false }
   return { title, body, format, audience: 'all', importance: 'normal', official: false }
+}
+
+/** Arkivartilgang gjelder egne åpne innlegg, aldri styreinnlegg eller moderasjon. */
+export function canNotifyPost(
+  me: { id: string },
+  post: { authorId: string | null; audience: PostAudience; official: boolean },
+  canPublish: boolean,
+  canArchive: boolean,
+): boolean {
+  return canPublish || (canArchive && post.authorId === me.id && post.audience === 'all' && !post.official)
 }
 
 /** Eieren av innlegget, eller en med `posts.publish` (moderasjon). */
@@ -329,7 +348,8 @@ export function postEmailSubject(title: string, important: boolean): string {
 }
 
 /** Avsenderlinjen i e-posten: «Fra styret · Navn» eller bare navnet. */
-export function postEmailFrom(authorName: string, official: boolean): string {
+export function postEmailFrom(authorName: string, official: boolean, fromArchive = false): string {
+  if (fromArchive) return `Fra notearkivar · ${authorName}`
   return official ? `Fra styret · ${authorName}` : authorName
 }
 

@@ -99,10 +99,10 @@ export function PostCard({ post, draft }: { post: PostListItem; draft?: boolean 
   const when = draft ? `Sist endret ${formatDateTime(post.updatedAt)}` : formatDateTime(post.publishedAt ?? post.createdAt)
   return (
     <article
-      className={`sheet px-4 py-4 sm:px-5 ${post.official ? 'border-brass/45 shadow-[inset_3px_0_0_var(--brass)]' : ''}`}
+      className={`sheet px-4 py-4 sm:px-5 ${post.official || post.fromArchive ? 'border-brass/45 shadow-[inset_3px_0_0_var(--brass)]' : ''}`}
     >
       <div className="flex items-center gap-2.5">
-        {post.official ? (
+        {post.official || post.fromArchive ? (
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-brass/40 bg-[var(--brass-soft)] font-mono text-[0.6rem] font-semibold uppercase tracking-wide text-brass-strong">
             TB
           </span>
@@ -111,13 +111,13 @@ export function PostCard({ post, draft }: { post: PostListItem; draft?: boolean 
         )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-[0.85rem] font-semibold text-ink">
-            {post.official ? 'Styret' : post.author.name}
+            {post.official || post.fromArchive ? (post.fromArchive ? 'Notearkivar' : 'Styret') : post.author.name}
           </p>
           <p className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-ink-faint">{when}</p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
           {draft && <Stamp tone="oxblood">Utkast</Stamp>}
-          {post.official && <Stamp tone="brass">Fra styret</Stamp>}
+          {(post.official || post.fromArchive) && <Stamp tone="brass">{post.fromArchive ? 'Fra notearkivar' : 'Fra styret'}</Stamp>}
           {post.importance === 'important' && <Stamp tone="oxblood">Viktig</Stamp>}
           {post.audience === 'board' && <Stamp>Kun styret</Stamp>}
         </div>

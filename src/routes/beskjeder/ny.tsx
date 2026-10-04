@@ -30,14 +30,14 @@ function NewPostPage() {
         <Kicker className="mb-2">Nytt innlegg</Kicker>
         <h1 className="display-title text-3xl font-semibold italic text-ink sm:text-4xl">Skriv innlegg</h1>
         <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-          {canPublish
+          {canPublish || (!!me && me.permissions.includes('posts.archive'))
             ? 'Lagre som utkast mens du jobber. Når du publiserer, kan medlemmene få beskjeden på e-post med det samme.'
             : 'Del en beskjed, et bilde eller et spørsmål med resten av korpset. Innlegget blir synlig for alle innloggede.'}
         </p>
       </header>
 
       <section className="rise" style={{ animationDelay: '80ms' }}>
-        <PostForm canPublish={canPublish} />
+        <PostForm canPublish={canPublish} canArchive={!!me && (me.permissions.includes('*') || me.permissions.includes('posts.archive'))} />
       </section>
     </div>
   )

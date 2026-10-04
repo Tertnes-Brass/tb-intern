@@ -8,6 +8,7 @@ import {
   canDeleteComment,
   canEditPost,
   canReadPost,
+  canNotifyPost,
   commentCountLabel,
   escapeHtml,
   excerpt,
@@ -215,6 +216,28 @@ describe('notifyResultMessage', () => {
 })
 
 describe('sanitizePostInput', () => {
+  it('arkivaren kan varsle kun om egne åpne innlegg', () => {
+    const post = { authorId: 'arkivar', audience: 'all' as const, official: false }
+    expect(canNotifyPost({ id: 'arkivar' }, post, false, true)).toBe(true)
+    expect(canNotifyPost({ id: 'annen' }, post, false, true)).toBe(false)
+    expect(canNotifyPost({ id: 'arkivar' }, { ...post, audience: 'board' }, false, true)).toBe(false)
+    expect(canNotifyPost({ id: 'arkivar' }, { ...post, official: true }, false, true)).toBe(false)
+    expect(canNotifyPost({ id: 'arkivar' }, post, false, false)).toBe(false)
+    expect(canNotifyPost({ id: 'moderator' }, post, true, false)).toBe(true)
+    expect(canReadPost({ audience: 'board', publishedAt: 1 }, false)).toBe(false)
+    expect(canEditPost({ id: 'arkivar' }, { authorId: 'annen' }, false)).toBe(false)
+  })
+  it('gir arkivaren viktighet og eget avsendermerke, men aldri styremålgruppe', () => {
+    expect(sanitizePostInput({ title: null, body: ' Nye noter ', format: 'markdown', audience: 'board', importance: 'important', official: true, fromArchive: true }, false, true)).toEqual({ title: null, body: 'Nye noter', format: 'markdown', audience: 'all', importance: 'important', official: false, fromArchive: true })
+  })
+  it('avviser notearkivarmerket fra vanlige medlemmer', () => {
+    expect(sanitizePostInput({ title: null, body: 'Hei', format: 'plain_text', audience: 'all', importance: 'important', official: false, fromArchive: true }, false).fromArchive).toBe(false)
+  })
+  it('lar ikke en beskjed være fra både styret og notearkivaren', () => {
+    const safe = sanitizePostInput({ title: null, body: 'Hei', format: 'plain_text', audience: 'all', importance: 'normal', official: true, fromArchive: true }, true)
+    expect(safe.official).toBe(false)
+    expect(postEmailFrom('Ole', safe.official, safe.fromArchive)).toBe('Fra notearkivar · Ole')
+  })
   const raw = {
     title: '  Viktig melding  ',
     body: '  Hei  ',

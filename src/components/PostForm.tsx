@@ -50,6 +50,7 @@ export type PostFormValues = {
   audience: PostAudience
   importance: PostImportance
   official: boolean
+  fromArchive: boolean
   publishedAt: number | null
   images: PostFormImage[]
   /** Dagens navn på de omtalte i `body`, slik at feltet kan vise `@Navn`. */
@@ -79,7 +80,8 @@ const IMPORTANCES: Array<{ value: PostImportance; label: string; hint: string }>
   { value: 'important', label: 'Viktig', hint: 'Merkes «Viktig», og når også dem som bare vil ha viktige e-poster.' },
 ]
 
-export function PostForm({ post, canPublish }: { post?: PostFormValues; canPublish: boolean }) {
+export function PostForm({ post, canPublish: canBoard, canArchive = false }: { post?: PostFormValues; canPublish: boolean; canArchive?: boolean }) {
+  const canPublish = canBoard || (canArchive && !post?.official && (!post || post.audience === 'all'))
   const navigate = useNavigate()
   const router = useRouter()
   const fileInput = useRef<HTMLInputElement>(null)
@@ -94,6 +96,7 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
   const [audience, setAudience] = useState<PostAudience>(post?.audience ?? 'all')
   const [importance, setImportance] = useState<PostImportance>(post?.importance ?? 'normal')
   const [official, setOfficial] = useState(post?.official ?? false)
+  const [fromArchive, setFromArchive] = useState(post?.fromArchive ?? false)
   // Avslått som standard (#85): publisering og masseutsending er to handlinger.
   const [notify, setNotify] = useState(DEFAULT_NOTIFY)
   const [existingImages, setExistingImages] = useState<PostFormImage[]>(post?.images ?? [])
@@ -149,6 +152,7 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
       audience,
       importance,
       official,
+      fromArchive,
     }
     if (!values.body) throw new Error('Skriv noe i teksten først')
     const id = post ? post.id : (await createPost({ data: values })).id
@@ -367,7 +371,7 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
                 value={audience}
                 onChange={(e) => setAudience(e.target.value as PostAudience)}
               >
-                {AUDIENCES.map((a) => (
+                {AUDIENCES.filter((a) => canBoard || a.value === 'all').map((a) => (
                   <option key={a.value} value={a.value}>
                     {a.label}
                   </option>
@@ -389,20 +393,14 @@ export function PostForm({ post, canPublish }: { post?: PostFormValues; canPubli
             </Field>
           </div>
 
-          <label className="sheet flex cursor-pointer items-start gap-3 px-4 py-3">
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--brass)]"
-              checked={official}
-              onChange={(e) => setOfficial(e.target.checked)}
-            />
-            <span>
-              <span className="block text-sm font-medium text-ink">Merk som «Fra styret»</span>
-              <span className="mt-0.5 block text-xs leading-snug text-ink-soft">
-                Innlegget vises som en offisiell beskjed fra korpset, ikke som et vanlig medlemsinnlegg.
-              </span>
-            </span>
-          </label>
+          <Field label="Avsender" hint="Velg hvem beskjeden kommer fra. Navnet ditt følger innlegget.">
+            <select className="field-input" value={fromArchive ? 'archive' : official ? 'board' : 'member'}
+              onChange={(e) => { setOfficial(e.target.value === 'board'); setFromArchive(e.target.value === 'archive') }}>
+              <option value="member">Fra meg</option>
+              {canBoard && <option value="board">Fra styret</option>}
+              <option value="archive">Fra notearkivar</option>
+            </select>
+          </Field>
 
           <label className="sheet flex cursor-pointer items-start gap-3 px-4 py-3">
             <input

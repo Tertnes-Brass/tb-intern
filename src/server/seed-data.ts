@@ -43,6 +43,7 @@ export const SEED_ROLE_PERMISSIONS: Array<{ roleId: string; permission: string }
   { roleId: 'archivist', permission: 'scores.view' },
   { roleId: 'archivist', permission: 'archive.viewAll' },
   { roleId: 'archivist', permission: 'downloads.view' },
+  { roleId: 'archivist', permission: 'posts.archive' },
   { roleId: 'conductor', permission: 'works.manage' },
   { roleId: 'conductor', permission: 'projects.manage' },
   { roleId: 'conductor', permission: 'shares.manage' },

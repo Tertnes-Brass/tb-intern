@@ -352,3 +352,15 @@ angår, er at brukerstyrt tekst nå blir markering, og der gjelder én regel:
   skjemaet kan aldri vise noe annet enn det som faktisk publiseres.
 - Angrepsforsøkene ligger i `src/lib/markdown.test.ts`. Faller en av dem, er det
   et hull — ikke en kosmetisk endring.
+
+## 9. Notearkivarbeskjeder
+
+`posts.archive` gir arkivaren avsendermerket «Fra notearkivar», viktighet og
+e-postvarsling på egne innlegg til hele korpset. Rettigheten gir ingen tilgang
+til styremålgruppen, andres utkast eller moderasjon. `posts.publish` beholder
+eksisterende moderasjonsrett og kan også velge arkivarmerket. De to merkene er
+gjensidig utelukkende. Begge skrivekall saniterer feltene på serveren, og
+`canNotifyPost` brukes for utsending, ny utsending og leveringsoversikt.
+Arkivarmerket beholdes ved tekstredigering fra en klient uten det nye feltet.
+E-post er fortsatt et eksplisitt valg og bruker samme preferanser og
+idempotenslogg som andre beskjeder.

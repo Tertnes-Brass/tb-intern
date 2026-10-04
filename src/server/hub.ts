@@ -87,6 +87,7 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
         format: posts.format,
         importance: posts.importance,
         official: posts.official,
+        fromArchive: posts.fromArchive,
         authorName: user.name,
         publishedAt: posts.publishedAt,
       })
@@ -167,7 +168,8 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
         publishedAt: p.publishedAt!.getTime(),
         important: p.importance === 'important',
         official: p.official,
-        authorName: p.authorName ?? (p.official ? 'Styret' : 'Ukjent'),
+        fromArchive: p.fromArchive,
+        authorName: p.authorName ?? (p.fromArchive ? 'Notearkivar' : p.official ? 'Styret' : 'Ukjent'),
         commentCount: commentCounts.get(p.id) ?? 0,
         likeCount: likeCounts.get(p.id) ?? 0,
       }

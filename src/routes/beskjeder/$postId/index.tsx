@@ -207,10 +207,10 @@ function PostPage() {
 
   const publish = () =>
     act('publish', async () => {
-      const result = await publishPost({ data: { id: post.id, sendEmail: data.canPublish && notify } })
+      const result = await publishPost({ data: { id: post.id, sendEmail: (data.canPublish || data.canArchive) && notify } })
       const { message, kind } = notifyResultMessage(result)
       setConfirmPublish(false)
-      toast(data.canPublish ? message : 'Publisert på veggen', kind)
+      toast(data.canPublish || data.canArchive ? message : 'Publisert på veggen', kind)
       await router.invalidate()
     })
 
@@ -240,8 +240,8 @@ function PostPage() {
         </Link>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Kicker>{isDraft ? 'Utkast' : post.official ? 'Beskjed fra styret' : 'Innlegg'}</Kicker>
-          {post.official && <Stamp tone="brass">Fra styret</Stamp>}
+          <Kicker>{isDraft ? 'Utkast' : post.fromArchive ? 'Beskjed fra notearkivar' : post.official ? 'Beskjed fra styret' : 'Innlegg'}</Kicker>
+          {(post.official || post.fromArchive) && <Stamp tone="brass">{post.fromArchive ? 'Fra notearkivar' : 'Fra styret'}</Stamp>}
           {post.importance === 'important' && <Stamp tone="oxblood">Viktig</Stamp>}
           {post.audience === 'board' && <Stamp>Kun styret</Stamp>}
           {isDraft && <Stamp tone="oxblood">Ikke publisert</Stamp>}
@@ -256,7 +256,7 @@ function PostPage() {
         <div className="mt-3 flex items-center gap-2.5">
           <Avatar name={post.official ? 'Tertnes Brass' : post.author.name} size="sm" />
           <p className="font-mono text-[0.66rem] uppercase tracking-[0.14em] text-ink-soft">
-            {post.official ? `Styret · ${post.author.name}` : post.author.name} ·{' '}
+            {post.fromArchive ? `Notearkivar · ${post.author.name}` : post.official ? `Styret · ${post.author.name}` : post.author.name} ·{' '}
             {isDraft ? `sist endret ${formatDateTime(post.updatedAt)}` : formatDateTime(post.publishedAt!)}
           </p>
         </div>
@@ -320,7 +320,7 @@ function PostPage() {
                 Publiser
               </Button>
             ) : (
-              data.canPublish && (
+              data.delivery && (
                 <Button
                   variant="primary"
                   onClick={() => void resend()}
@@ -355,7 +355,7 @@ function PostPage() {
         <p className="text-sm leading-relaxed text-ink-soft">
           Innlegget blir synlig for {post.audience === 'board' ? 'styret' : 'alle medlemmer'} med det samme.
         </p>
-        {data.canPublish && (
+        {(data.canPublish || (data.canArchive && post.canEdit && !post.official && post.audience === 'all')) && (
           <label className="mt-4 flex cursor-pointer items-start gap-3">
             <input
               type="checkbox"

@@ -564,6 +564,7 @@ export const posts = sqliteTable(
       .default('normal'),
     // «Fra styret»: kun `posts.publish` kan sette den.
     official: integer('official', { mode: 'boolean' }).notNull().default(false),
+    fromArchive: integer('from_archive', { mode: 'boolean' }).notNull().default(false),
     authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
     publishedAt: integer('published_at', { mode: 'timestamp_ms' }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),

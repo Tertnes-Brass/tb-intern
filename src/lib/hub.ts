@@ -49,6 +49,7 @@ export type HubPost = {
   important: boolean
   /** Merket «Fra styret». */
   official: boolean
+  fromArchive?: boolean
   authorName: string
   commentCount: number
   likeCount: number

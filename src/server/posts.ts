@@ -40,12 +40,13 @@ import {
   canDeleteComment,
   canEditPost,
   canReadPost,
+  canNotifyPost,
   excerpt,
   postHeading,
   recipientsFor,
   sanitizePostInput,
 } from '../lib/posts'
-import { type Me, hasPermission, requireMe, requirePermission } from './access'
+import { type Me, hasPermission, requireMe } from './access'
 import { canAttachImages } from './post-images'
 import { mentionEmail, postEmail, postMentionEmail, sendEmail } from './email'
 
@@ -88,6 +89,7 @@ const postInput = z.object({
   audience: z.enum(['all', 'board']).default('all'),
   importance: z.enum(['normal', 'important']).default('normal'),
   official: z.boolean().default(false),
+  fromArchive: z.boolean().optional(),
 })
 
 export type PostAuthor = { id: string | null; name: string }
@@ -109,6 +111,7 @@ export type PostListItem = {
   format: PostFormat
   audience: PostAudience
   importance: PostImportance
+  fromArchive: boolean
   official: boolean
   author: PostAuthor
   publishedAt: number | null
@@ -163,6 +166,7 @@ type Row = {
   format: PostFormat
   audience: PostAudience
   importance: PostImportance
+  fromArchive: boolean
   official: boolean
   authorId: string | null
   authorName: string | null
@@ -181,6 +185,7 @@ function selectPosts() {
       audience: posts.audience,
       importance: posts.importance,
       official: posts.official,
+      fromArchive: posts.fromArchive,
       authorId: posts.authorId,
       authorName: user.name,
       publishedAt: posts.publishedAt,
@@ -201,8 +206,8 @@ function visibleTo(row: Row, canPublish: boolean, me?: Me): boolean {
   return canReadPost({ audience: row.audience, publishedAt: row.publishedAt?.getTime() ?? null }, canPublish)
 }
 
-function authorOf(row: { authorId: string | null; authorName: string | null; official: boolean }): PostAuthor {
-  return { id: row.authorId, name: row.authorName ?? (row.official ? OFFICIAL_AUTHOR : UNKNOWN_AUTHOR) }
+function authorOf(row: { authorId: string | null; authorName: string | null; official: boolean; fromArchive?: boolean }): PostAuthor {
+  return { id: row.authorId, name: row.authorName ?? (row.fromArchive ? 'Notearkivar' : row.official ? OFFICIAL_AUTHOR : UNKNOWN_AUTHOR) }
 }
 
 /** Leser ett innlegg og avviser det leseren ikke har lov til å se. */
@@ -308,6 +313,7 @@ function toListItem(
     audience: row.audience,
     importance: row.importance,
     official: row.official,
+    fromArchive: row.fromArchive,
     author: authorOf(row),
     publishedAt: row.publishedAt ? row.publishedAt.getTime() : null,
     createdAt: row.createdAt.getTime(),
@@ -331,6 +337,7 @@ export const listPosts = createServerFn().handler(async () => {
 
   return {
     canPublish,
+    canArchive: hasPermission(me, 'posts.archive'),
     meId: me.id,
     posts: visible
       .filter((r) => r.publishedAt !== null)
@@ -375,6 +382,7 @@ export const getPost = createServerFn()
     return {
       post: detail,
       canPublish,
+      canArchive: hasPermission(me, 'posts.archive'),
       meId: me.id,
       comments: commentRows.map(
         (c): PostComment => ({
@@ -387,7 +395,7 @@ export const getPost = createServerFn()
         }),
       ),
       // Leveringsstatus er et skriveverktøy; medlemmer skal ikke se hvem som fikk e-post.
-      delivery: canPublish && row.publishedAt ? await deliveryFor(row) : null,
+      delivery: canNotifyPost(me, row, canPublish, hasPermission(me, 'posts.archive')) && row.publishedAt ? await deliveryFor(row) : null,
     }
   })
 
@@ -401,7 +409,7 @@ export const createPost = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const me = await requireMe()
     const canPublish = hasPermission(me, PUBLISH_PERMISSION)
-    const safe = sanitizePostInput({ ...data, title: data.title ?? null }, canPublish)
+    const safe = sanitizePostInput({ ...data, title: data.title ?? null }, canPublish, hasPermission(me, 'posts.archive'))
     // Omtalene valideres FØR innlegget lagres — mot målgruppen `sanitizePostInput`
     // faktisk endte på, ikke den klienten påstod at den valgte.
     const mentionIds = await checkedPostMentions(safe.body, safe.audience)
@@ -417,6 +425,7 @@ export const createPost = createServerFn({ method: 'POST' })
         audience: safe.audience,
         importance: safe.importance,
         official: safe.official,
+        fromArchive: safe.fromArchive ?? false,
         authorId: me.id,
         publishedAt: null,
         createdAt: ts,
@@ -437,7 +446,7 @@ export const updatePost = createServerFn({ method: 'POST' })
     if (!existing || !visibleTo(existing, canPublish, me)) throw new Error('Fant ikke beskjeden')
     if (!canEditPost(me, existing, canPublish)) throw new Error('Du kan bare endre dine egne innlegg')
 
-    const safe = sanitizePostInput({ ...data, title: data.title ?? null }, canPublish)
+    const safe = sanitizePostInput({ ...data, title: data.title ?? null }, canPublish, hasPermission(me, 'posts.archive'))
     // Målgruppen som faktisk kommer til å gjelde etter lagringen — uten
     // `posts.publish` skrives den ikke, og da er det den gamle som teller.
     // Omtalene valideres på NYTT mot den: flyttes et innlegg til «Bare styret»,
@@ -445,8 +454,9 @@ export const updatePost = createServerFn({ method: 'POST' })
     const audience = canPublish ? safe.audience : existing.audience
     const mentionIds = await checkedPostMentions(safe.body, audience)
 
-    // Uten `posts.publish` endres kun tittel og tekst: et innlegg en moderator
-    // har merket «Fra styret» skal ikke miste merket fordi eieren retter en skrivefeil.
+    // Arkivaren kan endre egne åpne innlegg. Styremerking og målgruppe beholdes
+    // når en eier uten moderasjonsrett retter teksten.
+    const canArchiveEdit = hasPermission(me, 'posts.archive') && !existing.official && existing.audience === 'all'
     await db()
       .update(posts)
       .set(
@@ -458,11 +468,16 @@ export const updatePost = createServerFn({ method: 'POST' })
               audience: safe.audience,
               importance: safe.importance,
               official: safe.official,
+              fromArchive: safe.official ? false : safe.fromArchive ?? existing.fromArchive,
               updatedAt: new Date(),
             }
           : // Formatet er ikke privilegert, så det følger med også her — ellers
             // ville et markdown-innlegg blitt ren tekst av en skrivefeilretting.
-            { title: safe.title, body: safe.body, format: safe.format, updatedAt: new Date() },
+            {
+              title: safe.title, body: safe.body, format: safe.format,
+              ...(canArchiveEdit ? { fromArchive: safe.fromArchive ?? existing.fromArchive, importance: safe.importance } : {}),
+              updatedAt: new Date(),
+            },
       )
       .where(eq(posts.id, data.id))
     await syncPostMentions(data.id, mentionIds)
@@ -477,8 +492,11 @@ export const updatePost = createServerFn({ method: 'POST' })
         body: safe.body,
         format: safe.format,
         audience,
-        importance: canPublish ? safe.importance : existing.importance,
+        importance: canPublish || canArchiveEdit ? safe.importance : existing.importance,
         official: canPublish ? safe.official : existing.official,
+        fromArchive: canPublish || canArchiveEdit
+          ? (safe.official ? false : safe.fromArchive ?? existing.fromArchive)
+          : existing.fromArchive,
       }
       try {
         await notifyPostMentions(updated, new Set())
@@ -511,8 +529,8 @@ export const publishPost = createServerFn({ method: 'POST' })
       row.publishedAt = now
     }
 
-    // E-post er styrets verktøy. Ber en vanlig skribent om det, ignoreres det.
-    const notify = data.sendEmail && canPublish
+    // E-post krever moderasjonsrett eller arkivartilgang til eget åpent innlegg.
+    const notify = data.sendEmail && canNotifyPost(me, row, canPublish, hasPermission(me, 'posts.archive'))
     const { result, emailed } = notify
       ? await notifyPost(row)
       : { result: { sent: 0, logged: 0, failed: 0, skipped: 0 }, emailed: new Set<string>() }
@@ -845,9 +863,9 @@ export const deletePostImage = createServerFn({ method: 'POST' })
 export const resendPostNotifications = createServerFn({ method: 'POST' })
   .validator(idInput)
   .handler(async ({ data }): Promise<PostNotifyResult & { ok: true }> => {
-    await requirePermission(PUBLISH_PERMISSION)
-    const row = (await selectPosts().where(eq(posts.id, data.id)).limit(1))[0]
-    if (!row) throw new Error('Fant ikke beskjeden')
+    const me = await requireMe()
+    const row = await readablePost(data.id, hasPermission(me, PUBLISH_PERMISSION), me)
+    if (!canNotifyPost(me, row, hasPermission(me, PUBLISH_PERMISSION), hasPermission(me, 'posts.archive'))) throw new Error('Du kan bare varsle om dine egne innlegg')
     if (!row.publishedAt) throw new Error('Beskjeden er ikke publisert ennå')
     return { ok: true, ...(await notifyPost(row)).result }
   })
@@ -947,9 +965,10 @@ async function notifyPost(row: Row): Promise<{ result: PostNotifyResult; emailed
     body,
     format: row.format,
     url,
-    authorName: row.authorName ?? OFFICIAL_AUTHOR,
+    authorName: authorOf(row).name,
     important: row.importance === 'important',
     official: row.official,
+    fromArchive: row.fromArchive,
     imageCount,
   })
 

@@ -25,7 +25,7 @@ const responseInput = z.object({ status: z.enum(ATTENDANCE_STATUSES).nullable() 
 
 function mobilePost(post: PostListItem) {
   return {
-    id: post.id, author: post.author.name, official: post.official,
+    id: post.id, author: post.fromArchive ? `Notearkivar · ${post.author.name}` : post.author.name, official: post.official, fromArchive: post.fromArchive,
     heading: post.heading, body: post.excerpt,
     date: post.publishedAt ?? post.createdAt,
     likes: post.likeCount, liked: post.likedByMe, commentCount: post.commentCount,

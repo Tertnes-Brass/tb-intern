@@ -15,7 +15,7 @@ import { listPosts } from '../../server/posts'
 
 const filterSchema = z.object({
   // Validert så visningen kan lenkes til (docs/designprinsipper.md §4).
-  vis: z.enum(['alt', 'styret', 'viktig']).default('alt').catch('alt'),
+  vis: z.enum(['alt', 'styret', 'arkivar', 'viktig']).default('alt').catch('alt'),
 })
 
 type Filter = z.infer<typeof filterSchema>['vis']
@@ -23,6 +23,7 @@ type Filter = z.infer<typeof filterSchema>['vis']
 const FILTERS: Array<{ value: Filter; label: string }> = [
   { value: 'alt', label: 'Alt' },
   { value: 'styret', label: 'Fra styret' },
+  { value: 'arkivar', label: 'Fra notearkivar' },
   { value: 'viktig', label: 'Viktig' },
 ]
 
@@ -40,7 +41,7 @@ function PostsPage() {
   const { vis } = Route.useSearch()
 
   const visible = data.posts.filter((post) =>
-    vis === 'styret' ? post.official : vis === 'viktig' ? post.importance === 'important' : true,
+    vis === 'styret' ? post.official : vis === 'arkivar' ? post.fromArchive : vis === 'viktig' ? post.importance === 'important' : true,
   )
 
   return (
@@ -51,8 +52,8 @@ function PostsPage() {
             <Kicker className="mb-2">Beskjeder</Kicker>
             <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Veggen</h1>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-soft">
-              Beskjeder fra styret og alt annet korpset deler med hverandre. Alle kan skrive her — styret merker sine
-              med «Fra styret», og de sendes også på e-post.
+              Beskjeder fra styret, notearkivaren og medlemmene. Alle kan skrive her. Beskjeder kan merkes
+              med avsender og viktighet, og kan også sendes på e-post.
             </p>
           </div>
           <Link to="/beskjeder/ny">

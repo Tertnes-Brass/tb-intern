@@ -198,6 +198,7 @@ export function postEmail({
   authorName,
   important,
   official,
+  fromArchive = false,
   imageCount,
 }: {
   title: string
@@ -210,12 +211,13 @@ export function postEmail({
   important: boolean
   /** Merket «Fra styret». Sier hvem beskjeden kommer fra, ikke bare hvem som skrev den. */
   official: boolean
+  fromArchive?: boolean
   /** Bilder vises ikke i e-posten; de ligger bak innlogging på internsiden. */
   imageCount: number
 }): { subject: string; html: string; text: string } {
   const heading = escapeHtml(title)
   // Tekstversjonen skal ikke ha HTML-escaping i seg («Bø &amp; Co»).
-  const fromText = postEmailFrom(authorName, official)
+  const fromText = postEmailFrom(authorName, official, fromArchive)
   const from = escapeHtml(fromText)
   const images = postEmailImageNote(imageCount)
   const bodyHtml =
@@ -228,7 +230,7 @@ export function postEmail({
     subject: postEmailSubject(title, important),
     html: shell(
       heading,
-      `${official ? '<p style="margin:0 0 12px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#95762a;font-weight:700">Fra styret</p>' : ''}
+      `${official || fromArchive ? `<p style="margin:0 0 12px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#95762a;font-weight:700">${fromArchive ? 'Fra notearkivar' : 'Fra styret'}</p>` : ''}
        ${important ? '<p style="margin:0 0 16px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8f2f24;font-weight:700">Viktig beskjed</p>' : ''}
        <p style="margin:0 0 20px;font-size:12px;color:#8e8468">${from} · Tertnes Brass</p>
        <div style="font-size:15px;line-height:1.6;color:#5f5640">${bodyHtml}</div>
@@ -237,7 +239,7 @@ export function postEmail({
        <p style="margin:0;font-size:12px;color:#8e8468">Du kan velge hvilke beskjeder du vil ha på e-post under «Min profil» på internsiden.</p>`,
       MEMBER_FOOTER,
     ),
-    text: `${official ? 'FRA STYRET\n' : ''}${important ? 'VIKTIG BESKJED\n' : ''}\n${title}\n${fromText} · Tertnes Brass\n\n${bodyText}\n${images ? `\n${images}\n` : ''}\nLes på internsiden:\n${url}\n\nVil du ha færre e-poster? Endre varslingsvalget under «Min profil».\n`,
+    text: `${fromArchive ? 'FRA NOTEARKIVAR\n' : official ? 'FRA STYRET\n' : ''}${important ? 'VIKTIG BESKJED\n' : ''}\n${title}\n${fromText} · Tertnes Brass\n\n${bodyText}\n${images ? `\n${images}\n` : ''}\nLes på internsiden:\n${url}\n\nVil du ha færre e-poster? Endre varslingsvalget under «Min profil».\n`,
   }
 }
 

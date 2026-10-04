@@ -101,11 +101,11 @@ function HubPage() {
                 <Link to="/beskjeder/$postId" params={{ postId: post.id }} className="link-quiet block py-3">
                   <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     <span className="display-title text-base font-semibold text-ink">{post.heading}</span>
-                    {post.official && <Stamp tone="brass">Fra styret</Stamp>}
+                    {(post.official || post.fromArchive) && <Stamp tone="brass">{post.fromArchive ? 'Fra notearkivar' : 'Fra styret'}</Stamp>}
                     {post.important && <Stamp tone="oxblood">Viktig</Stamp>}
                   </span>
                   <span className="mt-0.5 block font-mono text-[0.6rem] uppercase tracking-[0.14em] text-ink-faint">
-                    {post.official ? 'Styret' : post.authorName} · {formatDateTime(post.publishedAt)}
+                    {post.fromArchive ? 'Notearkivar' : post.official ? 'Styret' : post.authorName} · {formatDateTime(post.publishedAt)}
                     {post.likeCount > 0 ? ` · ${post.likeCount} liker` : ''}
                     {post.commentCount > 0
                       ? ` · ${post.commentCount} ${post.commentCount === 1 ? 'kommentar' : 'kommentarer'}`
