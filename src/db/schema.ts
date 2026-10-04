@@ -174,6 +174,23 @@ export const workLinks = sqliteTable(
   (t) => [index('work_links_work_idx').on(t.workId)],
 )
 
+// Historisk fysisk katalog: arkivnummer endres aldri av importen.
+export const legacyArchiveEntries = sqliteTable('legacy_archive_entries', {
+  id: text('id').primaryKey(),
+  archiveNumber: text('archive_number'),
+  title: text('title').notNull(),
+  composer: text('composer'),
+  arranger: text('arranger'),
+  missingParts: text('missing_parts'),
+  lastChecked: text('last_checked'),
+  categoryCode: text('category_code'),
+  notes: text('notes'),
+  loanedTo: text('loaned_to'),
+  markedDigitized: integer('marked_digitized', { mode: 'boolean' }).notNull().default(false),
+  sourceRow: integer('source_row').notNull(),
+  sourceData: text('source_data').notNull(),
+}, (t) => [index('legacy_archive_number_idx').on(t.archiveNumber), index('legacy_archive_title_idx').on(t.title)])
+
 // ---------- Sesonger og prosjekter ----------
 
 export const seasons = sqliteTable('seasons', {

@@ -53,6 +53,7 @@ import { Route as BeskjederPostIdRedigerRouteImport } from './routes/beskjeder/$
 import { Route as GruppeledereChatIndexRouteImport } from './routes/gruppeledere/chat/index'
 import { Route as NoterArkivIndexRouteImport } from './routes/noter/arkiv/index'
 import { Route as NoterArkivWorkIdRouteImport } from './routes/noter/arkiv/$workId'
+import { Route as NoterArkivListeRouteImport } from './routes/noter/arkiv/liste'
 import { Route as NoterProsjekterIndexRouteImport } from './routes/noter/prosjekter/index'
 import { Route as NoterProsjekterProjectIdRouteImport } from './routes/noter/prosjekter/$projectId'
 import { Route as StyreChatIndexRouteImport } from './routes/styre/chat/index'
@@ -285,6 +286,11 @@ const NoterArkivWorkIdRoute = NoterArkivWorkIdRouteImport.update({
   path: '/arkiv/$workId',
   getParentRoute: () => NoterRouteRoute,
 } as any)
+const NoterArkivListeRoute = NoterArkivListeRouteImport.update({
+  id: '/arkiv/liste',
+  path: '/arkiv/liste',
+  getParentRoute: () => NoterRouteRoute,
+} as any)
 const NoterProsjekterIndexRoute = NoterProsjekterIndexRouteImport.update({
   id: '/prosjekter/',
   path: '/prosjekter/',
@@ -381,6 +387,7 @@ export interface FileRoutesByFullPath {
   '/api/upload/start': typeof ApiUploadStartRoute
   '/beskjeder/$postId/rediger': typeof BeskjederPostIdRedigerRoute
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
+  '/noter/arkiv/liste': typeof NoterArkivListeRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
@@ -434,6 +441,7 @@ export interface FileRoutesByTo {
   '/api/upload/start': typeof ApiUploadStartRoute
   '/beskjeder/$postId/rediger': typeof BeskjederPostIdRedigerRoute
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
+  '/noter/arkiv/liste': typeof NoterArkivListeRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
@@ -491,6 +499,7 @@ export interface FileRoutesById {
   '/api/upload/start': typeof ApiUploadStartRoute
   '/beskjeder/$postId/rediger': typeof BeskjederPostIdRedigerRoute
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
+  '/noter/arkiv/liste': typeof NoterArkivListeRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
@@ -549,6 +558,7 @@ export interface FileRouteTypes {
     | '/api/upload/start'
     | '/beskjeder/$postId/rediger'
     | '/noter/arkiv/$workId'
+    | '/noter/arkiv/liste'
     | '/noter/prosjekter/$projectId'
     | '/styre/moter/$meetingId'
     | '/styre/prosjekter/$boardProjectId'
@@ -602,6 +612,7 @@ export interface FileRouteTypes {
     | '/api/upload/start'
     | '/beskjeder/$postId/rediger'
     | '/noter/arkiv/$workId'
+    | '/noter/arkiv/liste'
     | '/noter/prosjekter/$projectId'
     | '/styre/moter/$meetingId'
     | '/styre/prosjekter/$boardProjectId'
@@ -658,6 +669,7 @@ export interface FileRouteTypes {
     | '/api/upload/start'
     | '/beskjeder/$postId/rediger'
     | '/noter/arkiv/$workId'
+    | '/noter/arkiv/liste'
     | '/noter/prosjekter/$projectId'
     | '/styre/moter/$meetingId'
     | '/styre/prosjekter/$boardProjectId'
@@ -1024,6 +1036,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NoterArkivWorkIdRouteImport
       parentRoute: typeof NoterRouteRoute
     }
+    '/noter/arkiv/liste': {
+      id: '/noter/arkiv/liste'
+      path: '/arkiv/liste'
+      fullPath: '/noter/arkiv/liste'
+      preLoaderRoute: typeof NoterArkivListeRouteImport
+      parentRoute: typeof NoterRouteRoute
+    }
     '/noter/prosjekter/': {
       id: '/noter/prosjekter/'
       path: '/prosjekter'
@@ -1113,6 +1132,7 @@ const GruppeledereRouteRouteWithChildren =
 interface NoterRouteRouteChildren {
   NoterIndexRoute: typeof NoterIndexRoute
   NoterArkivWorkIdRoute: typeof NoterArkivWorkIdRoute
+  NoterArkivListeRoute: typeof NoterArkivListeRoute
   NoterProsjekterProjectIdRoute: typeof NoterProsjekterProjectIdRoute
   NoterArkivIndexRoute: typeof NoterArkivIndexRoute
   NoterProsjekterIndexRoute: typeof NoterProsjekterIndexRoute
@@ -1122,6 +1142,7 @@ interface NoterRouteRouteChildren {
 const NoterRouteRouteChildren: NoterRouteRouteChildren = {
   NoterIndexRoute: NoterIndexRoute,
   NoterArkivWorkIdRoute: NoterArkivWorkIdRoute,
+  NoterArkivListeRoute: NoterArkivListeRoute,
   NoterProsjekterProjectIdRoute: NoterProsjekterProjectIdRoute,
   NoterArkivIndexRoute: NoterArkivIndexRoute,
   NoterProsjekterIndexRoute: NoterProsjekterIndexRoute,

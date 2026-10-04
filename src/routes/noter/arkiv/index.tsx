@@ -111,11 +111,14 @@ function ArchivePage() {
           <Kicker className="mb-2">Biblioteket</Kicker>
           <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Arkivet</h1>
         </div>
-        {data.canManage && (
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            <PlusIcon /> Nytt verk
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <Link to="/noter/arkiv/liste" className="link-brass text-sm">Arkivliste · fysisk arkiv</Link>
+          {data.canManage && (
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              <PlusIcon /> Nytt verk
+            </Button>
+          )}
+        </div>
       </header>
 
       <div className="rise sheet space-y-4 p-4 sm:p-5" style={{ animationDelay: '80ms' }}>

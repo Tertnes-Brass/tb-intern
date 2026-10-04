@@ -134,6 +134,13 @@
       "when": 1791133639093,
       "tag": "0018_verk-utgaver",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1791138130978,
+      "tag": "0019_gammel-arkivliste",
+      "breakpoints": true
     }
   ]
 }
