@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import { env } from 'cloudflare:workers'
-import { and, asc, desc, eq, like, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, like, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
 import { parts, projectWorks, projects, workFiles, workLinks, works } from '../db/schema'
@@ -239,6 +239,24 @@ export const deleteWork = createServerFn({ method: 'POST' })
     }
     await d.delete(works).where(eq(works.id, data.id))
     return { ok: true }
+  })
+
+/** Alle filene må tilhøre det oppgitte verket før noe slettes. */
+export const deleteWorkFiles = createServerFn({ method: 'POST' })
+  .validator(z.object({ workId: z.string().min(1), fileIds: z.array(z.string().min(1)).min(1).max(100) }))
+  .handler(async ({ data }) => {
+    await requirePermission('works.manage')
+    const d = db()
+    const ids = [...new Set(data.fileIds)]
+    const selected = and(eq(workFiles.workId, data.workId), inArray(workFiles.id, ids))
+    const files = await d.select({ id: workFiles.id, r2Key: workFiles.r2Key }).from(workFiles).where(selected)
+    if (files.length !== ids.length) {
+      throw new Error('En valgt fil finnes ikke lenger i dette verket. Oppdater siden og velg på nytt.')
+    }
+    // Behold databaseradene til R2-slettingen er ferdig.
+    await env.FILES.delete(files.map((f) => f.r2Key))
+    await d.delete(workFiles).where(selected)
+    return { deleted: files.length }
   })
 
 export const deleteWorkFile = createServerFn({ method: 'POST' })

@@ -1,5 +1,5 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PdfSplitterLauncher } from '../../../components/PdfSplitter'
 import { WorkFormModal } from '../../../components/WorkForm'
 import { toast, toastError } from '../../../components/toast'
@@ -14,6 +14,7 @@ import {
   addWorkLink,
   deleteWork,
   deleteWorkFile,
+  deleteWorkFiles,
   deleteWorkLink,
   getWork,
   rematchWorkFiles,
@@ -362,6 +363,16 @@ type WorkData = Awaited<ReturnType<typeof getWork>>
 function FilesSection({ data }: { data: WorkData }) {
   const router = useRouter()
   const [rematching, setRematching] = useState(false)
+  const [selecting, setSelecting] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const selectedFiles = data.files.filter((f) => selectedIds.includes(f.id))
+  const closeSelection = () => { setSelecting(false); setSelectedIds([]) }
+  useEffect(() => {
+    setSelectedIds((ids) => ids.filter((id) => data.files.some((f) => f.id === id)))
+    setConfirmDelete(false)
+  }, [data.files, data.work.id])
   const sections = new Map<string, typeof data.files>()
   for (const f of data.files) {
     const key =
@@ -388,6 +399,40 @@ function FilesSection({ data }: { data: WorkData }) {
 
   return (
     <section className="rise space-y-6" style={{ animationDelay: '140ms' }}>
+      {data.canManage && (
+        <div className="sheet flex flex-wrap items-center gap-3 p-4">
+          <Button onClick={() => selecting ? closeSelection() : setSelecting(true)} disabled={deleting}>
+            {selecting ? 'Avslutt valg' : 'Velg flere filer'}
+          </Button>
+          {selecting && <>
+            <Button size="sm" onClick={() => setSelectedIds(data.files.filter((f) => f.kind === 'part' || f.kind === 'score').slice(0, 100).map((f) => f.id))}>Velg alle notefiler</Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelectedIds([])}>Fjern valg</Button>
+            <span className="text-sm text-ink-soft" role="status">{selectedFiles.length} filer valgt</span>
+            <Button variant="danger" disabled={selectedFiles.length === 0} onClick={() => setConfirmDelete(true)}>Slett valgte ({selectedFiles.length})</Button>
+            <p className="w-full text-xs text-ink-soft">Velg opptil 100 filer. «Velg alle notefiler» velger stemmer og partitur; lyd og uplasserte filer kan krysses av enkeltvis.</p>
+          </>}
+        </div>
+      )}
+      <Modal open={confirmDelete} onClose={() => { if (!deleting) setConfirmDelete(false) }} title={`Slette ${selectedFiles.length} filer?`} kicker={data.work.title}>
+        <p className="mb-3 text-sm text-ink-soft">De valgte filene slettes permanent. Stykket og prosjektkoblingene beholdes. Handlingen kan ikke angres.</p>
+        <ul className="mb-5 max-h-60 space-y-2 overflow-y-auto text-sm">
+          {selectedFiles.map((f) => <li key={f.id}><span className="font-semibold">{zipLabelFor(f)}</span><span className="block break-all text-xs text-ink-soft">{f.fileName}</span></li>)}
+        </ul>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" disabled={deleting} onClick={() => setConfirmDelete(false)}>Avbryt</Button>
+          <Button variant="danger" loading={deleting} disabled={selectedFiles.length === 0} onClick={async () => {
+            setDeleting(true)
+            try {
+              const result = await deleteWorkFiles({ data: { workId: data.work.id, fileIds: selectedFiles.map((f) => f.id) } })
+              setConfirmDelete(false)
+              closeSelection()
+              toast(`${result.deleted} filer er slettet`)
+              await router.invalidate()
+            } catch (err) { toastError(err) }
+            finally { setDeleting(false) }
+          }}>Slett {selectedFiles.length} filer</Button>
+        </div>
+      </Modal>
       {order
         .filter((key) => sections.has(key))
         .map((key) => (
@@ -423,7 +468,10 @@ function FilesSection({ data }: { data: WorkData }) {
             </div>
             <ul className="sheet divide-y divide-[var(--line)] overflow-hidden">
               {sections.get(key)!.map((f) => (
-                <FileRow key={f.id} file={f} data={data} onChanged={() => router.invalidate()} />
+                <FileRow key={f.id} file={f} data={data} onChanged={() => router.invalidate()}
+                  selecting={data.canManage && selecting} selected={selectedIds.includes(f.id)}
+                  selectionDisabled={deleting || (!selectedIds.includes(f.id) && selectedFiles.length >= 100)}
+                  onSelect={(checked) => setSelectedIds((ids) => checked ? [...ids, f.id] : ids.filter((id) => id !== f.id))} />
               ))}
             </ul>
           </div>
@@ -436,16 +484,29 @@ function FileRow({
   file,
   data,
   onChanged,
+  selecting,
+  selected,
+  selectionDisabled,
+  onSelect,
 }: {
   file: WorkData['files'][number]
   data: WorkData
   onChanged: () => void
+  selecting: boolean
+  selected: boolean
+  selectionDisabled: boolean
+  onSelect: (checked: boolean) => void
 }) {
   const [busy, setBusy] = useState(false)
   const name = file.kind === 'score' ? 'Partitur' : file.kind === 'audio' ? (file.label ?? 'Lydfil') : (file.partName ?? 'Uplassert')
 
   return (
     <li className="flex flex-col gap-2.5 px-4 py-3 sm:flex-row sm:flex-nowrap sm:items-center sm:gap-x-4 sm:px-5">
+      {selecting && <label className="flex min-h-10 cursor-pointer items-center gap-2 text-sm sm:shrink-0">
+        <input type="checkbox" className="h-5 w-5 accent-brass" checked={selected} disabled={selectionDisabled}
+          aria-label={`Velg ${name}: ${file.fileName}`} onChange={(e) => onSelect(e.target.checked)} />
+        <span className="sm:hidden">Velg fil</span>
+      </label>}
       <span className="min-w-0 flex-1">
         <span className={`block text-[0.92rem] font-semibold ${file.kind === 'other' ? 'text-oxblood' : 'text-ink'}`}>
           {name}
@@ -500,7 +561,7 @@ function FileRow({
           >
             Last ned
           </a>
-          {data.canManage && (
+          {data.canManage && !selecting && (
             <button
               disabled={busy}
               onClick={async () => {
