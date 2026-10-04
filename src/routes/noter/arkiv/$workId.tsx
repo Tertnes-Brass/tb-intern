@@ -1,6 +1,7 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { PdfSplitterLauncher } from '../../../components/PdfSplitter'
+import { WorkEditions } from '../../../components/WorkEditions'
 import { WorkFormModal } from '../../../components/WorkForm'
 import { toast, toastError } from '../../../components/toast'
 import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
@@ -30,7 +31,9 @@ export const Route = createFileRoute('/noter/arkiv/$workId')({
       context.me.permissions.includes('works.manage')
     if (!canBrowseArchive) throw redirect({ to: '/noter' })
   },
-  loader: ({ params }) => getWork({ data: { id: params.workId } }),
+  validateSearch: (search: Record<string, unknown>): { utgave?: string } => ({ utgave: typeof search.utgave === 'string' && search.utgave ? search.utgave : undefined }),
+  loaderDeps: ({ search }) => ({ utgave: search.utgave }),
+  loader: ({ params, deps }) => getWork({ data: { id: params.workId, editionId: deps.utgave === 'original' ? null : deps.utgave } }),
   component: WorkPage,
 })
 
@@ -115,11 +118,13 @@ function WorkPage() {
         )}
       </header>
 
-      {data.canManage && <UploadZone workId={w.id} />}
+      <WorkEditions key={w.id} data={data} onSelect={(editionId) => { void router.navigate({ to: '/noter/arkiv/$workId', params: { workId: w.id }, search: { utgave: editionId ?? 'original' } }) }} />
 
-      {data.canManage && <PdfSplitterLauncher work={w} allParts={data.allParts} files={data.files} />}
+      {data.canManage && <UploadZone key={`${w.id}:${data.editionId}`} workId={w.id} editionId={data.editionId} />}
 
-      <FilesSection data={data} />
+      {data.canManage && <PdfSplitterLauncher key={`${w.id}:${data.editionId}`} editionId={data.editionId} work={w} allParts={data.allParts} files={data.files} />}
+
+      <FilesSection key={`${w.id}:${data.editionId}`} data={data} />
 
       <LinksSection data={data} />
 
@@ -153,7 +158,7 @@ function WorkPage() {
 
       <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Slette verket?" kicker={w.title}>
         <p className="mb-5 text-sm leading-relaxed text-ink-soft">
-          Dette sletter verket, alle {data.files.length} tilhørende filer og koblingene til prosjekter.
+          Dette sletter verket, alle utgaver med tilhørende filer og koblingene til prosjekter.
           Handlingen kan ikke angres.
         </p>
         <div className="flex justify-end gap-2">
@@ -194,7 +199,7 @@ type UploadJob = {
   error?: string
 }
 
-function UploadZone({ workId }: { workId: string }) {
+function UploadZone({ workId, editionId }: { workId: string; editionId: string | null }) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
@@ -235,6 +240,7 @@ function UploadZone({ workId }: { workId: string }) {
       try {
         const saved = await uploadWorkFile({
           workId,
+          editionId,
           file,
           onProgress: (loaded) => update(id, { loaded }),
         })
@@ -446,7 +452,7 @@ function FilesSection({ data }: { data: WorkData }) {
                   onClick={async () => {
                     setRematching(true)
                     try {
-                      const res = await rematchWorkFiles({ data: { workId: data.work.id } })
+                      const res = await rematchWorkFiles({ data: { workId: data.work.id, editionId: data.editionId } })
                       toast(
                         res.matched > 0
                           ? `${res.matched} av ${res.total} ${res.total === 1 ? 'fil' : 'filer'} plassert`

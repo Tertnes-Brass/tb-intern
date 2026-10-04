@@ -108,6 +108,7 @@ export const getShareView = createServerFn()
     const repertoire = await d
       .select({
         workId: works.id,
+        editionId: projectWorks.editionId,
         title: works.title,
         composer: works.composer,
         arranger: works.arranger,
@@ -128,6 +129,7 @@ export const getShareView = createServerFn()
             .select({
               id: workFiles.id,
               workId: workFiles.workId,
+              editionId: workFiles.editionId,
               kind: workFiles.kind,
               partId: workFiles.partId,
               fileName: workFiles.fileName,
@@ -170,7 +172,7 @@ export const getShareView = createServerFn()
         ...r,
         percussionSetup: showPercussion ? r.percussionSetup : null,
         files: files
-          .filter((f) => f.workId === r.workId && shareAllows({ kind: f.kind, partId: f.partId }, partIds))
+          .filter((f) => f.workId === r.workId && f.editionId === r.editionId && shareAllows({ kind: f.kind, partId: f.partId }, partIds))
           .map((f) => ({ id: f.id, kind: f.kind, partName: f.partName, fileName: f.fileName, pageCount: f.pageCount })),
         links: links
           .filter((l) => l.workId === r.workId)

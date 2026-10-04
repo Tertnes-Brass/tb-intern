@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { env } from 'cloudflare:workers'
-import { and, eq, gte } from 'drizzle-orm'
+import { and, eq, gte, sql } from 'drizzle-orm'
 import { db } from '../../../db'
 import { projects, projectWorks, shareLinks, workFiles } from '../../../db/schema'
 import { sha256Hex } from '../../../lib/id'
@@ -53,6 +53,7 @@ export const Route = createFileRoute('/api/files/$fileId')({
                 .where(
                   and(
                     eq(projectWorks.workId, file.workId),
+                    sql`${projectWorks.editionId} IS ${file.editionId}`,
                     eq(projects.isPublished, true),
                     gte(projects.eventDate, today),
                   ),
@@ -83,7 +84,7 @@ export const Route = createFileRoute('/api/files/$fileId')({
             await d
               .select()
               .from(projectWorks)
-              .where(and(eq(projectWorks.projectId, share.projectId), eq(projectWorks.workId, file.workId)))
+              .where(and(eq(projectWorks.projectId, share.projectId), eq(projectWorks.workId, file.workId), sql`${projectWorks.editionId} IS ${file.editionId}`))
               .limit(1)
           )[0]
           const sharedLeafIds = JSON.parse(share.partIds) as string[]

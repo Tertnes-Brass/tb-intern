@@ -123,11 +123,21 @@ export const works = sqliteTable(
     acquiredYear: integer('acquired_year'),
     notes: text('notes'),
     status: text('status').notNull().default('active'), // 'active' | 'archived'
+    // Null er originalutgaven. Tilhørighet valideres i serverlaget.
+    currentEditionId: text('current_edition_id'),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (t) => [index('works_title_idx').on(t.title)],
 )
+
+export const workEditions = sqliteTable('work_editions', {
+  id: text('id').primaryKey(),
+  workId: text('work_id').notNull().references(() => works.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  notes: text('notes'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+}, (t) => [index('work_editions_work_idx').on(t.workId)])
 
 export const workFiles = sqliteTable(
   'work_files',
@@ -136,6 +146,7 @@ export const workFiles = sqliteTable(
     workId: text('work_id')
       .notNull()
       .references(() => works.id, { onDelete: 'cascade' }),
+    editionId: text('edition_id').references(() => workEditions.id),
     kind: text('kind').notNull(), // 'part' | 'score' | 'audio' | 'other'
     partId: text('part_id').references(() => parts.id),
     label: text('label'),
@@ -200,6 +211,7 @@ export const projectWorks = sqliteTable(
     workId: text('work_id')
       .notNull()
       .references(() => works.id, { onDelete: 'cascade' }),
+    editionId: text('edition_id').references(() => workEditions.id),
     position: integer('position').notNull(),
     note: text('note'),
     // Slagverksoppsettet for DETTE stykket i DETTE prosjektet — hvilke

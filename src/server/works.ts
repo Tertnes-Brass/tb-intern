@@ -1,9 +1,10 @@
 import { createServerFn } from '@tanstack/react-start'
 import { env } from 'cloudflare:workers'
-import { and, asc, desc, eq, inArray, like, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, like, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
-import { parts, projectWorks, projects, workFiles, workLinks, works } from '../db/schema'
+import { parts, projectWorks, projects, workFiles, workLinks, workEditions, works } from '../db/schema'
+import { resolveEdition } from './work-editions-store'
 import { newId } from '../lib/id'
 import { guessPartFromFilename } from '../lib/taxonomy'
 import {
@@ -71,6 +72,8 @@ export const listWorks = createServerFn()
           n: sql<number>`count(*)`,
         })
         .from(workFiles)
+        .innerJoin(works, eq(workFiles.workId, works.id))
+        .where(sql`${workFiles.editionId} IS ${works.currentEditionId}`)
         .groupBy(workFiles.workId, workFiles.kind),
       d
         .select({ workId: workLinks.workId, n: sql<number>`count(*)` })
@@ -108,7 +111,7 @@ export const listWorks = createServerFn()
   })
 
 export const getWork = createServerFn()
-  .validator(z.object({ id: z.string() }))
+  .validator(z.object({ id: z.string(), editionId: z.string().min(1).nullable().optional() }))
   .handler(async ({ data }) => {
     const me = await requireMe()
     if (!hasFullArchiveAccess(me)) throw new Error('Du har ikke tilgang til hele arkivet')
@@ -116,6 +119,8 @@ export const getWork = createServerFn()
 
     const workRow = (await d.select().from(works).where(eq(works.id, data.id)).limit(1))[0]
     if (!workRow) throw new Error('Fant ikke verket')
+    const editionId = await resolveEdition(d, data.id, data.editionId)
+    const editions = await d.select().from(workEditions).where(eq(workEditions.workId, data.id)).orderBy(asc(workEditions.createdAt), asc(workEditions.id))
 
     const [files, links, allParts, usedIn] = await Promise.all([
       d
@@ -134,11 +139,11 @@ export const getWork = createServerFn()
         })
         .from(workFiles)
         .leftJoin(parts, eq(workFiles.partId, parts.id))
-        .where(eq(workFiles.workId, data.id)),
+        .where(and(eq(workFiles.workId, data.id), editionId === null ? isNull(workFiles.editionId) : eq(workFiles.editionId, editionId))),
       d.select().from(workLinks).where(eq(workLinks.workId, data.id)),
       d.select().from(parts).orderBy(asc(parts.sortOrder)),
       d
-        .select({ id: projects.id, name: projects.name, eventDate: projects.eventDate })
+        .select({ id: projects.id, name: projects.name, eventDate: projects.eventDate, editionId: projectWorks.editionId })
         .from(projectWorks)
         .innerJoin(projects, eq(projectWorks.projectId, projects.id))
         .where(eq(projectWorks.workId, data.id))
@@ -149,6 +154,8 @@ export const getWork = createServerFn()
 
     return {
       work: workRow,
+      editionId,
+      editions: [{ id: null as string | null, name: 'Utgave 1', notes: null as string | null, createdAt: workRow.createdAt }, ...editions],
       files,
       links,
       allParts,
@@ -157,6 +164,29 @@ export const getWork = createServerFn()
       canViewScore: hasPermission(me, 'scores.view'),
       effectivePartIds: me.effectivePartIds,
     }
+  })
+
+export const createWorkEdition = createServerFn({ method: 'POST' })
+  .validator(z.object({ workId: z.string().min(1), name: z.string().trim().min(1, 'Navn er påkrevd').max(100), notes: z.string().trim().max(2000).optional() }))
+  .handler(async ({ data }) => {
+    await requirePermission('works.manage')
+    const d = db()
+    await resolveEdition(d, data.workId, null)
+    const id = newId()
+    await d.insert(workEditions).values({ id, workId: data.workId, name: data.name, notes: data.notes || null, createdAt: new Date() })
+    return { id }
+  })
+
+export const setCurrentWorkEdition = createServerFn({ method: 'POST' })
+  .validator(z.object({ workId: z.string().min(1), editionId: z.string().min(1).nullable() }))
+  .handler(async ({ data }) => {
+    await requirePermission('works.manage')
+    const d = db()
+    const editionId = await resolveEdition(d, data.workId, data.editionId)
+    const file = (await d.select({ id: workFiles.id }).from(workFiles).where(and(eq(workFiles.workId, data.workId), editionId === null ? isNull(workFiles.editionId) : eq(workFiles.editionId, editionId))).limit(1))[0]
+    if (!file) throw new Error('Last opp filer til utgaven før den settes som gjeldende')
+    await d.update(works).set({ currentEditionId: editionId, updatedAt: new Date() }).where(eq(works.id, data.workId))
+    return { ok: true }
   })
 
 const workInput = workMetadataInput.extend({
@@ -286,15 +316,16 @@ export const setWorkFilePart = createServerFn({ method: 'POST' })
  * (kind = 'other'). Nyttig når besetning/aliaser er endret etter opplasting.
  */
 export const rematchWorkFiles = createServerFn({ method: 'POST' })
-  .validator(z.object({ workId: z.string() }))
+  .validator(z.object({ workId: z.string(), editionId: z.string().min(1).nullable().optional() }))
   .handler(async ({ data }) => {
     await requirePermission('works.manage')
     const d = db()
+    const editionId = await resolveEdition(d, data.workId, data.editionId)
     const partDefs = await d.select().from(parts).orderBy(asc(parts.sortOrder))
     const unplaced = await d
       .select({ id: workFiles.id, fileName: workFiles.fileName })
       .from(workFiles)
-      .where(and(eq(workFiles.workId, data.workId), eq(workFiles.kind, 'other')))
+      .where(and(eq(workFiles.workId, data.workId), eq(workFiles.kind, 'other'), editionId === null ? isNull(workFiles.editionId) : eq(workFiles.editionId, editionId)))
 
     let matched = 0
     for (const f of unplaced) {

@@ -7,6 +7,7 @@ import { parts, workFiles, works } from '../../../db/schema'
 import { guessPartFromFilename, isAudioFilename } from '../../../lib/taxonomy'
 import { MAX_PARTS } from '../../../lib/upload'
 import { currentUser, hasPermission } from '../../../server/access'
+import { resolveEdition } from '../../../server/work-editions-store'
 import { verifyUploadTicket } from '../../../server/upload-token'
 
 const Body = z.object({
@@ -45,6 +46,11 @@ export const Route = createFileRoute('/api/upload/complete')({
           return Response.json({ error: 'Opplastingen er utløpt — prøv på nytt' }, { status: 400 })
         }
 
+        // Billetten binder opplastingen til utgaven som ble valgt ved start.
+        const d = db()
+        let editionId: string | null
+        try { editionId = await resolveEdition(d, ticket.workId, ticket.editionId ?? null) }
+        catch { return Response.json({ error: 'Verket eller utgaven finnes ikke lenger' }, { status: 400 }) }
         const upload = env.FILES.resumeMultipartUpload(ticket.key, ticket.uploadId)
         let object: R2Object
         try {
@@ -53,7 +59,6 @@ export const Route = createFileRoute('/api/upload/complete')({
           return Response.json({ error: 'Klarte ikke sette sammen filen' }, { status: 400 })
         }
 
-        const d = db()
         const partDefs = await d.select().from(parts).orderBy(asc(parts.sortOrder))
         const isAudio = isAudioFilename(ticket.fileName)
         // En eksplisitt stemme må finnes i besetningen. Faller vi tilbake til
@@ -68,6 +73,7 @@ export const Route = createFileRoute('/api/upload/complete')({
         await d.insert(workFiles).values({
           id: ticket.fileId,
           workId: ticket.workId,
+          editionId,
           kind,
           partId,
           label: null,

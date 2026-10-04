@@ -36,6 +36,7 @@ type SplitterFile = { id: string; fileName: string; kind: string }
 
 type SplitterProps = {
   work: { id: string; title: string }
+  editionId?: string | null
   allParts: SplitterPart[]
   files: SplitterFile[]
 }
@@ -88,7 +89,7 @@ export function PdfSplitterLauncher(props: SplitterProps) {
   )
 }
 
-function PdfSplitterModal({ work, allParts, files, onClose }: SplitterProps & { onClose: () => void }) {
+function PdfSplitterModal({ work, editionId, allParts, files, onClose }: SplitterProps & { onClose: () => void }) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Kildedokumentet holdes utenfor state: det er stort, og skal aldri utløse
@@ -251,6 +252,7 @@ function PdfSplitterModal({ work, allParts, files, onClose }: SplitterProps & { 
         update(i, { status: 'laster', size: file.size })
         await uploadWorkFile({
           workId: work.id,
+          editionId,
           file,
           partId: part.partId,
           onProgress: (loaded) => update(i, { loaded }),

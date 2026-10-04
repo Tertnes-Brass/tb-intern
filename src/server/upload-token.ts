@@ -10,6 +10,7 @@ import { env } from 'cloudflare:workers'
  */
 export type UploadTicket = {
   workId: string
+  editionId?: string | null
   fileId: string
   key: string
   uploadId: string

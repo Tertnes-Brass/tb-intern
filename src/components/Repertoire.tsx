@@ -117,6 +117,7 @@ export function RepertoireRow({
   index,
   manage,
   percussion,
+  edition,
   shareToken,
 }: {
   item: ProjectWorkDetail
@@ -128,6 +129,7 @@ export function RepertoireRow({
    * ikke skal se det. Prosjektsiden sender inn den redigerbare varianten.
    */
   percussion?: ReactNode
+  edition?: ReactNode
   shareToken?: string
 }) {
   const tokenSuffix = shareToken ? `?t=${shareToken}` : ''
@@ -150,6 +152,7 @@ export function RepertoireRow({
         <p className="mt-0.5 text-[0.85rem] text-ink-soft">
           {[item.composer, item.arranger ? `arr. ${item.arranger}` : null].filter(Boolean).join(' · ') || '—'}
         </p>
+        {edition ?? (item.editionName ? <p className="mt-1 text-xs text-ink-faint">{item.editionName}</p> : null)}
         {item.note && (
           <p className="mt-1.5">
             <Stamp tone="oxblood">{item.note}</Stamp>
@@ -204,12 +207,14 @@ export function RepertoireList({
   items,
   manage,
   percussion,
+  edition,
   shareToken,
   className = '',
 }: {
   items: ProjectWorkDetail[]
   manage?: (item: ProjectWorkDetail, index: number) => ReactNode
   percussion?: (item: ProjectWorkDetail, index: number) => ReactNode
+  edition?: (item: ProjectWorkDetail, index: number) => ReactNode
   shareToken?: string
   className?: string
 }) {
@@ -222,6 +227,7 @@ export function RepertoireList({
           index={i + 1}
           manage={manage?.(item, i)}
           percussion={percussion?.(item, i)}
+          edition={edition?.(item, i)}
           shareToken={shareToken}
         />
       ))}

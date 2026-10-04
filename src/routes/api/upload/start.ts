@@ -7,10 +7,12 @@ import { works } from '../../../db/schema'
 import { newId } from '../../../lib/id'
 import { PART_SIZE, uploadExtension, uploadRejectionReason } from '../../../lib/upload'
 import { currentUser, hasPermission } from '../../../server/access'
+import { resolveEdition } from '../../../server/work-editions-store'
 import { signUploadTicket } from '../../../server/upload-token'
 
 const Body = z.object({
   workId: z.string().min(1),
+  editionId: z.string().min(1).nullable().optional(),
   fileName: z.string().min(1).max(300),
   // Grensene håndheves av uploadRejectionReason, som gir en begrunnelse
   // klienten kan vise — her slipper vi bare gjennom noe som er et tall.
@@ -45,12 +47,17 @@ export const Route = createFileRoute('/api/upload/start')({
         )[0]
         if (!work) return Response.json({ error: 'Fant ikke verket' }, { status: 404 })
 
+        let editionId: string | null
+        try { editionId = await resolveEdition(db(), workId, parsed.data.editionId) }
+        catch { return Response.json({ error: 'Utgaven tilhører ikke dette verket' }, { status: 400 }) }
+
         const fileId = newId()
         const key = `works/${workId}/${fileId}.${uploadExtension(fileName)}`
         const upload = await env.FILES.createMultipartUpload(key)
 
         const token = await signUploadTicket({
           workId,
+          editionId,
           fileId,
           key,
           uploadId: upload.uploadId,

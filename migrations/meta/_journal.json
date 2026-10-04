@@ -127,6 +127,13 @@
       "when": 1790439927099,
       "tag": "0017_forum-ulest",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1791133639093,
+      "tag": "0018_verk-utgaver",
+      "breakpoints": true
     }
   ]
 }

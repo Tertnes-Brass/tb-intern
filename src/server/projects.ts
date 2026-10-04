@@ -2,7 +2,8 @@ import { createServerFn } from '@tanstack/react-start'
 import { and, asc, desc, eq, gte, inArray, like, lt, lte, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db, type Db } from '../db'
-import { parts, projectWorks, projects, seasons, workFiles, workLinks, works } from '../db/schema'
+import { parts, projectWorks, projects, seasons, workFiles, workLinks, workEditions, works } from '../db/schema'
+import { resolveEdition } from './work-editions-store'
 import { newId } from '../lib/id'
 import { PERCUSSION_MAX_LENGTH, parsePercussionSetup, showPercussionFor } from '../lib/percussion'
 import {
@@ -25,6 +26,9 @@ import {
 
 export type ProjectWorkDetail = {
   workId: string
+  editionId?: string | null
+  editionName?: string
+  editions?: Array<{ id: string | null; name: string }>
   title: string
   composer: string | null
   arranger: string | null
@@ -50,6 +54,7 @@ export async function assembleRepertoire(
   const rows = await d
     .select({
       workId: works.id,
+      editionId: projectWorks.editionId,
       title: works.title,
       composer: works.composer,
       arranger: works.arranger,
@@ -67,11 +72,12 @@ export async function assembleRepertoire(
   if (rows.length === 0) return []
   const workIds = rows.map((r) => r.workId)
 
-  const [files, links] = await Promise.all([
+  const [files, links, editions] = await Promise.all([
     d
       .select({
         id: workFiles.id,
         workId: workFiles.workId,
+        editionId: workFiles.editionId,
         kind: workFiles.kind,
         partId: workFiles.partId,
         label: workFiles.label,
@@ -84,10 +90,12 @@ export async function assembleRepertoire(
       .leftJoin(parts, eq(workFiles.partId, parts.id))
       .where(inArray(workFiles.workId, workIds)),
     d.select().from(workLinks).where(inArray(workLinks.workId, workIds)),
+    d.select({ id: workEditions.id, workId: workEditions.workId, name: workEditions.name }).from(workEditions).where(inArray(workEditions.workId, workIds)).orderBy(asc(workEditions.createdAt), asc(workEditions.id)),
   ])
 
   return rows.map((r) => {
-    const wf = files.filter((f) => f.workId === r.workId)
+    const wf = files.filter((f) => f.workId === r.workId && f.editionId === r.editionId)
+    const availableEditions = [{ id: null as string | null, name: 'Utgave 1' }, ...editions.filter((e) => e.workId === r.workId).map(({ id, name }) => ({ id, name }))]
     // Samme policy som fil-gaten: metadata kan ikke røpe stemmer som
     // nedlastings-API-et ville avvist.
     const partFiles = wf
@@ -97,6 +105,8 @@ export async function assembleRepertoire(
     const score = wf.find((f) => f.kind === 'score')
     return {
       ...r,
+      editionName: availableEditions.find((e) => e.id === r.editionId)?.name ?? 'Ukjent utgave',
+      editions: availableEditions,
       links: links.filter((l) => l.workId === r.workId).map((l) => ({ id: l.id, kind: l.kind, url: l.url, label: l.label })),
       partFiles,
       myFiles: wf
@@ -377,6 +387,7 @@ export const addWorkToProject = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     await requirePermission('projects.manage')
     const d = db()
+    const editionId = await resolveEdition(d, data.workId)
     const max = await d
       .select({ m: sql<number>`coalesce(max(position), 0)` })
       .from(projectWorks)
@@ -384,9 +395,23 @@ export const addWorkToProject = createServerFn({ method: 'POST' })
     await d.insert(projectWorks).values({
       projectId: data.projectId,
       workId: data.workId,
+      editionId,
       position: (max[0]?.m ?? 0) + 1,
       note: data.note?.trim() || null,
     })
+    return { ok: true }
+  })
+
+export const setProjectWorkEdition = createServerFn({ method: 'POST' })
+  .validator(z.object({ projectId: z.string().min(1), workId: z.string().min(1), editionId: z.string().min(1).nullable() }))
+  .handler(async ({ data }) => {
+    await requirePermission('projects.manage')
+    const d = db()
+    const editionId = await resolveEdition(d, data.workId, data.editionId)
+    const selected = and(eq(projectWorks.projectId, data.projectId), eq(projectWorks.workId, data.workId))
+    const row = (await d.select({ id: projectWorks.workId }).from(projectWorks).where(selected).limit(1))[0]
+    if (!row) throw new Error('Verket finnes ikke i prosjektet')
+    await d.update(projectWorks).set({ editionId }).where(selected)
     return { ok: true }
   })
 

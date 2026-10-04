@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { PercussionNotesField, PercussionSetupField } from '../../../components/Percussion'
 import { ProjectFormModal } from '../../../components/ProjectForm'
 import { ProjectOrderEditor } from '../../../components/ProjectOrderEditor'
+import { ProjectWorkEdition } from '../../../components/ProjectWorkEdition'
 import { RepertoireList } from '../../../components/Repertoire'
 import { toast, toastError } from '../../../components/toast'
 import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
@@ -161,6 +162,7 @@ function ProjectPage() {
         ) : (
           <RepertoireList
             items={data.repertoire}
+            edition={data.canManage ? (item) => <ProjectWorkEdition projectId={p.id} item={item} /> : undefined}
             percussion={
               data.canManage
                 ? (item) => (

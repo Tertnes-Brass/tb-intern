@@ -34,11 +34,13 @@ async function call<T>(url: string, init: RequestInit): Promise<T> {
  */
 export async function uploadWorkFile({
   workId,
+  editionId,
   file,
   partId,
   onProgress,
 }: {
   workId: string
+  editionId?: string | null
   file: File
   partId?: string
   onProgress?: (loaded: number) => void
@@ -65,7 +67,7 @@ export async function uploadWorkFile({
   const { token, partSize } = await call<{ token: string; partSize: number }>('/api/upload/start', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ workId, fileName: file.name, fileSize: file.size }),
+    body: JSON.stringify({ workId, editionId, fileName: file.name, fileSize: file.size }),
   })
 
   try {
