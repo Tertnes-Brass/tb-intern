@@ -369,18 +369,21 @@ type WorkData = Awaited<ReturnType<typeof getWork>>
 function FilesSection({ data }: { data: WorkData }) {
   const router = useRouter()
   const [rematching, setRematching] = useState(false)
+  const [fileQuery, setFileQuery] = useState('')
+  const query = fileQuery.trim().toLocaleLowerCase('nb-NO')
+  const visibleFiles = data.files.filter((f) => [f.fileName, zipLabelFor(f)].some((value) => value.toLocaleLowerCase('nb-NO').includes(query)))
   const [selecting, setSelecting] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const selectedFiles = data.files.filter((f) => selectedIds.includes(f.id))
+  const selectedFiles = visibleFiles.filter((f) => selectedIds.includes(f.id))
   const closeSelection = () => { setSelecting(false); setSelectedIds([]) }
   useEffect(() => {
     setSelectedIds((ids) => ids.filter((id) => data.files.some((f) => f.id === id)))
     setConfirmDelete(false)
   }, [data.files, data.work.id])
   const sections = new Map<string, typeof data.files>()
-  for (const f of data.files) {
+  for (const f of visibleFiles) {
     const key =
       f.kind === 'audio' ? 'audio' : f.kind === 'other' || !f.partSection ? 'other' : f.partSection
     const list = sections.get(key) ?? []
@@ -405,17 +408,29 @@ function FilesSection({ data }: { data: WorkData }) {
 
   return (
     <section className="rise space-y-6" style={{ animationDelay: '140ms' }}>
+      <div className="sheet space-y-3 p-4">
+        <Field label="Filtrer filer" hint="Søk i filnavn og stemmenavn i denne utgaven.">
+          <input type="search" className="field-input" value={fileQuery} placeholder="For eksempel Conselho 3 …" disabled={deleting} onChange={(e) => {
+            setFileQuery(e.target.value)
+            setSelectedIds([])
+            setConfirmDelete(false)
+          }} />
+        </Field>
+        <p className="text-sm text-ink-soft" role="status">Viser {visibleFiles.length} av {data.files.length} filer</p>
+        {fileQuery && <Button size="sm" variant="ghost" disabled={deleting} onClick={() => { setFileQuery(''); setSelectedIds([]); setConfirmDelete(false) }}>Nullstill filter</Button>}
+      </div>
       {data.canManage && (
         <div className="sheet flex flex-wrap items-center gap-3 p-4">
           <Button onClick={() => selecting ? closeSelection() : setSelecting(true)} disabled={deleting}>
             {selecting ? 'Avslutt valg' : 'Velg flere filer'}
           </Button>
           {selecting && <>
-            <Button size="sm" onClick={() => setSelectedIds(data.files.filter((f) => f.kind === 'part' || f.kind === 'score').slice(0, 100).map((f) => f.id))}>Velg alle notefiler</Button>
+            <Button size="sm" onClick={() => setSelectedIds(visibleFiles.filter((f) => f.kind === 'part' || f.kind === 'score').slice(0, 100).map((f) => f.id))}>Velg alle notefiler</Button>
+            <Button size="sm" disabled={visibleFiles.length === 0} onClick={() => setSelectedIds(visibleFiles.slice(0, 100).map((f) => f.id))}>{visibleFiles.length > 100 ? 'Velg de første 100 viste' : 'Velg alle viste'}</Button>
             <Button size="sm" variant="ghost" onClick={() => setSelectedIds([])}>Fjern valg</Button>
             <span className="text-sm text-ink-soft" role="status">{selectedFiles.length} filer valgt</span>
             <Button variant="danger" disabled={selectedFiles.length === 0} onClick={() => setConfirmDelete(true)}>Slett valgte ({selectedFiles.length})</Button>
-            <p className="w-full text-xs text-ink-soft">Velg opptil 100 filer. «Velg alle notefiler» velger stemmer og partitur; lyd og uplasserte filer kan krysses av enkeltvis.</p>
+            <p className="w-full text-xs text-ink-soft">Velg opptil 100 filer blant treffene. «Velg alle viste» tar med alle filtyper. Valget tømmes når filteret endres.</p>
           </>}
         </div>
       )}
@@ -439,6 +454,7 @@ function FilesSection({ data }: { data: WorkData }) {
           }}>Slett {selectedFiles.length} filer</Button>
         </div>
       </Modal>
+      {visibleFiles.length === 0 && <div className="sheet"><EmptyState title="Ingen filer matcher filteret">Prøv et annet filnavn eller stemmenavn.</EmptyState></div>}
       {order
         .filter((key) => sections.has(key))
         .map((key) => (
