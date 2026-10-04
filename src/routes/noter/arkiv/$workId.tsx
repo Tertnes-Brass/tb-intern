@@ -120,11 +120,11 @@ function WorkPage() {
 
       <WorkEditions key={w.id} data={data} onSelect={(editionId) => { void router.navigate({ to: '/noter/arkiv/$workId', params: { workId: w.id }, search: { utgave: editionId ?? 'original' } }) }} />
 
-      {data.canManage && <UploadZone key={`${w.id}:${data.editionId}`} workId={w.id} editionId={data.editionId} />}
+      {data.canManage && <UploadZone key={`upload:${w.id}:${data.editionId}`} workId={w.id} editionId={data.editionId} />}
 
-      {data.canManage && <PdfSplitterLauncher key={`${w.id}:${data.editionId}`} editionId={data.editionId} work={w} allParts={data.allParts} files={data.files} />}
+      {data.canManage && <PdfSplitterLauncher key={`splitter:${w.id}:${data.editionId}`} editionId={data.editionId} work={w} allParts={data.allParts} files={data.files} />}
 
-      <FilesSection key={`${w.id}:${data.editionId}`} data={data} />
+      <FilesSection key={`files:${w.id}:${data.editionId}`} data={data} />
 
       <LinksSection data={data} />
 
