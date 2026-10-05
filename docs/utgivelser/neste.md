@@ -1,10 +1,12 @@
-# Flere funksjoner i den native iPhone-appen
+# Vedlegg på beskjeder
 
-- Appen får native skjermer for profil, medlemmer, prosjekter, notearkiv, styrearbeid, gruppelederområde og innstillinger.
-- Kalenderen viser øvingsplan og oppmøte. Beskjeder kan redigeres, publiseres og få bilder og omtaler.
-- Noter, lyd og styredokumenter kan åpnes og lastes opp. Samle-PDF-er kan deles i stemmefiler på telefonen.
-- Appen bruker fortsatt samme innlogging, data og tilganger som nettsiden.
+- Styret kan legge til filer under «Vedlegg» når en beskjed skrives eller redigeres.
+- På eksisterende og publiserte beskjeder kan vedlegg fjernes, og nye filer kan lastes opp. Bruk «Lagre endringer» for nye filer; «Fjern» sletter det valgte vedlegget med det samme.
+- Medlemmer får «Last ned»-lenker under beskjeden. Vedlegg følger beskjedenes tilgang, også for utkast og styreinterne beskjeder.
+- Inntil 10 vedlegg à 25 MB. Ved avbrutt opplasting kan du fortsette med samme utkast uten å laste opp allerede bekreftede filer på nytt.
 
-Til testing: åpne Mer i appen og prøv områdene du har tilgang til. Kontroller prosjekt, notefil og øvingsplan. Bruk lokale testmedlemmer til prøveinnlegg, oppgaver og opplastinger.
+Prøv gjerne en ny beskjed med PDF-/Excel-vedlegg, og rediger den etter publisering for å fjerne en fil og legge til en ny.
 
-Appen er fortsatt en Xcode-/simulatorversjon; dette publiserer den ikke i App Store. Ingen databasemigrasjon er nødvendig.
+Prosjektstatus og alle 24 åpne issues er gjennomgått i `docs/prosjektstatus.md`. Flere større saker er delvis levert; kontaktinformasjon i #14 er dekket gjennom profilfunksjonen i #65. Issues er ikke automatisk lukket.
+
+Dette gjelder nettsiden. Native vedleggsvisning/opplasting i iPhone-appen er ikke lagt til i denne leveransen.

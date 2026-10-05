@@ -42,6 +42,8 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiBoardFilesDocumentIdRouteImport } from './routes/api/board-files/$documentId'
 import { Route as ApiBoardFilesUploadRouteImport } from './routes/api/board-files/upload'
 import { Route as ApiFilesFileIdRouteImport } from './routes/api/files/$fileId'
+import { Route as ApiPostAttachmentsAttachmentIdRouteImport } from './routes/api/post-attachments/$attachmentId'
+import { Route as ApiPostAttachmentsUploadRouteImport } from './routes/api/post-attachments/upload'
 import { Route as ApiPostImagesImageIdRouteImport } from './routes/api/post-images/$imageId'
 import { Route as ApiPostImagesUploadRouteImport } from './routes/api/post-images/upload'
 import { Route as ApiUploadAbortRouteImport } from './routes/api/upload/abort'
@@ -231,6 +233,18 @@ const ApiFilesFileIdRoute = ApiFilesFileIdRouteImport.update({
   path: '/api/files/$fileId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPostAttachmentsAttachmentIdRoute =
+  ApiPostAttachmentsAttachmentIdRouteImport.update({
+    id: '/api/post-attachments/$attachmentId',
+    path: '/api/post-attachments/$attachmentId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPostAttachmentsUploadRoute =
+  ApiPostAttachmentsUploadRouteImport.update({
+    id: '/api/post-attachments/upload',
+    path: '/api/post-attachments/upload',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPostImagesImageIdRoute = ApiPostImagesImageIdRouteImport.update({
   id: '/api/post-images/$imageId',
   path: '/api/post-images/$imageId',
@@ -379,6 +393,8 @@ export interface FileRoutesByFullPath {
   '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
   '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/post-attachments/$attachmentId': typeof ApiPostAttachmentsAttachmentIdRoute
+  '/api/post-attachments/upload': typeof ApiPostAttachmentsUploadRoute
   '/api/post-images/$imageId': typeof ApiPostImagesImageIdRoute
   '/api/post-images/upload': typeof ApiPostImagesUploadRoute
   '/api/upload/abort': typeof ApiUploadAbortRoute
@@ -433,6 +449,8 @@ export interface FileRoutesByTo {
   '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
   '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/post-attachments/$attachmentId': typeof ApiPostAttachmentsAttachmentIdRoute
+  '/api/post-attachments/upload': typeof ApiPostAttachmentsUploadRoute
   '/api/post-images/$imageId': typeof ApiPostImagesImageIdRoute
   '/api/post-images/upload': typeof ApiPostImagesUploadRoute
   '/api/upload/abort': typeof ApiUploadAbortRoute
@@ -491,6 +509,8 @@ export interface FileRoutesById {
   '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
   '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/post-attachments/$attachmentId': typeof ApiPostAttachmentsAttachmentIdRoute
+  '/api/post-attachments/upload': typeof ApiPostAttachmentsUploadRoute
   '/api/post-images/$imageId': typeof ApiPostImagesImageIdRoute
   '/api/post-images/upload': typeof ApiPostImagesUploadRoute
   '/api/upload/abort': typeof ApiUploadAbortRoute
@@ -550,6 +570,8 @@ export interface FileRouteTypes {
     | '/api/board-files/$documentId'
     | '/api/board-files/upload'
     | '/api/files/$fileId'
+    | '/api/post-attachments/$attachmentId'
+    | '/api/post-attachments/upload'
     | '/api/post-images/$imageId'
     | '/api/post-images/upload'
     | '/api/upload/abort'
@@ -604,6 +626,8 @@ export interface FileRouteTypes {
     | '/api/board-files/$documentId'
     | '/api/board-files/upload'
     | '/api/files/$fileId'
+    | '/api/post-attachments/$attachmentId'
+    | '/api/post-attachments/upload'
     | '/api/post-images/$imageId'
     | '/api/post-images/upload'
     | '/api/upload/abort'
@@ -661,6 +685,8 @@ export interface FileRouteTypes {
     | '/api/board-files/$documentId'
     | '/api/board-files/upload'
     | '/api/files/$fileId'
+    | '/api/post-attachments/$attachmentId'
+    | '/api/post-attachments/upload'
     | '/api/post-images/$imageId'
     | '/api/post-images/upload'
     | '/api/upload/abort'
@@ -715,6 +741,8 @@ export interface RootRouteChildren {
   ApiBoardFilesDocumentIdRoute: typeof ApiBoardFilesDocumentIdRoute
   ApiBoardFilesUploadRoute: typeof ApiBoardFilesUploadRoute
   ApiFilesFileIdRoute: typeof ApiFilesFileIdRoute
+  ApiPostAttachmentsAttachmentIdRoute: typeof ApiPostAttachmentsAttachmentIdRoute
+  ApiPostAttachmentsUploadRoute: typeof ApiPostAttachmentsUploadRoute
   ApiPostImagesImageIdRoute: typeof ApiPostImagesImageIdRoute
   ApiPostImagesUploadRoute: typeof ApiPostImagesUploadRoute
   ApiUploadAbortRoute: typeof ApiUploadAbortRoute
@@ -957,6 +985,20 @@ declare module '@tanstack/react-router' {
       path: '/api/files/$fileId'
       fullPath: '/api/files/$fileId'
       preLoaderRoute: typeof ApiFilesFileIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/post-attachments/$attachmentId': {
+      id: '/api/post-attachments/$attachmentId'
+      path: '/api/post-attachments/$attachmentId'
+      fullPath: '/api/post-attachments/$attachmentId'
+      preLoaderRoute: typeof ApiPostAttachmentsAttachmentIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/post-attachments/upload': {
+      id: '/api/post-attachments/upload'
+      path: '/api/post-attachments/upload'
+      fullPath: '/api/post-attachments/upload'
+      preLoaderRoute: typeof ApiPostAttachmentsUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/post-images/$imageId': {
@@ -1209,6 +1251,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiBoardFilesDocumentIdRoute: ApiBoardFilesDocumentIdRoute,
   ApiBoardFilesUploadRoute: ApiBoardFilesUploadRoute,
   ApiFilesFileIdRoute: ApiFilesFileIdRoute,
+  ApiPostAttachmentsAttachmentIdRoute: ApiPostAttachmentsAttachmentIdRoute,
+  ApiPostAttachmentsUploadRoute: ApiPostAttachmentsUploadRoute,
   ApiPostImagesImageIdRoute: ApiPostImagesImageIdRoute,
   ApiPostImagesUploadRoute: ApiPostImagesUploadRoute,
   ApiUploadAbortRoute: ApiUploadAbortRoute,

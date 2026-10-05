@@ -1,8 +1,10 @@
-import { useNavigate, useRouter } from '@tanstack/react-router'
+import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { useMemo, useRef, useState } from 'react'
+import { attachmentRejectionReason, MAX_POST_ATTACHMENTS, postAttachmentUrl, uploadPostAttachment, type PostAttachment } from '../lib/post-attachments'
+import { deletePostAttachment } from '../server/post-attachments'
 import { markdownToHtml } from '../lib/markdown'
 import { type MentionUser, mentionDraft, toMarkers } from '../lib/mentions'
-import { postImageUrl, uploadPostImages } from '../lib/post-images-client'
+import { postImageUrl, uploadPostImage } from '../lib/post-images-client'
 import {
   DEFAULT_NOTIFY,
   DEFAULT_POST_FORMAT,
@@ -24,7 +26,7 @@ import { Button, Field } from './ui'
  * for alle: et vanlig medlem ser tekst, valgfri tittel og bilder, mens
  * `posts.publish` i tillegg får målgruppe, viktighet, «Fra styret» og e-post.
  *
- * Flyten er alltid opprett → last opp bilder → publiser, slik at et innlegg
+ * Flyten er alltid opprett → last opp bilder og vedlegg → publiser, slik at et innlegg
  * aldri blir synlig halvferdig og bilder aldri blir foreldreløse.
  *
  * Formatvalget (#79) er ikke privilegert: alle kan velge markdown når teksten
@@ -53,6 +55,7 @@ export type PostFormValues = {
   fromArchive: boolean
   publishedAt: number | null
   images: PostFormImage[]
+  attachments?: PostAttachment[]
   /** Dagens navn på de omtalte i `body`, slik at feltet kan vise `@Navn`. */
   mentions: MentionUser[]
 }
@@ -101,6 +104,12 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
   const [notify, setNotify] = useState(DEFAULT_NOTIFY)
   const [existingImages, setExistingImages] = useState<PostFormImage[]>(post?.images ?? [])
   const [files, setFiles] = useState<File[]>([])
+  const [savedPostId, setSavedPostId] = useState(post?.id)
+  const savedIdRef = useRef(post?.id)
+  const [existingAttachments, setExistingAttachments] = useState<PostAttachment[]>(post?.attachments ?? [])
+  const [attachmentFiles, setAttachmentFiles] = useState<File[]>([])
+  const [removingAttachment, setRemovingAttachment] = useState<string | null>(null)
+  const attachmentBudget = MAX_POST_ATTACHMENTS - existingAttachments.length - attachmentFiles.length
   const [busy, setBusy] = useState<'draft' | 'publish' | null>(null)
   const isPublished = post?.publishedAt != null
   const imageBudget = MAX_POST_IMAGES - existingImages.length - files.length
@@ -141,7 +150,7 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
     }
   }
 
-  /** Lagrer teksten og laster opp nye bilder. Returnerer id-en til innlegget. */
+  /** Lagrer teksten og laster opp nye bilder og vedlegg. Returnerer id-en til innlegget. */
   const save = async (): Promise<string> => {
     const values = {
       title: title.trim() || null,
@@ -155,18 +164,29 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
       fromArchive,
     }
     if (!values.body) throw new Error('Skriv noe i teksten først')
-    const id = post ? post.id : (await createPost({ data: values })).id
-    if (post) await updatePost({ data: { id, ...values } })
-    if (files.length > 0) {
-      try {
-        await uploadPostImages(id, files)
-      } catch (err) {
-        // Teksten er lagret; si tydelig fra hvor den ble av, slik at ingen
-        // skriver det samme innlegget på nytt.
-        const reason = err instanceof Error ? err.message : 'Bildet ble ikke lastet opp'
-        throw new Error(`${reason}. Innlegget er lagret som utkast — åpne det og prøv bildene på nytt.`)
+    let id = savedIdRef.current
+    if (id) await updatePost({ data: { id, ...values } })
+    else {
+      id = (await createPost({ data: values })).id
+      savedIdRef.current = id
+      setSavedPostId(id)
+    }
+    try {
+      // Remove each successfully uploaded file from the pending list, so a
+      // retry after a partial failure never duplicates those uploads.
+      for (const file of files) {
+        const uploaded = await uploadPostImage(id, file)
+        setExistingImages((current) => [...current, uploaded])
+        setFiles((current) => current.filter((pending) => pending !== file))
       }
-      setFiles([])
+      for (const file of attachmentFiles) {
+        const uploaded = await uploadPostAttachment(id, file)
+        setExistingAttachments((current) => [...current, uploaded])
+        setAttachmentFiles((current) => current.filter((pending) => pending !== file))
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Filen ble ikke lastet opp'
+      throw new Error(`${reason}. Teksten er lagret${isPublished ? '' : ' som utkast'}. Prøv igjen eller åpne den lagrede beskjeden nedenfor.`)
     }
     return id
   }
@@ -324,6 +344,7 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
                 <button
                   type="button"
                   onClick={() => void removeExisting(image)}
+                  disabled={busy !== null}
                   aria-label={`Fjern ${image.fileName}`}
                   className="absolute right-1 top-1 grid h-6 w-6 cursor-pointer place-items-center rounded-full bg-paper/90 text-ink-soft transition-colors hover:text-danger"
                 >
@@ -339,6 +360,7 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
                 <button
                   type="button"
                   onClick={() => setFiles((current) => current.filter((_, index) => index !== i))}
+                  disabled={busy !== null}
                   aria-label={`Fjern ${file.name}`}
                   className="absolute right-1 top-1 grid h-6 w-6 cursor-pointer place-items-center rounded-full bg-paper/90 text-ink-soft transition-colors hover:text-danger"
                 >
@@ -355,12 +377,46 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
           multiple
           onChange={(e) => addFiles(e.target.files)}
           className="block w-full text-xs text-ink-soft file:mr-3 file:cursor-pointer file:rounded-[9px] file:border file:border-line-strong file:bg-paper-raised file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink hover:file:border-brass"
-          disabled={imageBudget <= 0}
+          disabled={busy !== null || imageBudget <= 0}
         />
         <p className="mt-1 text-xs text-ink-faint">
           Inntil {MAX_POST_IMAGES} bilder, maks 10 MB hver. Bildene er kun synlige for innloggede medlemmer.
         </p>
       </div>
+
+      {canBoard && <div className="space-y-3">
+        <p className="text-[0.8rem] font-medium text-ink-soft">Vedlegg</p>
+        <p className="text-xs text-ink-faint">Inntil {MAX_POST_ATTACHMENTS} filer, maks 25 MB hver. De som kan lese beskjeden, kan laste ned vedleggene.</p>
+        {(existingAttachments.length > 0 || attachmentFiles.length > 0) && <ul className="sheet divide-y divide-line">
+          {existingAttachments.map((file) => <li key={file.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+            <a className="link-brass break-all" href={postAttachmentUrl(file.id)} download>{file.fileName}</a>
+            <Button type="button" disabled={busy !== null || removingAttachment !== null} onClick={async () => {
+              setRemovingAttachment(file.id)
+              try { await deletePostAttachment({ data: { id: file.id } }); setExistingAttachments((current) => current.filter((f) => f.id !== file.id)); await router.invalidate() }
+              catch (error) { toastError(error) }
+              finally { setRemovingAttachment(null) }
+            }} aria-label={`Fjern ${file.fileName}`}>Fjern</Button>
+          </li>)}
+          {attachmentFiles.map((file, index) => <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+            <span className="break-all">{file.name} <span className="text-ink-faint">· ikke lastet opp ennå</span></span>
+            <Button type="button" disabled={busy !== null} onClick={() => setAttachmentFiles((current) => current.filter((_, i) => i !== index))} aria-label={`Fjern ${file.name}`}>Fjern</Button>
+          </li>)}
+        </ul>}
+        <label className="block text-sm text-ink-soft">Legg til vedlegg
+          <input type="file" multiple disabled={busy !== null || removingAttachment !== null || attachmentBudget <= 0}
+            className="field-input mt-1" onChange={(event) => {
+              const picked = Array.from(event.target.files ?? []).filter((file) => {
+                const reason = attachmentRejectionReason(file.size)
+                if (reason) toast(`${file.name}: ${reason}`, 'error')
+                return !reason
+              })
+              if (picked.length > attachmentBudget) toast(`Maks ${MAX_POST_ATTACHMENTS} vedlegg per beskjed`, 'error')
+              setAttachmentFiles((current) => [...current, ...picked.slice(0, Math.max(0, attachmentBudget))])
+              event.target.value = ''
+            }} />
+        </label>
+      </div>}
+      {!post && savedPostId && <p className="text-sm text-ink-soft">Beskjeden er lagret. <Link to="/beskjeder/$postId" params={{ postId: savedPostId }} className="link-brass">Åpne den lagrede beskjeden</Link> for å fortsette senere.</p>}
 
       {canPublish && (
         <>
@@ -425,7 +481,7 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
 
       <div className="flex flex-col-reverse gap-2 border-t border-line pt-5 sm:flex-row sm:justify-end">
         {canPublish && (
-          <Button type="submit" variant="secondary" loading={busy === 'draft'} className="w-full sm:w-auto">
+          <Button type="submit" variant="secondary" loading={busy === 'draft'} disabled={busy !== null || removingAttachment !== null} className="w-full sm:w-auto">
             {isPublished ? 'Lagre endringer' : 'Lagre utkast'}
           </Button>
         )}
@@ -433,6 +489,7 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
           type={canPublish ? 'button' : 'submit'}
           variant="primary"
           loading={busy === 'publish'}
+          disabled={busy !== null || removingAttachment !== null}
           onClick={canPublish ? () => void publish() : undefined}
           className="w-full sm:w-auto"
         >

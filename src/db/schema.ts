@@ -674,6 +674,17 @@ export const postImages = sqliteTable(
   (t) => [index('post_images_post_idx').on(t.postId, t.sortOrder)],
 )
 
+// Vedlegg følger innleggets tilgang; bytene nås kun via /api/post-attachments.
+export const postAttachments = sqliteTable('post_attachments', {
+  id: text('id').primaryKey(),
+  postId: text('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
+  r2Key: text('r2_key').notNull(),
+  fileName: text('file_name').notNull(),
+  size: integer('size').notNull(),
+  uploadedBy: text('uploaded_by').references(() => user.id, { onDelete: 'set null' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+}, (t) => [index('post_attachments_post_idx').on(t.postId, t.createdAt)])
+
 // Én rad per bruker som har valgt noe annet enn standarden. Ingen rad = 'all'
 // for begge kolonnene: fravær av rad skal aldri bety «ingen varsler».
 export const notificationPreferences = sqliteTable('notification_preferences', {

@@ -1,3 +1,5 @@
+import { formatBytes } from '../../../lib/format'
+import { postAttachmentUrl } from '../../../lib/post-attachments'
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { CommentComposer } from '../../../components/CommentComposer'
@@ -282,6 +284,13 @@ function PostPage() {
             ))}
           </ul>
         )}
+        {data.attachments.length > 0 && <section className="sheet space-y-3 p-4">
+          <h2 className="kicker">Vedlegg</h2>
+          <ul className="space-y-3">{data.attachments.map((file) => <li key={file.id}>
+            <a href={postAttachmentUrl(file.id)} download className="link-brass break-all">Last ned {file.fileName}</a>
+            <span className="ml-2 text-xs text-ink-faint">{formatBytes(file.size)}</span>
+          </li>)}</ul>
+        </section>}
         {!isDraft && (
           <div className="flex flex-wrap items-center gap-3 border-t border-line pt-4">
             <LikeButton postId={post.id} count={post.likeCount} mine={post.likedByMe} />
@@ -384,7 +393,7 @@ function PostPage() {
 
       <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Slette innlegget?" kicker="Veggen">
         <p className="text-sm leading-relaxed text-ink-soft">
-          «{post.heading}» slettes for alle, sammen med kommentarer og bilder. E-poster som allerede er sendt, kan ikke
+          «{post.heading}» slettes for alle, sammen med kommentarer, bilder og vedlegg. E-poster som allerede er sendt, kan ikke
           trekkes tilbake.
         </p>
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

@@ -10,6 +10,7 @@ import {
   postCommentMentions,
   postComments,
   postImages,
+  postAttachments,
   postMentions,
   postReactions,
   posts,
@@ -383,6 +384,8 @@ export const getPost = createServerFn()
       post: detail,
       canPublish,
       canArchive: hasPermission(me, 'posts.archive'),
+      attachments: await db().select({ id: postAttachments.id, fileName: postAttachments.fileName, size: postAttachments.size })
+        .from(postAttachments).where(eq(postAttachments.postId, row.id)).orderBy(asc(postAttachments.createdAt), asc(postAttachments.id)),
       meId: me.id,
       comments: commentRows.map(
         (c): PostComment => ({
@@ -572,8 +575,9 @@ export const deletePost = createServerFn({ method: 'POST' })
     // R2 først: databaseraden er den eneste veien tilbake til nøkkelen, så
     // klarer vi ikke å slette bytene, skal raden bli stående.
     const images = await db().select({ r2Key: postImages.r2Key }).from(postImages).where(eq(postImages.postId, data.id))
-    await Promise.all(images.map((img) => env.FILES.delete(img.r2Key)))
-    await db().delete(posts).where(eq(posts.id, data.id)) // kommentarer/likes/bilder via cascade
+    const attachments = await db().select({ r2Key: postAttachments.r2Key }).from(postAttachments).where(eq(postAttachments.postId, data.id))
+    await Promise.all([...images, ...attachments].map((file) => env.FILES.delete(file.r2Key)))
+    await db().delete(posts).where(eq(posts.id, data.id)) // kommentarer/likes/bilder/vedlegg via cascade
     return { ok: true }
   })
 

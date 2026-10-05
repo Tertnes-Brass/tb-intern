@@ -364,3 +364,16 @@ gjensidig utelukkende. Begge skrivekall saniterer feltene på serveren, og
 Arkivarmerket beholdes ved tekstredigering fra en klient uten det nye feltet.
 E-post er fortsatt et eksplisitt valg og bruker samme preferanser og
 idempotenslogg som andre beskjeder.
+
+
+## Vedlegg på beskjeder
+
+`post_attachments` følger den samme innsynsregelen som beskjeden, også ved direkte
+nedlasting fra `/api/post-attachments/$attachmentId`. Aktiv innlogging kreves;
+utkast og styre-målgruppen er skjult for andre medlemmer, bortsett fra forfatterens
+eget innlegg. Bare `posts.publish`/`*` kan laste opp eller fjerne vedlegg. Vanlige
+medlemmer kan laste ned vedlegg på beskjeder de kan lese. Filene vises aldri
+inline og har `private, no-store`. Det finnes ingen offentlig R2-lenke eller
+vikartoken for disse filene. Opplasting bruker servergenererte nøkler og en
+atomisk antallsgrense. R2-bytene slettes før metadata, også ved sletting av hele
+beskjeden.

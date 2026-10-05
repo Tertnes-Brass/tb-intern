@@ -28,7 +28,7 @@ export const PERMISSION_CATALOG: Array<{ key: string; label: string; hint: strin
     hint: 'Se hele oppmøtelista og registrere fravær for et medlem',
   },
   { key: 'forum.moderate', label: 'Moderere forum', hint: 'Redigere tekst og låse eller gjenåpne diskusjoner' },
-  { key: 'posts.publish', label: 'Beskjeder', hint: 'Skrive og publisere beskjeder til korpset' },
+  { key: 'posts.publish', label: 'Beskjeder', hint: 'Skrive og publisere beskjeder med vedlegg til korpset' },
   { key: 'posts.archive', label: 'Notearkivarbeskjeder', hint: 'Merke egne innlegg «Fra notearkivar», sette viktighet og sende e-post til korpset' },
   { key: SETTINGS_PERMISSION, label: 'Innstillinger', hint: 'Administrere besetning og roller' },
 ]

@@ -148,6 +148,13 @@
       "when": 1791141563000,
       "tag": "0020_notearkivar-beskjeder",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1791221651122,
+      "tag": "0021_beskjedvedlegg",
+      "breakpoints": true
     }
   ]
 }

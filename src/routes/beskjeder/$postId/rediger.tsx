@@ -18,7 +18,7 @@ export const Route = createFileRoute('/beskjeder/$postId/rediger')({
 })
 
 function EditPostPage() {
-  const { post, canPublish, canArchive } = Route.useLoaderData()
+  const { post, canPublish, canArchive, attachments } = Route.useLoaderData()
   const isDraft = post.publishedAt === null
 
   if (!post.canEdit) {
@@ -48,7 +48,7 @@ function EditPostPage() {
       </header>
 
       <section className="rise" style={{ animationDelay: '80ms' }}>
-        <PostForm post={post} canPublish={canPublish} canArchive={canArchive} />
+        <PostForm post={{ ...post, attachments }} canPublish={canPublish} canArchive={canArchive} />
       </section>
     </div>
   )
