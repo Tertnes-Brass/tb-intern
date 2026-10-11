@@ -101,15 +101,21 @@ export function mentionChipHtml(name: string | null): string {
 
 /**
  * Kommentaren som HTML. ALT brukerinnhold escapes; det eneste som blir markering
- * er omtale-chipene, som rendreren skriver selv. Samme prinsipp som
+ * er omtale-chipene og http(s)/www-lenker, som rendreren skriver selv. Samme prinsipp som
  * `src/lib/markdown.ts`: allowlist ved konstruksjon, ingen sanitizer etterpå.
  *
  * Linjeskift blir IKKE `<br>` — kommentarer vises med `white-space: pre-wrap`,
  * akkurat som før omtalene fantes.
  */
 export function renderCommentHtml(body: string, users: Iterable<MentionUser> = []): string {
-  return mentionTokens(body, users)
-    .map((token) => (token.kind === 'text' ? escapeHtml(token.value) : mentionChipHtml(token.name)))
+  return postLineTokens(body, users)
+    .map((token) => {
+      if (token.kind === 'mention') return mentionChipHtml(token.name)
+      if (token.kind === 'link') {
+        return `<a class="link-brass break-all" href="${escapeHtml(token.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(token.value)}</a>`
+      }
+      return escapeHtml(token.value)
+    })
     .join('')
 }
 

@@ -1,5 +1,7 @@
 # Vedlegg på beskjeder
 
+Nettadresser i kommentarer er nå klikkbare ([#91](https://github.com/Tertnes-Brass/tb-intern/issues/91)). Dette gjelder `http://`, `https://` og `www.`, også i eksisterende kommentarer og forumsvar. Lenker åpnes i ny fane; omtaler og linjeskift beholdes.
+
 - Styret kan legge til filer under «Vedlegg» når en beskjed skrives eller redigeres.
 - På eksisterende og publiserte beskjeder kan vedlegg fjernes, og nye filer kan lastes opp. Bruk «Lagre endringer» for nye filer; «Fjern» sletter det valgte vedlegget med det samme.
 - Medlemmer får «Last ned»-lenker under beskjeden. Vedlegg følger beskjedenes tilgang, også for utkast og styreinterne beskjeder.

@@ -52,6 +52,29 @@ describe('parseMentions', () => {
 })
 
 describe('renderCommentHtml', () => {
+  it('lenker nettadresser og www, og beholder tegnsetting og linjeskift', () => {
+    const html = renderCommentHtml('Se https://tb.no/program?a=1&b=2.\nwww.tb.no!')
+    expect(html).toContain('href="https://tb.no/program?a=1&amp;b=2"')
+    expect(html).toContain('https://tb.no/program?a=1&amp;b=2</a>.\n')
+    expect(html).toContain('href="https://www.tb.no"')
+    expect(html).toContain('www.tb.no</a>!')
+    expect(html).toContain('target="_blank" rel="noopener noreferrer"')
+  })
+
+  it('beholder omtaler sammen med lenker uten å lenke medlemsnavn', () => {
+    const html = renderCommentHtml('@[u:u1] se https://tb.no', [{ id: 'u1', name: 'www.ola.no' }])
+    expect(html).toContain('<span class="mention">@www.ola.no</span>')
+    expect(html.match(/<a /g)).toHaveLength(1)
+  })
+
+  it('lar farlige skjema stå som tekst og escaper forsøk på HTML-injeksjon', () => {
+    expect(renderCommentHtml('javascript:alert(1) data:text/html,test')).not.toContain('<a ')
+    const html = renderCommentHtml('https://tb.no/" onclick="alert(1) <img src=x onerror=alert(1)>')
+    expect(html).toContain('href="https://tb.no/" target=')
+    expect(html).toContain('&quot; onclick=&quot;alert(1) &lt;img')
+    expect(html).not.toContain('<img')
+  })
+
   it('gjør markøren om til en chip med DAGENS navn', () => {
     expect(renderCommentHtml('Hei @[u:u1]!', [OLA])).toBe('Hei <span class="mention">@Ola Nordmann</span>!')
   })

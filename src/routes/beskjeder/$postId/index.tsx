@@ -160,7 +160,7 @@ function CommentThread({
                   )}
                 </div>
               </div>
-              {/* Omtaler blir chips; alt annet escapes av `renderCommentHtml`
+              {/* Omtaler blir chips og nettadresser blir lenker; brukerinnhold escapes av `renderCommentHtml`
                   (allowlist ved konstruksjon, som i markdown.ts). Linjeskift
                   beholdes av `whitespace-pre-wrap`, akkurat som før. */}
               <p
