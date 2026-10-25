@@ -7,7 +7,7 @@ const file = (kind: string, partId: string | null = null) => ({ kind, partId })
 const member: AccessCtx = {
   effectivePartIds: ['percussion-1'],
   sectionLeaderPartIds: [],
-  canManageSection: false,
+  canManageSection: false, isGroupLeader: false,
   canViewScore: true,
   canViewAll: false,
   inAccessibleProject: true,
@@ -16,7 +16,7 @@ const member: AccessCtx = {
 const viewAll: AccessCtx = {
   effectivePartIds: [],
   sectionLeaderPartIds: [],
-  canManageSection: false,
+  canManageSection: false, isGroupLeader: false,
   canViewScore: true,
   canViewAll: true,
   inAccessibleProject: false,
@@ -25,7 +25,7 @@ const viewAll: AccessCtx = {
 const noScore: AccessCtx = {
   effectivePartIds: ['percussion-1'],
   sectionLeaderPartIds: [],
-  canManageSection: false,
+  canManageSection: false, isGroupLeader: false,
   canViewScore: false,
   canViewAll: false,
   inAccessibleProject: true,
@@ -39,6 +39,18 @@ const sectionLeader: AccessCtx = {
 }
 
 describe('memberCanAccessFile (nedlasting)', () => {
+  it('aktiv gruppeleder får andre seksjoners stemmer uten stemmetildelingsrett', () => {
+    const leader = { ...member, isGroupLeader: true, canManageSection: false }
+    for (const partId of ['solo-cornet', 'tenor-horn', 'eb-bass']) {
+      expect(memberCanAccessFile(file('part', partId), leader)).toBe(true)
+      expect(memberCanSeeFile(file('part', partId), leader)).toBe(true)
+    }
+    expect(memberCanAccessFile(file('part', 'tenor-horn'), { ...leader, inAccessibleProject: false })).toBe(false)
+    expect(memberCanSeeFile(file('part', 'tenor-horn'), { ...leader, inAccessibleProject: false })).toBe(false)
+    expect(memberCanAccessFile(file('score'), { ...leader, canViewScore: false })).toBe(false)
+    expect(memberCanAccessFile(file('other'), leader)).toBe(false)
+    expect(memberCanAccessFile(file('part', 'tenor-horn'), { ...leader, isGroupLeader: false })).toBe(false)
+  })
   it('egen stemme: ja', () => {
     expect(memberCanAccessFile(file('part', 'percussion-1'), member)).toBe(true)
   })
@@ -122,7 +134,7 @@ describe('memberCanSeeFile (metadata i liste)', () => {
     expect(
       memberCanSeeFile(file('part', 'solo-cornet'), {
         ...sectionLeader,
-        canManageSection: false,
+        canManageSection: false, isGroupLeader: false,
       }),
     ).toBe(false)
   })

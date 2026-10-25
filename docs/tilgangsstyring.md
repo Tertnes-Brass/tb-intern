@@ -1,5 +1,22 @@
 # Nøstede stemmer + hard tilgangsstyring + seksjonsleder
 
+## Oppdatert gruppetilgang 25. oktober 2026
+
+Aktive gruppeledere (`isGroupLeader(me)`, basert på ferske `leadsPartIds`) kan
+lese og laste ned alle instrumentstemmer i notesett som tilhører publiserte,
+kommende prosjekter, også utenfor egen seksjon. Dette støtter blant annet
+dobling av andre stemmer. `members.manage.section` er ikke nødvendig for denne
+lesetilgangen; den styrer fortsatt stemmetildeling innen eget omfang.
+
+Stemmene finnes via «Alle stemmer» på prosjektet og «Mine noter». Filmetadata og
+direkte nedlasting bruker samme policy, også i mobil-API-et. Egne stemmer
+beholder sin vanlige plass. Gruppelederbindingen gir ikke fullt arkivinnsyn,
+tilgang til tidligere/ikke-publiserte prosjekter, uplasserte filer eller
+skriverett til noter. Partitur krever fortsatt `scores.view`/`*`, og vikarlenker
+beholder sitt avgrensede stemmeutvalg. Når bindingen fjernes, faller den utvidede
+tilgangen bort ved neste serverkall. Beskrivelsen nedenfor av nedlasting kun
+innen lederens eget stemmeomfang er historikk og erstattes av denne regelen.
+
 Designdokument for `feat/tilgangsstyring`. Utgangspunkt: testtilbakemelding om at
 slagverk blir et puslespill med mange stemmer, og ønsket om at en tildelt
 forelder-stemme («Slagverk») gir tilgang til alle understemmer, mens «Slagverk 1»

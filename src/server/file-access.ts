@@ -6,8 +6,7 @@
  *
  * Hard tilgangsstyring: en innlogget bruker når en stemmefil hvis stemma er i
  * `effectivePartIds` (egne tildelte stemmer ekspandert nedover treet), eller i
- * det eksplisitte løv-omfanget hen leder OG hen fortsatt har
- * `members.manage.section`. Verket må være med i et publisert, kommende
+ * hele notesettet når hen har en aktiv gruppelederbinding. Verket må være med i et publisert, kommende
  * prosjekt. Fullt arkivinnsyn omgår prosjektkravet. Partitur styres ortogonalt
  * av `scores.view`. Uplassert ('other') krever fullt arkivinnsyn.
  */
@@ -18,6 +17,7 @@ export type AccessCtx = {
   effectivePartIds: string[]
   sectionLeaderPartIds: string[] // løv-stemmer i eksplisitt section_leaders-scope
   canManageSection: boolean // members.manage.section; scope-rader alene er ikke nok
+  isGroupLeader: boolean // aktiv binding; gir alle instrumentstemmer i tilgjengelige prosjekter
   canViewScore: boolean // scores.view
   canViewAll: boolean // archive.viewAll ELLER works.manage (sistnevnte = fail-safe for arkivforvaltere)
   inAccessibleProject: boolean // verket finnes i minst ett publisert, kommende prosjekt
@@ -26,6 +26,7 @@ export type AccessCtx = {
 function memberCanAccessPart(partId: string | null, ctx: AccessCtx): boolean {
   if (!partId) return false
   return (
+    ctx.isGroupLeader ||
     ctx.effectivePartIds.includes(partId) ||
     (ctx.canManageSection && ctx.sectionLeaderPartIds.includes(partId))
   )

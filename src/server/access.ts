@@ -6,6 +6,7 @@ import { memberProfiles, parts, rolePermissions, roles, sectionLeaders, userPart
 import { getAuth } from './auth-instance'
 import type { AccessCtx } from './file-access'
 import { buildChildrenMap, expandPartIds, leaderCanAssign } from './parts-tree'
+import { isGroupLeader } from '../lib/gruppeledere'
 
 export type Me = {
   id: string
@@ -91,14 +92,15 @@ export function hasFullArchiveAccess(me: Me | null): boolean {
 
 /**
  * Bygger den felles konteksten for filmetadata og filstrømming. Lederomfanget
- * holdes separat fra egne stemmer slik at en foreldet section_leaders-rad aldri
- * virker uten den faktiske rettigheten.
+ * holdes separat fra egne stemmer. Aktive gruppeledere får hele notesettet i
+ * tilgjengelige prosjekter, uten å få fullt arkivinnsyn eller skriverett.
  */
 export function memberFileAccessContext(me: Me, inAccessibleProject: boolean): AccessCtx {
   return {
     effectivePartIds: me.effectivePartIds,
     sectionLeaderPartIds: me.leadsLeafPartIds,
     canManageSection: hasPermission(me, 'members.manage.section'),
+    isGroupLeader: isGroupLeader(me),
     canViewScore: hasPermission(me, 'scores.view'),
     canViewAll: hasFullArchiveAccess(me),
     inAccessibleProject,

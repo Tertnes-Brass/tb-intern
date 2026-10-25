@@ -19,7 +19,7 @@ vi.mock('./access', () => ({
   hasFullArchiveAccess: () => state.fullArchive,
   currentUser: async () => state.user,
   hasPermission: () => true,
-  memberFileAccessContext: (_me: unknown, inAccessibleProject: boolean) => ({ effectivePartIds: ['cornet'], sectionLeaderPartIds: [], canManageSection: false, canViewScore: true, canViewAll: state.fullArchive, inAccessibleProject }),
+  memberFileAccessContext: (_me: unknown, inAccessibleProject: boolean) => ({ effectivePartIds: ['cornet'], sectionLeaderPartIds: [], canManageSection: false, isGroupLeader: false, canViewScore: true, canViewAll: state.fullArchive, inAccessibleProject }),
 }))
 vi.mock('@tanstack/react-router', () => ({ createFileRoute: () => (options: unknown) => ({ options }) }))
 vi.mock('./file-access-log', () => ({ accessTypeForRequestUrl: () => 'view', logFileAccess: vi.fn() }))
@@ -34,7 +34,7 @@ import { signUploadTicket, verifyUploadTicket } from './upload-token'
 
 let sqlite: DatabaseSync
 let d: Db
-const access = { effectivePartIds: ['cornet'], sectionLeaderPartIds: [], canManageSection: false, canViewScore: true, canViewAll: true, inAccessibleProject: true }
+const access = { effectivePartIds: ['cornet'], sectionLeaderPartIds: [], canManageSection: false, isGroupLeader: false, canViewScore: true, canViewAll: true, inAccessibleProject: true }
 
 beforeEach(() => {
   vi.resetAllMocks()
