@@ -20,6 +20,7 @@ export const Route = createFileRoute('/noter/')({
 
 function HomePage() {
   const data = Route.useLoaderData()
+  const { me } = Route.useRouteContext()
   const next = data.nextProject
   // Det som ligger på notestativet for neste prosjekt — samme regel som
   // stativet selv, så «6 stemmer» her er de seks man får der.
@@ -104,7 +105,7 @@ function HomePage() {
                 <Icon name="notes" size={22} />
                 Åpne notestativet
               </Link>
-              <OfflineStandRow project={{ id: next.id, name: next.name }} fileIds={standFileIds} />
+              <OfflineStandRow project={{ id: next.id, name: next.name }} fileIds={standFileIds} ownerId={me.id} />
             </div>
           )}
 

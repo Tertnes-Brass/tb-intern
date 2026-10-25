@@ -219,7 +219,14 @@ export function useSheetDrag(ref: RefObject<HTMLDialogElement | null>, onClose: 
     dlg.style.transition = 'transform 0.22s cubic-bezier(0.2, 0.65, 0.25, 1)'
     if (dy > 90 || (dy > 24 && velocity > 0.6)) {
       dlg.style.transform = 'translateY(100%)'
-      window.setTimeout(onClose, 160)
+      window.setTimeout(() => {
+        onClose()
+        // Noen dialoger nekter å lukkes mens de jobber (onClose gjør ingenting).
+        // Da skal arket tilbake på plass, ikke bli liggende usynlig og modalt.
+        window.setTimeout(() => {
+          if (dlg.open) dlg.style.transform = ''
+        }, 80)
+      }, 160)
     } else {
       dlg.style.transform = ''
     }

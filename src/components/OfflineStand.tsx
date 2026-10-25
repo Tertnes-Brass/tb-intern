@@ -6,6 +6,7 @@ import {
   onOfflineChange,
   removeStandOffline,
   saveStandOffline,
+  syncStandOffline,
 } from '../lib/offline-notes'
 import { Icon } from './Icons'
 import { toast, toastError } from './toast'
@@ -14,10 +15,11 @@ import { toast, toastError } from './toast'
  * Lagre/fjerne et stativ offline. Delt av «Mine noter» og notestativet, så
  * begge viser det samme og bryteren aldri kommer i utakt med cachen.
  */
-export function useOfflineStand(project: { id: string; name: string }, fileIds: string[]) {
+export function useOfflineStand(project: { id: string; name: string }, fileIds: string[], ownerId: string) {
   const [supported, setSupported] = useState(false)
   const [saved, setSaved] = useState<ReturnType<typeof offlineStand>>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const idsKey = fileIds.join(',')
 
   useEffect(() => {
     setSupported(offlineSupported())
@@ -25,6 +27,11 @@ export function useOfflineStand(project: { id: string; name: string }, fileIds: 
     sync()
     return onOfflineChange(sync)
   }, [project.id])
+
+  // Er stativet lagret, holdes kopien i takt med programmet i bakgrunnen.
+  useEffect(() => {
+    void syncStandOffline(project, fileIds, ownerId).catch(() => {})
+  }, [project.id, idsKey, ownerId]) // idsKey står for fileIds (en ny array ved hver tegning)
 
   const toggle = async () => {
     if (progress) return
@@ -35,7 +42,7 @@ export function useOfflineStand(project: { id: string; name: string }, fileIds: 
     }
     setProgress({ done: 0, total: fileIds.length })
     try {
-      await saveStandOffline(project, fileIds, (done, total) => setProgress({ done, total }))
+      await saveStandOffline(project, fileIds, ownerId, (done, total) => setProgress({ done, total }))
       toast('Lagret for bruk uten nett')
     } catch (err) {
       toastError(err)
@@ -48,8 +55,16 @@ export function useOfflineStand(project: { id: string; name: string }, fileIds: 
 }
 
 /** Raden på «Mine noter»: «Tilgjengelig offline · 6 stemmer · 4,2 MB» med bryter. */
-export function OfflineStandRow({ project, fileIds }: { project: { id: string; name: string }; fileIds: string[] }) {
-  const { supported, saved, progress, toggle } = useOfflineStand(project, fileIds)
+export function OfflineStandRow({
+  project,
+  fileIds,
+  ownerId,
+}: {
+  project: { id: string; name: string }
+  fileIds: string[]
+  ownerId: string
+}) {
+  const { supported, saved, progress, toggle } = useOfflineStand(project, fileIds, ownerId)
   if (!supported || fileIds.length === 0) return null
 
   const count = fileIds.length === 1 ? '1 stemme' : `${fileIds.length} stemmer`

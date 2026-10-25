@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
-import { and, eq } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
 import { notificationPreferences, pushSubscriptions } from '../db/schema'
@@ -18,6 +18,9 @@ import { pushConfigured, sendPushToUsers, vapidKeys } from './push-send'
  * slår på varsler, flyttes raden (samme `endpoint`) til dem; ved utlogging
  * sletter klienten sin egen rad før økten avsluttes (`signOutHere`).
  */
+
+/** Flere enheter enn dette per medlem gir ingen mening; de eldste slettes. */
+const MAX_DEVICES = 10
 
 /** Den offentlige VAPID-nøkkelen nettleseren trenger, eller null når push er av. */
 export const getPushConfig = createServerFn().handler(async () => {
@@ -60,7 +63,53 @@ export const savePushSubscription = createServerFn({ method: 'POST' })
         target: pushSubscriptions.endpoint,
         set: { userId: me.id, p256dh: data.keys.p256dh, auth: data.keys.auth, label },
       })
+    // Et tak per medlem: hver publisering sender til alle radene, og ingen har
+    // flere enn en håndfull enheter. De eldste ryker først.
+    const surplus = await db()
+      .select({ id: pushSubscriptions.id })
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.userId, me.id))
+      .orderBy(desc(pushSubscriptions.createdAt))
+      .offset(MAX_DEVICES)
+      .limit(50)
+    if (surplus.length > 0) {
+      await db()
+        .delete(pushSubscriptions)
+        .where(inArray(pushSubscriptions.id, surplus.map((r) => r.id)))
+    }
     return { ok: true }
+  })
+
+/**
+ * Ved oppstart av appen: oppdater nøklene for denne enhetens abonnement — men
+ * bare hvis raden allerede er DIN. `savePushSubscription` flytter raden fordi
+ * den er en bevisst handling («slå på varsler»); denne skal aldri gi noen push
+ * de ikke har bedt om. Hører raden til en annen bruker (forrige bruker av en
+ * delt iPad, som aldri logget ut), slettes den: de varslene skal ikke vises
+ * her lenger. Klienten avslutter da abonnementet lokalt.
+ */
+export const refreshPushSubscription = createServerFn({ method: 'POST' })
+  .validator(subscriptionInput)
+  .handler(async ({ data }): Promise<{ status: 'ok' | 'missing' | 'other' }> => {
+    const me = await requireMe()
+    const d = db()
+    const row = (
+      await d
+        .select({ userId: pushSubscriptions.userId })
+        .from(pushSubscriptions)
+        .where(eq(pushSubscriptions.endpoint, data.endpoint))
+        .limit(1)
+    )[0]
+    if (!row) return { status: 'missing' }
+    if (row.userId !== me.id) {
+      await d.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, data.endpoint))
+      return { status: 'other' }
+    }
+    await d
+      .update(pushSubscriptions)
+      .set({ p256dh: data.keys.p256dh, auth: data.keys.auth })
+      .where(and(eq(pushSubscriptions.endpoint, data.endpoint), eq(pushSubscriptions.userId, me.id)))
+    return { status: 'ok' }
   })
 
 /** Bare egne abonnement kan slettes — `endpoint` alene gir ingen rett. */

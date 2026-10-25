@@ -47,25 +47,30 @@ export async function runRsvpReminders(now: Date = new Date()): Promise<{ ran: b
 
     let sent = 0
     for (const event of events) {
-      const answeredRows = await d
-        .select({ userId: eventAttendance.userId })
-        .from(eventAttendance)
-        .where(eq(eventAttendance.occurrenceKey, event.occurrenceKey))
-      const recipients = rsvpReminderRecipients({
-        subscribers: subscribers.map((s) => ({ ...s, pref: (s.pref ?? null) as RsvpReminderChoice | null })),
-        answered: new Set(answeredRows.map((r) => r.userId)),
-      })
-      if (recipients.length === 0) continue
-      const result = await sendPushToUsers(
-        recipients,
-        rsvpReminderMessage({
-          occurrenceKey: event.occurrenceKey,
-          title: event.title,
-          when: `i morgen kl. ${formatTime(event.start)}`,
-        }),
-        { ttl: PUSH_TTL.rsvp },
-      )
-      sent += result.sent
+      // Én hendelse som feiler skal ikke ta med seg resten — dagen er allerede tatt.
+      try {
+        const answeredRows = await d
+          .select({ userId: eventAttendance.userId })
+          .from(eventAttendance)
+          .where(eq(eventAttendance.occurrenceKey, event.occurrenceKey))
+        const recipients = rsvpReminderRecipients({
+          subscribers: subscribers.map((s) => ({ ...s, pref: (s.pref ?? null) as RsvpReminderChoice | null })),
+          answered: new Set(answeredRows.map((r) => r.userId)),
+        })
+        if (recipients.length === 0) continue
+        const result = await sendPushToUsers(
+          recipients,
+          rsvpReminderMessage({
+            occurrenceKey: event.occurrenceKey,
+            title: event.title,
+            when: `i morgen kl. ${formatTime(event.start)}`,
+          }),
+          { ttl: PUSH_TTL.rsvp },
+        )
+        sent += result.sent
+      } catch (err) {
+        console.error(`[push] påminnelse for ${event.occurrenceKey} feilet:`, err)
+      }
     }
     return { ran: true, events: events.length, sent }
   } catch (err) {

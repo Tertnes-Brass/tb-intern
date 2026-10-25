@@ -29,11 +29,14 @@ export function Notestativ({
   repertoire,
   hasParts,
   initialFileId,
+  ownerId,
 }: {
   project: { id: string; name: string }
   repertoire: ProjectWorkDetail[]
   hasParts: boolean
   initialFileId: string | null
+  /** Innlogget bruker — offline-kopien merkes med hvem som lagret den. */
+  ownerId: string
 }) {
   // Lista bygges én gang: en fil man åpnet stativet fra (f.eks. partituret)
   // skal bli liggende mens man blar.
@@ -47,10 +50,10 @@ export function Notestativ({
   const scroller = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const canGoBack = useCanGoBack()
-  const offline = useOfflineStand(
-    project,
-    entries.map((e) => e.fileId),
-  )
+  // Offline lagres hele stativet slik det ser ut uten `?fil=` — det er den
+  // siden som lagres og åpnes uten nett, og det samme som «Mine noter» teller.
+  const [offlineIds] = useState(() => standEntries(repertoire, { hasParts }).map((e) => e.fileId))
+  const offline = useOfflineStand(project, offlineIds, ownerId)
 
   const onPage = useCallback((current: number, total: number) => {
     setPage((prev) => (prev.current === current && prev.total === total ? prev : { current, total }))
@@ -283,7 +286,7 @@ export function Notestativ({
             label={offline.progress ? `${offline.progress.done}/${offline.progress.total}` : offline.saved ? 'Lagret' : 'Offline'}
             active={!!offline.saved}
             busy={!!offline.progress}
-            disabled={!offline.supported || entries.length === 0}
+            disabled={!offline.supported || offlineIds.length === 0}
             onClick={offline.toggle}
           />
           <ToolButton
@@ -496,12 +499,13 @@ function PdfPage({
     }
   }, [doc, pageNumber])
 
-  // Tegn først når siden er i nærheten av skjermen, og rapporter hvor mye av
-  // den som synes (for «side 2 av 3»).
+  // Tegn først når siden er i nærheten av skjermen, og slipp lerretet igjen når
+  // den er langt unna — et langt partitur på en iPad ville ellers brukt opp
+  // minnet Safari gir lerreter. Rapporter også hvor mye som synes («side 2 av 3»).
   useEffect(() => {
     const el = box.current
     if (!el) return
-    const near = new IntersectionObserver(([e]) => e?.isIntersecting && setNear(true), {
+    const near = new IntersectionObserver(([e]) => e && setNear(e.isIntersecting), {
       root: scrollRoot.current,
       rootMargin: '150% 0px',
     })
@@ -519,7 +523,15 @@ function PdfPage({
 
   useEffect(() => {
     const el = canvas.current
-    if (!page || !near || !el || width === 0) return
+    if (!el) return
+    if (!near) {
+      // 0×0 frigjør lerretets minne; siden beholder plassen sin (høyden står på boksen).
+      el.width = 0
+      el.height = 0
+      setRendered(false)
+      return
+    }
+    if (!page || width === 0) return
     const base = page.getViewport({ scale: 1 })
     let scale = (width / base.width) * Math.min(window.devicePixelRatio || 1, 3)
     const pixels = base.width * base.height * scale * scale

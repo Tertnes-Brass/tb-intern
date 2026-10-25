@@ -581,12 +581,26 @@ function AttendanceSection({ data, occurrenceKey }: { data: Detail; occurrenceKe
 }
 
 function MyRsvp({ data, occurrenceKey }: { data: Detail; occurrenceKey: string }) {
+  // En hendelse som er borte fra kalenderen (`OrphanPage`) har ingen tid å
+  // svare på — da vises bare registreringene, ikke «Mitt svar».
+  if (!data.event) return null
+  return <MyRsvpControls data={data} event={data.event} occurrenceKey={occurrenceKey} />
+}
+
+function MyRsvpControls({
+  data,
+  event,
+  occurrenceKey,
+}: {
+  data: Detail
+  event: NonNullable<Detail['event']>
+  occurrenceKey: string
+}) {
   const router = useRouter()
   const current = data.myAttendance
   const [clearing, setClearing] = useState(false)
   const [comment, setComment] = useState(current?.comment ?? '')
   const [savingComment, setSavingComment] = useState(false)
-  const event = data.event!
   const date = toOsloDate(event.start)
 
   useEffect(() => {

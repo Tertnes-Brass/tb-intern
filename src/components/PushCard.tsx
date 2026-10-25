@@ -3,7 +3,7 @@ import { formatDateTime } from '../lib/format'
 import type { RsvpReminderChoice } from '../lib/push'
 import { currentPushSubscription, disablePush, enablePush, pushSupport, type PushSupport } from '../lib/push-client'
 import { isIos } from '../lib/pwa'
-import { listMyPushDevices, sendTestPush, updateMyRsvpReminders } from '../server/push'
+import { getPushConfig, listMyPushDevices, sendTestPush, updateMyRsvpReminders } from '../server/push'
 import { Icon } from './Icons'
 import { toast, toastError } from './toast'
 import { Button, Kicker } from './ui'
@@ -21,10 +21,16 @@ export function PushCard() {
   const [enabledHere, setEnabledHere] = useState(false)
   const [devices, setDevices] = useState<Devices | null>(null)
   const [busy, setBusy] = useState<'toggle' | 'test' | 'rsvp' | null>(null)
+  const [publicKey, setPublicKey] = useState<string | null>(null)
 
   const refresh = async () => {
     setSupport(pushSupport())
-    const [sub, list] = await Promise.all([currentPushSubscription().catch(() => null), listMyPushDevices()])
+    const [sub, list, config] = await Promise.all([
+      currentPushSubscription().catch(() => null),
+      listMyPushDevices(),
+      getPushConfig(),
+    ])
+    setPublicKey(config.publicKey)
     setDevices(list)
     setEnabledHere(!!sub && list.devices.some((d) => d.endpoint === sub.endpoint))
   }
@@ -40,7 +46,7 @@ export function PushCard() {
         await disablePush()
         toast('Varsler er slått av på denne enheten')
       } else {
-        await enablePush()
+        await enablePush(publicKey)
         toast('Varsler er slått på')
       }
       await refresh()

@@ -112,8 +112,9 @@ export async function handleMobileAPI(request: Request, path: string): Promise<R
       const id = segments[1]
       if (segments.length === 2 && request.method === 'GET') {
         const result = await getPost({ data: { id } })
-        // Åpnet i appen = lest, som på detaljsiden. Svaret er uendret (v1).
-        await markPostRead({ data: { id } })
+        // Åpnet i appen = lest, som på detaljsiden. Svaret er uendret (v1), og en
+        // kvittering som ikke lar seg skrive skal aldri velte selve visningen.
+        await markPostRead({ data: { id } }).catch((err) => console.error('[mobile] markPostRead:', err))
         return mobileJSON({
           post: { ...mobilePost(result.post), body: mentionPlainText(postPlainText(result.post.body, result.post.format), result.post.mentions), ...(result.post.format === 'markdown' ? { markdown: mentionPlainText(result.post.body, result.post.mentions) } : {}) },
           comments: result.comments.map((comment) => ({ id: comment.id, author: comment.author.name, body: mentionPlainText(comment.body, comment.mentions), date: comment.createdAt })),

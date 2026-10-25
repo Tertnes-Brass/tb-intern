@@ -1,9 +1,11 @@
 import { useRouter } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
+import { claimOfflineNotes } from '../lib/offline-notes'
 import { resyncPush } from '../lib/push-client'
 import { isIos, isStandalone } from '../lib/pwa'
 import { refreshShellCounts } from '../lib/shell-events'
 import { Icon } from './Icons'
+import { toast } from './toast'
 
 /** Hvor lenge appen må ha vært i bakgrunnen før den henter data på nytt. */
 const RESUME_AFTER_MS = 60_000
@@ -15,13 +17,14 @@ const RESUME_AFTER_MS = 60_000
  * - **Tilbake fra bakgrunnen:** en installert app kan ligge i bakgrunnen i
  *   dagevis. Kommer den fram igjen etter mer enn et minutt, lastes rutens data
  *   på nytt, slik at «Neste» og veggen ikke viser gårsdagen.
- * - **Push:** enhetens abonnement sendes til serveren ved oppstart.
+ * - **Delt enhet:** noter og push-abonnement fra en annen bruker ryddes bort
+ *   ved oppstart.
  * - **`rise` bare første gang:** innlastingsanimasjonen er en velkomst, ikke
  *   noe man skal se ved hvert trykk. Etter første navigasjon får `<html>`
  *   klassen `navigated`, og styles.css slår den av — sideskiftet har sin egen
  *   overgang (View Transitions, `defaultViewTransition` i router.tsx).
  */
-export function AppBehaviour() {
+export function AppBehaviour({ userId }: { userId: string }) {
   const router = useRouter()
 
   useEffect(() => {
@@ -31,17 +34,21 @@ export function AppBehaviour() {
         hiddenAt = Date.now()
       } else if (hiddenAt && Date.now() - hiddenAt > RESUME_AFTER_MS) {
         hiddenAt = 0
-        void router.invalidate()
+        // Uten nett ville en ny lasting byttet ut siden med en feilside; da er
+        // det bedre å vise det vi har (med frakoblet-stripen over).
+        if (navigator.onLine) void router.invalidate()
       }
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [router])
 
-  // Hold serveren oppdatert om denne enhetens push-abonnement (se `resyncPush`).
+  // Delt enhet: noter lagret av en annen bruker slettes, og et push-abonnement
+  // som ikke er denne brukerens avsluttes (se `claimOfflineNotes`/`resyncPush`).
   useEffect(() => {
+    void claimOfflineNotes(userId).catch(() => {})
     void resyncPush().catch(() => {})
-  }, [])
+  }, [userId])
 
   useEffect(() => {
     return router.subscribe('onBeforeNavigate', () => {
@@ -111,8 +118,12 @@ function PullToRefresh() {
       setRefreshing(true)
       setPull(PULL_THRESHOLD)
       try {
-        await router.invalidate()
-        refreshShellCounts()
+        if (navigator.onLine) {
+          await router.invalidate()
+          refreshShellCounts()
+        } else {
+          toast('Du er uten nett — prøv igjen når du har dekning.', 'error')
+        }
       } finally {
         setRefreshing(false)
         setPull(0)

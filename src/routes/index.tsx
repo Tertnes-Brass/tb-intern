@@ -1,10 +1,12 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
+import { useEffect, useState } from 'react'
 import { Icon } from '../components/Icons'
 import { InstallHint } from '../components/InstallHint'
 import { RsvpControl } from '../components/Rsvp'
 import { EmptyState, Kicker, SectionHeading, Stamp } from '../components/ui'
 import { formatDate, formatDateTime, formatTime, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../lib/format'
 import { type HubEvent, chooseHero } from '../lib/hub'
+import { offlineStand, onOfflineChange } from '../lib/offline-notes'
 import { getHub } from '../server/hub'
 
 /**
@@ -82,6 +84,7 @@ function HubPage() {
   const important = data.importantUnread
   // Den viktige beskjeden står allerede øverst; ikke vis den to ganger.
   const wallPosts = data.posts.filter((p) => p.id !== important?.id)
+  const savedOffline = useSavedOffline(next?.id ?? null)
 
   return (
     <div className="space-y-12 md:space-y-14">
@@ -207,6 +210,7 @@ function HubPage() {
                 </span>
                 <span className="mt-1 block font-mono text-[0.6rem] uppercase tracking-[0.14em] text-brass">
                   {formatDate(next.eventDate)} · {relativeDays(next.eventDate)}
+                  {savedOffline && <span className="text-ok"> · Lagret offline</span>}
                 </span>
               </>
             ) : (
@@ -359,4 +363,16 @@ function HubPage() {
       </section>
     </div>
   )
+}
+
+/** Er stativet for prosjektet lagret på denne enheten? Bare klienten vet det. */
+function useSavedOffline(projectId: string | null): boolean {
+  const [saved, setSaved] = useState(false)
+  useEffect(() => {
+    if (!projectId) return setSaved(false)
+    const sync = () => setSaved(offlineStand(projectId) !== null)
+    sync()
+    return onOfflineChange(sync)
+  }, [projectId])
+  return saved
 }

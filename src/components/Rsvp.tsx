@@ -75,8 +75,9 @@ export function RsvpControl({
               disabled={busy !== null}
               onClick={() => {
                 if (seg.status === 'not_attending') setSheetOpen(true)
-                // Samme svar på nytt beholder kommentaren.
-                else if (!active) void write(seg.status, null)
+                // Mellom «Kommer» og «Usikker» følger kommentaren med («kommer
+                // 19:30»); en fraværsgrunn gjør det ikke.
+                else if (!active) void write(seg.status, mine?.status === 'not_attending' ? null : (mine?.comment ?? null))
               }}
               className={`flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-[8px] px-2 text-[0.88rem] font-medium transition-colors disabled:cursor-wait ${
                 active

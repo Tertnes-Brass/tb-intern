@@ -77,9 +77,17 @@ export async function sendPushToUsers(
     })
   }
 
-  if (gone.length > 0) await d.delete(pushSubscriptions).where(inArray(pushSubscriptions.id, gone))
-  if (delivered.length > 0) {
-    await d.update(pushSubscriptions).set({ lastSuccessAt: new Date() }).where(inArray(pushSubscriptions.id, delivered))
+  // D1 tillater 100 bundne parametere per spørring; oppdateringen binder i
+  // tillegg tidspunktet. 80 om gangen holder god avstand.
+  for (let i = 0; i < gone.length; i += 80) {
+    await d.delete(pushSubscriptions).where(inArray(pushSubscriptions.id, gone.slice(i, i + 80)))
+  }
+  const now = new Date()
+  for (let i = 0; i < delivered.length; i += 80) {
+    await d
+      .update(pushSubscriptions)
+      .set({ lastSuccessAt: now })
+      .where(inArray(pushSubscriptions.id, delivered.slice(i, i + 80)))
   }
   return result
 }

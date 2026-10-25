@@ -19,7 +19,7 @@
  *
  * Bump VERSION når denne fila eller offline.html endres.
  */
-const VERSION = 'v4'
+const VERSION = 'v5'
 const SHELL_CACHE = `tb-shell-${VERSION}`
 const ASSET_CACHE = 'tb-assets'
 /** Hashede filer fra gamle deployer blir liggende; taket holder cachen liten. */
@@ -88,7 +88,7 @@ self.addEventListener('fetch', (event) => {
   }
   // Bare hele-fil-forespørsler: lydavspilling bruker Range og skal rett til nettet.
   if (url.pathname.startsWith('/api/files/') && !url.search && !request.headers.has('range')) {
-    event.respondWith(noteFile(request, url.pathname))
+    event.respondWith(noteFile(event, url.pathname))
   }
 })
 
@@ -106,12 +106,13 @@ async function navigation(event) {
 }
 
 async function asset(request) {
-  const cache = await caches.open(ASSET_CACHE)
-  // ignoreVary: Cloudflare svarer med `Vary: Origin`, og en modul-<script>
-  // sender Origin mens en vanlig fetch() ikke gjør det. Filene er uforanderlige
-  // (navnet er innholdets hash), så variasjonen betyr ingenting her.
-  const hit = await cache.match(request, { ignoreVary: true })
+  // Let i ALLE cacher: et lagret notestativ har koden sin i OFFLINE_CACHE, som
+  // aldri trimmes. ignoreVary: Cloudflare svarer med `Vary: Origin`, og en
+  // modul-<script> sender Origin mens en vanlig fetch() ikke gjør det. Filene er
+  // uforanderlige (navnet er innholdets hash), så variasjonen betyr ingenting.
+  const hit = await caches.match(request, { ignoreVary: true })
   if (hit) return hit
+  const cache = await caches.open(ASSET_CACHE)
   const response = await fetch(request)
   if (response.ok && response.type === 'basic') {
     await cache.put(request, response.clone())
@@ -126,7 +127,8 @@ async function trimAssets(cache) {
   for (const key of keys.slice(0, Math.max(0, keys.length - ASSET_LIMIT))) await cache.delete(key)
 }
 
-async function noteFile(request, path) {
+async function noteFile(event, path) {
+  const request = event.request
   const cache = await caches.open(OFFLINE_CACHE)
   const saved = await cache.match(path, { ignoreVary: true })
   if (!saved) return fetch(request)
@@ -137,13 +139,14 @@ async function noteFile(request, path) {
     if (response.status === 401 || response.status === 403 || response.status === 404) await cache.delete(path)
     return response
   })
+  // Svaret kan komme etter at kopien er vist; slettingen over skal likevel skje.
+  event.waitUntil(network.catch(() => {}))
   const timeout = new Promise((resolve) => setTimeout(() => resolve(null), FILE_TIMEOUT_MS))
   try {
     const first = await Promise.race([network, timeout])
-    if (first) return first
-    // Tregt nett: vis kopien nå, og la nettet fullføre i bakgrunnen.
-    network.catch(() => {})
-    return saved
+    // Tregt nett eller en feil på serveren (5xx): vis kopien.
+    if (!first || first.status >= 500) return saved
+    return first
   } catch {
     return saved
   }

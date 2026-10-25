@@ -6,8 +6,19 @@
  */
 const EVENT = 'tb:shell-counts'
 
+let pending: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * Slås sammen: forumet markerer svar som lest ett og ett mens man ruller, og 30
+ * leste svar skal bli én henting, ikke 30.
+ */
 export function refreshShellCounts(): void {
-  if (typeof window !== 'undefined') window.dispatchEvent(new Event(EVENT))
+  if (typeof window === 'undefined') return
+  if (pending) clearTimeout(pending)
+  pending = setTimeout(() => {
+    pending = null
+    window.dispatchEvent(new Event(EVENT))
+  }, 800)
 }
 
 export function onShellCountsRefresh(listener: () => void): () => void {

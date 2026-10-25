@@ -41,8 +41,10 @@ export const Route = createFileRoute('/noter_/stativ/$projectId')({
 function StandPage() {
   const data = Route.useLoaderData()
   const { fil } = Route.useSearch()
+  const { me } = Route.useRouteContext()
   return (
     <Notestativ
+      ownerId={me!.id}
       project={{ id: data.project.id, name: data.project.name }}
       repertoire={data.repertoire}
       hasParts={data.myParts.length > 0}
