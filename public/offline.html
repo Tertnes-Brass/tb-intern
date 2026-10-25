@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="nb">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <title>Frakoblet · Tertnes Brass Intern</title>
+    <meta name="theme-color" content="#f7f1e6" />
+    <!--
+      Vises av service workeren (public/sw.js) når en side ikke kan hentes.
+      Selvstendig: ingen JS-pakke, ingen fonter fra /assets — den skal fungere
+      uten nett. Fargene er tokens fra src/styles.css.
+    -->
+    <script>
+      try {
+        var stored = localStorage.getItem('theme')
+        var dark = stored === 'dark' || (stored !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
+    <style>
+      :root {
+        --paper: #f7f1e6;
+        --paper-raised: #fdfaf2;
+        --ink: #211b12;
+        --ink-soft: #5f5640;
+        --ink-faint: #8e8468;
+        --line: #ddd2ba;
+        --brass: #95762a;
+        --brass-strong: #7a5f1d;
+      }
+      .dark {
+        --paper: #171310;
+        --paper-raised: #201a14;
+        --ink: #ede4cf;
+        --ink-soft: #b5a98b;
+        --ink-faint: #857b62;
+        --line: #3a3225;
+        --brass: #d3ac4d;
+        --brass-strong: #e7c468;
+      }
+      html {
+        background: var(--paper);
+        color: var(--ink);
+        -webkit-tap-highlight-color: transparent;
+      }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+          max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+        box-sizing: border-box;
+        font-family: 'Helvetica Neue', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        max-width: 26rem;
+        width: 100%;
+      }
+      .kicker {
+        font-family: Menlo, monospace;
+        font-size: 0.6875rem;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--brass);
+        margin: 0 0 0.75rem;
+      }
+      h1 {
+        font-family: Georgia, serif;
+        font-style: italic;
+        font-weight: 600;
+        font-size: 2.6rem;
+        line-height: 1;
+        margin: 0;
+      }
+      p {
+        color: var(--ink-soft);
+        line-height: 1.55;
+      }
+      .stands {
+        list-style: none;
+        margin: 1.5rem 0 0;
+        padding: 0;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--paper-raised);
+        overflow: hidden;
+      }
+      .stands:empty {
+        display: none;
+      }
+      .stands li + li {
+        border-top: 1px solid var(--line);
+      }
+      .stands a {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.9rem 1.1rem;
+        min-height: 44px;
+        box-sizing: border-box;
+        color: var(--ink);
+        text-decoration: none;
+      }
+      .stands b {
+        font-family: Georgia, serif;
+        font-size: 1.05rem;
+      }
+      .stands small {
+        display: block;
+        margin-top: 0.15rem;
+        color: var(--ink-faint);
+        font-size: 0.78rem;
+      }
+      button {
+        margin-top: 1.5rem;
+        min-height: 44px;
+        padding: 0 1.25rem;
+        border-radius: 9px;
+        border: 0;
+        background: var(--brass);
+        color: var(--paper-raised);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="kicker">Tertnes Brass · Intern</p>
+      <h1>Du er frakoblet</h1>
+      <p id="lead">Siden kunne ikke hentes. Sjekk nettet, så prøver vi igjen.</p>
+      <ul class="stands" id="stands"></ul>
+      <button type="button" onclick="location.reload()">Prøv igjen</button>
+    </main>
+    <script>
+      // Notestativene brukeren har lagret for offline-bruk (src/lib/offline-notes.ts).
+      try {
+        var stands = JSON.parse(localStorage.getItem('tb-offline-stands') || '[]')
+        if (stands.length) {
+          document.getElementById('lead').textContent = 'Notene du har lagret, kan du fortsatt åpne:'
+          var list = document.getElementById('stands')
+          stands.forEach(function (stand) {
+            var li = document.createElement('li')
+            var a = document.createElement('a')
+            a.href = '/noter/stativ/' + encodeURIComponent(stand.projectId)
+            var text = document.createElement('span')
+            var title = document.createElement('b')
+            title.textContent = stand.name
+            var meta = document.createElement('small')
+            meta.textContent = stand.files + (stand.files === 1 ? ' stemme' : ' stemmer')
+            text.appendChild(title)
+            text.appendChild(meta)
+            var arrow = document.createElement('span')
+            arrow.textContent = '→'
+            arrow.setAttribute('aria-hidden', 'true')
+            a.appendChild(text)
+            a.appendChild(arrow)
+            li.appendChild(a)
+            list.appendChild(li)
+          })
+        }
+      } catch (e) {}
+    </script>
+  </body>
+</html>

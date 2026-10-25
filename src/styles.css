@@ -92,6 +92,43 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* ---------- App på telefon (PWA) ----------
+   Ingen grå blink over det man trykker på, og ingen ventetid på dobbelttrykk-
+   zoom før et trykk registreres. Klyp-zoom virker fortsatt. */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+a,
+button,
+input,
+label,
+select,
+summary,
+textarea,
+[role='button'] {
+  touch-action: manipulation;
+}
+
+/* Trygge marger rundt hakket og hjem-indikatoren (viewport-fit=cover i
+   __root.tsx). Uten notch er env() 0, og fallbacken gjelder. */
+.px-safe {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+@media (min-width: 640px) {
+  .px-safe {
+    padding-left: max(1.5rem, env(safe-area-inset-left));
+    padding-right: max(1.5rem, env(safe-area-inset-right));
+  }
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 ::selection {
   background: var(--brass-soft);
   color: var(--ink);

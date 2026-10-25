@@ -1,13 +1,18 @@
 import { HeadContent, Outlet, Scripts, createRootRoute, useRouterState } from '@tanstack/react-router'
+import { useEffect } from 'react'
 import { Shell } from '../components/Shell'
 import { Toaster } from '../components/toast'
+import { initPwa } from '../lib/pwa'
+import { THEME_COLORS, applyTheme, followSystemTheme, readThemeMode, resolveTheme } from '../lib/theme'
 import { getMe } from '../server/auth'
 
 import appCss from '../styles.css?url'
 
 // Statisk, kompilert-inn temainit (ingen brukerinput): settes før første maling
-// for å unngå blink av feil tema.
-const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark')?stored:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.classList.remove('light','dark');root.classList.add(resolved);root.setAttribute('data-theme',resolved);root.style.colorScheme=resolved;}catch(e){}})();`
+// for å unngå blink av feil tema. `theme-color` følger det valgte temaet, ikke
+// bare telefonens — ellers får en installert app lys statuslinje over mørkt
+// papir. Samme regler som `src/lib/theme.ts`.
+const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark')?stored:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.classList.remove('light','dark');root.classList.add(resolved);root.setAttribute('data-theme',resolved);root.style.colorScheme=resolved;var color=resolved==='dark'?'${THEME_COLORS.dark}':'${THEME_COLORS.light}';document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.content=color});}catch(e){}})();`
 
 export const Route = createRootRoute({
   beforeLoad: async () => {
@@ -17,15 +22,25 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+      // viewport-fit=cover: siden tegnes under hjem-indikatoren og rundt hakket,
+      // og `env(safe-area-inset-*)` i styles.css holder innholdet unna.
+      { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
       { title: 'Intern · Tertnes Brass' },
       { name: 'robots', content: 'noindex' },
-      { name: 'theme-color', media: '(prefers-color-scheme: light)', content: '#f7f1e6' },
-      { name: 'theme-color', media: '(prefers-color-scheme: dark)', content: '#171310' },
+      // Én meta uten `media`: React slår sammen like `<meta name>`, og fargen skal
+      // følge det VALGTE temaet. Temainit-skriptet og `applyTheme` setter den.
+      { name: 'theme-color', content: THEME_COLORS.light },
+      // Installert på Hjem-skjermen (iOS): fullskjerm, kort navn under ikonet.
+      // `default` gir statuslinje i `theme-color`, så innholdet starter under den.
+      { name: 'mobile-web-app-capable', content: 'yes' },
+      { name: 'apple-mobile-web-app-capable', content: 'yes' },
+      { name: 'apple-mobile-web-app-title', content: 'TB Intern' },
+      { name: 'apple-mobile-web-app-status-bar-style', content: 'default' },
     ],
     links: [
       { rel: 'icon', href: '/favicon.ico' },
       { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+      { rel: 'manifest', href: '/manifest.webmanifest' },
       { rel: 'stylesheet', href: appCss },
     ],
     scripts: [{ children: THEME_INIT_SCRIPT }],
@@ -60,8 +75,20 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <body className="paper-grain antialiased">
         {children}
         <Toaster />
+        <PwaInit />
         <Scripts />
       </body>
     </html>
   )
+}
+
+/** Service worker, installasjonsforespørsel og «følg telefonens tema». */
+function PwaInit() {
+  useEffect(() => {
+    initPwa()
+    // Temainit-skriptet kan ha kjørt før `theme-color`-meta-en fantes.
+    applyTheme(resolveTheme(readThemeMode()))
+    return followSystemTheme()
+  }, [])
+  return null
 }

@@ -1,4 +1,5 @@
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
+import { InstallHint } from '../components/InstallHint'
 import { EmptyState, Kicker, SectionHeading, Stamp } from '../components/ui'
 import { formatDate, formatDateTime, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../lib/format'
 import { type HubEvent, chooseHero } from '../lib/hub'
@@ -74,6 +75,7 @@ function HubPage() {
 
   return (
     <div className="space-y-14">
+      <InstallHint />
       {/*
         Beskjeder (#28) står øverst, over hero: en melding fra styret er det
         eneste som skal kunne fortrenge «Neste» (docs/designprinsipper.md §7
