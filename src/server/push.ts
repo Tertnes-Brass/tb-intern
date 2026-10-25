@@ -8,6 +8,7 @@ import { newId } from '../lib/id'
 import { PUSH_TTL, RSVP_REMINDER_CHOICES, deviceLabel } from '../lib/push'
 import { isAllowedPushEndpoint } from '../lib/web-push'
 import { requireMe } from './access'
+import { getAuth } from './auth-instance'
 import { pushConfigured, sendPushToUsers, vapidKeys } from './push-send'
 
 /**
@@ -21,6 +22,15 @@ import { pushConfigured, sendPushToUsers, vapidKeys } from './push-send'
 
 /** Flere enheter enn dette per medlem gir ingen mening; de eldste slettes. */
 const MAX_DEVICES = 10
+
+/**
+ * Økten forespørselen kom med. Abonnementet knyttes til den (CASCADE), så
+ * varslene stopper når økten avsluttes — se `pushSubscriptions.sessionId`.
+ */
+async function currentSessionId(): Promise<string | null> {
+  const result = await getAuth().api.getSession({ headers: getRequest().headers })
+  return result?.session?.id ?? null
+}
 
 /** Den offentlige VAPID-nøkkelen nettleseren trenger, eller null når push er av. */
 export const getPushConfig = createServerFn().handler(async () => {
@@ -48,6 +58,7 @@ export const savePushSubscription = createServerFn({ method: 'POST' })
     const me = await requireMe()
     if (!pushConfigured()) throw new Error('Varsler er ikke satt opp på serveren ennå')
     const label = deviceLabel(getRequest().headers.get('user-agent'))
+    const sessionId = await currentSessionId()
     await db()
       .insert(pushSubscriptions)
       .values({
@@ -58,10 +69,12 @@ export const savePushSubscription = createServerFn({ method: 'POST' })
         auth: data.keys.auth,
         label,
         createdAt: new Date(),
+        sessionId,
       })
       .onConflictDoUpdate({
         target: pushSubscriptions.endpoint,
-        set: { userId: me.id, p256dh: data.keys.p256dh, auth: data.keys.auth, label },
+        // createdAt nullstilles: for taket under er dette nå den nyeste enheten.
+        set: { userId: me.id, p256dh: data.keys.p256dh, auth: data.keys.auth, label, createdAt: new Date(), sessionId },
       })
     // Et tak per medlem: hver publisering sender til alle radene, og ingen har
     // flere enn en håndfull enheter. De eldste ryker først.
@@ -105,9 +118,10 @@ export const refreshPushSubscription = createServerFn({ method: 'POST' })
       await d.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, data.endpoint))
       return { status: 'other' }
     }
+    // Ny innlogging på samme enhet: abonnementet følger den nye økten.
     await d
       .update(pushSubscriptions)
-      .set({ p256dh: data.keys.p256dh, auth: data.keys.auth })
+      .set({ p256dh: data.keys.p256dh, auth: data.keys.auth, sessionId: await currentSessionId() })
       .where(and(eq(pushSubscriptions.endpoint, data.endpoint), eq(pushSubscriptions.userId, me.id)))
     return { status: 'ok' }
   })

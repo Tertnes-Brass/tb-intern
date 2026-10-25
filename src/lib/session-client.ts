@@ -14,7 +14,12 @@ import { disablePush } from './push-client'
  * Ryddingen skal aldri hindre selve utloggingen.
  */
 export async function signOutHere(): Promise<void> {
-  await Promise.allSettled([disablePush(), clearOfflineNotes(), clearBadge()])
+  // Høyst tre sekunder: en hengende service worker eller et tregt nett skal
+  // aldri stå i veien for å komme seg ut.
+  await Promise.race([
+    Promise.allSettled([disablePush(), clearOfflineNotes(), clearBadge()]),
+    new Promise((resolve) => setTimeout(resolve, 3000)),
+  ])
   await authClient.signOut()
 }
 

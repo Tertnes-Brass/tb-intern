@@ -141,6 +141,7 @@ export function Modal({
   return (
     <dialog
       ref={ref}
+      tabIndex={-1}
       className={`sheet-dialog ${wide ? 'sheet-dialog-wide' : ''} ${mobileFull ? 'sheet-dialog-mobile-full' : ''}`}
       onClose={onClose}
       onClick={(e) => {
@@ -181,6 +182,10 @@ function useDialogOpen(ref: RefObject<HTMLDialogElement | null>, open: boolean) 
     if (!dlg) return
     if (open && !dlg.open) {
       dlg.style.transform = ''
+      // Fokus på selve dialogen, ikke på første knapp: det er «Lukk» øverst, og
+      // Safari tegner en fokusring rundt den i det arket åpnes. Skjermleseren
+      // starter da på dialogens navn, og Tab går videre til første felt.
+      dlg.setAttribute('autofocus', '')
       dlg.showModal()
     }
     if (!open && dlg.open) dlg.close()
@@ -260,6 +265,7 @@ export function BottomSheet({
   return (
     <dialog
       ref={ref}
+      tabIndex={-1}
       aria-label={label}
       className="sheet-dialog sheet-dialog-bottom"
       onClose={onClose}

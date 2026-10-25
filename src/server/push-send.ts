@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers'
-import { and, gte, inArray, isNotNull } from 'drizzle-orm'
+import { and, eq, gt, gte, inArray, isNotNull } from 'drizzle-orm'
 import { db } from '../db'
-import { postReads, posts, pushSubscriptions } from '../db/schema'
+import { postReads, posts, pushSubscriptions, session } from '../db/schema'
 import type { PushMessage } from '../lib/push'
 import { unreadSince } from '../lib/unread'
 import { type VapidKeys, encryptPushPayload, isAllowedPushEndpoint, vapidAuthorization } from '../lib/web-push'
@@ -18,6 +18,8 @@ import { type VapidKeys, encryptPushPayload, isAllowedPushEndpoint, vapidAuthori
 
 /** Mange samtidige forespørsler mot push-tjenestene er unødvendig; fem om gangen holder. */
 const BATCH = 5
+/** Lenger enn dette svarer ingen frisk push-tjeneste. */
+const PUSH_TIMEOUT_MS = 8000
 
 export function vapidKeys(): VapidKeys | null {
   if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return null
@@ -48,11 +50,17 @@ export async function sendPushToUsers(
 
   const d = db()
   const subscriptions: Subscription[] = []
-  // D1 har et tak på bundne parametere per spørring.
+  const now = new Date()
+  // D1 har et tak på bundne parametere per spørring. Bare enheter med en aktiv
+  // innlogging får varsler (`pushSubscriptions.sessionId`): en utløpt økt betyr
+  // at ingen er logget inn der lenger.
   for (let i = 0; i < unique.length; i += 80) {
-    subscriptions.push(
-      ...(await d.select().from(pushSubscriptions).where(inArray(pushSubscriptions.userId, unique.slice(i, i + 80)))),
-    )
+    const rows = await d
+      .select({ sub: pushSubscriptions })
+      .from(pushSubscriptions)
+      .innerJoin(session, eq(session.id, pushSubscriptions.sessionId))
+      .where(and(inArray(pushSubscriptions.userId, unique.slice(i, i + 80)), gt(session.expiresAt, now)))
+    subscriptions.push(...rows.map((r) => r.sub))
   }
 
   const gone: string[] = []
@@ -82,11 +90,11 @@ export async function sendPushToUsers(
   for (let i = 0; i < gone.length; i += 80) {
     await d.delete(pushSubscriptions).where(inArray(pushSubscriptions.id, gone.slice(i, i + 80)))
   }
-  const now = new Date()
+  const deliveredAt = new Date()
   for (let i = 0; i < delivered.length; i += 80) {
     await d
       .update(pushSubscriptions)
-      .set({ lastSuccessAt: now })
+      .set({ lastSuccessAt: deliveredAt })
       .where(inArray(pushSubscriptions.id, delivered.slice(i, i + 80)))
   }
   return result
@@ -114,6 +122,9 @@ async function deliver(
       Urgency: opts.urgency ?? 'normal',
     },
     body,
+    // Utsendingen skjer mens publiseringen venter. En push-tjeneste som henger,
+    // skal ikke holde igjen svaret — eller omtale-e-postene som sendes etterpå.
+    signal: AbortSignal.timeout(PUSH_TIMEOUT_MS),
   })
   if (response.ok) return 'ok'
   // 404/410: abonnementet finnes ikke lenger (appen er slettet, varsler slått av).

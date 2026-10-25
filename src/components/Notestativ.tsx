@@ -47,6 +47,8 @@ export function Notestativ({
   const [night, setNight] = useState(false)
   const [listenOpen, setListenOpen] = useState(false)
   const [page, setPage] = useState({ current: 1, total: 0 })
+  /** Den åpne PDF-en, til «Del» — bytene er allerede lastet, ingen ny henting. */
+  const docRef = useRef<PDFDocumentProxy | null>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const canGoBack = useCanGoBack()
@@ -186,8 +188,15 @@ export function Notestativ({
               href={`/api/files/${entry.fileId}`}
               target="_blank"
               rel="noreferrer"
-              aria-label="Åpne PDF-en"
-              title="Åpne PDF-en"
+              aria-label="Del eller åpne PDF-en"
+              title="Del eller åpne PDF-en"
+              onClick={(e) => {
+                // Med mus (desktop) åpnes PDF-en i ny fane som før.
+                const doc = docRef.current
+                if (!doc || !('canShare' in navigator) || !window.matchMedia('(pointer: coarse)').matches) return
+                e.preventDefault()
+                void sharePdf(doc, `${entry.title} – ${entry.label}.pdf`, e.currentTarget.href)
+              }}
               className="-mr-2 grid h-11 w-11 place-items-center rounded-full text-[#e7c468]"
             >
               <Icon name="share" size={21} />
@@ -215,6 +224,7 @@ export function Notestativ({
                 night={night}
                 scrollRoot={scroller}
                 onPage={onPage}
+                onDoc={(doc) => (docRef.current = doc)}
               />
             </div>
           ) : (
@@ -346,14 +356,18 @@ function PdfDocument({
   night,
   scrollRoot,
   onPage,
+  onDoc,
 }: {
   fileId: string
   night: boolean
   scrollRoot: React.RefObject<HTMLDivElement | null>
   onPage: (current: number, total: number) => void
+  onDoc: (doc: PDFDocumentProxy | null) => void
 }) {
   const [state, setState] = useState<DocState>({ doc: null, error: null })
   const [width, setWidth] = useState(0)
+  const onDocRef = useRef(onDoc)
+  onDocRef.current = onDoc
   const wrap = useRef<HTMLDivElement>(null)
   const visible = useRef(new Map<number, number>())
 
@@ -361,6 +375,7 @@ function PdfDocument({
     let cancelled = false
     let destroy: (() => void) | null = null
     setState({ doc: null, error: null })
+    onDocRef.current(null)
     loadPdfJs()
       .then((lib) => {
         if (cancelled) return null
@@ -381,6 +396,7 @@ function PdfDocument({
           return
         }
         setState({ doc, error: null })
+        onDocRef.current(doc)
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -566,6 +582,30 @@ function PdfPage({
       )}
     </div>
   )
+}
+
+// ---------- Del ----------
+
+/**
+ * «Del» åpner delingsarket med selve PDF-en (lagre i Filer, skrive ut, AirDrop).
+ * I en installert iOS-app åpner en lenke i ny fane en nettleser som ikke deler
+ * appens innlogging, så fil-gaten ville svart «Krever innlogging». Bytene
+ * kommer fra pdf.js, som allerede har dem — ingen ny henting som kunne latt
+ * trykket «gå ut på dato» før delingsarket åpnes. Uten støtte: vanlig lenke.
+ */
+async function sharePdf(doc: PDFDocumentProxy, name: string, fallbackHref: string) {
+  try {
+    const bytes = new Uint8Array(await doc.getData())
+    const file = new File([bytes], name.replace(/[\\/:*?"<>|]+/g, ' '), { type: 'application/pdf' })
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: name })
+      return
+    }
+  } catch (err) {
+    // Avbrutt av brukeren: ikke noe mer å gjøre.
+    if ((err as Error)?.name === 'AbortError') return
+  }
+  window.open(fallbackHref, '_blank', 'noreferrer')
 }
 
 // ---------- Skjerm og statuslinje ----------

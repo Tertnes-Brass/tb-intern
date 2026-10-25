@@ -16,7 +16,7 @@ type Devices = Awaited<ReturnType<typeof listMyPushDevices>>
  * styres av valgene under (de samme som for e-post). Påminnelsen om oppmøte
  * er det eneste som bare finnes som push.
  */
-export function PushCard() {
+export function PushCard({ userId }: { userId: string }) {
   const [support, setSupport] = useState<PushSupport>('unsupported')
   const [enabledHere, setEnabledHere] = useState(false)
   const [devices, setDevices] = useState<Devices | null>(null)
@@ -46,7 +46,7 @@ export function PushCard() {
         await disablePush()
         toast('Varsler er slått av på denne enheten')
       } else {
-        await enablePush(publicKey)
+        await enablePush(publicKey, userId)
         toast('Varsler er slått på')
       }
       await refresh()

@@ -31,6 +31,7 @@ export const Route = createFileRoute('/min-profil')({
 
 function MyProfilePage() {
   const profile = Route.useLoaderData()
+  const { me } = Route.useRouteContext()
   const router = useRouter()
   const [name, setName] = useState(profile.name)
   const [phone, setPhone] = useState(profile.phone)
@@ -123,7 +124,7 @@ function MyProfilePage() {
         </section>
 
         <div className="space-y-6">
-          <PushCard />
+          <PushCard userId={me!.id} />
           <NotificationsCard current={profile.notifyPosts} />
           <MentionNotificationsCard current={profile.notifyMentions} />
           {/* Styreoppgaver angår bare styret — valget vises derfor kun for dem

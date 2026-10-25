@@ -21,10 +21,10 @@ export async function loadPdfJs(): Promise<Runtime['pdfjs']> {
 }
 
 /**
- * Henter biblioteket og arbeideren én gang, slik at service workeren har dem i
- * cachen før man står uten nett. Kalles når et stativ lagres offline.
+ * Adressene til pdf.js-modulen og arbeideren. Ingen av dem står i sidens HTML
+ * (de lastes dynamisk), så offline-lagringen må få dem herfra.
  */
-export async function warmPdfAssets(): Promise<void> {
-  const { workerUrl } = await runtime()
-  await fetch(workerUrl).catch(() => {})
+export async function pdfAssetUrls(): Promise<string[]> {
+  const { runtimeUrl, workerUrl } = await runtime()
+  return [runtimeUrl, workerUrl]
 }

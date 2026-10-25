@@ -17,14 +17,12 @@ const RESUME_AFTER_MS = 60_000
  * - **Tilbake fra bakgrunnen:** en installert app kan ligge i bakgrunnen i
  *   dagevis. Kommer den fram igjen etter mer enn et minutt, lastes rutens data
  *   på nytt, slik at «Neste» og veggen ikke viser gårsdagen.
- * - **Delt enhet:** noter og push-abonnement fra en annen bruker ryddes bort
- *   ved oppstart.
  * - **`rise` bare første gang:** innlastingsanimasjonen er en velkomst, ikke
  *   noe man skal se ved hvert trykk. Etter første navigasjon får `<html>`
  *   klassen `navigated`, og styles.css slår den av — sideskiftet har sin egen
  *   overgang (View Transitions, `defaultViewTransition` i router.tsx).
  */
-export function AppBehaviour({ userId }: { userId: string }) {
+export function AppBehaviour() {
   const router = useRouter()
 
   useEffect(() => {
@@ -42,13 +40,6 @@ export function AppBehaviour({ userId }: { userId: string }) {
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [router])
-
-  // Delt enhet: noter lagret av en annen bruker slettes, og et push-abonnement
-  // som ikke er denne brukerens avsluttes (se `claimOfflineNotes`/`resyncPush`).
-  useEffect(() => {
-    void claimOfflineNotes(userId).catch(() => {})
-    void resyncPush().catch(() => {})
-  }, [userId])
 
   useEffect(() => {
     return router.subscribe('onBeforeNavigate', () => {
@@ -193,4 +184,18 @@ export function OfflineBanner() {
       </p>
     </div>
   )
+}
+
+/**
+ * Delt enhet: noter lagret av en annen bruker slettes, og et push-abonnement
+ * som ikke er denne brukerens avsluttes (`claimOfflineNotes`/`resyncPush`).
+ * Monteres i roten for ALLE ruter med innlogget bruker — også notestativet,
+ * som ikke har skallet.
+ */
+export function SessionGuards({ userId }: { userId: string }) {
+  useEffect(() => {
+    void claimOfflineNotes(userId).catch(() => {})
+    void resyncPush(userId).catch(() => {})
+  }, [userId])
+  return null
 }

@@ -269,7 +269,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
       </footer>
 
       <TabBar counts={counts} />
-      <AppBehaviour userId={me.id} />
+      <AppBehaviour />
       <Launcher me={me} counts={counts} open={launcherOpen} onClose={() => setLauncherOpen(false)} />
     </div>
   )

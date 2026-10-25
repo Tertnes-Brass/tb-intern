@@ -169,6 +169,13 @@
       "when": 1792959741860,
       "tag": "0023_push-varsler",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1792971707552,
+      "tag": "0024_push-okt",
+      "breakpoints": true
     }
   ]
 }

@@ -11,4 +11,7 @@ import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
-export { pdfjs, workerUrl }
+/** Adressen til denne modulen selv — offline-lagringen må ha den med. */
+const runtimeUrl = import.meta.url
+
+export { pdfjs, runtimeUrl, workerUrl }

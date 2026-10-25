@@ -26,10 +26,37 @@ export function pushSupport(): PushSupport {
 
 async function registration(): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) return null
-  // Uten registrert service worker (dev) ville `ready` ventet for alltid.
+  // `serviceWorker.ready` venter for alltid uten en aktiv service worker (i dev,
+  // eller hvis installasjonen feilet) — og da ville også utloggingen hengt.
   const existing = await navigator.serviceWorker.getRegistration()
-  if (!existing) return null
-  return navigator.serviceWorker.ready
+  return existing?.active ? existing : null
+}
+
+/** Hvem som slo på varsler på denne enheten — for å kjenne igjen et fornyet abonnement. */
+const OWNER_KEY = 'tb-push-owner'
+
+function rememberOwner(userId: string | null) {
+  try {
+    if (userId) window.localStorage.setItem(OWNER_KEY, userId)
+    else window.localStorage.removeItem(OWNER_KEY)
+  } catch {}
+}
+
+function rememberedOwner(): string | null {
+  try {
+    return window.localStorage.getItem(OWNER_KEY)
+  } catch {
+    return null
+  }
+}
+
+/** Er abonnementet laget med den samme VAPID-nøkkelen som serveren bruker nå? */
+function sameKey(sub: PushSubscription, publicKey: string): boolean {
+  const key = sub.options.applicationServerKey
+  if (!key) return false
+  const a = new Uint8Array(key)
+  const b = base64UrlDecode(publicKey)
+  return a.length === b.length && a.every((v, i) => v === b[i])
 }
 
 export async function currentPushSubscription(): Promise<PushSubscription | null> {
@@ -51,7 +78,7 @@ function toInput(sub: PushSubscription) {
  * få Safari til å avvise den i stillhet. Derfor er `requestPermission` det
  * første som skjer her.
  */
-export async function enablePush(publicKey: string | null): Promise<void> {
+export async function enablePush(publicKey: string | null, userId: string): Promise<void> {
   if (!publicKey) throw new Error('Varsler er ikke satt opp på serveren ennå.')
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') {
@@ -64,14 +91,22 @@ export async function enablePush(publicKey: string | null): Promise<void> {
   const reg = await registration()
   if (!reg) throw new Error('Varsler krever at appen er installert og lastet på nytt.')
   let sub = await reg.pushManager.getSubscription()
+  // Et abonnement laget med en gammel nøkkel avvises av push-tjenesten for
+  // alltid; da må det lages på nytt.
+  if (sub && !sameKey(sub, publicKey)) {
+    await sub.unsubscribe().catch(() => {})
+    sub = null
+  }
   if (!sub) {
     sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlDecode(publicKey) })
   }
   await savePushSubscription({ data: toInput(sub) })
+  rememberOwner(userId)
 }
 
 /** Slår av for denne enheten: hos push-tjenesten og hos oss. */
 export async function disablePush(): Promise<void> {
+  rememberOwner(null)
   const sub = await currentPushSubscription()
   if (!sub) return
   await deletePushSubscription({ data: { endpoint: sub.endpoint } }).catch(() => {})
@@ -80,15 +115,24 @@ export async function disablePush(): Promise<void> {
 
 /**
  * Ved oppstart: oppdater serverens kopi av denne enhetens abonnement, men bare
- * hvis det allerede er brukerens (`refreshPushSubscription`). Finnes det ikke
- * hos oss, eller tilhører det en annen bruker, avsluttes det lokalt — da
- * stemmer «På/Av» i appen med hva serveren faktisk sender, og ingen får varsler
- * de ikke selv har slått på.
+ * hvis det er brukerens (`refreshPushSubscription`).
+ *
+ * - Tilhører det en annen bruker, avsluttes det lokalt — ingen får varsler de
+ *   ikke selv har slått på.
+ * - Finnes det ikke hos oss, men det var DENNE brukeren som slo på varsler her,
+ *   har nettleseren fornyet abonnementet i stillhet (ny adresse). Da lagres det
+ *   nye. Ellers avsluttes det, så «På/Av» stemmer med hva serveren sender.
  */
-export async function resyncPush(): Promise<void> {
+export async function resyncPush(userId: string): Promise<void> {
   if (pushSupport() !== 'supported' || Notification.permission !== 'granted') return
   const sub = await currentPushSubscription()
   if (!sub) return
   const { status } = await refreshPushSubscription({ data: toInput(sub) })
-  if (status !== 'ok') await sub.unsubscribe().catch(() => {})
+  if (status === 'ok') return
+  if (status === 'missing' && rememberedOwner() === userId) {
+    await savePushSubscription({ data: toInput(sub) })
+    return
+  }
+  rememberOwner(null)
+  await sub.unsubscribe().catch(() => {})
 }

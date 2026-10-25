@@ -380,7 +380,9 @@ dialog.sheet-dialog.sheet-dialog-wide {
    innenfor tommelens rekkevidde, med grep øverst (dra ned for å lukke, se
    `useSheetDrag` i ui.tsx). En sentrert desktop-dialog midt på en telefon er
    langt unna både tommel og tastatur. */
-.sheet-grab-phone {
+/* Grepet i en vanlig dialog vises bare der den er et bunnark (telefon). To
+   klasser, så regelen slår den generelle `.sheet-grab` lenger ned. */
+.sheet-grab.sheet-grab-phone {
   display: none;
 }
 @media (max-width: 640px) {
@@ -401,7 +403,7 @@ dialog.sheet-dialog.sheet-dialog-wide {
   dialog.sheet-dialog[open] {
     animation: sheet-in 0.32s cubic-bezier(0.2, 0.75, 0.25, 1);
   }
-  .sheet-grab-phone {
+  .sheet-grab.sheet-grab-phone {
     display: block;
   }
   /* Nær-fullskjerm for modaler som trenger plass (avspilling av opptak/video,
@@ -433,6 +435,12 @@ dialog.sheet-dialog.sheet-dialog-bottom[open] {
   to {
     transform: translateY(0);
   }
+}
+
+/* Arket selv kan ha fokus (se useDialogOpen i ui.tsx); det skal ikke få ring. */
+dialog.sheet-dialog:focus,
+dialog.sheet-dialog:focus-visible {
+  outline: none;
 }
 
 /* Grepet øverst i et ark — viser at det kan dras ned. */

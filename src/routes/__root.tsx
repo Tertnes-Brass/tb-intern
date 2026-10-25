@@ -1,5 +1,6 @@
 import { HeadContent, Outlet, Scripts, createRootRoute, useRouterState } from '@tanstack/react-router'
 import { useEffect } from 'react'
+import { SessionGuards } from '../components/AppBehaviour'
 import { Shell } from '../components/Shell'
 import { Toaster } from '../components/toast'
 import { initPwa } from '../lib/pwa'
@@ -60,11 +61,21 @@ function RootLayout() {
     // Notestativet er fullskjerm: ingen meny, ingen fanelinje.
     pathname.startsWith('/noter/stativ/')
 
-  if (bare || !me) return <Outlet />
+  if (bare || !me) {
+    return (
+      <>
+        {me && <SessionGuards userId={me.id} />}
+        <Outlet />
+      </>
+    )
+  }
   return (
-    <Shell me={me}>
-      <Outlet />
-    </Shell>
+    <>
+      <SessionGuards userId={me.id} />
+      <Shell me={me}>
+        <Outlet />
+      </Shell>
+    </>
   )
 }
 

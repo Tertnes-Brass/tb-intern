@@ -97,7 +97,9 @@ export function saveStandOffline(
 ): Promise<OfflineStand> {
   const running = inFlight.get(project.id)
   if (running) return running
-  const task = doSave(project, fileIds, ownerId, onProgress).finally(() => inFlight.delete(project.id))
+  const task = claimOfflineNotes(ownerId)
+    .then(() => doSave(project, fileIds, ownerId, onProgress))
+    .finally(() => inFlight.delete(project.id))
   inFlight.set(project.id, task)
   return task
 }
@@ -108,6 +110,9 @@ async function doSave(
   ownerId: string,
   onProgress?: (done: number, total: number) => void,
 ): Promise<OfflineStand> {
+  // Be om varig lagring, så nettleseren ikke rydder bort notene for å frigjøre
+  // plass. Et nei er greit — da er det bare som før.
+  void navigator.storage?.persist?.().catch(() => {})
   const cache = await caches.open(OFFLINE_CACHE)
   const previous = offlineStand(project.id)
   const unique = [...new Set(fileIds)]
@@ -117,7 +122,7 @@ async function doSave(
     for (const [i, fileId] of unique.entries()) {
       const cached = await cache.match(filePath(fileId))
       if (cached) {
-        bytes += (await cached.blob()).size
+        bytes += Number(cached.headers.get('Content-Length') ?? 0)
       } else {
         const response = await fetch(`${filePath(fileId)}?download=1`, { credentials: 'same-origin' })
         if (!response.ok) {
@@ -165,31 +170,49 @@ async function doSave(
   return stand
 }
 
+/** Øvre grense for hvor mange filer kartleggingen følger — en vakt, ikke et mål. */
+const MAX_ASSETS = 400
+/** `./x.js`, `/assets/x.js`, `assets/x.css` osv. — slik Vite-bygget peker på filer. */
+const ASSET_REF = /(?:\.\/|\/assets\/|assets\/)([\w.-]+\.(?:m?js|css|woff2))/g
+
 /**
- * Legger koden siden trenger i offline-cachen: det stativ-siden lenker til,
- * pluss alt denne økten har lastet fra /assets/ (fonter, pdf.js og arbeideren
- * — `warmPdfAssets` sørger for at de er hentet).
+ * Legger ALL koden stativ-siden trenger i offline-cachen. Lista bygges ikke av
+ * det denne økten tilfeldigvis har lastet, men ved å følge referansene fra den
+ * lagrede HTML-en: hver JS-fil leses for statiske og dynamiske importer (og
+ * Vites `__vite__mapDeps`-liste), CSS for fonter, og pdf.js-modulen og
+ * arbeideren legges til eksplisitt fordi de lastes dynamisk. Av fontene tas
+ * bare det latinske utvalget med — det er det norsk tekst bruker.
+ *
+ * Kaster hvis en fil ikke kan hentes, så stativet aldri merkes «Lagret» uten
+ * koden sin.
  */
 async function storeAssets(cache: Cache, html: string): Promise<string[]> {
-  const { warmPdfAssets } = await import('./pdf-loader')
-  await warmPdfAssets()
-  const urls = new Set(html.match(/\/assets\/[\w.-]+\.(?:js|mjs|css|woff2)/g) ?? [])
-  for (const entry of performance.getEntriesByType('resource')) {
-    const url = new URL(entry.name, window.location.href)
-    if (url.origin === window.location.origin && url.pathname.startsWith('/assets/')) urls.add(url.pathname)
+  const { pdfAssetUrls } = await import('./pdf-loader')
+  const queue = new Set<string>()
+  const enqueue = (name: string) => {
+    if (name.endsWith('.woff2') && (!name.includes('-latin-') || name.includes('-latin-ext-'))) return
+    queue.add(`/assets/${name}`)
   }
-  const stored: string[] = []
-  await Promise.all(
-    [...urls].map(async (url) => {
-      try {
-        const response = await fetch(url)
-        if (!response.ok) return
-        await cache.put(url, new Response(await response.blob(), { headers: response.headers }))
-        stored.push(url)
-      } catch {}
-    }),
-  )
-  return stored
+  for (const match of html.matchAll(ASSET_REF)) enqueue(match[1]!)
+  for (const url of await pdfAssetUrls()) queue.add(new URL(url, window.location.href).pathname)
+
+  const stored = new Set<string>()
+  for (const url of queue) {
+    if (stored.size >= MAX_ASSETS) break
+    if (stored.has(url)) continue
+    const response = await fetch(url)
+    // En referanse som ikke er en fil i bygget (pdf.js har f.eks. en CDN-variant
+    // i koden), er ikke noe siden laster. Alt annet må finnes.
+    if (response.status === 404) continue
+    if (!response.ok) throw new Error('Kunne ikke lagre appen for bruk uten nett. Prøv igjen.')
+    const blob = await response.blob()
+    await cache.put(url, new Response(blob, { headers: response.headers }))
+    stored.add(url)
+    if (/\.(?:m?js|css)$/.test(url)) {
+      for (const match of (await blob.text()).matchAll(ASSET_REF)) enqueue(match[1]!)
+    }
+  }
+  return [...stored]
 }
 
 /**
@@ -199,6 +222,7 @@ async function storeAssets(cache: Cache, html: string): Promise<string[]> {
  * stativet ikke er lagret.
  */
 export async function syncStandOffline(project: { id: string; name: string }, fileIds: string[], ownerId: string): Promise<void> {
+  await claimOfflineNotes(ownerId)
   const saved = offlineStand(project.id)
   if (!saved || !offlineSupported() || !navigator.onLine) return
   const wanted = [...new Set(fileIds)]
@@ -255,17 +279,33 @@ export async function pruneOfflineStands(upcomingProjectIds: string[]): Promise<
   }
 }
 
+/** Én avklaring per bruker og sidelasting; alle lagringer venter på den. */
+let claimed: { userId: string; done: Promise<void> } | null = null
+
 /**
- * Kalles av skallet med innlogget bruker. Ligger det noter fra en ANNEN bruker
- * på enheten (forrige bruker logget aldri ut), slettes alt.
+ * Sørger for at offline-cachen tilhører `userId`. Ligger det noter fra en ANNEN
+ * bruker der (forrige bruker logget aldri ut), slettes alt. Det samme gjelder
+ * en cache uten indeks — rester etter en lagring som ble avbrutt (appen drept
+ * midt i), som ellers kunne vist forrige brukers side uten nett.
+ *
+ * Kalles fra roten for hver innlogget bruker, og fra hver lagring og synk før
+ * de rører cachen — rekkefølgen mellom effekter i React er ikke noe å stole på.
  */
-export async function claimOfflineNotes(userId: string): Promise<void> {
-  const stands = offlineStands()
-  if (stands.length > 0 && stands.some((s) => s.ownerId !== userId)) await clearOfflineNotes()
+export function claimOfflineNotes(userId: string): Promise<void> {
+  if (claimed?.userId === userId) return claimed.done
+  const done = (async () => {
+    if (!offlineSupported()) return
+    const stands = offlineStands()
+    if (stands.some((s) => s.ownerId !== userId)) await clearOfflineNotes()
+    else if (stands.length === 0 && (await caches.has(OFFLINE_CACHE))) await caches.delete(OFFLINE_CACHE)
+  })()
+  claimed = { userId, done: done.catch(() => {}) }
+  return claimed.done
 }
 
 /** Ved utlogging: ingen noter skal ligge igjen på en delt enhet. */
 export async function clearOfflineNotes(): Promise<void> {
+  claimed = null
   try {
     window.localStorage.removeItem(INDEX_KEY)
   } catch {}

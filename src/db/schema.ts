@@ -6,7 +6,7 @@ import {
   sqliteTable,
   text,
 } from 'drizzle-orm/sqlite-core'
-import { user } from './auth-schema'
+import { session, user } from './auth-schema'
 
 // better-auth eier autentiseringstabellene (user/session/account/verification).
 // Vi re-eksporterer dem så Drizzle Kit ser dem, og kobler RBAC til user.id.
@@ -755,8 +755,14 @@ export const pushSubscriptions = sqliteTable(
     label: text('label'),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     lastSuccessAt: integer('last_success_at', { mode: 'timestamp_ms' }),
+    // Innloggingen på enheten (migrasjon 0024). Varsler hører til en innlogget
+    // enhet: «Logg ut andre enheter», passordbytte og utestengelse sletter
+    // økten, og CASCADE tar abonnementet med seg — en mistet iPad skal ikke
+    // fortsette å vise «Viktig fra styret» på låseskjermen. Utsendingen hopper
+    // også over rader uten aktiv økt (utløpt).
+    sessionId: text('session_id').references(() => session.id, { onDelete: 'cascade' }),
   },
-  (t) => [index('push_subscriptions_user_idx').on(t.userId)],
+  (t) => [index('push_subscriptions_user_idx').on(t.userId), index('push_subscriptions_session_idx').on(t.sessionId)],
 )
 
 // Idempotens for varsling: en beskjed sendes aldri to ganger til samme person.
