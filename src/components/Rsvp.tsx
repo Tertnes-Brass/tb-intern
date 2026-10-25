@@ -30,12 +30,15 @@ export function RsvpControl({
   eventLabel,
   current,
   onSaved,
+  showComment = true,
 }: {
   occurrenceKey: string
   /** «Øvelse · onsdag 28. oktober, 19:00» — vises i arket. */
   eventLabel: string
   current: MyAttendance
   onSaved?: () => void | Promise<void>
+  /** Detaljsiden har sitt eget kommentarfelt og skjuler linjen her. */
+  showComment?: boolean
 }) {
   const [mine, setMine] = useState<MyAttendance>(current)
   const [busy, setBusy] = useState<AttendanceStatus | null>(null)
@@ -93,7 +96,7 @@ export function RsvpControl({
           )
         })}
       </div>
-      {mine?.comment && (
+      {showComment && mine?.comment && (
         <p className="mt-2 text-xs text-ink-soft">
           <span className="text-ink-faint">Kommentar:</span> {mine.comment}
         </p>

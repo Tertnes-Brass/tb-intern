@@ -7,6 +7,7 @@ import { signOutHere } from '../lib/session-client'
 import { onShellCountsRefresh } from '../lib/shell-events'
 import { setThemeMode } from '../lib/theme'
 import { EMPTY_SHELL_COUNTS, type ShellCounts, badgeLabel } from '../lib/unread'
+import { AppBehaviour } from './AppBehaviour'
 import { Launcher } from './Launcher'
 import { TabBar } from './TabBar'
 import { Avatar } from './ui'
@@ -267,6 +268,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
       </footer>
 
       <TabBar counts={counts} />
+      <AppBehaviour />
       <Launcher me={me} counts={counts} open={launcherOpen} onClose={() => setLauncherOpen(false)} />
     </div>
   )

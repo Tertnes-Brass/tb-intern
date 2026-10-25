@@ -44,9 +44,9 @@ function StyreLayout() {
 
   return (
     <div>
-      <div className="-mt-2 mb-9 border-b border-line">
+      <div className="area-nav-wrap print-hidden">
         <nav
-          className="flex items-center gap-5 overflow-x-auto overscroll-x-contain pb-2.5 sm:gap-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="area-nav"
           aria-label="Styre"
         >
           {ITEMS.map((item) => (
@@ -54,7 +54,7 @@ function StyreLayout() {
               key={item.to}
               to={item.to}
               activeOptions={{ exact: item.exact ?? false }}
-              className="nav-link flex shrink-0 items-center gap-1.5 whitespace-nowrap font-mono text-[0.68rem] font-medium uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-ink [&[data-status=active]]:text-brass-strong"
+              className="area-link"
             >
               {item.label}
               {item.to === '/styre/chat' && unread > 0 && (

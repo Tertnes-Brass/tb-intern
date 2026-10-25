@@ -312,10 +312,28 @@ textarea,
   animation: spin 0.7s linear infinite;
 }
 
+/* Etter første navigasjon (AppBehaviour.tsx): ingen ny innlasting-animasjon
+   for hvert trykk — sideskiftet har sin egen overgang. */
+html.navigated main .rise {
+  animation: none;
+}
+
+/* Sideskift (View Transitions, router.tsx): kort kryssfade av innholdet. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.18s;
+  animation-timing-function: ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rise,
   .fadein {
     animation: none;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
   * {
     transition-duration: 0.01ms !important;
@@ -358,17 +376,37 @@ dialog.sheet-dialog.sheet-dialog-wide {
   max-width: min(94vw, 760px);
 }
 
-/* Nær-fullskjerms bunn-sheet på telefon for modaler som trenger plass
-   (avspilling av opptak/video): full bredde, pinnet mot bunnen. */
+/* På telefon er ALLE dialoger bunnark: full bredde, festet mot bunnen og
+   innenfor tommelens rekkevidde, med grep øverst (dra ned for å lukke, se
+   `useSheetDrag` i ui.tsx). En sentrert desktop-dialog midt på en telefon er
+   langt unna både tommel og tastatur. */
+.sheet-grab-phone {
+  display: none;
+}
 @media (max-width: 640px) {
-  dialog.sheet-dialog.sheet-dialog-mobile-full {
+  dialog.sheet-dialog {
     width: 100%;
     max-width: 100%;
     margin: auto 0 0;
     border-left: none;
     border-right: none;
     border-bottom: none;
-    border-radius: 18px 18px 0 0;
+    border-radius: 20px 20px 0 0;
+    max-height: 92dvh;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  dialog.sheet-dialog.sheet-dialog-wide {
+    max-width: 100%;
+  }
+  dialog.sheet-dialog[open] {
+    animation: sheet-in 0.32s cubic-bezier(0.2, 0.75, 0.25, 1);
+  }
+  .sheet-grab-phone {
+    display: block;
+  }
+  /* Nær-fullskjerm for modaler som trenger plass (avspilling av opptak/video,
+     skjemaer med mange felt). */
+  dialog.sheet-dialog.sheet-dialog-mobile-full {
     min-height: 60dvh;
     max-height: 94dvh;
   }
@@ -577,6 +615,92 @@ select.field-input {
 .nav-link:hover::after,
 .nav-link[data-status='active']::after {
   right: 0;
+}
+
+/* ---------- Områdemenyer (Noter, Styre, Gruppeledere) ----------
+   designprinsipper §6 (a): hvert område eier sin egen meny. På telefon er det
+   en rad med «piller» som er store nok for tommelen og kan rulles vannrett;
+   fra 640 px er det de smale mono-fanene med messingstrek under (`.nav-link`). */
+.area-nav-wrap {
+  margin: -0.25rem 0 1.75rem;
+}
+.area-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 -1rem;
+  padding: 0 1rem 0.25rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.area-nav::-webkit-scrollbar {
+  display: none;
+}
+.area-link {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 9999px;
+  white-space: nowrap;
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-decoration: none;
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+}
+.area-link[data-status='active'] {
+  border-color: var(--brass);
+  background: var(--brass-soft);
+  color: var(--brass-strong);
+}
+@media (min-width: 640px) {
+  .area-nav-wrap {
+    margin: -0.5rem 0 2.25rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .area-nav {
+    gap: 1.5rem;
+    margin: 0;
+    padding: 0 0 0.625rem;
+  }
+  .area-link {
+    position: relative;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .area-link:hover {
+    color: var(--ink);
+  }
+  .area-link[data-status='active'] {
+    background: transparent;
+    color: var(--brass-strong);
+  }
+  .area-link::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 100%;
+    bottom: -3px;
+    height: 1.5px;
+    background: var(--brass);
+    transition: right 0.22s cubic-bezier(0.2, 0.65, 0.25, 1);
+  }
+  .area-link:hover::after,
+  .area-link[data-status='active']::after {
+    right: 0;
+  }
 }
 
 /* ---------- Markdown-innhold («.prose», #79) ----------

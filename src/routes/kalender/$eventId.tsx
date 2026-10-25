@@ -1,6 +1,7 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { toast, toastError } from '../../components/toast'
+import { RsvpControl } from '../../components/Rsvp'
 import { Button, EmptyState, Kicker, Modal, SectionHeading, Stamp } from '../../components/ui'
 import {
   ATTENDANCE_COMMENT_MAX,
@@ -582,45 +583,64 @@ function AttendanceSection({ data, occurrenceKey }: { data: Detail; occurrenceKe
 function MyRsvp({ data, occurrenceKey }: { data: Detail; occurrenceKey: string }) {
   const router = useRouter()
   const current = data.myAttendance
+  const [clearing, setClearing] = useState(false)
   const [comment, setComment] = useState(current?.comment ?? '')
-  const [busy, setBusy] = useState<AttendanceStatus | 'clear' | null>(null)
+  const [savingComment, setSavingComment] = useState(false)
+  const event = data.event!
+  const date = toOsloDate(event.start)
 
   useEffect(() => {
     setComment(current?.comment ?? '')
   }, [current?.comment])
 
-  const write = async (status: AttendanceStatus | null, nextComment: string) => {
-    setBusy(status ?? 'clear')
+  const saveComment = async () => {
+    if (!current) return
+    setSavingComment(true)
     try {
-      await setMyAttendance({ data: { occurrenceKey, status, comment: status ? nextComment : null } })
+      await setMyAttendance({ data: { occurrenceKey, status: current.status, comment } })
       await router.invalidate()
     } catch (err) {
       toastError(err)
     } finally {
-      setBusy(null)
+      setSavingComment(false)
     }
   }
 
   return (
     <div className="sheet px-4 py-4 sm:px-5">
-      <p className="kicker mb-3">Mitt svar</p>
-      <div className="flex flex-wrap gap-2">
-        {ATTENDANCE_STATUSES.map((status) => (
-          <Button
-            key={status}
-            size="sm"
-            variant={current?.status === status ? 'primary' : 'secondary'}
-            loading={busy === status}
-            onClick={() => write(status, comment)}
-          >
-            {ATTENDANCE_LABELS[status]}
-          </Button>
-        ))}
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="kicker">Mitt svar</p>
         {current && (
-          <Button size="sm" variant="ghost" loading={busy === 'clear'} onClick={() => write(null, '')}>
+          <Button
+            size="sm"
+            variant="ghost"
+            loading={clearing}
+            onClick={async () => {
+              setClearing(true)
+              try {
+                await setMyAttendance({ data: { occurrenceKey, status: null, comment: null } })
+                await router.invalidate()
+              } catch (err) {
+                toastError(err)
+              } finally {
+                setClearing(false)
+              }
+            }}
+          >
             Nullstill
           </Button>
         )}
+      </div>
+      {/* Samme kontroll som på Hjem: tre trykk, og et ark med grunn og
+          kommentar for «Kan ikke». */}
+      <div className="max-w-md">
+        <RsvpControl
+          occurrenceKey={occurrenceKey}
+          eventLabel={`${event.title} · ${formatWeekday(date)} ${formatDate(date)}${event.allDay ? '' : `, ${formatTimeRange(event.start, null)}`}`}
+          current={current}
+          onSaved={() => router.invalidate()}
+          showComment={false}
+        />
       </div>
       {current && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -631,11 +651,11 @@ function MyRsvp({ data, occurrenceKey }: { data: Detail; occurrenceKey: string }
             maxLength={ATTENDANCE_COMMENT_MAX}
             onChange={(e) => setComment(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') write(current.status, comment)
+              if (e.key === 'Enter') void saveComment()
             }}
           />
           {comment !== (current.comment ?? '') && (
-            <Button size="sm" onClick={() => write(current.status, comment)}>
+            <Button size="sm" loading={savingComment} onClick={saveComment}>
               Lagre
             </Button>
           )}

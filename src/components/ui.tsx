@@ -22,9 +22,11 @@ const btnVariants: Record<NonNullable<ButtonProps['variant']>, string> = {
   danger: 'border border-danger/40 text-danger bg-transparent hover:bg-danger/10',
 }
 
+// Med finger (pointer: coarse) får knappene minst 40/44 px høyde — Apples og
+// Googles minstemål for et trykkmål. Med mus beholdes den kompakte høyden.
 const btnSizes: Record<NonNullable<ButtonProps['size']>, string> = {
-  sm: 'text-xs px-2.5 py-1.5',
-  md: 'text-sm px-4 py-2',
+  sm: 'text-xs px-2.5 py-1.5 pointer-coarse:min-h-10 pointer-coarse:px-3.5 pointer-coarse:text-[0.8rem]',
+  md: 'text-sm px-4 py-2 pointer-coarse:min-h-11',
 }
 
 export function Button({ variant = 'secondary', size = 'md', loading, className = '', children, ...rest }: ButtonProps) {
@@ -132,13 +134,9 @@ export function Modal({
   mobileFull?: boolean
 }) {
   const ref = useRef<HTMLDialogElement>(null)
-
-  useEffect(() => {
-    const dlg = ref.current
-    if (!dlg) return
-    if (open && !dlg.open) dlg.showModal()
-    if (!open && dlg.open) dlg.close()
-  }, [open])
+  useDialogOpen(ref, open)
+  // På telefon er dialogen et bunnark (styles.css), og overskriften er grepet.
+  const drag = useSheetDrag(ref, onClose)
 
   return (
     <dialog
@@ -150,14 +148,15 @@ export function Modal({
         if (e.target === ref.current) onClose()
       }}
     >
-      <div className="shrink-0 px-6 pt-5 sm:px-7">
+      <div className="shrink-0 px-6 pt-5 max-sm:touch-none max-sm:pt-2.5 sm:px-7" {...drag}>
+        <span className="sheet-grab sheet-grab-phone" aria-hidden />
         {kicker && <Kicker className="mb-1">{kicker}</Kicker>}
         <div className="flex items-start justify-between gap-4">
           <h2 className="display-title text-xl font-semibold">{title}</h2>
           <button
             onClick={onClose}
             aria-label="Lukk"
-            className="-mr-2 -mt-1 grid h-9 w-9 cursor-pointer place-items-center rounded-full text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink active:scale-95"
+            className="-mr-2 -mt-1 grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink active:scale-95 pointer-coarse:h-11 pointer-coarse:w-11"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
               <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -168,7 +167,7 @@ export function Modal({
       {/* flex-auto (ikke flex-1): flex-basis 0 % blir 0 px i WebKit på iPhone/
           iPad, som regner dialogens høyde som bestemt. Med overflow-y: auto er
           minimumshøyden også 0, så kroppen kollapset til bare padding. */}
-      <div className="min-h-0 flex-auto overflow-y-auto px-6 pb-6 pt-4 sm:px-7">{children}</div>
+      <div className="min-h-0 flex-auto overflow-y-auto overscroll-contain px-6 pb-6 pt-4 sm:px-7">{children}</div>
     </dialog>
   )
 }

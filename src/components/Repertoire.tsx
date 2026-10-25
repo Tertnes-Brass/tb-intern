@@ -14,7 +14,7 @@ function FileChip({ fileId, label, accent }: { fileId: string; label: string; ac
       href={`/api/files/${fileId}`}
       target="_blank"
       rel="noreferrer"
-      className={`group/chip inline-flex cursor-pointer items-center gap-1.5 rounded-[7px] border px-2.5 py-2.5 font-mono text-[0.68rem] uppercase tracking-[0.07em] transition-all duration-150 can-hover:hover:-translate-y-px active:translate-y-0 ${
+      className={`group/chip inline-flex cursor-pointer items-center gap-1.5 rounded-[7px] border px-2.5 py-2.5 pointer-coarse:min-h-11 pointer-coarse:px-3 font-mono text-[0.68rem] uppercase tracking-[0.07em] transition-all duration-150 can-hover:hover:-translate-y-px active:translate-y-0 ${
         accent
           ? 'border-brass/50 bg-[var(--brass-soft)] text-brass-strong hover:border-brass'
           : 'border-line-strong text-ink-soft hover:border-brass/60 hover:text-brass-strong'
@@ -54,7 +54,7 @@ function ListenButton({ item }: { item: ProjectWorkDetail }) {
         href={external[0]!.url}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex cursor-pointer items-center gap-1.5 rounded-[7px] border border-line-strong px-2.5 py-2.5 font-mono text-[0.68rem] uppercase tracking-[0.07em] text-ink-soft transition-all duration-150 can-hover:hover:-translate-y-px active:translate-y-0 hover:border-oxblood/60 hover:text-oxblood"
+        className="inline-flex cursor-pointer items-center gap-1.5 rounded-[7px] border border-line-strong px-2.5 py-2.5 pointer-coarse:min-h-11 pointer-coarse:px-3 font-mono text-[0.68rem] uppercase tracking-[0.07em] text-ink-soft transition-all duration-150 can-hover:hover:-translate-y-px active:translate-y-0 hover:border-oxblood/60 hover:text-oxblood"
       >
         <PlayIcon /> Lytt
       </a>
@@ -65,7 +65,7 @@ function ListenButton({ item }: { item: ProjectWorkDetail }) {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex cursor-pointer items-center gap-1.5 rounded-[7px] border border-line-strong px-2.5 py-2.5 font-mono text-[0.68rem] uppercase tracking-[0.07em] text-ink-soft transition-all duration-150 can-hover:hover:-translate-y-px active:translate-y-0 hover:border-oxblood/60 hover:text-oxblood"
+        className="inline-flex cursor-pointer items-center gap-1.5 rounded-[7px] border border-line-strong px-2.5 py-2.5 pointer-coarse:min-h-11 pointer-coarse:px-3 font-mono text-[0.68rem] uppercase tracking-[0.07em] text-ink-soft transition-all duration-150 can-hover:hover:-translate-y-px active:translate-y-0 hover:border-oxblood/60 hover:text-oxblood"
       >
         <PlayIcon /> Lytt
       </button>
@@ -198,7 +198,7 @@ function AllPartsDisclosure({ item }: { item: ProjectWorkDetail }) {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex cursor-pointer items-center gap-1 rounded-[7px] px-2 py-1.5 font-mono text-[0.68rem] uppercase tracking-[0.07em] text-ink-faint transition-colors hover:text-brass-strong"
+        className="inline-flex cursor-pointer items-center gap-1 rounded-[7px] px-2 py-1.5 pointer-coarse:min-h-11 font-mono text-[0.68rem] uppercase tracking-[0.07em] text-ink-faint transition-colors hover:text-brass-strong"
       >
         Alle stemmer
         <svg width="9" height="6" viewBox="0 0 9 6" fill="none" aria-hidden>
