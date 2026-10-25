@@ -3,7 +3,9 @@ import type { ProjectWorkDetail } from '../server/projects'
 import { formatDuration, toRoman } from '../lib/format'
 import { youTubeEmbedUrl, youTubeVideoId } from '../lib/youtube'
 import { PercussionLine } from './Percussion'
-import { Modal, Stamp } from './ui'
+import { Button, Modal, Stamp } from './ui'
+import { ZipDownloadButton } from './ZipDownload'
+import { zipEntryName } from '../lib/zip'
 
 function FileChip({ fileId, label, accent }: { fileId: string; label: string; accent?: boolean }) {
   return (
@@ -181,6 +183,12 @@ export function RepertoireRow({
 
 function AllPartsDisclosure({ item }: { item: ProjectWorkDetail }) {
   const [open, setOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const selectedFiles = item.partFiles.filter((f) => selectedIds.includes(f.id))
+  const zipFiles = selectedFiles.map((f, i) => ({
+    fileId: f.id,
+    name: zipEntryName([String(i + 1).padStart(2, '0'), item.title, f.partName], 'stemme.pdf'),
+  }))
   return (
     <>
       <button
@@ -193,9 +201,23 @@ function AllPartsDisclosure({ item }: { item: ProjectWorkDetail }) {
         </svg>
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title={item.title} kicker="Alle stemmer" wide>
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <Button size="sm" onClick={() => setSelectedIds(item.partFiles.map((f) => f.id))}>Velg alle</Button>
+          <Button size="sm" variant="ghost" disabled={selectedFiles.length === 0} onClick={() => setSelectedIds([])}>Fjern valg</Button>
+          <span className="text-sm text-ink-soft" role="status">{selectedFiles.length} filer valgt</span>
+          <ZipDownloadButton label="Last ned valgte (ZIP)" zipName={`${item.title} – valgte stemmer`} files={zipFiles} />
+        </div>
         <div className="flex flex-wrap gap-2">
           {item.partFiles.map((f) => (
-            <FileChip key={f.id} fileId={f.id} label={f.partName ?? 'Ukjent stemme'} />
+            <div key={f.id} className="flex items-center gap-2 rounded-lg border border-line px-2">
+              <input
+                type="checkbox"
+                aria-label={`Velg ${f.partName ?? 'Ukjent stemme'}`}
+                checked={selectedIds.includes(f.id)}
+                onChange={(e) => setSelectedIds((ids) => e.target.checked ? [...ids, f.id] : ids.filter((id) => id !== f.id))}
+              />
+              <FileChip fileId={f.id} label={f.partName ?? 'Ukjent stemme'} />
+            </div>
           ))}
         </div>
       </Modal>

@@ -8,7 +8,12 @@ kommende prosjekter, også utenfor egen seksjon. Dette støtter blant annet
 dobling av andre stemmer. `members.manage.section` er ikke nødvendig for denne
 lesetilgangen; den styrer fortsatt stemmetildeling innen eget omfang.
 
-Stemmene finnes via «Alle stemmer» på prosjektet og «Mine noter». Filmetadata og
+Stemmene finnes via «Alle stemmer» på prosjektet og «Mine noter».
+I «Alle stemmer» kan brukeren krysse av enkeltstemmer, velge alle eller fjerne
+valget og laste ned utvalget med «Last ned valgte (ZIP)». Listen inneholder bare
+stemmene serveren gir brukeren tilgang til; hver fil sjekkes også ved nedlasting.
+
+Filmetadata og
 direkte nedlasting bruker samme policy, også i mobil-API-et. Egne stemmer
 beholder sin vanlige plass. Gruppelederbindingen gir ikke fullt arkivinnsyn,
 tilgang til tidligere/ikke-publiserte prosjekter, uplasserte filer eller
