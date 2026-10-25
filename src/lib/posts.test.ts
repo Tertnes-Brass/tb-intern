@@ -412,8 +412,8 @@ describe('e-postvarsling ved publisering', () => {
   })
 
   it('sier i etiketten hva som skjer og til hvem', () => {
-    expect(notifyLabel('all')).toBe('Send e-post til hele korpset nå')
-    expect(notifyLabel('board')).toBe('Send e-post til styret nå')
+    expect(notifyLabel('all')).toBe('Varsle hele korpset nå')
+    expect(notifyLabel('board')).toBe('Varsle styret nå')
   })
 
   /**

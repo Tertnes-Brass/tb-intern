@@ -14,10 +14,12 @@
  *    svært tregt) nett brukes kopien.
  * 4. Ingenting annet røres: server functions (/_serverFn/), resten av /api/* og
  *    alt med brukerdata går rett til nettet, uten cache.
+ * 5. Push-varsler (src/server/push-send.ts): vises med tittel, tekst og lenke,
+ *    og et trykk åpner (eller fokuserer) appen på riktig side.
  *
  * Bump VERSION når denne fila eller offline.html endres.
  */
-const VERSION = 'v3'
+const VERSION = 'v4'
 const SHELL_CACHE = `tb-shell-${VERSION}`
 const ASSET_CACHE = 'tb-assets'
 /** Hashede filer fra gamle deployer blir liggende; taket holder cachen liten. */
@@ -146,3 +148,51 @@ async function noteFile(request, path) {
     return saved
   }
 }
+
+// ---------- Push-varsler ----------
+
+self.addEventListener('push', (event) => {
+  let message = {}
+  try {
+    message = event.data ? event.data.json() : {}
+  } catch {
+    message = { title: 'Tertnes Brass Intern', body: event.data ? event.data.text() : '' }
+  }
+  const title = message.title || 'Tertnes Brass Intern'
+  const tasks = [
+    self.registration.showNotification(title, {
+      body: message.body || '',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/badge-96.png',
+      tag: message.tag,
+      data: { url: message.url || '/' },
+      lang: 'nb',
+    }),
+  ]
+  // Tallet på app-ikonet, når serveren har regnet det ut for akkurat denne brukeren.
+  if (typeof message.badge === 'number' && self.navigator.setAppBadge) {
+    tasks.push(
+      (message.badge > 0 ? self.navigator.setAppBadge(message.badge) : self.navigator.clearAppBadge()).catch(() => {}),
+    )
+  }
+  event.waitUntil(Promise.all(tasks))
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const target = new URL(event.notification.data?.url || '/', self.location.origin)
+  // Bare egne adresser — et varsel skal aldri kunne sende noen ut av appen.
+  if (target.origin !== self.location.origin) return
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      const existing = windows.find((w) => new URL(w.url).origin === self.location.origin)
+      if (existing) {
+        await existing.focus()
+        if ('navigate' in existing) return existing.navigate(target.href).catch(() => self.clients.openWindow(target.href))
+        return
+      }
+      return self.clients.openWindow(target.href)
+    })(),
+  )
+})

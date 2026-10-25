@@ -1,5 +1,6 @@
 import startEntry from '@tanstack/react-start/server-entry'
 import { runOverdueReminders } from './server/board-notify'
+import { runRsvpReminders } from './server/push-reminders'
 
 /**
  * Worker-entry. Denne fila finnes av én grunn: Start sin egen entry
@@ -24,5 +25,8 @@ export default {
     // idempotent per kalenderdag (`settings`-raden `board.reminders.lastRunDate`),
     // så en cron som utløses to ganger sender ikke dobbelt.
     ctx.waitUntil(runOverdueReminders())
+    // «Kommer du i morgen?» som push (src/server/push-reminders.ts), med egen
+    // dagsvakt i `settings`. Gjør ingenting uten VAPID-nøkler.
+    ctx.waitUntil(runRsvpReminders())
   },
 }

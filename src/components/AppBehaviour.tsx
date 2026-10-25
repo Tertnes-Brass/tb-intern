@@ -1,5 +1,6 @@
 import { useRouter } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
+import { resyncPush } from '../lib/push-client'
 import { isIos, isStandalone } from '../lib/pwa'
 import { refreshShellCounts } from '../lib/shell-events'
 import { Icon } from './Icons'
@@ -14,6 +15,7 @@ const RESUME_AFTER_MS = 60_000
  * - **Tilbake fra bakgrunnen:** en installert app kan ligge i bakgrunnen i
  *   dagevis. Kommer den fram igjen etter mer enn et minutt, lastes rutens data
  *   på nytt, slik at «Neste» og veggen ikke viser gårsdagen.
+ * - **Push:** enhetens abonnement sendes til serveren ved oppstart.
  * - **`rise` bare første gang:** innlastingsanimasjonen er en velkomst, ikke
  *   noe man skal se ved hvert trykk. Etter første navigasjon får `<html>`
  *   klassen `navigated`, og styles.css slår den av — sideskiftet har sin egen
@@ -35,6 +37,11 @@ export function AppBehaviour() {
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [router])
+
+  // Hold serveren oppdatert om denne enhetens push-abonnement (se `resyncPush`).
+  useEffect(() => {
+    void resyncPush().catch(() => {})
+  }, [])
 
   useEffect(() => {
     return router.subscribe('onBeforeNavigate', () => {

@@ -4,6 +4,7 @@ import type { Me } from '../server/access'
 import { type HubAreaTo, areasFor } from '../lib/hub'
 import { formatBytes } from '../lib/format'
 import { clearOfflineNotes, offlineBytes, offlineStands, offlineSupported } from '../lib/offline-notes'
+import { currentPushSubscription, pushSupport } from '../lib/push-client'
 import { signOutHere } from '../lib/session-client'
 import { type ThemeMode, readThemeMode, setThemeMode } from '../lib/theme'
 import type { ShellCounts } from '../lib/unread'
@@ -56,10 +57,19 @@ export function Launcher({
     bytes: 0,
   })
 
+  const [push, setPush] = useState<string | null>(null)
+
   useEffect(() => {
     if (!open) return
     setTheme(readThemeMode())
     setOffline({ supported: offlineSupported(), stands: offlineStands().length, bytes: offlineBytes() })
+    const support = pushSupport()
+    if (support === 'needs-install') setPush('Krever Hjem-skjerm')
+    else if (support === 'unsupported') setPush(null)
+    else
+      currentPushSubscription()
+        .then((sub) => setPush(sub && Notification.permission === 'granted' ? 'På' : 'Av'))
+        .catch(() => setPush(null))
   }, [open])
 
   return (
@@ -137,6 +147,7 @@ export function Launcher({
         <Link to="/min-profil" hash="varsler" onClick={onClose} className="link-quiet flex min-h-[52px] items-center gap-3 px-4 active:bg-paper-sunken">
           <GroupIcon name="bell" />
           <span className="flex-1 text-[0.95rem] text-ink">Varsler</span>
+          {push && <span className="text-sm text-ink-faint">{push}</span>}
           <Icon name="chevronRight" size={18} className="text-ink-faint" />
         </Link>
         {offline.supported && (

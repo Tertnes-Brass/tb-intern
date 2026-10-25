@@ -726,7 +726,38 @@ export const notificationPreferences = sqliteTable('notification_preferences', {
   mentions: text('mentions', { enum: ['all', 'off'] })
     .notNull()
     .default('all'),
+  // Push-varsel dagen før en hendelse du ikke har svart på (kun push — det går
+  // aldri e-post om dette). Standarden er på; varselet går uansett bare til
+  // enheter der medlemmet selv har slått på varsler.
+  rsvpReminders: text('rsvp_reminders', { enum: ['all', 'off'] })
+    .notNull()
+    .default('all'),
 })
+
+// Web Push: én rad per nettleser/enhet som har slått på varsler (PWA på
+// Hjem-skjermen, Android, desktop). Nøklene er nettleserens egne og brukes til å
+// kryptere hver melding til akkurat den enheten (src/lib/web-push.ts).
+// `endpoint` er unik: logger noen andre inn på samme enhet og slår på varsler,
+// flyttes raden til dem i stedet for å bli liggende hos forrige bruker.
+// Raden slettes når push-tjenesten svarer 404/410 (abonnementet er borte), ved
+// utlogging fra enheten, og når brukeren slår varsler av.
+export const pushSubscriptions = sqliteTable(
+  'push_subscriptions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull().unique(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    // «iPhone · Safari» osv. — bare for å kunne vise hvilke enheter som får varsler.
+    label: text('label'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    lastSuccessAt: integer('last_success_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [index('push_subscriptions_user_idx').on(t.userId)],
+)
 
 // Idempotens for varsling: en beskjed sendes aldri to ganger til samme person.
 // «Send på nytt» sender kun til dem som mangler en rad her.
