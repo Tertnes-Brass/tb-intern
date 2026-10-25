@@ -207,18 +207,45 @@ function AllPartsDisclosure({ item }: { item: ProjectWorkDetail }) {
           <span className="text-sm text-ink-soft" role="status">{selectedFiles.length} filer valgt</span>
           <ZipDownloadButton label="Last ned valgte (ZIP)" zipName={`${item.title} – valgte stemmer`} files={zipFiles} />
         </div>
-        <div className="flex flex-wrap gap-2">
-          {item.partFiles.map((f) => (
-            <div key={f.id} className="flex items-center gap-2 rounded-lg border border-line px-2">
-              <input
-                type="checkbox"
-                aria-label={`Velg ${f.partName ?? 'Ukjent stemme'}`}
-                checked={selectedIds.includes(f.id)}
-                onChange={(e) => setSelectedIds((ids) => e.target.checked ? [...ids, f.id] : ids.filter((id) => id !== f.id))}
-              />
-              <FileChip fileId={f.id} label={f.partName ?? 'Ukjent stemme'} />
-            </div>
-          ))}
+        <div className="overflow-x-auto rounded-xl border border-line">
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">Stemmer i {item.title}</caption>
+            <thead className="bg-paper-sunken text-ink-soft">
+              <tr className="border-b border-line">
+                <th scope="col" className="w-12 px-3 py-3"><span className="sr-only">Velg</span></th>
+                <th scope="col" className="px-3 py-3 font-semibold">Stemme</th>
+                <th scope="col" className="px-3 py-3 text-right font-semibold">Handlinger</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--line)]">
+              {item.partFiles.map((f) => (
+                <tr key={f.id} className={selectedIds.includes(f.id) ? 'bg-paper-sunken' : undefined}>
+                  <td className="px-3 py-3">
+                    <input
+                      id={`select-part-${f.id}`}
+                      type="checkbox"
+                      aria-label={`Velg ${f.partName ?? 'Ukjent stemme'}`}
+                      className="h-4 w-4 cursor-pointer accent-brass"
+                      checked={selectedIds.includes(f.id)}
+                      onChange={(e) => {
+                        const checked = e.currentTarget.checked
+                        setSelectedIds((ids) => checked ? [...ids, f.id] : ids.filter((id) => id !== f.id))
+                      }}
+                    />
+                  </td>
+                  <th scope="row" className="px-3 py-3 font-medium text-ink">
+                    <label htmlFor={`select-part-${f.id}`} className="cursor-pointer">{f.partName ?? 'Ukjent stemme'}</label>
+                  </th>
+                  <td className="px-3 py-3">
+                    <div className="flex flex-wrap justify-end gap-x-4 gap-y-2">
+                      <a href={`/api/files/${f.id}`} target="_blank" rel="noreferrer" className="link-brass" aria-label={`Åpne ${f.partName ?? 'Ukjent stemme'}`}>Åpne</a>
+                      <a href={`/api/files/${f.id}?download=1`} download className="link-brass whitespace-nowrap" aria-label={`Last ned ${f.partName ?? 'Ukjent stemme'}`}>Last ned</a>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Modal>
     </>
