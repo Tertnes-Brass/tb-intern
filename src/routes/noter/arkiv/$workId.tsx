@@ -6,6 +6,7 @@ import { WorkFormModal } from '../../../components/WorkForm'
 import { toast, toastError } from '../../../components/toast'
 import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
 import { ZipDownloadButton } from '../../../components/ZipDownload'
+import { PdfDownloadButton } from '../../../components/PdfDownload'
 import { formatBytes, formatDate, formatDuration } from '../../../lib/format'
 import { SECTION_LABELS, SECTION_ORDER } from '../../../lib/taxonomy'
 import { ACCEPT_ATTR, MAX_UPLOAD_BYTES, uploadRejectionReason } from '../../../lib/upload'
@@ -436,6 +437,9 @@ function FilesSection({ data }: { data: WorkData }) {
             <Button size="sm" variant="ghost" onClick={() => setSelectedIds([])}>Fjern valg</Button>
             <span className="text-sm text-ink-soft" role="status">{selectedFiles.length} filer valgt</span>
             <ZipDownloadButton label={`Last ned valgte (ZIP) (${selectedZipFiles.length})`} zipName={`${data.work.title} – valgte filer`} files={selectedZipFiles} />
+            {selectedFiles.length > 0 && selectedFiles.every((f) => /\.pdf$/i.test(f.fileName)) && (
+              <PdfDownloadButton name={`${data.work.title} – valgte stemmer`} files={selectedZipFiles} />
+            )}
             <Button variant="danger" disabled={selectedFiles.length === 0} onClick={() => setConfirmDelete(true)}>Slett valgte ({selectedFiles.length})</Button>
             <p className="w-full text-xs text-ink-soft">Velg opptil 100 filer blant treffene. «Velg alle viste» tar med alle filtyper. Valget tømmes når filteret endres.</p>
           </>}

@@ -15,6 +15,14 @@ kan velges sammen med instrumentstemmene i ZIP-nedlastingen. Brukeren kan velge 
 valget og laste ned utvalget med «Last ned valgte (ZIP)». Listen inneholder bare
 stemmene serveren gir brukeren tilgang til; hver fil sjekkes også ved nedlasting.
 
+«Last ned valgte som PDF» samler de valgte stemmene og partituret i én PDF i
+tabellens rekkefølge, med original siderekkefølge og sidestørrelse. Sammenslåingen
+skjer i nettleseren med `pdf-lib`, som lastes ved bruk. Hver kildefil hentes via
+den vanlige fil-gaten og nedlastingsloggen. Hvis en fil mangler, avvises eller
+ikke kan leses som PDF, avbrytes hele samlingen med en feilmelding; ingen
+ufullstendig PDF leveres. På arkivsiden finnes samme knapp når alle valgte filer
+er PDF-er. ZIP-alternativet beholdes for separate filer og andre filtyper.
+
 Filmetadata og
 direkte nedlasting bruker samme policy, også i mobil-API-et. Egne stemmer
 beholder sin vanlige plass. Gruppelederbindingen gir ikke fullt arkivinnsyn,

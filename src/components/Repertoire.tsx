@@ -5,6 +5,7 @@ import { youTubeEmbedUrl, youTubeVideoId } from '../lib/youtube'
 import { PercussionLine } from './Percussion'
 import { Button, Modal, Stamp } from './ui'
 import { ZipDownloadButton } from './ZipDownload'
+import { PdfDownloadButton } from './PdfDownload'
 import { zipEntryName } from '../lib/zip'
 
 function FileChip({ fileId, label, accent }: { fileId: string; label: string; accent?: boolean }) {
@@ -210,6 +211,7 @@ function AllPartsDisclosure({ item }: { item: ProjectWorkDetail }) {
           <Button size="sm" variant="ghost" disabled={selectedFiles.length === 0} onClick={() => setSelectedIds([])}>Fjern valg</Button>
           <span className="text-sm text-ink-soft" role="status">{selectedFiles.length} filer valgt</span>
           <ZipDownloadButton label="Last ned valgte (ZIP)" zipName={`${item.title} – valgte stemmer`} files={zipFiles} />
+          <PdfDownloadButton name={`${item.title} – valgte stemmer`} files={zipFiles} />
         </div>
         <div className="overflow-x-auto rounded-xl border border-line">
           <table className="w-full text-left text-sm">
