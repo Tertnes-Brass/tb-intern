@@ -377,6 +377,12 @@ function FilesSection({ data }: { data: WorkData }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const selectedFiles = visibleFiles.filter((f) => selectedIds.includes(f.id))
+  const selectedZipFiles = selectedFiles
+    .filter((f) => f.kind !== 'score' || data.canViewScore)
+    .map((f, i) => ({
+      fileId: f.id,
+      name: zipEntryName([String(i + 1).padStart(2, '0'), data.work.title, zipLabelFor(f)], f.fileName),
+    }))
   const closeSelection = () => { setSelecting(false); setSelectedIds([]) }
   useEffect(() => {
     setSelectedIds((ids) => ids.filter((id) => data.files.some((f) => f.id === id)))
@@ -429,6 +435,7 @@ function FilesSection({ data }: { data: WorkData }) {
             <Button size="sm" disabled={visibleFiles.length === 0} onClick={() => setSelectedIds(visibleFiles.slice(0, 100).map((f) => f.id))}>{visibleFiles.length > 100 ? 'Velg de første 100 viste' : 'Velg alle viste'}</Button>
             <Button size="sm" variant="ghost" onClick={() => setSelectedIds([])}>Fjern valg</Button>
             <span className="text-sm text-ink-soft" role="status">{selectedFiles.length} filer valgt</span>
+            <ZipDownloadButton label={`Last ned valgte (ZIP) (${selectedZipFiles.length})`} zipName={`${data.work.title} – valgte filer`} files={selectedZipFiles} />
             <Button variant="danger" disabled={selectedFiles.length === 0} onClick={() => setConfirmDelete(true)}>Slett valgte ({selectedFiles.length})</Button>
             <p className="w-full text-xs text-ink-soft">Velg opptil 100 filer blant treffene. «Velg alle viste» tar med alle filtyper. Valget tømmes når filteret endres.</p>
           </>}

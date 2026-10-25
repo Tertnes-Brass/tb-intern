@@ -13,3 +13,5 @@ Utgave 1 er representert ved null i utgavefeltene. Eksisterende filer og prosjek
 En utgave kan opprettes tom, fylles med nye filer og deretter settes som gjeldende. Den kan også velges eksplisitt i et prosjekt. Ingen utgave slettes automatisk. Filer kan fortsatt slettes med eksisterende filhandlinger, og sletting av hele verket fjerner alle utgaver og filer.
 
 Fil-gaten krever at filens utgave er den som er valgt i et tilgjengelig prosjekt eller vikarens prosjekt. Fullt arkivinnsyn gir fortsatt tilgang til historiske utgaver med samme stemme-/partiturregler. Mobil v1 beholder kontrakten og får filene fra prosjektets valgte utgave.
+
+På verksiden kan arkivar/admin med `works.manage`/`*` velge «Velg flere filer», krysse av opptil 100 filer og bruke «Last ned valgte (ZIP)». Arkivet inneholder bare de valgte filene i den viste utgaven. Filfilteret avgrenser listen, og valget tømmes når filteret endres. Partitur tas bare med ved `scores.view`/`*`. Hver fil hentes gjennom den eksisterende server-gaten og loggføres som nedlasting, slik som ved nedlasting av enkeltfiler. Den samme avkryssingen kan brukes til «Slett valgte», som krever egen bekreftelse.
