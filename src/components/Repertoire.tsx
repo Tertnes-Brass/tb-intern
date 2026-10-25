@@ -168,7 +168,7 @@ export function RepertoireRow({
           ))}
           {item.scoreFileId && <FileChip fileId={item.scoreFileId} label="Partitur" />}
           <ListenButton item={item} />
-          {!shareToken && item.partFiles.length > 0 && <AllPartsDisclosure item={item} />}
+          {!shareToken && (item.partFiles.length > 0 || item.scoreFileId) && <AllPartsDisclosure item={item} />}
           {item.myFiles.length === 0 && !item.scoreFileId && item.partFiles.length === 0 && (
             <span className="font-mono text-[0.66rem] uppercase tracking-[0.12em] text-ink-faint">
               Ingen noter lastet opp ennå
@@ -184,7 +184,11 @@ export function RepertoireRow({
 function AllPartsDisclosure({ item }: { item: ProjectWorkDetail }) {
   const [open, setOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const selectedFiles = item.partFiles.filter((f) => selectedIds.includes(f.id))
+  const files = [
+    ...(item.scoreFileId ? [{ id: item.scoreFileId, partName: 'Partitur' }] : []),
+    ...item.partFiles,
+  ]
+  const selectedFiles = files.filter((f) => selectedIds.includes(f.id))
   const zipFiles = selectedFiles.map((f, i) => ({
     fileId: f.id,
     name: zipEntryName([String(i + 1).padStart(2, '0'), item.title, f.partName], 'stemme.pdf'),
@@ -202,7 +206,7 @@ function AllPartsDisclosure({ item }: { item: ProjectWorkDetail }) {
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title={item.title} kicker="Alle stemmer" wide>
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          <Button size="sm" onClick={() => setSelectedIds(item.partFiles.map((f) => f.id))}>Velg alle</Button>
+          <Button size="sm" onClick={() => setSelectedIds(files.map((f) => f.id))}>Velg alle</Button>
           <Button size="sm" variant="ghost" disabled={selectedFiles.length === 0} onClick={() => setSelectedIds([])}>Fjern valg</Button>
           <span className="text-sm text-ink-soft" role="status">{selectedFiles.length} filer valgt</span>
           <ZipDownloadButton label="Last ned valgte (ZIP)" zipName={`${item.title} – valgte stemmer`} files={zipFiles} />
@@ -218,7 +222,7 @@ function AllPartsDisclosure({ item }: { item: ProjectWorkDetail }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--line)]">
-              {item.partFiles.map((f) => (
+              {files.map((f) => (
                 <tr key={f.id} className={selectedIds.includes(f.id) ? 'bg-paper-sunken' : undefined}>
                   <td className="px-3 py-3">
                     <input

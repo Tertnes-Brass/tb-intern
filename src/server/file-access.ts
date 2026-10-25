@@ -8,7 +8,7 @@
  * `effectivePartIds` (egne tildelte stemmer ekspandert nedover treet), eller i
  * hele notesettet når hen har en aktiv gruppelederbinding. Verket må være med i et publisert, kommende
  * prosjekt. Fullt arkivinnsyn omgår prosjektkravet. Partitur styres ortogonalt
- * av `scores.view`. Uplassert ('other') krever fullt arkivinnsyn.
+ * av `scores.view` eller aktiv gruppelederbinding i et tilgjengelig prosjekt. Uplassert ('other') krever fullt arkivinnsyn.
  */
 
 export type FileLite = { kind: string; partId: string | null }
@@ -39,7 +39,7 @@ export function memberCanAccessFile(file: FileLite, ctx: AccessCtx): boolean {
     case 'audio':
       return true
     case 'score':
-      return ctx.canViewScore
+      return ctx.canViewScore || (ctx.isGroupLeader && ctx.inAccessibleProject)
     case 'part':
       return ctx.canViewAll || memberCanAccessPart(file.partId, ctx)
     default:

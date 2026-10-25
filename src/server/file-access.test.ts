@@ -47,7 +47,9 @@ describe('memberCanAccessFile (nedlasting)', () => {
     }
     expect(memberCanAccessFile(file('part', 'tenor-horn'), { ...leader, inAccessibleProject: false })).toBe(false)
     expect(memberCanSeeFile(file('part', 'tenor-horn'), { ...leader, inAccessibleProject: false })).toBe(false)
-    expect(memberCanAccessFile(file('score'), { ...leader, canViewScore: false })).toBe(false)
+    expect(memberCanAccessFile(file('score'), { ...leader, canViewScore: false })).toBe(true)
+    expect(memberCanAccessFile(file('score'), { ...leader, canViewScore: false, inAccessibleProject: false })).toBe(false)
+    expect(memberCanAccessFile(file('score'), { ...leader, canViewScore: false, isGroupLeader: false })).toBe(false)
     expect(memberCanAccessFile(file('other'), leader)).toBe(false)
     expect(memberCanAccessFile(file('part', 'tenor-horn'), { ...leader, isGroupLeader: false })).toBe(false)
   })
