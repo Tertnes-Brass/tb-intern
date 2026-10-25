@@ -936,3 +936,45 @@ select.field-input {
     page-break-inside: avoid;
   }
 }
+
+/* ---------- Notestativet (/noter/stativ/$projectId) ---------- */
+/* Nattlys: arket inverteres til lys skrift på mørkt, litt varmt. */
+.stand-night canvas {
+  filter: invert(0.9) sepia(0.25) brightness(0.95);
+}
+.stand-night > div > div {
+  background: #1c1915;
+}
+/* Neste/forrige stykke glir inn fra den siden man sveipet mot. */
+@keyframes stand-in-next {
+  from {
+    opacity: 0;
+    transform: translateX(18%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes stand-in-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-18%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.stand-slide-next {
+  animation: stand-in-next 0.26s cubic-bezier(0.2, 0.7, 0.25, 1);
+}
+.stand-slide-prev {
+  animation: stand-in-prev 0.26s cubic-bezier(0.2, 0.7, 0.25, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .stand-slide-next,
+  .stand-slide-prev {
+    animation: none;
+  }
+}

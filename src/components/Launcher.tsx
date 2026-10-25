@@ -2,6 +2,8 @@ import { Link, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import type { Me } from '../server/access'
 import { type HubAreaTo, areasFor } from '../lib/hub'
+import { formatBytes } from '../lib/format'
+import { clearOfflineNotes, offlineBytes, offlineStands, offlineSupported } from '../lib/offline-notes'
 import { signOutHere } from '../lib/session-client'
 import { type ThemeMode, readThemeMode, setThemeMode } from '../lib/theme'
 import type { ShellCounts } from '../lib/unread'
@@ -48,9 +50,16 @@ export function Launcher({
   const areas = areasFor(me.permissions, { leadsPartIds: me.leadsPartIds }).filter((a) => !tabRoutes.has(a.to))
   const [theme, setTheme] = useState<ThemeMode>('auto')
   const [signingOut, setSigningOut] = useState(false)
+  const [offline, setOffline] = useState<{ supported: boolean; stands: number; bytes: number }>({
+    supported: false,
+    stands: 0,
+    bytes: 0,
+  })
 
   useEffect(() => {
-    if (open) setTheme(readThemeMode())
+    if (!open) return
+    setTheme(readThemeMode())
+    setOffline({ supported: offlineSupported(), stands: offlineStands().length, bytes: offlineBytes() })
   }, [open])
 
   return (
@@ -130,6 +139,27 @@ export function Launcher({
           <span className="flex-1 text-[0.95rem] text-ink">Varsler</span>
           <Icon name="chevronRight" size={18} className="text-ink-faint" />
         </Link>
+        {offline.supported && (
+          <div className="flex min-h-[52px] items-center gap-3 px-4">
+            <GroupIcon name="download" />
+            <span className="flex-1 text-[0.95rem] text-ink">Lagret offline</span>
+            {offline.stands > 0 ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!window.confirm('Fjerne notene som er lagret på denne enheten?')) return
+                  await clearOfflineNotes()
+                  setOffline((o) => ({ ...o, stands: 0, bytes: 0 }))
+                }}
+                className="min-h-11 cursor-pointer text-sm text-ink-soft"
+              >
+                {formatBytes(offline.bytes)} · <span className="text-danger">Fjern</span>
+              </button>
+            ) : (
+              <span className="text-sm text-ink-faint">Ingenting</span>
+            )}
+          </div>
+        )}
         <div className="px-4 py-3">
           <div className="flex items-center gap-3">
             <GroupIcon name="contrast" />

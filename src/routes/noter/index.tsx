@@ -1,8 +1,13 @@
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
+import { useEffect, useMemo } from 'react'
+import { Icon } from '../../components/Icons'
+import { OfflineStandRow } from '../../components/OfflineStand'
 import { RepertoireList } from '../../components/Repertoire'
 import { EmptyState, Kicker, SectionHeading, Stamp } from '../../components/ui'
 import { formatDate, formatWeekday, relativeDays } from '../../lib/format'
+import { pruneOfflineStands } from '../../lib/offline-notes'
 import { percussionLines } from '../../lib/percussion'
+import { standEntries } from '../../lib/stand'
 import { getHome } from '../../server/projects'
 
 export const Route = createFileRoute('/noter/')({
@@ -16,6 +21,17 @@ export const Route = createFileRoute('/noter/')({
 function HomePage() {
   const data = Route.useLoaderData()
   const next = data.nextProject
+  // Det som ligger på notestativet for neste prosjekt — samme regel som
+  // stativet selv, så «6 stemmer» her er de seks man får der.
+  const standFileIds = useMemo(
+    () => standEntries(data.repertoire, { hasParts: data.me.parts.length > 0 }).map((e) => e.fileId),
+    [data.repertoire, data.me.parts.length],
+  )
+
+  // Stativ lagret offline for prosjekter som ikke lenger er kommende, slettes.
+  useEffect(() => {
+    void pruneOfflineStands([...(next ? [next.id] : []), ...data.upcoming.map((p) => p.id)]).catch(() => {})
+  }, [next, data.upcoming])
 
   return (
     <div className="space-y-14">
@@ -35,7 +51,15 @@ function HomePage() {
                   {next.name}
                 </h1>
               </Link>
-              <p className="mt-4 max-w-xl text-[0.95rem] leading-relaxed text-ink-soft">
+              {/* På telefon står datoen her i stedet for i datoblokken (som bare
+                  vises fra md) — så «Åpne notestativet» kommer over bretten. */}
+              {next.eventDate && (
+                <p className="mt-3 text-[0.95rem] text-ink md:hidden">
+                  {formatWeekday(next.eventDate)} {formatDate(next.eventDate)}
+                  {next.venue ? ` · ${next.venue}` : ''}
+                </p>
+              )}
+              <p className="mt-3 max-w-xl text-[0.95rem] leading-relaxed text-ink-soft md:mt-4">
                 {next.description}
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -49,7 +73,7 @@ function HomePage() {
             </div>
 
             {next.eventDate && (
-              <div className="sheet flex shrink-0 items-stretch self-start overflow-hidden md:self-end">
+              <div className="sheet hidden shrink-0 items-stretch self-end overflow-hidden md:flex">
                 <div className="flex flex-col items-center justify-center px-6 py-4">
                   <span className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-ink-faint">
                     {formatWeekday(next.eventDate)}
@@ -70,6 +94,20 @@ function HomePage() {
             )}
           </div>
 
+          {standFileIds.length > 0 && (
+            <div className="mt-7 grid gap-3 sm:grid-cols-2">
+              <Link
+                to="/noter/stativ/$projectId"
+                params={{ projectId: next.id }}
+                className="flex min-h-[68px] items-center justify-center gap-2.5 rounded-[14px] bg-brass px-5 text-[0.98rem] font-semibold text-paper-raised shadow-[var(--shadow-soft)] transition-colors hover:bg-brass-strong active:translate-y-px dark:text-paper"
+              >
+                <Icon name="notes" size={22} />
+                Åpne notestativet
+              </Link>
+              <OfflineStandRow project={{ id: next.id, name: next.name }} fileIds={standFileIds} />
+            </div>
+          )}
+
           <div className="staff-rule mt-8 w-full opacity-50" aria-hidden />
 
           {next.percussionNotes && (
@@ -86,7 +124,7 @@ function HomePage() {
           )}
 
           <div className="mt-2">
-            <RepertoireList items={data.repertoire} />
+            <RepertoireList items={data.repertoire} standProjectId={next.id} />
             {data.repertoire.length === 0 && (
               <EmptyState title="Programmet er ikke satt ennå">
                 Repertoaret dukker opp her så snart det er publisert.

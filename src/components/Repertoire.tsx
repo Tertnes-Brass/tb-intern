@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { useState, type ReactNode } from 'react'
 import type { ProjectWorkDetail } from '../server/projects'
 import { formatDuration, toRoman } from '../lib/format'
@@ -8,22 +9,54 @@ import { ZipDownloadButton } from './ZipDownload'
 import { PdfDownloadButton } from './PdfDownload'
 import { zipEntryName } from '../lib/zip'
 
-function FileChip({ fileId, label, accent }: { fileId: string; label: string; accent?: boolean }) {
+const chipClass = (accent?: boolean) =>
+  `group/chip inline-flex cursor-pointer items-center gap-1.5 rounded-[7px] border px-2.5 py-2.5 pointer-coarse:min-h-11 pointer-coarse:px-3 font-mono text-[0.68rem] uppercase tracking-[0.07em] transition-all duration-150 can-hover:hover:-translate-y-px active:translate-y-0 ${
+    accent
+      ? 'border-brass/50 bg-[var(--brass-soft)] text-brass-strong hover:border-brass'
+      : 'border-line-strong text-ink-soft hover:border-brass/60 hover:text-brass-strong'
+  }`
+
+function FileGlyph() {
   return (
-    <a
-      href={`/api/files/${fileId}`}
-      target="_blank"
-      rel="noreferrer"
-      className={`group/chip inline-flex cursor-pointer items-center gap-1.5 rounded-[7px] border px-2.5 py-2.5 pointer-coarse:min-h-11 pointer-coarse:px-3 font-mono text-[0.68rem] uppercase tracking-[0.07em] transition-all duration-150 can-hover:hover:-translate-y-px active:translate-y-0 ${
-        accent
-          ? 'border-brass/50 bg-[var(--brass-soft)] text-brass-strong hover:border-brass'
-          : 'border-line-strong text-ink-soft hover:border-brass/60 hover:text-brass-strong'
-      }`}
-    >
-      <svg width="11" height="13" viewBox="0 0 11 13" fill="none" aria-hidden className="shrink-0">
-        <path d="M1 1h6l3 3v8H1V1Z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
-        <path d="M7 1v3h3" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
-      </svg>
+    <svg width="11" height="13" viewBox="0 0 11 13" fill="none" aria-hidden className="shrink-0">
+      <path d="M1 1h6l3 3v8H1V1Z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+      <path d="M7 1v3h3" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/**
+ * En fil i repertoaret. Med `standProjectId` åpner den notestativet inne i
+ * appen (`/noter/stativ/$projectId`); uten (vikarvisningen, partitur fra
+ * arkivet) åpner den fila i en ny fane som før.
+ */
+function FileChip({
+  fileId,
+  label,
+  accent,
+  standProjectId,
+}: {
+  fileId: string
+  label: string
+  accent?: boolean
+  standProjectId?: string
+}) {
+  if (standProjectId) {
+    return (
+      <Link
+        to="/noter/stativ/$projectId"
+        params={{ projectId: standProjectId }}
+        search={{ fil: fileId }}
+        className={chipClass(accent)}
+      >
+        <FileGlyph />
+        {label}
+      </Link>
+    )
+  }
+  return (
+    <a href={`/api/files/${fileId}`} target="_blank" rel="noreferrer" className={chipClass(accent)}>
+      <FileGlyph />
       {label}
       <svg
         width="10"
@@ -69,41 +102,59 @@ function ListenButton({ item }: { item: ProjectWorkDetail }) {
       >
         <PlayIcon /> Lytt
       </button>
-      <Modal open={open} onClose={() => setOpen(false)} title={item.title} kicker="Lytteeksempler" wide={!!embeddable} mobileFull>
-        <div className="space-y-4">
-          {embeddable && (
-            <div className="overflow-hidden rounded-xl border border-line">
-              <iframe
-                src={youTubeEmbedUrl(youTubeVideoId(embeddable.url)!)}
-                title={`YouTube: ${item.title}`}
-                className="aspect-video w-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-          )}
-          {item.audioFiles.map((a) => (
-            <div key={a.id} className="rounded-xl border border-line bg-paper px-4 py-3">
-              <p className="mb-2 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-ink-faint">
-                {a.label ?? a.fileName}
-              </p>
-              <audio controls preload="none" src={`/api/files/${a.id}`} className="w-full" />
-            </div>
-          ))}
-          {external.length > 0 && (
-            <ul className="space-y-1.5">
-              {external.map((l) => (
-                <li key={l.id}>
-                  <a href={l.url} target="_blank" rel="noreferrer" className="link-brass text-sm">
-                    {l.label ?? l.url} ↗
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </Modal>
+      <ListenModal item={item} open={open} onClose={() => setOpen(false)} />
     </>
+  )
+}
+
+/** Lytteeksemplene for ett verk: innebygd YouTube, lydfiler og andre lenker. */
+export function ListenModal({
+  item,
+  open,
+  onClose,
+}: {
+  item: Pick<ProjectWorkDetail, 'title' | 'links' | 'audioFiles'>
+  open: boolean
+  onClose: () => void
+}) {
+  const embeddable = item.links.find((l) => l.kind === 'youtube' && youTubeVideoId(l.url))
+  const external = item.links.filter((l) => !(l.kind === 'youtube' && youTubeVideoId(l.url)))
+  return (
+    <Modal open={open} onClose={onClose} title={item.title} kicker="Lytteeksempler" wide={!!embeddable} mobileFull>
+      <div className="space-y-4">
+        {/* Spilleren monteres bare mens dialogen er åpen, så lyden stopper når den lukkes. */}
+        {open && embeddable && (
+          <div className="overflow-hidden rounded-xl border border-line">
+            <iframe
+              src={youTubeEmbedUrl(youTubeVideoId(embeddable.url)!)}
+              title={`YouTube: ${item.title}`}
+              className="aspect-video w-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        )}
+        {item.audioFiles.map((a) => (
+          <div key={a.id} className="rounded-xl border border-line bg-paper px-4 py-3">
+            <p className="mb-2 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-ink-faint">
+              {a.label ?? a.fileName}
+            </p>
+            {open && <audio controls preload="none" src={`/api/files/${a.id}`} className="w-full" />}
+          </div>
+        ))}
+        {external.length > 0 && (
+          <ul className="space-y-1.5">
+            {external.map((l) => (
+              <li key={l.id}>
+                <a href={l.url} target="_blank" rel="noreferrer" className="link-brass text-sm">
+                  {l.label ?? l.url} ↗
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Modal>
   )
 }
 
@@ -122,6 +173,7 @@ export function RepertoireRow({
   percussion,
   edition,
   shareToken,
+  standProjectId,
 }: {
   item: ProjectWorkDetail
   index: number
@@ -134,8 +186,12 @@ export function RepertoireRow({
   percussion?: ReactNode
   edition?: ReactNode
   shareToken?: string
+  /** Åpne stemmer og partitur i notestativet for dette prosjektet. */
+  standProjectId?: string
 }) {
   const tokenSuffix = shareToken ? `?t=${shareToken}` : ''
+  // Notestativet krever innlogging; vikarlenken åpner fortsatt fila direkte.
+  const stand = shareToken ? undefined : standProjectId
   return (
     <li className="hairline-row group/row flex gap-4 py-5 sm:gap-6">
       <span className="roman-no w-9 shrink-0 pt-0.5 text-right text-lg text-brass sm:w-11 sm:text-xl" aria-hidden>
@@ -165,9 +221,15 @@ export function RepertoireRow({
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {item.myFiles.map((f) => (
-            <FileChip key={f.id} fileId={`${f.id}${tokenSuffix}`} label={f.partName ?? 'Min stemme'} accent />
+            <FileChip
+              key={f.id}
+              fileId={stand && /\.pdf$/i.test(f.fileName) ? f.id : `${f.id}${tokenSuffix}`}
+              label={f.partName ?? 'Min stemme'}
+              accent
+              standProjectId={/\.pdf$/i.test(f.fileName) ? stand : undefined}
+            />
           ))}
-          {item.scoreFileId && <FileChip fileId={item.scoreFileId} label="Partitur" />}
+          {item.scoreFileId && <FileChip fileId={item.scoreFileId} label="Partitur" standProjectId={stand} />}
           <ListenButton item={item} />
           {!shareToken && (item.partFiles.length > 0 || item.scoreFileId) && <AllPartsDisclosure item={item} />}
           {item.myFiles.length === 0 && !item.scoreFileId && item.partFiles.length === 0 && (
@@ -264,6 +326,7 @@ export function RepertoireList({
   percussion,
   edition,
   shareToken,
+  standProjectId,
   className = '',
 }: {
   items: ProjectWorkDetail[]
@@ -271,6 +334,8 @@ export function RepertoireList({
   percussion?: (item: ProjectWorkDetail, index: number) => ReactNode
   edition?: (item: ProjectWorkDetail, index: number) => ReactNode
   shareToken?: string
+  /** Se `RepertoireRow`. */
+  standProjectId?: string
   className?: string
 }) {
   return (
@@ -284,6 +349,7 @@ export function RepertoireList({
           percussion={percussion?.(item, i)}
           edition={edition?.(item, i)}
           shareToken={shareToken}
+          standProjectId={standProjectId}
         />
       ))}
     </ol>

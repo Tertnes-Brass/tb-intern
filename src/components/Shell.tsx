@@ -7,7 +7,7 @@ import { signOutHere } from '../lib/session-client'
 import { onShellCountsRefresh } from '../lib/shell-events'
 import { setThemeMode } from '../lib/theme'
 import { EMPTY_SHELL_COUNTS, type ShellCounts, badgeLabel } from '../lib/unread'
-import { AppBehaviour } from './AppBehaviour'
+import { AppBehaviour, OfflineBanner } from './AppBehaviour'
 import { Launcher } from './Launcher'
 import { TabBar } from './TabBar'
 import { Avatar } from './ui'
@@ -254,6 +254,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
             )}
           </button>
         </div>
+        <OfflineBanner />
       </header>
 
       <main className="main-with-tabs px-safe mx-auto w-full max-w-6xl flex-1 pt-6 sm:pt-10">{children}</main>

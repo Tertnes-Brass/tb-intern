@@ -147,3 +147,32 @@ function PullToRefresh() {
     </div>
   )
 }
+
+/**
+ * Stripe under toppen når nettet er borte. Det som står på skjermen er da det
+ * som sist ble hentet, og det skal man vite før man stoler på et klokkeslett.
+ */
+export function OfflineBanner() {
+  const [offline, setOffline] = useState(false)
+
+  useEffect(() => {
+    const update = () => setOffline(!navigator.onLine)
+    update()
+    window.addEventListener('online', update)
+    window.addEventListener('offline', update)
+    return () => {
+      window.removeEventListener('online', update)
+      window.removeEventListener('offline', update)
+    }
+  }, [])
+
+  if (!offline) return null
+  return (
+    <div role="status" className="fadein border-b border-line bg-paper-sunken">
+      <p className="px-safe mx-auto flex min-h-9 max-w-6xl items-center gap-2 text-[0.8rem] text-ink-soft">
+        <Icon name="wifiOff" size={16} className="text-oxblood" />
+        Frakoblet — det du ser, kan være utdatert. Lagrede noter virker fortsatt.
+      </p>
+    </div>
+  )
+}
