@@ -1,7 +1,9 @@
-import { Link, createFileRoute, redirect } from '@tanstack/react-router'
+import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
+import { Icon } from '../components/Icons'
 import { InstallHint } from '../components/InstallHint'
+import { RsvpControl } from '../components/Rsvp'
 import { EmptyState, Kicker, SectionHeading, Stamp } from '../components/ui'
-import { formatDate, formatDateTime, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../lib/format'
+import { formatDate, formatDateTime, formatTime, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../lib/format'
 import { type HubEvent, chooseHero } from '../lib/hub'
 import { getHub } from '../server/hub'
 
@@ -27,10 +29,14 @@ function timeLabel(event: HubEvent): string {
   return formatTimeRange(event.start, event.end)
 }
 
-/** Dato-blokken i hero: ukedag, dagtall og måned, med et valgfritt felt ved siden av. */
+/**
+ * Dato-blokken i hero: ukedag, dagtall og måned, med et valgfritt felt ved siden
+ * av. Bare på desktop — på telefon står datoen allerede i linjen under tittelen,
+ * og to ganger det samme koster en halv skjerm.
+ */
 function HeroDate({ iso, aside }: { iso: string; aside: string | null }) {
   return (
-    <div className="sheet flex shrink-0 items-stretch self-start overflow-hidden md:self-end">
+    <div className="sheet hidden shrink-0 items-stretch self-end overflow-hidden md:flex">
       <div className="flex flex-col items-center justify-center px-6 py-4">
         <span className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-ink-faint">{formatWeekday(iso)}</span>
         <span className="display-title tabular text-[2.6rem] font-semibold leading-none text-ink">
@@ -67,23 +73,161 @@ function RowDate({ iso }: { iso: string }) {
 
 function HubPage() {
   const data = Route.useLoaderData()
+  const router = useRouter()
   const hero = chooseHero(data)
   const next = data.nextProject
   // Kalenderen er hovedkilden; uten den er «Kommende» prosjektene i stedet.
   const useCalendar = data.calendar.configured && !data.calendar.error
   const upcomingEvents = data.calendar.upcoming
+  const important = data.importantUnread
+  // Den viktige beskjeden står allerede øverst; ikke vis den to ganger.
+  const wallPosts = data.posts.filter((p) => p.id !== important?.id)
 
   return (
-    <div className="space-y-14">
-      <InstallHint />
+    <div className="space-y-12 md:space-y-14">
       {/*
-        Beskjeder (#28) står øverst, over hero: en melding fra styret er det
-        eneste som skal kunne fortrenge «Neste» (docs/designprinsipper.md §7
-        pkt 3). Blokken er lesegrensesnittet; publiseringsflyten bor i sitt eget
-        navnerom, /beskjeder. Serveren har allerede filtrert bort utkast og
-        beskjeder som ikke er for denne brukeren.
+        Rekkefølgen (docs/designprinsipper.md §7 pkt 3, revidert 25. oktober
+        2026): «Neste» først, med svar på oppmøte rett i kortet. Det eneste som
+        får legge seg over, er en «Viktig»-beskjed brukeren ikke har åpnet —
+        og bare den ene. Resten av veggen står under notene.
       */}
-      <section className="rise">
+      {important && (
+        <Link
+          to="/beskjeder/$postId"
+          params={{ postId: important.id }}
+          className="sheet link-quiet rise flex items-center gap-3 border-oxblood/40 px-4 py-3.5 transition-colors active:bg-paper-sunken can-hover:hover:border-oxblood/70"
+        >
+          <Stamp tone="oxblood">Viktig</Stamp>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-semibold text-ink">{important.heading}</span>
+            <span className="mt-0.5 block font-mono text-[0.6rem] uppercase tracking-[0.14em] text-ink-faint">
+              {important.authorName} · {formatDateTime(important.publishedAt)}
+            </span>
+          </span>
+          <Icon name="chevronRight" size={18} className="text-ink-faint" />
+        </Link>
+      )}
+
+      <section className="rise" style={{ animationDelay: '40ms' }}>
+        {hero.kind === 'event' ? (
+          <>
+            <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
+              <div className="min-w-0">
+                <Kicker className="mb-3">Neste · {relativeDays(toOsloDate(hero.event.start))}</Kicker>
+                {/* Til forekomsten, ikke til lista: derfra ser man hele
+                    øvingsplanen og hvem som kommer (#82/#24). */}
+                <Link
+                  to="/kalender/$eventId"
+                  params={{ eventId: hero.event.occurrenceKey }}
+                  className="link-quiet block"
+                >
+                  <h1 className={heroTitleClass}>{hero.event.title}</h1>
+                </Link>
+                <p className="mt-3 text-[0.95rem] leading-relaxed text-ink-soft md:mt-4">
+                  {formatWeekday(toOsloDate(hero.event.start))} {formatDate(toOsloDate(hero.event.start))}
+                  {hero.event.allDay ? '' : ` · ${timeLabel(hero.event)}`}
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2 md:mt-4">
+                  {hero.event.location && <Stamp tone="brass">{hero.event.location}</Stamp>}
+                  {hero.event.allDay && <Stamp>Hele dagen</Stamp>}
+                </div>
+              </div>
+              <HeroDate iso={toOsloDate(hero.event.start)} aside={timeLabel(hero.event)} />
+            </div>
+            {data.heroEvent && (
+              <div className="sheet mt-6 px-4 py-4 sm:px-5 md:max-w-xl">
+                <p className="kicker mb-3">Kommer du?</p>
+                <RsvpControl
+                  occurrenceKey={hero.event.occurrenceKey}
+                  eventLabel={`${hero.event.title} · ${formatWeekday(toOsloDate(hero.event.start))} ${formatDate(toOsloDate(hero.event.start))}${hero.event.allDay ? '' : `, ${formatTime(hero.event.start)}`}`}
+                  current={data.heroEvent.myAttendance}
+                  onSaved={() => router.invalidate()}
+                />
+                {data.heroEvent.plan.length > 0 && (
+                  <Link
+                    to="/kalender/$eventId"
+                    params={{ eventId: hero.event.occurrenceKey }}
+                    className="link-quiet mt-3 flex min-h-11 items-center gap-3 border-t border-line pt-3"
+                  >
+                    <span className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-brass">Øves</span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-ink">
+                      {data.heroEvent.plan.join(' · ')}
+                      {data.heroEvent.planMore > 0 ? ` · +${data.heroEvent.planMore}` : ''}
+                    </span>
+                    <Icon name="chevronRight" size={18} className="text-ink-faint" />
+                  </Link>
+                )}
+              </div>
+            )}
+          </>
+        ) : hero.kind === 'project' ? (
+          <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <Kicker className="mb-3">Neste prosjekt · {relativeDays(hero.project.eventDate)}</Kicker>
+              <Link to="/noter/prosjekter/$projectId" params={{ projectId: hero.project.id }} className="link-quiet block">
+                <h1 className={heroTitleClass}>{hero.project.name}</h1>
+              </Link>
+              <p className="mt-4 text-[0.95rem] leading-relaxed text-ink-soft">
+                {formatWeekday(hero.project.eventDate)} {formatDate(hero.project.eventDate)}
+                {hero.project.venue ? ` · ${hero.project.venue}` : ''}
+              </p>
+              {hero.project.description && (
+                <p className="mt-3 max-w-xl text-sm leading-relaxed text-ink-soft">{hero.project.description}</p>
+              )}
+            </div>
+            <HeroDate iso={hero.project.eventDate} aside={hero.project.venue} />
+          </div>
+        ) : (
+          <EmptyState title="Ingenting på programmet ennå">
+            Når neste øvelse eller konsert er satt opp, står den her.
+          </EmptyState>
+        )}
+      </section>
+
+      <InstallHint />
+
+      <section className="rise" style={{ animationDelay: '100ms' }}>
+        <SectionHeading kicker="Mine noter" title="Klart på notestativet" className="mb-4" />
+        <Link
+          to="/noter"
+          className="sheet link-quiet flex items-center gap-4 px-4 py-4 transition-colors active:bg-paper-sunken sm:px-5 can-hover:hover:border-line-strong"
+        >
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[11px] bg-[var(--brass-soft)] text-brass-strong">
+            <Icon name="notes" size={24} />
+          </span>
+          <span className="min-w-0 flex-1">
+            {next ? (
+              <>
+                <span className="display-title block truncate text-[1.12rem] font-semibold text-ink">{next.name}</span>
+                <span className="mt-0.5 block truncate text-xs text-ink-soft">
+                  {next.workCount === 1 ? '1 verk' : `${next.workCount} verk`}
+                  {data.me.parts.length > 0
+                    ? ` · ${data.me.parts.length === 1 ? 'din stemme' : 'dine stemmer'}: ${data.me.parts.map((p) => p.nameNo).join(', ')}`
+                    : ' · ingen stemme registrert'}
+                </span>
+                <span className="mt-1 block font-mono text-[0.6rem] uppercase tracking-[0.14em] text-brass">
+                  {formatDate(next.eventDate)} · {relativeDays(next.eventDate)}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="display-title block text-[1.05rem] font-semibold text-ink">Mine noter</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-ink-soft">
+                  Ingen kommende prosjekter ennå — notene dine finner du likevel her.
+                </span>
+              </>
+            )}
+          </span>
+          <Icon name="chevronRight" size={18} className="text-ink-faint" />
+        </Link>
+      </section>
+
+      {/*
+        Veggen (#28). Blokken er lesegrensesnittet; publiseringsflyten bor i
+        sitt eget navnerom, /beskjeder. Serveren har allerede filtrert bort
+        utkast og beskjeder som ikke er for denne brukeren.
+      */}
+      <section className="rise" style={{ animationDelay: '160ms' }}>
         <SectionHeading
           kicker="Veggen"
           title="Siste beskjeder"
@@ -94,11 +238,11 @@ function HubPage() {
             </Link>
           }
         />
-        {data.posts.length === 0 ? (
-          <p className="text-sm text-ink-faint">Ingenting på veggen ennå — det kommer.</p>
+        {wallPosts.length === 0 ? (
+          <p className="text-sm text-ink-faint">Ingenting mer på veggen ennå — det kommer.</p>
         ) : (
           <ul>
-            {data.posts.map((post) => (
+            {wallPosts.map((post) => (
               <li key={post.id} className="hairline-row">
                 <Link to="/beskjeder/$postId" params={{ postId: post.id }} className="link-quiet block py-3">
                   <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -121,99 +265,7 @@ function HubPage() {
         )}
       </section>
 
-      <section className="rise" style={{ animationDelay: '60ms' }}>
-        {hero.kind === 'event' ? (
-          <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
-            <div className="min-w-0">
-              <Kicker className="mb-3">Neste · {relativeDays(toOsloDate(hero.event.start))}</Kicker>
-              {/* Til forekomsten, ikke til lista: derfra ser man øvingsplanen
-                  og kan svare på oppmøte (#82/#24). */}
-              <Link
-                to="/kalender/$eventId"
-                params={{ eventId: hero.event.occurrenceKey }}
-                className="link-quiet block"
-              >
-                <h1 className={heroTitleClass}>{hero.event.title}</h1>
-              </Link>
-              <p className="mt-4 text-[0.95rem] leading-relaxed text-ink-soft">
-                {formatWeekday(toOsloDate(hero.event.start))} {formatDate(toOsloDate(hero.event.start))}
-                {hero.event.allDay ? '' : ` · ${timeLabel(hero.event)}`}
-              </p>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                {hero.event.location && <Stamp tone="brass">{hero.event.location}</Stamp>}
-                {hero.event.allDay && <Stamp>Hele dagen</Stamp>}
-              </div>
-            </div>
-            <HeroDate iso={toOsloDate(hero.event.start)} aside={timeLabel(hero.event)} />
-          </div>
-        ) : hero.kind === 'project' ? (
-          <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
-            <div className="min-w-0">
-              <Kicker className="mb-3">Neste prosjekt · {relativeDays(hero.project.eventDate)}</Kicker>
-              <Link to="/noter/prosjekter/$projectId" params={{ projectId: hero.project.id }} className="link-quiet block">
-                <h1 className={heroTitleClass}>{hero.project.name}</h1>
-              </Link>
-              <p className="mt-4 text-[0.95rem] leading-relaxed text-ink-soft">
-                {formatWeekday(hero.project.eventDate)} {formatDate(hero.project.eventDate)}
-              </p>
-              {hero.project.description && (
-                <p className="mt-3 max-w-xl text-sm leading-relaxed text-ink-soft">{hero.project.description}</p>
-              )}
-            </div>
-            <HeroDate iso={hero.project.eventDate} aside={hero.project.venue} />
-          </div>
-        ) : (
-          <EmptyState title="Ingenting på programmet ennå">
-            Når neste øvelse eller konsert er satt opp, står den her.
-          </EmptyState>
-        )}
-      </section>
-
-      <section className="rise" style={{ animationDelay: '120ms' }}>
-        <SectionHeading kicker="Mine noter" title="Stemmene dine" className="mb-4" />
-        <div className="sheet flex flex-col gap-5 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:gap-8 sm:px-6">
-          <div className="min-w-0">
-            {next && hero.kind !== 'project' ? (
-              <>
-                <p className="display-title text-[1.15rem] font-semibold text-ink">{next.name}</p>
-                <p className="mt-1 text-xs text-ink-soft">
-                  {formatDate(next.eventDate)}
-                  {next.venue ? ` · ${next.venue}` : ''} · {relativeDays(next.eventDate)}
-                </p>
-                <p className="mt-2 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint">
-                  {next.workCount === 1 ? '1 verk i programmet' : `${next.workCount} verk i programmet`}
-                </p>
-              </>
-            ) : (
-              <p className="text-sm leading-relaxed text-ink-soft">
-                {next
-                  ? 'Programmet, stemmene dine og lytteeksemplene ligger klare i noteområdet.'
-                  : 'Ingen kommende prosjekter ennå — notene dine finner du likevel i noteområdet.'}
-              </p>
-            )}
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {data.me.parts.length > 0 ? (
-                data.me.parts.map((p) => (
-                  <Stamp key={p.id} tone="brass">
-                    {p.nameNo}
-                  </Stamp>
-                ))
-              ) : (
-                <Stamp>Ingen stemme registrert</Stamp>
-              )}
-              <Stamp>{data.me.roleName}</Stamp>
-            </div>
-          </div>
-          <Link
-            to="/noter"
-            className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-[9px] bg-brass px-4 py-2 text-sm font-medium text-paper-raised shadow-[0_1px_2px_rgba(43,34,16,0.2),inset_0_1px_0_rgba(255,255,255,0.18)] transition-colors hover:bg-brass-strong dark:text-paper"
-          >
-            Åpne mine noter
-          </Link>
-        </div>
-      </section>
-
-      <section className="rise" style={{ animationDelay: '200ms' }}>
+      <section className="rise" style={{ animationDelay: '220ms' }}>
         <SectionHeading
           kicker={useCalendar ? 'Kalenderen' : 'Lenger frem'}
           title="Kommende"
@@ -236,18 +288,24 @@ function HubPage() {
           ) : (
             <ul>
               {upcomingEvents.map((event) => (
-                <li key={event.id} className="hairline-row flex items-center gap-4 py-3">
-                  <RowDate iso={toOsloDate(event.start)} />
-                  <div className="min-w-0 flex-1">
-                    <p className="display-title truncate text-base font-semibold text-ink">{event.title}</p>
-                    <p className="mt-0.5 truncate text-xs text-ink-soft">
-                      {timeLabel(event)}
-                      {event.location ? ` · ${event.location}` : ''}
-                    </p>
-                  </div>
-                  <span className="hidden shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-brass sm:inline">
-                    {relativeDays(toOsloDate(event.start))}
-                  </span>
+                <li key={event.id} className="hairline-row">
+                  <Link
+                    to="/kalender/$eventId"
+                    params={{ eventId: event.occurrenceKey }}
+                    className="link-quiet flex items-center gap-4 py-3"
+                  >
+                    <RowDate iso={toOsloDate(event.start)} />
+                    <span className="min-w-0 flex-1">
+                      <span className="display-title block truncate text-base font-semibold text-ink">{event.title}</span>
+                      <span className="mt-0.5 block truncate text-xs text-ink-soft">
+                        {timeLabel(event)}
+                        {event.location ? ` · ${event.location}` : ''}
+                      </span>
+                    </span>
+                    <span className="hidden shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-brass sm:inline">
+                      {relativeDays(toOsloDate(event.start))}
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -281,7 +339,9 @@ function HubPage() {
         )}
       </section>
 
-      <section className="rise" style={{ animationDelay: '280ms' }}>
+      {/* På telefon står områdene i «Meg og mer» (Launcher.tsx), så kortene
+          her ville bare gjentatt menyen. */}
+      <section className="rise hidden md:block" style={{ animationDelay: '280ms' }}>
         <SectionHeading kicker="Internsiden" title="Områder" className="mb-4" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data.areas.map((area) => (

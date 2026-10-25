@@ -374,6 +374,79 @@ dialog.sheet-dialog.sheet-dialog-wide {
   }
 }
 
+/* Bunnark (`BottomSheet` i ui.tsx): alltid festet mot bunnen, innenfor
+   tommelens rekkevidde, med plass til hjem-indikatoren under innholdet. */
+dialog.sheet-dialog.sheet-dialog-bottom {
+  width: 100%;
+  max-width: min(100%, 560px);
+  margin: auto auto 0;
+  border-bottom: none;
+  border-radius: 20px 20px 0 0;
+  max-height: 92dvh;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+dialog.sheet-dialog.sheet-dialog-bottom[open] {
+  animation: sheet-in 0.32s cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Grepet øverst i et ark — viser at det kan dras ned. */
+.sheet-grab {
+  display: block;
+  width: 38px;
+  height: 5px;
+  margin: 0 auto 0.6rem;
+  border-radius: 9999px;
+  background: var(--line-strong);
+}
+
+/* Siden bak et åpent ark/dialog skal ikke rulle med (iOS gjør det ellers). */
+html:has(dialog[open]) {
+  overflow: hidden;
+}
+
+/* ---------- Fanelinjen (telefon) ---------- */
+/* Ingen «forhåndsvisning» ved langt trykk på en fane. */
+.tab-link {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* Når tastaturet er oppe, tar fanelinjen bare plass (Android flytter den opp
+   over tastaturet). Skjules mens et tekstfelt har fokus. */
+@media (max-width: 767px) {
+  body:has(:is(textarea, select, [contenteditable='true'], input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit']):not([type='range'])):focus) .tab-bar {
+    display: none;
+  }
+}
+
+/* Innholdet slutter over fanelinjen, ikke bak den. */
+.main-with-tabs {
+  padding-bottom: calc(58px + 2.5rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 768px) {
+  .main-with-tabs {
+    padding-bottom: 5rem;
+  }
+}
+
+/* Toastene skal ikke havne bak fanelinjen. */
+.toast-stack {
+  bottom: calc(1.25rem + env(safe-area-inset-bottom));
+}
+@media (max-width: 767px) {
+  body:has(.tab-bar) .toast-stack {
+    bottom: calc(58px + 0.9rem + env(safe-area-inset-bottom));
+  }
+}
+
 /* ---------- Skjema ---------- */
 .field-input {
   width: 100%;

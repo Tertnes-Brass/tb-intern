@@ -651,6 +651,27 @@ export const postReactions = sqliteTable(
   (t) => [primaryKey({ columns: [t.postId, t.userId] })],
 )
 
+// Lest-kvittering: hvem har ÅPNET hvilket innlegg (detaljsiden på web, eller
+// detaljvisningen i mobil-API-et). Grunnlaget for ulest-tallet på Beskjeder-
+// fanen og app-ikonet, og for «Viktig»-varselet øverst på Hjem. Skrives bare
+// av en eksplisitt POST (`markPostRead`), aldri av en GET — ruteren
+// forhåndslaster detaljsiden ved hover, og det er ikke det samme som å lese.
+// Bare innlegg fra de siste dagene telles som uleste (`UNREAD_WINDOW_DAYS` i
+// src/lib/unread.ts), så tabellen trenger ingen historikk fra før den fantes.
+export const postReads = sqliteTable(
+  'post_reads',
+  {
+    postId: text('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    readAt: integer('read_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.userId] }), index('post_reads_user_idx').on(t.userId)],
+)
+
 // Bilder på et innlegg. `r2Key` bygges ALLTID fra en fersk id, aldri fra
 // filnavnet. Visning skjer kun via /api/post-images/$imageId, som gjentar
 // audience-sjekken — bildene er aldri offentlige (docs/tilgangsstyring.md).

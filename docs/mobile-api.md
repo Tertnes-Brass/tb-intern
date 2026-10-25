@@ -42,7 +42,7 @@ expired and revoked sessions receive a JSON 401 on the native API.
 | PUT | `events/{occurrenceKey}/attendance` | `{status: "attending" | "not_attending" | "unsure" | null}`; existing event identity, own member only |
 | POST | `posts` | `{body}` creates an ordinary plain-text draft; returns `{id}` |
 | POST | `posts/{id}/publish` | `{}` publishes the caller's draft using existing checks; no bulk announcement email |
-| GET | `posts/{id}` | readable post and comments, with resolved mentions, plain text fallback and optional native Markdown source |
+| GET | `posts/{id}` | readable post and comments, with resolved mentions, plain text fallback and optional native Markdown source; also records a read receipt (`post_reads`) for the unread count on the web — the response is unchanged |
 | POST | `posts/{id}/like` | `{}` toggles the caller's reaction; returns `{mine, count}`; do not retry automatically |
 | POST | `posts/{id}/comments` | `{body}` adds a comment with existing visibility and mention validation |
 

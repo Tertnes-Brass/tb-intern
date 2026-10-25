@@ -282,6 +282,29 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 > det bør ta (b) opp til reell vurdering, med demotering av Filtilganger og
 > Innstillinger til brukermenyen som det billigste alternativet.
 
+> **Fulgt opp 25. oktober 2026 (mobil/PWA): launcheren (b) — men bare på
+> telefon.** Internsiden skal kunne brukes som installert app (PWA) i stedet
+> for egne iOS- og Android-apper, og en vannrett rullende tekststripe øverst på
+> skjermen er ikke en app-navigasjon. Under `md` (768 px) er toppmenyen derfor
+> byttet ut med to flater:
+>
+> - **Fanelinjen** nederst (`src/components/TabBar.tsx`): Hjem · Forum ·
+>   Beskjeder · Noter · Kalender — de fem første oppføringene i `BASE_NAV`, like
+>   for alle roller, med ulest-tall på Beskjeder og en prikk på Forum. Forum
+>   beholder plassen sin etter ønsket fra 26. september.
+> - **«Meg og mer»** bak avataren (`src/components/Launcher.tsx`): profil, alle
+>   områder som ikke står i fanelinjen (Medlemmer, Gruppeledere, Styre,
+>   Filtilganger, Innstillinger — utledet av `areasFor`, så betingelsene er de
+>   samme som på hub-en), varsler, utseende og utlogging.
+>
+> Desktop beholder toppmenyen og brukermenyen som før; der er taket fortsatt
+> det §6 beskriver. På telefon er taket borte: fanelinjen er fem for alle, og
+> et nytt område får en flis i «Meg og mer», ikke en ny fane. Prisen (b)
+> advarte om — ett ekstra trykk — betales bare av områdene som allerede var
+> rollestyrte, og de har nå et tydelig sted å bo i stedet for å gjemme seg bak
+> faden i stripen. Områdekortene på hub-en vises bare på desktop; på telefon
+> ville de gjentatt «Meg og mer».
+
 ## 7. Hva som ikke er avgjort
 
 1. ~~**Navigasjonsmodellen** (§6)~~ — **avgjort 30. august 2026: alternativ (a)**,
@@ -311,12 +334,29 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
    4. **Områder:** kompakte snarveier til områdene brukeren har tilgang til,
       med samme betingelser som toppmenyen (`areasFor` i `src/lib/hub.ts`).
 
-   **Beskjeder (#28) står øverst** — over hero — siden 31. august 2026. Det er
-   det eneste som skal kunne fortrenge «Neste». Blokken viser de tre siste
-   publiserte beskjedene brukeren har lov til å se (tittel, tidspunkt, utdrag,
-   «Viktig»-stempel) og lenker videre til `/beskjeder`. Uten beskjeder er den én
-   rolig linje, ikke en tom boks. Hele teksten, utkastene og publiseringsflyten
-   bor i området — hub-en er fortsatt ikke et kontrollpanel (§4).
+   ~~**Beskjeder (#28) står øverst** — over hero — siden 31. august 2026.~~
+
+   **Revidert 25. oktober 2026 (mobil/PWA):** på telefon var hele første skjerm
+   veggen, og det man åpner appen for — neste øvelse og «kommer du?» — lå under
+   bretten. Ny rekkefølge:
+
+   0. **En ulest «Viktig»-beskjed**, som én kompakt rad over hero. Bare den
+      nyeste, og bare til den er åpnet (lest-kvitteringer i `post_reads`,
+      skrevet av `markPostRead` når detaljsiden vises). Det er fortsatt det
+      eneste som kan fortrenge «Neste» — men nå bare så lenge den faktisk er ny.
+   1. **Hero — «Neste»**, med svar på oppmøte (Kommer · Usikker · Kan ikke) og
+      de første punktene i øvingsplanen rett i kortet. «Kan ikke» åpner et ark
+      med valgfri grunn og kommentar (`RsvpControl` i
+      `src/components/Rsvp.tsx`, samme `setMyAttendance` som detaljsiden).
+      Datoblokken vises bare på desktop.
+   2. **Mine noter** — «Klart på notestativet»: hele kortet er lenken.
+   3. **Siste beskjeder** — de tre siste (minus den viktige over, hvis den står
+      der). Uten beskjeder er det én rolig linje, ikke en tom boks.
+   4. **Kommende**, nå med lenke til hver forekomst.
+   5. **Områder** — bare på desktop (på telefon: «Meg og mer», se §6).
+
+   Hele teksten, utkastene og publiseringsflyten bor fortsatt i området —
+   hub-en er ikke et kontrollpanel (§4).
 
    Hub-en skal aldri bli et kontrollpanel som gjengir hvert områdes oversikt i
    miniatyr (§4). Den viser *det neste* og *veien videre*.

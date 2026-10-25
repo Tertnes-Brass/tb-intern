@@ -13,6 +13,7 @@ import {
   postAttachments,
   postMentions,
   postReactions,
+  postReads,
   posts,
   rolePermissions,
   user,
@@ -400,6 +401,26 @@ export const getPost = createServerFn()
       // Leveringsstatus er et skriveverktøy; medlemmer skal ikke se hvem som fikk e-post.
       delivery: canNotifyPost(me, row, canPublish, hasPermission(me, 'posts.archive')) && row.publishedAt ? await deliveryFor(row) : null,
     }
+  })
+
+/**
+ * Lest-kvittering (`post_reads`). Egen POST, ikke en bieffekt av `getPost`:
+ * ruteren forhåndslaster detaljsiden ved hover (`defaultPreload: 'intent'`), og
+ * en hover er ikke lesing. Detaljsiden kaller denne når den faktisk vises, og
+ * mobil-API-et når appen åpner innlegget. Utkast og innlegg leseren ikke får se
+ * avvises som i `getPost`.
+ */
+export const markPostRead = createServerFn({ method: 'POST' })
+  .validator(idInput)
+  .handler(async ({ data }) => {
+    const me = await requireMe()
+    const row = await readablePost(data.id, hasPermission(me, PUBLISH_PERMISSION), me)
+    if (!row.publishedAt) return { ok: true }
+    await db()
+      .insert(postReads)
+      .values({ postId: row.id, userId: me.id, readAt: new Date() })
+      .onConflictDoNothing()
+    return { ok: true }
   })
 
 /**

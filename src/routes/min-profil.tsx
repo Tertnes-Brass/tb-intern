@@ -163,7 +163,7 @@ function NotificationsCard({ current }: { current: PostNotificationChoice }) {
   }
 
   return (
-    <section className="sheet rise overflow-hidden" style={{ animationDelay: '100ms' }}>
+    <section id="varsler" className="sheet rise scroll-mt-24 overflow-hidden" style={{ animationDelay: '100ms' }}>
       <div className="border-b border-line bg-paper-sunken/50 px-5 py-5 sm:px-6">
         <Kicker className="mb-2">Varsler</Kicker>
         <h2 className="display-title text-2xl font-semibold text-ink">E-post om beskjeder</h2>

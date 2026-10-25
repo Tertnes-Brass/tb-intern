@@ -6,6 +6,7 @@ import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-rout
 import { useEffect, useRef, useState } from 'react'
 import { Button, Field, Stamp } from '../../components/ui'
 import { editForumText, getForumTopic, markForumRepliesRead, replyToForum, searchForumMentions, setForumLock } from '../../server/forum'
+import { refreshShellCounts } from '../../lib/shell-events'
 
 export const Route = createFileRoute('/forum/$topicId')({
   beforeLoad: ({ context }) => { if (!context.me) throw redirect({ to: '/login' }) },
@@ -33,7 +34,7 @@ function ForumText({ id, kind, body, author, createdAt, updatedAt, canEdit, unre
     const mark = async () => {
       if (sent || !visible || document.visibilityState !== 'visible') return
       sent = true
-      try { await markForumRepliesRead({ data: { topicId, replyIds: [id] } }) }
+      try { await markForumRepliesRead({ data: { topicId, replyIds: [id] } }); refreshShellCounts() }
       catch { if (!cancelled) sent = false }
     }
     const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; void mark() })

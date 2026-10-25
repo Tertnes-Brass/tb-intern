@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
 
 // ---------- Knapper ----------
 
@@ -169,6 +169,103 @@ export function Modal({
           iPad, som regner dialogens høyde som bestemt. Med overflow-y: auto er
           minimumshøyden også 0, så kroppen kollapset til bare padding. */}
       <div className="min-h-0 flex-auto overflow-y-auto px-6 pb-6 pt-4 sm:px-7">{children}</div>
+    </dialog>
+  )
+}
+
+// ---------- Bunnark (bottom sheet) ----------
+
+/** Åpner og lukker en native `<dialog>` i takt med `open`. */
+function useDialogOpen(ref: RefObject<HTMLDialogElement | null>, open: boolean) {
+  useEffect(() => {
+    const dlg = ref.current
+    if (!dlg) return
+    if (open && !dlg.open) {
+      dlg.style.transform = ''
+      dlg.showModal()
+    }
+    if (!open && dlg.open) dlg.close()
+  }, [open, ref])
+}
+
+/**
+ * Dra ned for å lukke. Kobles på grepet øverst i arket (og overskriften): arket
+ * følger fingeren, og slippes det mer enn ~90 px ned — eller med fart — lukkes
+ * det. Ellers glir det tilbake. Bare berøring og penn; med mus er det
+ * Lukk-knappen og Esc som gjelder.
+ */
+export function useSheetDrag(ref: RefObject<HTMLDialogElement | null>, onClose: () => void) {
+  const start = useRef<{ y: number; t: number } | null>(null)
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType === 'mouse') return
+    // Knapper og lenker i overskriften skal fortsatt kunne trykkes.
+    if ((e.target as HTMLElement).closest('button, a, input, textarea, select')) return
+    start.current = { y: e.clientY, t: performance.now() }
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    if (ref.current) ref.current.style.transition = 'none'
+  }
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!start.current || !ref.current) return
+    const dy = Math.max(0, e.clientY - start.current.y)
+    ref.current.style.transform = `translateY(${dy}px)`
+  }
+  const finish = (e: React.PointerEvent) => {
+    const from = start.current
+    const dlg = ref.current
+    start.current = null
+    if (!from || !dlg) return
+    const dy = Math.max(0, e.clientY - from.y)
+    const velocity = dy / Math.max(1, performance.now() - from.t)
+    dlg.style.transition = 'transform 0.22s cubic-bezier(0.2, 0.65, 0.25, 1)'
+    if (dy > 90 || (dy > 24 && velocity > 0.6)) {
+      dlg.style.transform = 'translateY(100%)'
+      window.setTimeout(onClose, 160)
+    } else {
+      dlg.style.transform = ''
+    }
+  }
+  return { onPointerDown, onPointerMove, onPointerUp: finish, onPointerCancel: finish }
+}
+
+/**
+ * Ark som glir opp fra bunnen — innenfor tommelens rekkevidde. Brukes der en
+ * handling hører til telefonen (f.eks. «Meg og mer» og «Kan ikke komme»). På
+ * bredere skjermer står det sentrert nederst, med samme oppførsel.
+ */
+export function BottomSheet({
+  open,
+  onClose,
+  label,
+  header,
+  children,
+}: {
+  open: boolean
+  onClose: () => void
+  /** Tilgjengelig navn når overskriften ikke er en vanlig tittel. */
+  label: string
+  header?: ReactNode
+  children: ReactNode
+}) {
+  const ref = useRef<HTMLDialogElement>(null)
+  useDialogOpen(ref, open)
+  const drag = useSheetDrag(ref, onClose)
+
+  return (
+    <dialog
+      ref={ref}
+      aria-label={label}
+      className="sheet-dialog sheet-dialog-bottom"
+      onClose={onClose}
+      onClick={(e) => {
+        if (e.target === ref.current) onClose()
+      }}
+    >
+      <div className="shrink-0 touch-none select-none px-5 pt-2.5" {...drag}>
+        <span className="sheet-grab" aria-hidden />
+        {header}
+      </div>
+      <div className="min-h-0 flex-auto overflow-y-auto overscroll-contain px-5 pb-5 pt-3">{children}</div>
     </dialog>
   )
 }

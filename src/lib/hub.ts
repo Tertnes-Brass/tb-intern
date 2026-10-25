@@ -138,6 +138,8 @@ function allows(permissions: string[], permission: string): boolean {
 /**
  * Samme betingelser som toppmenyen i `Shell.tsx` — snarveiene og menyen skal
  * ikke kunne komme i utakt. UI-et er uansett kosmetikk; serveren avviser selv.
+ * «Meg og mer» på telefon (`Launcher.tsx`) bygger flisene sine av denne
+ * lista, minus det fanelinjen allerede har.
  *
  * Ett unntak, bevisst: Filtilganger ble tatt ut av toppmenyen da Beskjeder kom
  * (docs/designprinsipper.md §6), men beholder kortet her — hub-en har plass, og
