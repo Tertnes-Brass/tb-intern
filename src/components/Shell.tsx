@@ -204,11 +204,11 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
   const launcherAttention = (counts.board?.overdue ?? 0) > 0
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      {/* Tett bakgrunn, ingen backdrop-filter, og `status-bar-fill` fortsetter
-          bakgrunnen opp bak klokka: i en installert app på iOS 26 ruller
-          innholdet ellers videre opp bak statuslinjen og skimtes uskarpt der. */}
-      <header className="status-bar-fill print-hidden pt-safe sticky top-0 z-40 border-b border-line bg-paper">
+    // `app-shell`: i installert app på iOS er det denne som ruller, ikke vinduet
+    // (`html.ios-app` i styles.css, src/lib/app-scroll.ts).
+    <div className="app-shell flex min-h-dvh flex-col" data-scroll-restoration-id="app">
+      {/* Tett bakgrunn, ingen backdrop-filter. */}
+      <header className="print-hidden pt-safe sticky top-0 z-40 border-b border-line bg-paper">
         <div className="px-safe mx-auto flex h-[56px] w-full max-w-6xl items-center justify-between gap-4 md:h-[60px]">
           <Link to="/" className="link-quiet group flex shrink-0 items-baseline gap-2.5">
             <span className="font-mono text-[0.66rem] font-semibold uppercase tracking-[0.24em] text-ink">

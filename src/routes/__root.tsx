@@ -12,8 +12,10 @@ import appCss from '../styles.css?url'
 // Statisk, kompilert-inn temainit (ingen brukerinput): settes før første maling
 // for å unngå blink av feil tema. `theme-color` følger det valgte temaet, ikke
 // bare telefonens — ellers får en installert app lys statuslinje over mørkt
-// papir. Samme regler som `src/lib/theme.ts`.
-const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark')?stored:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.classList.remove('light','dark');root.classList.add(resolved);root.setAttribute('data-theme',resolved);root.style.colorScheme=resolved;var color=resolved==='dark'?'${THEME_COLORS.dark}':'${THEME_COLORS.light}';document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.content=color});}catch(e){}})();`
+// papir. Samme regler som `src/lib/theme.ts`. Merker også installert app på iOS
+// (`ios-app`, samme regel som `isIos() && isStandalone()` i src/lib/pwa.ts), der
+// skallet ruller i stedet for vinduet — før første maling, så ingenting hopper.
+const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark')?stored:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.classList.remove('light','dark');root.classList.add(resolved);root.setAttribute('data-theme',resolved);root.style.colorScheme=resolved;var color=resolved==='dark'?'${THEME_COLORS.dark}':'${THEME_COLORS.light}';document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.content=color});var n=navigator;var standalone=n.standalone===true||window.matchMedia('(display-mode: standalone)').matches;var ios=/iPhone|iPad|iPod/.test(n.userAgent)||(n.userAgent.indexOf('Macintosh')>-1&&n.maxTouchPoints>1);if(standalone&&ios)root.classList.add('ios-app');}catch(e){}})();`
 
 export const Route = createRootRoute({
   // Venter ikke på serveren ved hver navigasjon — se `src/lib/me-client.ts`.
