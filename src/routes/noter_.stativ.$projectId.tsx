@@ -18,8 +18,9 @@ import { getProject } from '../server/projects'
  *
  * `?fil=` er bare startpunktet. Adressen oppdateres IKKE mens man blar: hver
  * endring i adressen er en navigasjon i ruteren (den fanger også
- * `history.replaceState`), som kjører rotens `beforeLoad` (`getMe`) på nytt — og
- * å bla skal virke uten nett, fra den lagrede kopien av siden.
+ * `history.replaceState`), som kjører `beforeLoad` og sjekker innloggingen mot
+ * serveren på nytt — og å bla skal virke uten nett, fra den lagrede kopien av
+ * siden.
  */
 export const Route = createFileRoute('/noter_/stativ/$projectId')({
   validateSearch: (search: Record<string, unknown>): { fil?: string } =>

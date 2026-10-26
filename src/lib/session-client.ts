@@ -1,4 +1,5 @@
 import { authClient } from './auth-client'
+import { forgetMe } from './me-client'
 import { clearOfflineNotes } from './offline-notes'
 import { disablePush } from './push-client'
 
@@ -21,6 +22,7 @@ export async function signOutHere(): Promise<void> {
     new Promise((resolve) => setTimeout(resolve, 3000)),
   ])
   await authClient.signOut()
+  forgetMe()
 }
 
 async function clearBadge(): Promise<void> {

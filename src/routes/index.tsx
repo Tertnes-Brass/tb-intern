@@ -22,6 +22,8 @@ export const Route = createFileRoute('/')({
     if (!context.me) throw redirect({ to: '/login' })
   },
   loader: () => getHub(),
+  // Fane i TabBar.tsx: vis forrige versjon med en gang og hent ny i bakgrunnen.
+  preloadStaleTime: Infinity,
   component: HubPage,
 })
 

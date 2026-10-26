@@ -10,6 +10,8 @@ export const Route = createFileRoute('/kalender/')({
     if (!context.me) throw redirect({ to: '/login' })
   },
   loader: () => getCalendar(),
+  // Fane i TabBar.tsx: vis forrige versjon med en gang og hent ny i bakgrunnen.
+  preloadStaleTime: Infinity,
   component: CalendarPage,
 })
 

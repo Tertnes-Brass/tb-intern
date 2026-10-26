@@ -1,11 +1,11 @@
-import { HeadContent, Outlet, Scripts, createRootRoute, useRouterState } from '@tanstack/react-router'
+import { HeadContent, Outlet, Scripts, createRootRoute, useRouter, useRouterState } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { SessionGuards } from '../components/AppBehaviour'
 import { Shell } from '../components/Shell'
 import { Toaster } from '../components/toast'
+import { loadMe, onMeChange, primeMe } from '../lib/me-client'
 import { initPwa } from '../lib/pwa'
 import { THEME_COLORS, applyTheme, followSystemTheme, readThemeMode, resolveTheme } from '../lib/theme'
-import { getMe } from '../server/auth'
 
 import appCss from '../styles.css?url'
 
@@ -16,8 +16,9 @@ import appCss from '../styles.css?url'
 const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark')?stored:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.classList.remove('light','dark');root.classList.add(resolved);root.setAttribute('data-theme',resolved);root.style.colorScheme=resolved;var color=resolved==='dark'?'${THEME_COLORS.dark}':'${THEME_COLORS.light}';document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.content=color});}catch(e){}})();`
 
 export const Route = createRootRoute({
-  beforeLoad: async () => {
-    const me = await getMe()
+  // Venter ikke på serveren ved hver navigasjon — se `src/lib/me-client.ts`.
+  beforeLoad: async ({ location, preload }) => {
+    const me = await loadMe({ pathname: location.pathname, preload })
     return { me }
   },
   head: () => ({
@@ -53,6 +54,9 @@ export const Route = createRootRoute({
 function RootLayout() {
   const me = Route.useRouteContext().me
   const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const router = useRouter()
+  useEffect(() => primeMe(me), [me])
+  useEffect(() => onMeChange(() => void router.invalidate()), [router])
   const bare =
     pathname === '/login' ||
     pathname === '/glemt-passord' ||

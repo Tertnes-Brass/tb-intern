@@ -205,7 +205,11 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="print-hidden pt-safe sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur-md">
+      {/* Tett bakgrunn, ingen backdrop-filter: på iOS 26 legger en installert app
+          et «glass» over statuslinjen, og innholdet skimtes bak klokka — med
+          mindre en sticky boks med ren bakgrunnsfarge dekker toppkanten. Da får
+          statuslinjen menyens farge i stedet. */}
+      <header className="print-hidden pt-safe sticky top-0 z-40 border-b border-line bg-paper">
         <div className="px-safe mx-auto flex h-[56px] w-full max-w-6xl items-center justify-between gap-4 md:h-[60px]">
           <Link to="/" className="link-quiet group flex shrink-0 items-baseline gap-2.5">
             <span className="font-mono text-[0.66rem] font-semibold uppercase tracking-[0.24em] text-ink">
@@ -255,6 +259,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
           </button>
         </div>
         <OfflineBanner />
+        <NavProgress />
       </header>
 
       <main className="main-with-tabs px-safe mx-auto w-full max-w-6xl flex-1 pt-6 sm:pt-10">{children}</main>
@@ -273,4 +278,23 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
       <Launcher me={me} counts={counts} open={launcherOpen} onClose={() => setLauncherOpen(false)} />
     </div>
   )
+}
+
+/**
+ * Tynn messinglinje under toppmenyen mens en navigasjon venter på serveren —
+ * fanen markeres med en gang, og linjen viser at noe skjer. Først etter 150 ms,
+ * så sider fra cachen ikke blinker.
+ */
+function NavProgress() {
+  const pending = useRouterState({ select: (s) => s.status === 'pending' })
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    if (!pending) {
+      setVisible(false)
+      return
+    }
+    const timer = setTimeout(() => setVisible(true), 150)
+    return () => clearTimeout(timer)
+  }, [pending])
+  return <div aria-hidden className={`nav-progress${visible ? ' is-active' : ''}`} />
 }

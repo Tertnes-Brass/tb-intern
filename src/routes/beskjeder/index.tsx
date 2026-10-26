@@ -33,6 +33,8 @@ export const Route = createFileRoute('/beskjeder/')({
   },
   validateSearch: filterSchema,
   loader: () => listPosts(),
+  // Fane i TabBar.tsx: vis forrige versjon med en gang og hent ny i bakgrunnen.
+  preloadStaleTime: Infinity,
   component: PostsPage,
 })
 

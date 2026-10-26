@@ -312,17 +312,44 @@ textarea,
   animation: spin 0.7s linear infinite;
 }
 
-/* Etter første navigasjon (AppBehaviour.tsx): ingen ny innlasting-animasjon
-   for hvert trykk — sideskiftet har sin egen overgang. */
-html.navigated main .rise {
-  animation: none;
+/* Navigasjon som venter på serveren (NavProgress i Shell.tsx). */
+.nav-progress {
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 2px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.nav-progress.is-active {
+  opacity: 1;
+}
+.nav-progress::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 40%;
+  background: var(--brass);
+}
+.nav-progress.is-active::before {
+  animation: nav-progress 1.1s ease-in-out infinite;
+}
+@keyframes nav-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
 }
 
-/* Sideskift (View Transitions, router.tsx): kort kryssfade av innholdet. */
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 0.18s;
-  animation-timing-function: ease-out;
+/* Etter første navigasjon (AppBehaviour.tsx): ingen ny innlasting-animasjon
+   for hvert trykk — sideskift skal være umiddelbare, som i en app. */
+html.navigated main .rise {
+  animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -330,10 +357,9 @@ html.navigated main .rise {
   .fadein {
     animation: none;
   }
-  ::view-transition-group(*),
-  ::view-transition-old(*),
-  ::view-transition-new(*) {
-    animation: none !important;
+  .nav-progress.is-active::before {
+    width: 100%;
+    animation: none;
   }
   * {
     transition-duration: 0.01ms !important;
