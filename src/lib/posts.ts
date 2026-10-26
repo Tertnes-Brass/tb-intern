@@ -260,8 +260,13 @@ export const DEFAULT_NOTIFY = false
  * bare i hjelpeteksten under: det skal gå fram av det man huker av at det
  * sendes e-post, og til hvem.
  */
+/**
+ * Avkryssingen som sender beskjeden ut. Den gjelder både e-post og push-varsel
+ * (samme mottakere, samme valg på /min-profil, samme idempotens), så teksten
+ * sier «varsle», ikke «e-post».
+ */
 export function notifyLabel(audience: PostAudience): string {
-  return audience === 'board' ? 'Send e-post til styret nå' : 'Send e-post til hele korpset nå'
+  return audience === 'board' ? 'Varsle styret nå' : 'Varsle hele korpset nå'
 }
 
 /** Maks antall bilder per innlegg. Håndheves server-side ved opplasting. */

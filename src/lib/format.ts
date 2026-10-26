@@ -78,16 +78,23 @@ export function formatTimeRange(
 }
 
 /** «om 13 dager», «i dag», «for 3 dager siden» */
-export function relativeDays(iso: string | null | undefined): string {
+export function relativeDays(iso: string | null | undefined, now: number = Date.now()): string {
   if (!iso) return ''
-  const target = new Date(`${iso}T12:00:00`)
-  const now = new Date()
-  const days = Math.round((target.getTime() - now.getTime()) / 86_400_000)
+  // Kalenderdager i norsk tid, på både server (UTC) og klient. Før regnet vi
+  // timer fra «nå», og mellom midnatt og 02 sa serveren «om 3 dager» mens
+  // telefonen sa «om 2» — hydreringen feilet og hele siden ble tegnet på nytt.
+  const days = Math.round((utcDay(iso) - utcDay(toOsloDate(now))) / 86_400_000)
   if (days === 0) return 'i dag'
   if (days === 1) return 'i morgen'
   if (days === -1) return 'i går'
   if (days > 1) return `om ${days} dager`
   return `for ${-days} dager siden`
+}
+
+/** «2026-10-28» → epoch-ms for midnatt UTC den dagen; bare til å telle dager. */
+function utcDay(iso: string): number {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
+  return Date.UTC(y!, (m ?? 1) - 1, d ?? 1)
 }
 
 export function formatDuration(sec: number | null | undefined): string {

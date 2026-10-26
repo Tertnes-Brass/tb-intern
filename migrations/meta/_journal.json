@@ -155,6 +155,27 @@
       "when": 1791221651122,
       "tag": "0021_beskjedvedlegg",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1792957394875,
+      "tag": "0022_ulest-beskjeder",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1792959741860,
+      "tag": "0023_push-varsler",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1792971707552,
+      "tag": "0024_push-okt",
+      "breakpoints": true
     }
   ]
 }

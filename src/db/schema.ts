@@ -6,7 +6,7 @@ import {
   sqliteTable,
   text,
 } from 'drizzle-orm/sqlite-core'
-import { user } from './auth-schema'
+import { session, user } from './auth-schema'
 
 // better-auth eier autentiseringstabellene (user/session/account/verification).
 // Vi re-eksporterer dem så Drizzle Kit ser dem, og kobler RBAC til user.id.
@@ -651,6 +651,27 @@ export const postReactions = sqliteTable(
   (t) => [primaryKey({ columns: [t.postId, t.userId] })],
 )
 
+// Lest-kvittering: hvem har ÅPNET hvilket innlegg (detaljsiden på web, eller
+// detaljvisningen i mobil-API-et). Grunnlaget for ulest-tallet på Beskjeder-
+// fanen og app-ikonet, og for «Viktig»-varselet øverst på Hjem. Skrives bare
+// av en eksplisitt POST (`markPostRead`), aldri av en GET — ruteren
+// forhåndslaster detaljsiden ved hover, og det er ikke det samme som å lese.
+// Bare innlegg fra de siste dagene telles som uleste (`UNREAD_WINDOW_DAYS` i
+// src/lib/unread.ts), så tabellen trenger ingen historikk fra før den fantes.
+export const postReads = sqliteTable(
+  'post_reads',
+  {
+    postId: text('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    readAt: integer('read_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.userId] }), index('post_reads_user_idx').on(t.userId)],
+)
+
 // Bilder på et innlegg. `r2Key` bygges ALLTID fra en fersk id, aldri fra
 // filnavnet. Visning skjer kun via /api/post-images/$imageId, som gjentar
 // audience-sjekken — bildene er aldri offentlige (docs/tilgangsstyring.md).
@@ -705,7 +726,44 @@ export const notificationPreferences = sqliteTable('notification_preferences', {
   mentions: text('mentions', { enum: ['all', 'off'] })
     .notNull()
     .default('all'),
+  // Push-varsel dagen før en hendelse du ikke har svart på (kun push — det går
+  // aldri e-post om dette). Standarden er på; varselet går uansett bare til
+  // enheter der medlemmet selv har slått på varsler.
+  rsvpReminders: text('rsvp_reminders', { enum: ['all', 'off'] })
+    .notNull()
+    .default('all'),
 })
+
+// Web Push: én rad per nettleser/enhet som har slått på varsler (PWA på
+// Hjem-skjermen, Android, desktop). Nøklene er nettleserens egne og brukes til å
+// kryptere hver melding til akkurat den enheten (src/lib/web-push.ts).
+// `endpoint` er unik: logger noen andre inn på samme enhet og slår på varsler,
+// flyttes raden til dem i stedet for å bli liggende hos forrige bruker.
+// Raden slettes når push-tjenesten svarer 404/410 (abonnementet er borte), ved
+// utlogging fra enheten, og når brukeren slår varsler av.
+export const pushSubscriptions = sqliteTable(
+  'push_subscriptions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull().unique(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    // «iPhone · Safari» osv. — bare for å kunne vise hvilke enheter som får varsler.
+    label: text('label'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    lastSuccessAt: integer('last_success_at', { mode: 'timestamp_ms' }),
+    // Innloggingen på enheten (migrasjon 0024). Varsler hører til en innlogget
+    // enhet: «Logg ut andre enheter», passordbytte og utestengelse sletter
+    // økten, og CASCADE tar abonnementet med seg — en mistet iPad skal ikke
+    // fortsette å vise «Viktig fra styret» på låseskjermen. Utsendingen hopper
+    // også over rader uten aktiv økt (utløpt).
+    sessionId: text('session_id').references(() => session.id, { onDelete: 'cascade' }),
+  },
+  (t) => [index('push_subscriptions_user_idx').on(t.userId), index('push_subscriptions_session_idx').on(t.sessionId)],
+)
 
 // Idempotens for varsling: en beskjed sendes aldri to ganger til samme person.
 // «Send på nytt» sender kun til dem som mangler en rad her.

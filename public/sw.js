@@ -1,0 +1,201 @@
+/*
+ * Service worker for Tertnes Brass Intern.
+ *
+ * Bevisst liten og uten byggesteg. Den gjør fire ting:
+ *
+ * 1. Hashede filer under /assets/ (JS, CSS, fonter) caches første gang de
+ *    hentes og serveres derfra etterpå. Navnet endres når innholdet endres, så
+ *    en fil i cachen er aldri utdatert.
+ * 2. Sidenavigasjon går alltid til nettet først. Feiler nettet, brukes en
+ *    lagret kopi av notestativ-siden hvis den finnes, ellers offline.html.
+ * 3. Noter brukeren selv har lagret offline (src/lib/offline-notes.ts) ligger i
+ *    OFFLINE_CACHE. For dem går forespørselen fortsatt til nettet først — det er
+ *    serveren som avgjør tilgang, og et nei sletter kopien. Bare uten (eller med
+ *    svært tregt) nett brukes kopien.
+ * 4. Ingenting annet røres: server functions (/_serverFn/), resten av /api/* og
+ *    alt med brukerdata går rett til nettet, uten cache.
+ * 5. Push-varsler (src/server/push-send.ts): vises med tittel, tekst og lenke,
+ *    og et trykk åpner (eller fokuserer) appen på riktig side.
+ *
+ * Bump VERSION når denne fila eller offline.html endres.
+ */
+const VERSION = 'v5'
+const SHELL_CACHE = `tb-shell-${VERSION}`
+const ASSET_CACHE = 'tb-assets'
+/** Hashede filer fra gamle deployer blir liggende; taket holder cachen liten. */
+const ASSET_LIMIT = 160
+/** Brukerens lagrede noter og notestativ-sider. Må stemme med src/lib/offline-notes.ts. */
+const OFFLINE_CACHE = 'tb-offline-v1'
+/** Hvor lenge vi venter på nettet før en lagret note vises i stedet. */
+const FILE_TIMEOUT_MS = 4000
+
+const SHELL_FILES = ['/offline.html', '/icons/icon-192.png', '/icons/badge-96.png']
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(SHELL_CACHE)
+      for (const path of SHELL_FILES) {
+        const response = await fetch(path, { cache: 'reload' })
+        if (!response.ok) throw new Error(`${path}: ${response.status}`)
+        await cache.put(path, await unredirected(response))
+      }
+      await self.skipWaiting()
+    })(),
+  )
+})
+
+/**
+ * Cloudflare sine statiske filer svarer `/offline.html` med en omdirigering til
+ * `/offline`. Et omdirigert svar kan ikke brukes som svar på en navigasjon
+ * (nettleseren gir ERR_FAILED), så vi lagrer en ren kopi.
+ */
+async function unredirected(response) {
+  if (!response.redirected) return response
+  return new Response(await response.blob(), {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  })
+}
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    (async () => {
+      const keys = await caches.keys()
+      await Promise.all(
+        keys.filter((key) => key.startsWith('tb-shell-') && key !== SHELL_CACHE).map((key) => caches.delete(key)),
+      )
+      if (self.registration.navigationPreload) await self.registration.navigationPreload.enable()
+      await self.clients.claim()
+    })(),
+  )
+})
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request
+  if (request.method !== 'GET') return
+  const url = new URL(request.url)
+  if (url.origin !== self.location.origin) return
+
+  if (request.mode === 'navigate') {
+    event.respondWith(navigation(event))
+    return
+  }
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(asset(request))
+    return
+  }
+  // Bare hele-fil-forespørsler: lydavspilling bruker Range og skal rett til nettet.
+  if (url.pathname.startsWith('/api/files/') && !url.search && !request.headers.has('range')) {
+    event.respondWith(noteFile(event, url.pathname))
+  }
+})
+
+async function navigation(event) {
+  try {
+    const preloaded = await event.preloadResponse
+    if (preloaded) return preloaded
+    return await fetch(event.request)
+  } catch {
+    const saved = await caches.match(event.request, { cacheName: OFFLINE_CACHE, ignoreSearch: true, ignoreVary: true })
+    if (saved) return saved
+    const offline = await caches.match('/offline.html', { cacheName: SHELL_CACHE })
+    return offline ?? new Response('Frakoblet', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
+  }
+}
+
+async function asset(request) {
+  // Let i ALLE cacher: et lagret notestativ har koden sin i OFFLINE_CACHE, som
+  // aldri trimmes. ignoreVary: Cloudflare svarer med `Vary: Origin`, og en
+  // modul-<script> sender Origin mens en vanlig fetch() ikke gjør det. Filene er
+  // uforanderlige (navnet er innholdets hash), så variasjonen betyr ingenting.
+  const hit = await caches.match(request, { ignoreVary: true })
+  if (hit) return hit
+  const cache = await caches.open(ASSET_CACHE)
+  const response = await fetch(request)
+  if (response.ok && response.type === 'basic') {
+    await cache.put(request, response.clone())
+    trimAssets(cache)
+  }
+  return response
+}
+
+async function trimAssets(cache) {
+  const keys = await cache.keys()
+  // keys() kommer i innsettingsrekkefølge: de eldste først.
+  for (const key of keys.slice(0, Math.max(0, keys.length - ASSET_LIMIT))) await cache.delete(key)
+}
+
+async function noteFile(event, path) {
+  const request = event.request
+  const cache = await caches.open(OFFLINE_CACHE)
+  const saved = await cache.match(path, { ignoreVary: true })
+  if (!saved) return fetch(request)
+
+  const network = fetch(request).then(async (response) => {
+    // Serveren sier nei (utlogget, tilgangen er borte, fila slettet): da skal
+    // kopien heller ikke vises.
+    if (response.status === 401 || response.status === 403 || response.status === 404) await cache.delete(path)
+    return response
+  })
+  // Svaret kan komme etter at kopien er vist; slettingen over skal likevel skje.
+  event.waitUntil(network.catch(() => {}))
+  const timeout = new Promise((resolve) => setTimeout(() => resolve(null), FILE_TIMEOUT_MS))
+  try {
+    const first = await Promise.race([network, timeout])
+    // Tregt nett eller en feil på serveren (5xx): vis kopien.
+    if (!first || first.status >= 500) return saved
+    return first
+  } catch {
+    return saved
+  }
+}
+
+// ---------- Push-varsler ----------
+
+self.addEventListener('push', (event) => {
+  let message = {}
+  try {
+    message = event.data ? event.data.json() : {}
+  } catch {
+    message = { title: 'Tertnes Brass Intern', body: event.data ? event.data.text() : '' }
+  }
+  const title = message.title || 'Tertnes Brass Intern'
+  const tasks = [
+    self.registration.showNotification(title, {
+      body: message.body || '',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/badge-96.png',
+      tag: message.tag,
+      data: { url: message.url || '/' },
+      lang: 'nb',
+    }),
+  ]
+  // Tallet på app-ikonet, når serveren har regnet det ut for akkurat denne brukeren.
+  if (typeof message.badge === 'number' && self.navigator.setAppBadge) {
+    tasks.push(
+      (message.badge > 0 ? self.navigator.setAppBadge(message.badge) : self.navigator.clearAppBadge()).catch(() => {}),
+    )
+  }
+  event.waitUntil(Promise.all(tasks))
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const target = new URL(event.notification.data?.url || '/', self.location.origin)
+  // Bare egne adresser — et varsel skal aldri kunne sende noen ut av appen.
+  if (target.origin !== self.location.origin) return
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      const existing = windows.find((w) => new URL(w.url).origin === self.location.origin)
+      if (existing) {
+        await existing.focus()
+        if ('navigate' in existing) return existing.navigate(target.href).catch(() => self.clients.openWindow(target.href))
+        return
+      }
+      return self.clients.openWindow(target.href)
+    })(),
+  )
+})

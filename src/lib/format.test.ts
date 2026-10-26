@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatTime, formatTimeRange, toOsloDate } from './format'
+import { formatTime, formatTimeRange, relativeDays, toOsloDate } from './format'
 
 describe('formatTime', () => {
   it('viser klokkeslettet i norsk tid, ikke i UTC', () => {
@@ -47,5 +47,22 @@ describe('toOsloDate', () => {
   it('tomt inn → tomt ut', () => {
     expect(toOsloDate(null)).toBe('')
     expect(toOsloDate('tull')).toBe('')
+  })
+})
+
+describe('relativeDays', () => {
+  // 25. oktober 2026 kl. 23:30 UTC = 26. oktober kl. 00:30 i Norge (sommertid er over).
+  const justAfterMidnightOslo = Date.UTC(2026, 9, 25, 23, 30)
+
+  it('teller kalenderdager i norsk tid, uansett hvor koden kjører', () => {
+    expect(relativeDays('2026-10-28', justAfterMidnightOslo)).toBe('om 2 dager')
+    expect(relativeDays('2026-10-27', justAfterMidnightOslo)).toBe('i morgen')
+    expect(relativeDays('2026-10-26', justAfterMidnightOslo)).toBe('i dag')
+    expect(relativeDays('2026-10-25', justAfterMidnightOslo)).toBe('i går')
+    expect(relativeDays('2026-10-20', justAfterMidnightOslo)).toBe('for 6 dager siden')
+  })
+
+  it('gir tom streng uten dato', () => {
+    expect(relativeDays(null)).toBe('')
   })
 })

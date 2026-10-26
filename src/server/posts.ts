@@ -13,6 +13,7 @@ import {
   postAttachments,
   postMentions,
   postReactions,
+  postReads,
   posts,
   rolePermissions,
   user,
@@ -50,6 +51,8 @@ import {
 import { type Me, hasPermission, requireMe } from './access'
 import { canAttachImages } from './post-images'
 import { mentionEmail, postEmail, postMentionEmail, sendEmail } from './email'
+import { PUSH_TTL, mentionPushMessage, postPushMessage } from '../lib/push'
+import { sendPushToUsers, unreadCountsFor } from './push-send'
 
 /**
  * Beskjeder (#28) — veggen. Alle innloggede kan skrive, kommentere og like;
@@ -400,6 +403,26 @@ export const getPost = createServerFn()
       // Leveringsstatus er et skriveverktøy; medlemmer skal ikke se hvem som fikk e-post.
       delivery: canNotifyPost(me, row, canPublish, hasPermission(me, 'posts.archive')) && row.publishedAt ? await deliveryFor(row) : null,
     }
+  })
+
+/**
+ * Lest-kvittering (`post_reads`). Egen POST, ikke en bieffekt av `getPost`:
+ * ruteren forhåndslaster detaljsiden ved hover (`defaultPreload: 'intent'`), og
+ * en hover er ikke lesing. Detaljsiden kaller denne når den faktisk vises, og
+ * mobil-API-et når appen åpner innlegget. Utkast og innlegg leseren ikke får se
+ * avvises som i `getPost`.
+ */
+export const markPostRead = createServerFn({ method: 'POST' })
+  .validator(idInput)
+  .handler(async ({ data }) => {
+    const me = await requireMe()
+    const row = await readablePost(data.id, hasPermission(me, PUBLISH_PERMISSION), me)
+    if (!row.publishedAt) return { ok: true }
+    await db()
+      .insert(postReads)
+      .values({ postId: row.id, userId: me.id, readAt: new Date() })
+      .onConflictDoNothing()
+    return { ok: true }
   })
 
 /**
@@ -786,6 +809,18 @@ async function notifyMentions(input: {
       batch.map((r) => sendEmail({ to: r.email!, subject: mail.subject, html: mail.html, text: mail.text })),
     )
   }
+  await pushSafely('omtale i kommentar', () =>
+    sendPushToUsers(
+      input.recipients.map((r) => r.userId),
+      mentionPushMessage({
+        postId: input.post.id,
+        authorName: input.commenterName,
+        excerpt: mentionPlainText(input.body, input.mentioned),
+        where: 'comment',
+      }),
+      { ttl: PUSH_TTL.mention, urgency: 'high' },
+    ),
+  )
 }
 
 export const deleteComment = createServerFn({ method: 'POST' })
@@ -862,6 +897,19 @@ export const deletePostImage = createServerFn({ method: 'POST' })
   })
 
 // ---------- E-postvarsling ----------
+
+/**
+ * Push er et tillegg til e-posten, med samme mottakere og samme valg. Feiler
+ * den, skal verken publiseringen, kommentaren eller e-posten merke det.
+ */
+async function pushSafely(label: string, send: () => Promise<unknown>): Promise<void> {
+  try {
+    await send()
+  } catch (err) {
+    console.error(`[push] ${label}:`, err)
+  }
+}
+
 
 /** Idempotent «send på nytt»: går kun til dem som mangler en rad i loggen. */
 export const resendPostNotifications = createServerFn({ method: 'POST' })
@@ -999,6 +1047,25 @@ async function notifyPost(row: Row): Promise<{ result: PostNotifyResult; emailed
       .values(batch.map((o) => ({ postId: row.id, userId: o.userId, sentAt, outcome: o.outcome })))
       .onConflictDoNothing()
   }
+
+  // Samme mottakere som e-posten, og like idempotent: `pending` er bare dem som
+  // ikke hadde en rad i loggen. Tallet på app-ikonet regnes per mottaker.
+  await pushSafely('beskjed', async () => {
+    const message = postPushMessage({
+      id: row.id,
+      heading: postHeading({ title: row.title, body: postPlainText(body, row.format) }, 160),
+      important: row.importance === 'important',
+      official: row.official,
+      fromArchive: row.fromArchive,
+      authorName: authorOf(row).name,
+    })
+    const badges = await unreadCountsFor(pending.map((r) => ({ userId: r.userId, canSeeBoardPosts: r.canPublish })))
+    await sendPushToUsers(
+      pending.map((r) => r.userId),
+      (userId) => ({ ...message, badge: badges.get(userId) }),
+      { ttl: PUSH_TTL.post, urgency: row.importance === 'important' ? 'high' : 'normal' },
+    )
+  })
   return { result, emailed }
 }
 
@@ -1096,6 +1163,19 @@ async function notifyPostMentions(row: Row, postEmailed: ReadonlySet<string>): P
         batch.map((r) => sendEmail({ to: r.email!, subject: mail.subject, html: mail.html, text: mail.text })),
       )
     }
+    // Samme regel som e-posten: ikke til dem som nettopp fikk hele beskjeden.
+    await pushSafely('omtale i innlegg', () =>
+      sendPushToUsers(
+        email.map((r) => r.userId),
+        mentionPushMessage({
+          postId: row.id,
+          authorName: row.authorName ?? OFFICIAL_AUTHOR,
+          excerpt: plain,
+          where: 'post',
+        }),
+        { ttl: PUSH_TTL.mention, urgency: 'high' },
+      ),
+    )
   }
 
   // Merket settes for ALLE som er ferdigbehandlet — også dem som fikk

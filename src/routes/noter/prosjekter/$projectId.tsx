@@ -162,6 +162,7 @@ function ProjectPage() {
         ) : (
           <RepertoireList
             items={data.repertoire}
+            standProjectId={p.id}
             edition={data.canManage ? (item) => <ProjectWorkEdition projectId={p.id} item={item} /> : undefined}
             percussion={
               data.canManage

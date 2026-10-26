@@ -468,10 +468,11 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
             <span>
               <span className="block text-sm font-medium text-ink">{notifyLabel(audience)}</span>
               <span className="mt-0.5 block text-xs leading-snug text-ink-soft">
-                Uten avkryssing publiseres innlegget uten at det sendes e-post.{' '}
+                Sender e-post, og varsel til dem som har slått på varsler på en enhet. Uten avkryssing
+                publiseres innlegget uten varsel.{' '}
                 {audience === 'board'
-                  ? 'E-posten går kun til dem som selv kan publisere beskjeder.'
-                  : 'E-posten går til aktive medlemmer med e-post, etter varslingsvalget deres.'}{' '}
+                  ? 'Varselet går kun til dem som selv kan publisere beskjeder.'
+                  : 'Varselet går til aktive medlemmer, etter varslingsvalget deres.'}{' '}
                 Ingen får den samme beskjeden to ganger.
               </span>
             </span>

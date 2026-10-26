@@ -16,6 +16,12 @@ interface __BaseEnv_Env {
 	// Staging-bryter, også håndjustert (fra literal til valgfri string): er den
 	// satt, omdirigerer sendEmail ALL e-post dit. Tom i prod, Sindre i staging.
 	EMAIL_REDIRECT_ALL_TO?: string;
+	// Web Push (VAPID), lagt til for hånd som over. Begge settes som secrets
+	// (`wrangler secret put VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`, nøklene lages
+	// med `node scripts/generate-vapid-keys.mjs`). Mangler de, er push av og
+	// knappen for å slå på varsler vises ikke.
+	VAPID_PUBLIC_KEY?: string;
+	VAPID_PRIVATE_KEY?: string;
 	BETTER_AUTH_SECRET: string;
 	BETTER_AUTH_URL: string;
 	ADMIN_EMAIL: string;

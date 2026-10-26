@@ -1,7 +1,7 @@
 import { formatBytes } from '../../../lib/format'
 import { postAttachmentUrl } from '../../../lib/post-attachments'
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CommentComposer } from '../../../components/CommentComposer'
 import { LikeButton } from '../../../components/PostCard'
 import { toast, toastError } from '../../../components/toast'
@@ -10,6 +10,7 @@ import { formatDateTime } from '../../../lib/format'
 import { markdownToHtml } from '../../../lib/markdown'
 import { type MentionUser, UNKNOWN_MENTION, postLineTokens, renderCommentHtml } from '../../../lib/mentions'
 import { postImageUrl } from '../../../lib/post-images-client'
+import { refreshShellCounts } from '../../../lib/shell-events'
 import {
   DEFAULT_NOTIFY,
   commentCountLabel,
@@ -23,6 +24,7 @@ import {
   deleteComment,
   deletePost,
   getPost,
+  markPostRead,
   publishPost,
   resendPostNotifications,
   unpublishPost,
@@ -187,6 +189,14 @@ function PostPage() {
   const [notify, setNotify] = useState(DEFAULT_NOTIFY)
   const [busy, setBusy] = useState<'resend' | 'publish' | 'unpublish' | 'delete' | null>(null)
   const isDraft = post.publishedAt === null
+
+  // Lest først når siden faktisk vises — ikke når ruteren forhåndslaster den.
+  useEffect(() => {
+    if (isDraft) return
+    markPostRead({ data: { id: post.id } })
+      .then(refreshShellCounts)
+      .catch(() => {})
+  }, [post.id, isDraft])
 
   const act = async (kind: 'resend' | 'publish' | 'unpublish' | 'delete', fn: () => Promise<unknown>) => {
     setBusy(kind)
@@ -375,8 +385,9 @@ function PostPage() {
             <span>
               <span className="block text-sm font-medium text-ink">{notifyLabel(post.audience)}</span>
               <span className="mt-0.5 block text-xs leading-snug text-ink-soft">
-                Uten avkryssing publiseres innlegget uten at det sendes e-post. E-posten følger
-                varslingsvalget til hver enkelt, og ingen får den samme beskjeden to ganger.
+                Sender e-post, og varsel til dem som har slått på varsler på en enhet. Uten avkryssing
+                publiseres innlegget uten varsel. Varselet følger varslingsvalget til hver enkelt, og ingen
+                får den samme beskjeden to ganger.
               </span>
             </span>
           </label>

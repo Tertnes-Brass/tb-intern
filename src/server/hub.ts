@@ -1,15 +1,28 @@
 import { createServerFn } from '@tanstack/react-start'
 import { and, asc, desc, eq, gte, inArray, isNotNull, sql } from 'drizzle-orm'
 import { db } from '../db'
-import { boardTasks, postComments, postMentions, postReactions, posts, projectWorks, projects, user } from '../db/schema'
+import {
+  eventAttendance,
+  eventSetlist,
+  postComments,
+  postMentions,
+  postReactions,
+  posts,
+  projectWorks,
+  projects,
+  user,
+  works,
+} from '../db/schema'
+import type { AttendanceStatus } from '../lib/attendance'
 import { boardAreaNote } from '../lib/board'
 import { type HubArea, type HubCalendar, type HubEvent, type HubPost, type HubProject, areasFor, eventsAfter } from '../lib/hub'
 import type { CalendarEvent } from '../lib/ical'
 import { postPlainText } from '../lib/markdown'
 import { type MentionUser, mentionPlainText } from '../lib/mentions'
 import { excerpt, postHeading } from '../lib/posts'
-import { hasPermission, requireMe } from './access'
+import { type Me, hasPermission, requireMe } from './access'
 import { loadCalendar } from './calendar-feed'
+import { type UnreadImportantPost, boardCounts, latestUnreadImportant } from './unread'
 
 /**
  * Datagrunnlaget for hub-forsiden `/`. Hub-en er plattformflaten: den viser det
@@ -22,12 +35,29 @@ import { loadCalendar } from './calendar-feed'
 const UPCOMING_EVENTS = 4
 /** Prosjekter under hero når kalenderen ikke er tilgjengelig. */
 const UPCOMING_PROJECTS = 4
-/** Veggen øverst. Tre er nok til å vise at det finnes flere uten å bli en feed. */
+/** Veggen. Tre er nok til å vise at det finnes flere uten å bli en feed. */
 const LATEST_POSTS = 3
+/** Punkter fra øvingsplanen som vises i hero — resten står på detaljsiden. */
+const HERO_PLAN_ITEMS = 3
 
 export type HubPayload = {
   /** De siste publiserte beskjedene brukeren har lov til å se. */
   posts: HubPost[]
+  /**
+   * Den nyeste «Viktig»-beskjeden brukeren ikke har åpnet. Det eneste som legger
+   * seg over «Neste» (docs/designprinsipper.md §7 pkt 3).
+   */
+  importantUnread: UnreadImportantPost | null
+  /**
+   * Oppmøte og øvingsplan for hero-hendelsen, så man kan svare rett fra Hjem.
+   * `null` når hero ikke er en kalenderhendelse.
+   */
+  heroEvent: {
+    myAttendance: { status: AttendanceStatus; comment: string | null } | null
+    plan: string[]
+    /** Antall punkter i planen utover dem i `plan`. */
+    planMore: number
+  } | null
   me: {
     name: string
     roleName: string
@@ -146,6 +176,11 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
 
   const nextEvent = calendar.next ? toHubEvent(calendar.next) : null
   const events = calendar.events.map(toHubEvent)
+  const heroIsEvent = calendar.configured && !calendar.error && nextEvent !== null
+  const [importantUnread, heroEvent] = await Promise.all([
+    latestUnreadImportant(me),
+    heroIsEvent ? heroEventDetails(me, nextEvent.occurrenceKey) : Promise.resolve(null),
+  ])
 
   // Tallene på Styre-kortet hentes bare når rettigheten finnes — et vanlig
   // medlem skal ikke koste en spørring for et område det ikke ser.
@@ -174,6 +209,8 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
         likeCount: likeCounts.get(p.id) ?? 0,
       }
     }),
+    importantUnread,
+    heroEvent,
     me: {
       name: me.name,
       roleName: me.roleName,
@@ -191,14 +228,30 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
   }
 })
 
-/** Åpne og forfalte styreoppgaver. Én spørring, to tall. */
-async function boardCounts(today: string): Promise<{ openTasks: number; overdue: number }> {
-  const rows = await db()
-    .select({
-      openTasks: sql<number>`count(*)`,
-      overdue: sql<number>`sum(case when ${boardTasks.dueDate} is not null and ${boardTasks.dueDate} < ${today} then 1 else 0 end)`,
-    })
-    .from(boardTasks)
-    .where(sql`${boardTasks.status} <> 'done'`)
-  return { openTasks: rows[0]?.openTasks ?? 0, overdue: rows[0]?.overdue ?? 0 }
+/**
+ * Mitt svar og de første punktene i øvingsplanen for hero-hendelsen. To små
+ * oppslag på nøkkelen; ingen rad betyr «ikke svart» og «ingen plan ennå».
+ * Selve skrivingen går gjennom `setMyAttendance` som på detaljsiden.
+ */
+async function heroEventDetails(me: Me, occurrenceKey: string): Promise<NonNullable<HubPayload['heroEvent']>> {
+  const d = db()
+  const [attendanceRows, planRows] = await Promise.all([
+    d
+      .select({ status: eventAttendance.status, comment: eventAttendance.comment })
+      .from(eventAttendance)
+      .where(and(eq(eventAttendance.occurrenceKey, occurrenceKey), eq(eventAttendance.userId, me.id)))
+      .limit(1),
+    d
+      .select({ customTitle: eventSetlist.customTitle, workTitle: works.title })
+      .from(eventSetlist)
+      .leftJoin(works, eq(eventSetlist.workId, works.id))
+      .where(eq(eventSetlist.occurrenceKey, occurrenceKey))
+      .orderBy(asc(eventSetlist.sortOrder)),
+  ])
+  const titles = planRows.map((r) => r.workTitle ?? r.customTitle ?? 'Uten tittel')
+  return {
+    myAttendance: attendanceRows[0] ?? null,
+    plan: titles.slice(0, HERO_PLAN_ITEMS),
+    planMore: Math.max(0, titles.length - HERO_PLAN_ITEMS),
+  }
 }

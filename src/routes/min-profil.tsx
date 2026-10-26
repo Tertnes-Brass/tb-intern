@@ -1,5 +1,6 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
+import { PushCard } from '../components/PushCard'
 import { toast, toastError } from '../components/toast'
 import { Button, Field, Kicker, Stamp } from '../components/ui'
 import { authClient } from '../lib/auth-client'
@@ -30,6 +31,7 @@ export const Route = createFileRoute('/min-profil')({
 
 function MyProfilePage() {
   const profile = Route.useLoaderData()
+  const { me } = Route.useRouteContext()
   const router = useRouter()
   const [name, setName] = useState(profile.name)
   const [phone, setPhone] = useState(profile.phone)
@@ -122,6 +124,7 @@ function MyProfilePage() {
         </section>
 
         <div className="space-y-6">
+          <PushCard userId={me!.id} />
           <NotificationsCard current={profile.notifyPosts} />
           <MentionNotificationsCard current={profile.notifyMentions} />
           {/* Styreoppgaver angår bare styret — valget vises derfor kun for dem
@@ -166,9 +169,10 @@ function NotificationsCard({ current }: { current: PostNotificationChoice }) {
     <section className="sheet rise overflow-hidden" style={{ animationDelay: '100ms' }}>
       <div className="border-b border-line bg-paper-sunken/50 px-5 py-5 sm:px-6">
         <Kicker className="mb-2">Varsler</Kicker>
-        <h2 className="display-title text-2xl font-semibold text-ink">E-post om beskjeder</h2>
+        <h2 className="display-title text-2xl font-semibold text-ink">Varsler om beskjeder</h2>
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-          Beskjeder fra styret ligger alltid på internsiden. Her velger du hvor mye av det du vil ha på e-post.
+          Beskjeder fra styret ligger alltid på internsiden. Her velger du hvor mye av det du vil bli varslet om —
+          på e-post, og på enhetene der du har slått på varsler.
         </p>
       </div>
       <div className="p-5 sm:p-6">
@@ -187,8 +191,8 @@ function NotificationsCard({ current }: { current: PostNotificationChoice }) {
           ))}
         </div>
         <p className="mt-3 text-xs leading-relaxed text-ink-faint">
-          «Bare viktige» betyr de beskjedene styret selv har merket som viktige. «Av» slår av all e-post om beskjeder —
-          du finner dem fortsatt under Beskjeder.
+          «Bare viktige» betyr de beskjedene styret selv har merket som viktige. «Av» slår av alle varsler om
+          beskjeder — du finner dem fortsatt under Beskjeder.
         </p>
       </div>
     </section>
@@ -230,9 +234,10 @@ function MentionNotificationsCard({ current }: { current: MentionNotificationCho
     <section className="sheet rise overflow-hidden" style={{ animationDelay: '108ms' }}>
       <div className="border-b border-line bg-paper-sunken/50 px-5 py-5 sm:px-6">
         <Kicker className="mb-2">Varsler</Kicker>
-        <h2 className="display-title text-2xl font-semibold text-ink">E-post når noen nevner deg</h2>
+        <h2 className="display-title text-2xl font-semibold text-ink">Når noen nevner deg</h2>
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-          Skriver noen «@» og navnet ditt i en kommentar på veggen, får du én e-post med lenke til innlegget.
+          Skriver noen «@» og navnet ditt på veggen, får du én e-post med lenke til innlegget — og et varsel på
+          enhetene der du har slått på varsler.
         </p>
       </div>
       <div className="p-5 sm:p-6">
@@ -251,8 +256,8 @@ function MentionNotificationsCard({ current }: { current: MentionNotificationCho
           ))}
         </div>
         <p className="mt-3 text-xs leading-relaxed text-ink-faint">
-          Du får aldri e-post når du nevner deg selv, og aldri mer enn én per kommentar. «Av» slår den av helt —
-          omtalen står fortsatt i kommentaren.
+          Du blir aldri varslet når du nevner deg selv, og aldri mer enn én gang per kommentar. «Av» slår det av
+          helt — omtalen står fortsatt i kommentaren.
         </p>
       </div>
     </section>

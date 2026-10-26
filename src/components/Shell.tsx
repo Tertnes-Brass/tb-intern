@@ -1,8 +1,15 @@
-import { Link, useRouter } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
+import { Link, useRouter, useRouterState } from '@tanstack/react-router'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Me } from '../server/access'
-import { authClient } from '../lib/auth-client'
+import { getShellCounts } from '../server/shell'
 import { isGroupLeader } from '../lib/gruppeledere'
+import { signOutHere } from '../lib/session-client'
+import { onShellCountsRefresh } from '../lib/shell-events'
+import { setThemeMode } from '../lib/theme'
+import { EMPTY_SHELL_COUNTS, type ShellCounts, badgeLabel } from '../lib/unread'
+import { AppBehaviour, OfflineBanner } from './AppBehaviour'
+import { Launcher } from './Launcher'
+import { TabBar } from './TabBar'
 import { Avatar } from './ui'
 
 function ThemeToggle() {
@@ -14,15 +21,7 @@ function ThemeToggle() {
 
   const toggle = () => {
     const next = resolved === 'dark' ? 'light' : 'dark'
-    setResolved(next)
-    const root = document.documentElement
-    root.classList.remove('light', 'dark')
-    root.classList.add(next)
-    root.setAttribute('data-theme', next)
-    root.style.colorScheme = next
-    try {
-      localStorage.setItem('theme', next)
-    } catch {}
+    setResolved(setThemeMode(next))
   }
 
   return (
@@ -95,7 +94,7 @@ function UserMenu({ me }: { me: Me }) {
           <button
             onClick={async () => {
               try {
-                await authClient.signOut()
+                await signOutHere()
               } finally {
                 await router.invalidate()
                 router.navigate({ to: '/login' })
@@ -117,13 +116,15 @@ type NavItem = {
   exact?: boolean
 }
 
-// Kort toppmeny; hvert område eier sin egen undernavigasjon (navigasjonsmodell
-// (a) i docs/designprinsipper.md §6). «Noter» er aktiv for hele /noter/*, så
-// Prosjekter og Arkiv hører hjemme i områdemenyen, ikke her.
+// Kort toppmeny på desktop; hvert område eier sin egen undernavigasjon
+// (navigasjonsmodell (a) i docs/designprinsipper.md §6). «Noter» er aktiv for
+// hele /noter/*, så Prosjekter og Arkiv hører hjemme i områdemenyen, ikke her.
 //
 // Forum er en fast oppføring etter Hjem, etter brukerens ønske (26. september).
 // Filtilganger nås fortsatt fra Innstillinger og områdesnarveien på Hjem.
-// Lange menyer kan rulles vannrett uten å presse logoen og brukermenyen ut.
+//
+// På telefon (< md) erstattes menyen av fanelinjen (`TabBar.tsx`: de fem første
+// oppføringene her) og «Meg og mer» bak avataren (`Launcher.tsx`: resten).
 const BASE_NAV: NavItem[] = [
   { to: '/', label: 'Hjem', exact: true },
   { to: '/forum', label: 'Forum' },
@@ -133,9 +134,62 @@ const BASE_NAV: NavItem[] = [
   { to: '/medlemmer', label: 'Medlemmer' },
 ]
 
+/**
+ * Tellerne i skallet. Hentes etter navigasjon (maks hvert 20. sekund), når
+ * appen kommer tilbake i forgrunnen, og med en gang når en side sier fra
+ * (`refreshShellCounts`). Tallet på app-ikonet (Badging API) følger med.
+ */
+function useShellCounts(): ShellCounts {
+  const [counts, setCounts] = useState<ShellCounts>(EMPTY_SHELL_COUNTS)
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const lastFetch = useRef(0)
+
+  const load = useCallback(async (force: boolean) => {
+    if (!force && Date.now() - lastFetch.current < 20_000) return
+    lastFetch.current = Date.now()
+    try {
+      const next = await getShellCounts()
+      setCounts(next)
+      updateAppBadge(next.unreadPosts)
+    } catch {
+      // Frakoblet eller utlogget: behold det vi har.
+    }
+  }, [])
+
+  useEffect(() => {
+    void load(false)
+  }, [pathname, load])
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load(false)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    const off = onShellCountsRefresh(() => void load(true))
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      off()
+    }
+  }, [load])
+
+  return counts
+}
+
+/** Tallet på app-ikonet (installert PWA). Stilltiende uten støtte. */
+function updateAppBadge(count: number) {
+  const nav = navigator as Navigator & {
+    setAppBadge?: (n?: number) => Promise<void>
+    clearAppBadge?: () => Promise<void>
+  }
+  if (count > 0) nav.setAppBadge?.(count).catch(() => {})
+  else nav.clearAppBadge?.().catch(() => {})
+}
+
 export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
   const canManageSettings = me.permissions.includes('*') || me.permissions.includes('settings.manage')
   const canManageBoard = me.permissions.includes('*') || me.permissions.includes('board.manage')
+  const counts = useShellCounts()
+  const [launcherOpen, setLauncherOpen] = useState(false)
   const NAV: NavItem[] = [...BASE_NAV]
   // Gruppeledere (#81): aktiv leiarbinding, samme rene regel som
   // guarden på serveren og `areasFor` på hub-en. En admin uten binding ser den
@@ -146,10 +200,13 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
   if (canManageBoard) NAV.push({ to: '/styre', label: 'Styre' })
   // exact, ellers markeres Innstillinger som aktiv også på /innstillinger/nedlastinger
   if (canManageSettings) NAV.push({ to: '/innstillinger', label: 'Innstillinger', exact: true })
+  const unread = badgeLabel(counts.unreadPosts)
+  const launcherAttention = (counts.board?.overdue ?? 0) > 0
+
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="print-hidden sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur-md">
-        <div className="mx-auto flex h-[60px] w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+      <header className="print-hidden pt-safe sticky top-0 z-40 border-b border-line bg-paper/85 backdrop-blur-md">
+        <div className="px-safe mx-auto flex h-[56px] w-full max-w-6xl items-center justify-between gap-4 md:h-[60px]">
           <Link to="/" className="link-quiet group flex shrink-0 items-baseline gap-2.5">
             <span className="font-mono text-[0.66rem] font-semibold uppercase tracking-[0.24em] text-ink">
               Tertnes Brass
@@ -168,44 +225,52 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
                 className="nav-link shrink-0 whitespace-nowrap text-[0.86rem] font-medium text-ink-soft transition-colors hover:text-ink [&[data-status=active]]:text-ink"
               >
                 {item.label}
+                {item.to === '/beskjeder' && unread && (
+                  <span className="ml-1.5 inline-grid h-4 min-w-4 place-items-center rounded-full bg-oxblood px-1 align-[1px] font-mono text-[0.56rem] font-semibold text-paper-raised">
+                    {unread}
+                    <span className="sr-only"> uleste</span>
+                  </span>
+                )}
               </Link>
             ))}
           </nav>
 
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="hidden shrink-0 items-center gap-1.5 md:flex">
             <ThemeToggle />
             <UserMenu me={me} />
           </div>
-        </div>
-        <div className="relative md:hidden after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-8 after:bg-gradient-to-l after:from-paper/85 after:to-transparent">
-          <nav
-            className="flex items-center gap-5 overflow-x-auto overscroll-x-contain border-t border-line px-4 py-1.5 pr-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            aria-label="Hovedmeny mobil"
+
+          {/* Telefon: avataren åpner «Meg og mer». */}
+          <button
+            type="button"
+            onClick={() => setLauncherOpen(true)}
+            aria-label="Meg og mer"
+            aria-haspopup="dialog"
+            className="relative -mr-1.5 grid h-11 w-11 cursor-pointer place-items-center rounded-full md:hidden"
           >
-            {NAV.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                activeOptions={{ exact: item.exact ?? false }}
-                className="nav-link whitespace-nowrap py-1 text-[0.8rem] font-medium text-ink-soft [&[data-status=active]]:text-ink"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+            <Avatar name={me.name} />
+            {launcherAttention && (
+              <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-oxblood ring-2 ring-paper" aria-hidden />
+            )}
+          </button>
         </div>
+        <OfflineBanner />
       </header>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-20 pt-8 sm:px-6 sm:pt-10">{children}</main>
+      <main className="main-with-tabs px-safe mx-auto w-full max-w-6xl flex-1 pt-6 sm:pt-10">{children}</main>
 
-      <footer className="print-hidden border-t border-line">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 sm:px-6">
+      <footer className="print-hidden pb-safe hidden border-t border-line md:block">
+        <div className="px-safe mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 py-6">
           <p className="font-mono text-[0.64rem] uppercase tracking-[0.18em] text-ink-faint">
             Tertnes Brass · Intern
           </p>
           <div className="staff-rule w-28 opacity-50" aria-hidden />
         </div>
       </footer>
+
+      <TabBar counts={counts} />
+      <AppBehaviour />
+      <Launcher me={me} counts={counts} open={launcherOpen} onClose={() => setLauncherOpen(false)} />
     </div>
   )
 }
