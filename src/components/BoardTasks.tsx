@@ -109,7 +109,7 @@ export function BoardTaskRowItem({
             {task.title}
           </span>
           {!hideBoardProject && task.boardProjectTitle && (
-            <Stamp tone="brass">{task.boardProjectTitle}</Stamp>
+            <Stamp tone="brass" wrap>{task.boardProjectTitle}</Stamp>
           )}
         </span>
         {meta.length > 0 && (

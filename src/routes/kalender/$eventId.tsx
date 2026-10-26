@@ -83,11 +83,11 @@ function EventDetailPage() {
           <p className="mt-3 max-w-xl whitespace-pre-line text-sm leading-relaxed text-ink-soft">{event.description}</p>
         )}
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          {event.location && <Stamp tone="brass">{event.location}</Stamp>}
+          {event.location && <Stamp tone="brass" wrap>{event.location}</Stamp>}
           {event.allDay && <Stamp>Hele dagen</Stamp>}
           {data.linkedProject && (
             <Link to="/noter/prosjekter/$projectId" params={{ projectId: data.linkedProject.id }}>
-              <Stamp className="cursor-pointer">{data.linkedProject.name}</Stamp>
+              <Stamp wrap className="cursor-pointer">{data.linkedProject.name}</Stamp>
             </Link>
           )}
         </div>

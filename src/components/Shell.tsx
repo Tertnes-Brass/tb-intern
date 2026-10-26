@@ -7,7 +7,7 @@ import { signOutHere } from '../lib/session-client'
 import { onShellCountsRefresh } from '../lib/shell-events'
 import { setThemeMode } from '../lib/theme'
 import { EMPTY_SHELL_COUNTS, type ShellCounts, badgeLabel } from '../lib/unread'
-import { AppBehaviour, OfflineBanner } from './AppBehaviour'
+import { AppBehaviour, OfflineBanner, PullToRefresh } from './AppBehaviour'
 import { Launcher } from './Launcher'
 import { TabBar } from './TabBar'
 import { Avatar } from './ui'
@@ -205,11 +205,10 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      {/* Tett bakgrunn, ingen backdrop-filter: på iOS 26 legger en installert app
-          et «glass» over statuslinjen, og innholdet skimtes bak klokka — med
-          mindre en sticky boks med ren bakgrunnsfarge dekker toppkanten. Da får
-          statuslinjen menyens farge i stedet. */}
-      <header className="print-hidden pt-safe sticky top-0 z-40 border-b border-line bg-paper">
+      {/* Tett bakgrunn, ingen backdrop-filter, og `status-bar-fill` fortsetter
+          bakgrunnen opp bak klokka: i en installert app på iOS 26 ruller
+          innholdet ellers videre opp bak statuslinjen og skimtes uskarpt der. */}
+      <header className="status-bar-fill print-hidden pt-safe sticky top-0 z-40 border-b border-line bg-paper">
         <div className="px-safe mx-auto flex h-[56px] w-full max-w-6xl items-center justify-between gap-4 md:h-[60px]">
           <Link to="/" className="link-quiet group flex shrink-0 items-baseline gap-2.5">
             <span className="font-mono text-[0.66rem] font-semibold uppercase tracking-[0.24em] text-ink">
@@ -260,9 +259,13 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
         </div>
         <OfflineBanner />
         <NavProgress />
+        <PullToRefresh />
       </header>
 
-      <main className="main-with-tabs px-safe mx-auto w-full max-w-6xl flex-1 pt-6 sm:pt-10">{children}</main>
+      {/* `overflow-x-clip`: noe som er bredere enn telefonen, skal aldri gjøre
+          hele siden sidelengs rullbar. `clip` (ikke `hidden`) lager ingen
+          rullecontainer, så sticky inni virker fortsatt. */}
+      <main className="main-with-tabs px-safe mx-auto w-full max-w-6xl flex-1 overflow-x-clip pt-6 sm:pt-10">{children}</main>
 
       <footer className="print-hidden pb-safe hidden border-t border-line md:block">
         <div className="px-safe mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 py-6">

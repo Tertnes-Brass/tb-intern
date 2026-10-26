@@ -160,9 +160,14 @@ export function Notestativ({
 
   return (
     <div className="fixed inset-0 flex flex-col text-[#ede4cf]" style={{ background: STAND_BG }}>
-      {/* Under statuslinjen: en tett stripe, så iOS 26 farger statuslinjen i
-          stedet for å legge glass over noten (som i Shell.tsx). */}
-      <div aria-hidden className="fixed inset-x-0 top-0 z-30 h-[env(safe-area-inset-top)]" style={{ background: STAND_BG }} />
+      {/* Bak klokka: en tett stripe fra over toppen av skjermen og ned til
+          trygg sone, så feltet bak statuslinjen er stativets farge og ikke
+          papirfargen eller uskarpe noter (som `status-bar-fill` i styles.css). */}
+      <div
+        aria-hidden
+        className="fixed inset-x-0 top-[-100vh] z-30 h-[calc(100vh+env(safe-area-inset-top))]"
+        style={{ background: STAND_BG }}
+      />
       {/* Topplinje */}
       <header
         className={`stand-bar pt-safe absolute inset-x-0 top-0 z-20 bg-[#15120f]/88 backdrop-blur-md transition-[opacity,transform] duration-200 ${
@@ -642,10 +647,19 @@ function useWakeLock() {
   }, [])
 }
 
-/** Mørk statuslinje over det mørke stativet; temaets farge tilbake etterpå. */
+/**
+ * Mørk statuslinje over det mørke stativet; temaets farge tilbake etterpå.
+ * Sidens bakgrunn følger med, for det er den iOS viser bak klokka og når man
+ * drar forbi kanten — ellers en lys stripe over notene i lyst tema.
+ */
 function useStandStatusBar() {
   useEffect(() => {
+    const root = document.documentElement
     for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) meta.content = STAND_BG
-    return () => applyTheme(resolveTheme(readThemeMode()))
+    root.style.backgroundColor = STAND_BG
+    return () => {
+      root.style.backgroundColor = ''
+      applyTheme(resolveTheme(readThemeMode()))
+    }
   }, [])
 }
