@@ -1,14 +1,28 @@
-# Vedlegg på beskjeder
+# Intern som app på telefonen
 
-Nettadresser i kommentarer er nå klikkbare ([#91](https://github.com/Tertnes-Brass/tb-intern/issues/91)). Dette gjelder `http://`, `https://` og `www.`, også i eksisterende kommentarer og forumsvar. Lenker åpnes i ny fane; omtaler og linjeskift beholdes.
+Intern kan nå legges på Hjem-skjermen og brukes som en app.
 
-- Styret kan legge til filer under «Vedlegg» når en beskjed skrives eller redigeres.
-- På eksisterende og publiserte beskjeder kan vedlegg fjernes, og nye filer kan lastes opp. Bruk «Lagre endringer» for nye filer; «Fjern» sletter det valgte vedlegget med det samme.
-- Medlemmer får «Last ned»-lenker under beskjeden. Vedlegg følger beskjedenes tilgang, også for utkast og styreinterne beskjeder.
-- Inntil 10 vedlegg à 25 MB. Ved avbrutt opplasting kan du fortsette med samme utkast uten å laste opp allerede bekreftede filer på nytt.
+- **iPhone/iPad:** åpne intern.tertnesbrass.com i Safari → Del → «Legg til på Hjem-skjerm».
+- **Android:** Chrome viser «Installer app» (eller bruk menyen → «Legg til på startskjermen»).
 
-Prøv gjerne en ny beskjed med PDF-/Excel-vedlegg, og rediger den etter publisering for å fjerne en fil og legge til en ny.
+**På telefonen**
+- Fanelinje nederst: Hjem · Forum · Beskjeder · Noter · Kalender. Tallet på Beskjeder viser hvor mange beskjeder du ikke har åpnet de siste 14 dagene.
+- Trykk på bildet ditt oppe til høyre for «Meg og mer»: profil, Medlemmer, styret og gruppeledere (hvis du har tilgang), varsler, noter lagret offline, lyst/mørkt og utlogging.
+- Dialoger kommer opp nedenfra og kan dras ned for å lukkes.
 
-Prosjektstatus og alle 24 åpne issues er gjennomgått i `docs/prosjektstatus.md`. Flere større saker er delvis levert; kontaktinformasjon i #14 er dekket gjennom profilfunksjonen i #65. Issues er ikke automatisk lukket.
+**Hjem**
+- Neste øvelse eller konsert står øverst, og du kan svare «Kommer», «Usikker» eller «Kan ikke» rett der. Ved «Kan ikke» kan du velge en grunn.
+- En ulest «Viktig»-beskjed legger seg øverst til du har åpnet den.
 
-Dette gjelder nettsiden. Native vedleggsvisning/opplasting i iPhone-appen er ikke lagt til i denne leveransen.
+**Notestativet**
+- Stemmene dine åpnes i fullskjerm i appen, i programrekkefølge. Sveip eller trykk på kanten for å bla, eller bruk bladvender/piltaster. Skjermen holdes våken.
+- «Nattlys» gir mørke noter, og «Lytt» spiller lytteeksemplene.
+- Slå på «Tilgjengelig offline» under «Mine noter», så kan du åpne notene uten nett, for eksempel i en kirke uten dekning.
+
+**Varsler**
+- Under «Min profil» → «Varsler på denne enheten» kan du få push-varsler om nye beskjeder fra styret, når noen nevner deg, og «Kommer du i morgen?» dagen før en øvelse du ikke har svart på.
+- På iPhone virker push-varsler bare når Intern er lagt på Hjem-skjermen (iOS 16.4 eller nyere).
+
+På PC er menyen den samme som før. Hjem er stokket om, stemmene åpnes i notestativet, og varsler kan slås på i nettleseren.
+
+**Prøv gjerne:** legg Intern på Hjem-skjermen, slå på varsler, svar på neste øvelse fra Hjem, og åpne en stemme med flymodus på etter å ha slått på «Tilgjengelig offline».
