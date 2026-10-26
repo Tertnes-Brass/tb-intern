@@ -63,9 +63,11 @@ const PULL_MAX = 110
  * har det ikke, og der er det den første gesten folk prøver når noe ser
  * utdatert ut.
  *
- * Rendres INNI toppmenyen og henger under den: iOS drar selv hele siden ned
- * (med toppmenyen) når man drar fra toppen, mens et `fixed` element står igjen
- * — da havnet beskjeden løsrevet midt i innholdet.
+ * Rendres inni toppmenyen og står OVER den: iOS drar selv hele siden ned (med
+ * toppmenyen) når man drar fra toppen, og beskjeden dukker opp i det tomme
+ * feltet som åpner seg over menyen, slik som i en vanlig app. I ro ligger den
+ * over toppen av skallet og synes ikke. Mens den oppdaterer, går messinglinjen
+ * under menyen (som ved navigasjon) — da har iOS allerede lukket feltet.
  */
 export function PullToRefresh() {
   const router = useRouter()
@@ -143,22 +145,29 @@ export function PullToRefresh() {
   if (!enabled || (pull === 0 && !refreshing)) return null
   const ready = pull >= PULL_THRESHOLD
 
+  if (refreshing) {
+    return (
+      <>
+        <div aria-hidden className="nav-progress is-active" />
+        <span role="status" className="sr-only">
+          Oppdaterer …
+        </span>
+      </>
+    )
+  }
+
   return (
     <div
-      className="pointer-events-none absolute inset-x-0 top-full flex justify-center pt-2"
-      style={{ opacity: refreshing ? 1 : Math.min(1, pull / 40) }}
+      className="pointer-events-none absolute inset-x-0 bottom-full flex justify-center pb-3"
+      style={{ opacity: Math.min(1, pull / 40) }}
       role="status"
       aria-live="polite"
     >
       <span className="flex items-center gap-2 rounded-full border border-line bg-paper-raised px-3.5 py-2 text-xs font-medium text-ink-soft shadow-[var(--shadow-soft)]">
-        {refreshing ? (
-          <span className="spinner text-brass" aria-hidden />
-        ) : (
-          <span style={{ transform: `rotate(${(pull / PULL_THRESHOLD) * 270}deg)` }} className="text-brass">
-            <Icon name="refresh" size={16} strokeWidth={2} />
-          </span>
-        )}
-        {refreshing ? 'Oppdaterer …' : ready ? 'Slipp for å oppdatere' : 'Dra for å oppdatere'}
+        <span style={{ transform: `rotate(${(pull / PULL_THRESHOLD) * 270}deg)` }} className="text-brass">
+          <Icon name="refresh" size={16} strokeWidth={2} />
+        </span>
+        {ready ? 'Slipp for å oppdatere' : 'Dra for å oppdatere'}
       </span>
     </div>
   )
