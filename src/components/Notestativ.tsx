@@ -160,6 +160,9 @@ export function Notestativ({
 
   return (
     <div className="fixed inset-0 flex flex-col text-[#ede4cf]" style={{ background: STAND_BG }}>
+      {/* Under statuslinjen: en tett stripe, så iOS 26 farger statuslinjen i
+          stedet for å legge glass over noten (som i Shell.tsx). */}
+      <div aria-hidden className="fixed inset-x-0 top-0 z-30 h-[env(safe-area-inset-top)]" style={{ background: STAND_BG }} />
       {/* Topplinje */}
       <header
         className={`stand-bar pt-safe absolute inset-x-0 top-0 z-20 bg-[#15120f]/88 backdrop-blur-md transition-[opacity,transform] duration-200 ${

@@ -15,6 +15,8 @@ export const Route = createFileRoute('/noter/')({
     if (!context.me) throw redirect({ to: '/login' })
   },
   loader: () => getHome(),
+  // Fane i TabBar.tsx: vis forrige versjon med en gang og hent ny i bakgrunnen.
+  preloadStaleTime: Infinity,
   component: HomePage,
 })
 

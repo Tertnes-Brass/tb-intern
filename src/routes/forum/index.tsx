@@ -8,6 +8,8 @@ export const Route = createFileRoute('/forum/')({
   validateSearch: (search: Record<string, unknown>) => ({ page: Math.max(0, Math.min(100000, Math.floor(Number(search.page) || 0))) }),
   loaderDeps: ({ search }) => search,
   loader: ({ deps }) => listForum({ data: deps }),
+  // Fane i TabBar.tsx: vis forrige versjon med en gang og hent ny i bakgrunnen.
+  preloadStaleTime: Infinity,
   component: ForumPage,
 })
 
