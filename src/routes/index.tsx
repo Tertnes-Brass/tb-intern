@@ -133,7 +133,7 @@ function HubPage() {
                   {hero.event.allDay ? '' : ` · ${timeLabel(hero.event)}`}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2 md:mt-4">
-                  {hero.event.location && <Stamp tone="brass">{hero.event.location}</Stamp>}
+                  {hero.event.location && <Stamp tone="brass" wrap>{hero.event.location}</Stamp>}
                   {hero.event.allDay && <Stamp>Hele dagen</Stamp>}
                 </div>
               </div>

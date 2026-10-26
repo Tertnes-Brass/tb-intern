@@ -19,8 +19,10 @@ const RESUME_AFTER_MS = 60_000
  *   på nytt, slik at «Neste» og veggen ikke viser gårsdagen.
  * - **`rise` bare første gang:** innlastingsanimasjonen er en velkomst, ikke
  *   noe man skal se ved hvert trykk. Etter første navigasjon får `<html>`
- *   klassen `navigated`, og styles.css slår den av — sideskiftet har sin egen
- *   overgang (View Transitions, `defaultViewTransition` i router.tsx).
+ *   klassen `navigated`, og styles.css slår den av — sideskift skal være
+ *   umiddelbare.
+ *
+ * «Dra for å oppdatere» (`PullToRefresh`) bor i toppmenyen i `Shell.tsx`.
  */
 export function AppBehaviour() {
   const router = useRouter()
@@ -47,7 +49,7 @@ export function AppBehaviour() {
     })
   }, [router])
 
-  return <PullToRefresh />
+  return null
 }
 
 /** Avstand (px) man må dra før slipp betyr «oppdater». */
@@ -59,8 +61,12 @@ const PULL_MAX = 110
  * nettleseren, og Android/Chrome har det i standalone; en installert iOS-app
  * har det ikke, og der er det den første gesten folk prøver når noe ser
  * utdatert ut.
+ *
+ * Rendres INNI toppmenyen og henger under den: iOS drar selv hele siden ned
+ * (med toppmenyen) når man drar fra toppen, mens et `fixed` element står igjen
+ * — da havnet beskjeden løsrevet midt i innholdet.
  */
-function PullToRefresh() {
+export function PullToRefresh() {
   const router = useRouter()
   const [enabled, setEnabled] = useState(false)
   const [pull, setPull] = useState(0)
@@ -138,8 +144,8 @@ function PullToRefresh() {
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 z-30 flex justify-center"
-      style={{ top: `calc(env(safe-area-inset-top) + 56px + ${Math.max(0, pull - 40)}px)` }}
+      className="pointer-events-none absolute inset-x-0 top-full flex justify-center pt-2"
+      style={{ opacity: refreshing ? 1 : Math.min(1, pull / 40) }}
       role="status"
       aria-live="polite"
     >

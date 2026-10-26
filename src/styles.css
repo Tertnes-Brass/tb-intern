@@ -129,6 +129,22 @@ textarea,
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Statuslinjen i installert app på iOS 26: siden begynner UNDER klokka, og
+   sticky/fixed stopper der — men innholdet ruller videre opp bak klokka, der
+   iOS viser det uskarpt. Toppmenyen fortsetter derfor oppover med sin egen
+   bakgrunn, så feltet bak klokka alltid er tett. Ellers ligger den over toppen
+   av siden og synes ikke. */
+.status-bar-fill::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 100vh;
+  background: inherit;
+  pointer-events: none;
+}
+
 ::selection {
   background: var(--brass-soft);
   color: var(--ink);
@@ -213,6 +229,13 @@ textarea,
   border-color: color-mix(in srgb, var(--oxblood) 50%, transparent);
   color: var(--oxblood);
   background: color-mix(in srgb, var(--oxblood) 8%, transparent);
+}
+/* Fritekst (adresse, prosjektnavn) kan være bredere enn telefonen: da brytes
+   den inne i stempelet i stedet for å gjøre siden bredere enn skjermen. */
+.stamp-wrap {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 /* ---------- Omtale av medlem (#83) ---------- */

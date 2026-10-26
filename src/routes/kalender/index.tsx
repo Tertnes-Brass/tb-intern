@@ -152,7 +152,7 @@ function CalendarPage() {
                 </p>
               )}
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                {next.location && <Stamp tone="brass">{next.location}</Stamp>}
+                {next.location && <Stamp tone="brass" wrap>{next.location}</Stamp>}
                 {next.allDay && <Stamp>Hele dagen</Stamp>}
               </div>
             </div>

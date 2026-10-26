@@ -46,11 +46,14 @@ export function Button({ variant = 'secondary', size = 'md', loading, className 
 
 export function Stamp({
   tone = 'neutral',
+  wrap = false,
   className = '',
   title,
   children,
 }: {
   tone?: 'neutral' | 'brass' | 'oxblood'
+  /** Fritekst som kan bli lang (adresse, prosjektnavn): brytes i stedet for å gå ut over skjermen. */
+  wrap?: boolean
   className?: string
   /** Valgfri forklaring på hover — for stempler som er et begrep, ikke en etikett. */
   title?: string
@@ -58,7 +61,7 @@ export function Stamp({
 }) {
   const toneClass = tone === 'brass' ? 'stamp-brass' : tone === 'oxblood' ? 'stamp-oxblood' : ''
   return (
-    <span className={`stamp ${toneClass} ${className}`} title={title}>
+    <span className={`stamp ${toneClass} ${wrap ? 'stamp-wrap' : ''} ${className}`} title={title}>
       {children}
     </span>
   )

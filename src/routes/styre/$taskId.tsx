@@ -118,7 +118,7 @@ function BoardTaskPage() {
               params={{ boardProjectId: task.boardProjectId }}
               className="link-quiet"
             >
-              <Stamp tone="brass">{task.boardProjectTitle}</Stamp>
+              <Stamp tone="brass" wrap>{task.boardProjectTitle}</Stamp>
             </Link>
           )}
           {overdue && <Stamp tone="oxblood">Forfalt · {dueLabel(task.dueDate, data.today)}</Stamp>}

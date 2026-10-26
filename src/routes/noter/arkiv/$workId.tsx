@@ -98,10 +98,10 @@ function WorkPage() {
           {w.genre && <Stamp tone="brass">{w.genre}</Stamp>}
           {w.grade && <Stamp>Grad {w.grade}</Stamp>}
           {w.durationSec ? <Stamp>{formatDuration(w.durationSec)} min</Stamp> : null}
-          {w.publisher && <Stamp>{w.publisher}</Stamp>}
+          {w.publisher && <Stamp wrap>{w.publisher}</Stamp>}
           {w.acquiredYear && <Stamp>Anskaffet {w.acquiredYear}</Stamp>}
           {w.archiveNumber && <Stamp tone="brass">Arkivnummer {w.archiveNumber}</Stamp>}
-          {w.physicalLocation && <Stamp tone="oxblood">{w.physicalLocation}</Stamp>}
+          {w.physicalLocation && <Stamp tone="oxblood" wrap>{w.physicalLocation}</Stamp>}
           <Stamp tone={partFileCount >= totalParts ? 'brass' : partFileCount > 0 ? 'neutral' : 'oxblood'}>
             {partFileCount}/{totalParts} stemmer
           </Stamp>
