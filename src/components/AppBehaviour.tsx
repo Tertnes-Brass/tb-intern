@@ -1,5 +1,6 @@
 import { useRouter } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
+import { appScrollTop } from '../lib/app-scroll'
 import { claimOfflineNotes } from '../lib/offline-notes'
 import { resyncPush } from '../lib/push-client'
 import { isIos, isStandalone } from '../lib/pwa'
@@ -82,7 +83,7 @@ export function PullToRefresh() {
     if (!enabled) return
 
     const onStart = (e: TouchEvent) => {
-      if (refreshing || window.scrollY > 0 || e.touches.length !== 1) return
+      if (refreshing || appScrollTop() > 0 || e.touches.length !== 1) return
       const target = e.target as HTMLElement
       // Ikke i dialoger, tekstfelt eller noe som ruller selv.
       if (document.querySelector('dialog[open]') || target.closest('textarea, input, select, [data-no-pull]')) return
@@ -92,7 +93,7 @@ export function PullToRefresh() {
       if (!start.current) return
       const dy = e.touches[0]!.clientY - start.current.y
       const dx = Math.abs(e.touches[0]!.clientX - start.current.x)
-      if (dy <= 0 || dx > dy || window.scrollY > 0) {
+      if (dy <= 0 || dx > dy || appScrollTop() > 0) {
         start.current = null
         pullRef.current = 0
         setPull(0)

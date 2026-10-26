@@ -1,4 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router'
+import { scrollAppToTop } from '../lib/app-scroll'
 import { badgeLabel, type ShellCounts } from '../lib/unread'
 import { Icon, type IconName } from './Icons'
 
@@ -45,7 +46,7 @@ export function TabBar({ counts }: { counts: ShellCounts }) {
                 onClick={() => {
                   // Trykk på fanen du allerede står på = tilbake til toppen, som i
                   // en vanlig app.
-                  if (pathname === tab.to) window.scrollTo({ top: 0, behavior: 'smooth' })
+                  if (pathname === tab.to) scrollAppToTop()
                 }}
                 className="tab-link relative flex flex-1 flex-col items-center justify-center gap-[3px] text-[0.64rem] font-medium tracking-[0.01em] text-ink-faint transition-colors [&[data-status=active]]:text-brass-strong"
               >

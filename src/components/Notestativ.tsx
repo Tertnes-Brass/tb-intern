@@ -160,14 +160,6 @@ export function Notestativ({
 
   return (
     <div className="fixed inset-0 flex flex-col text-[#ede4cf]" style={{ background: STAND_BG }}>
-      {/* Bak klokka: en tett stripe fra over toppen av skjermen og ned til
-          trygg sone, så feltet bak statuslinjen er stativets farge og ikke
-          papirfargen eller uskarpe noter (som `status-bar-fill` i styles.css). */}
-      <div
-        aria-hidden
-        className="fixed inset-x-0 top-[-100vh] z-30 h-[calc(100vh+env(safe-area-inset-top))]"
-        style={{ background: STAND_BG }}
-      />
       {/* Topplinje */}
       <header
         className={`stand-bar pt-safe absolute inset-x-0 top-0 z-20 bg-[#15120f]/88 backdrop-blur-md transition-[opacity,transform] duration-200 ${
@@ -650,7 +642,8 @@ function useWakeLock() {
 /**
  * Mørk statuslinje over det mørke stativet; temaets farge tilbake etterpå.
  * Sidens bakgrunn følger med, for det er den iOS viser bak klokka og når man
- * drar forbi kanten — ellers en lys stripe over notene i lyst tema.
+ * drar forbi kanten — ellers en lys stripe over notene i lyst tema. (Et fast
+ * element over toppen av skjermen ville ikke hjulpet: WebKit klipper det.)
  */
 function useStandStatusBar() {
   useEffect(() => {

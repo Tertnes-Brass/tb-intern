@@ -129,20 +129,20 @@ textarea,
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Statuslinjen i installert app på iOS 26: siden begynner UNDER klokka, og
-   sticky/fixed stopper der — men innholdet ruller videre opp bak klokka, der
-   iOS viser det uskarpt. Toppmenyen fortsetter derfor oppover med sin egen
-   bakgrunn, så feltet bak klokka alltid er tett. Ellers ligger den over toppen
-   av siden og synes ikke. */
-.status-bar-fill::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 100%;
-  height: 100vh;
-  background: inherit;
-  pointer-events: none;
+/* Installert app på iOS (`ios-app` settes av temainit-skriptet i __root.tsx):
+   siden begynner under klokka, men innholdet i et rullende dokument fortsetter
+   opp bak klokka, der iOS 26 viser det uskarpt — og verken sticky eller fixed
+   kan tegne over det, for WebKit klipper dem ved kanten av visningsområdet.
+   Derfor ruller ikke dokumentet her: skallet fyller skjermen og ruller selv,
+   og innholdet klippes under klokka. Sider uten skallet (innlogging,
+   notestativet) er uendret. Rullekode skal bruke src/lib/app-scroll.ts. */
+html.ios-app .app-shell {
+  position: fixed;
+  inset: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 
 ::selection {
