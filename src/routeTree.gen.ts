@@ -59,6 +59,7 @@ import { Route as NoterArkivWorkIdRouteImport } from './routes/noter/arkiv/$work
 import { Route as NoterArkivListeRouteImport } from './routes/noter/arkiv/liste'
 import { Route as NoterProsjekterIndexRouteImport } from './routes/noter/prosjekter/index'
 import { Route as NoterProsjekterProjectIdRouteImport } from './routes/noter/prosjekter/$projectId'
+import { Route as NoterOppsettSetupIdRouteImport } from './routes/noter_.oppsett.$setupId'
 import { Route as NoterStativProjectIdRouteImport } from './routes/noter_.stativ.$projectId'
 import { Route as StyreChatIndexRouteImport } from './routes/styre/chat/index'
 import { Route as StyreDokumenterIndexRouteImport } from './routes/styre/dokumenter/index'
@@ -323,6 +324,11 @@ const NoterProsjekterProjectIdRoute =
     path: '/prosjekter/$projectId',
     getParentRoute: () => NoterRouteRoute,
   } as any)
+const NoterOppsettSetupIdRoute = NoterOppsettSetupIdRouteImport.update({
+  id: '/noter_/oppsett/$setupId',
+  path: '/noter/oppsett/$setupId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NoterStativProjectIdRoute = NoterStativProjectIdRouteImport.update({
   id: '/noter_/stativ/$projectId',
   path: '/noter/stativ/$projectId',
@@ -418,6 +424,7 @@ export interface FileRoutesByFullPath {
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
   '/noter/arkiv/liste': typeof NoterArkivListeRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
+  '/noter/oppsett/$setupId': typeof NoterOppsettSetupIdRoute
   '/noter/stativ/$projectId': typeof NoterStativProjectIdRoute
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
@@ -476,6 +483,7 @@ export interface FileRoutesByTo {
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
   '/noter/arkiv/liste': typeof NoterArkivListeRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
+  '/noter/oppsett/$setupId': typeof NoterOppsettSetupIdRoute
   '/noter/stativ/$projectId': typeof NoterStativProjectIdRoute
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
@@ -538,6 +546,7 @@ export interface FileRoutesById {
   '/noter/arkiv/$workId': typeof NoterArkivWorkIdRoute
   '/noter/arkiv/liste': typeof NoterArkivListeRoute
   '/noter/prosjekter/$projectId': typeof NoterProsjekterProjectIdRoute
+  '/noter_/oppsett/$setupId': typeof NoterOppsettSetupIdRoute
   '/noter_/stativ/$projectId': typeof NoterStativProjectIdRoute
   '/styre/moter/$meetingId': typeof StyreMoterMeetingIdRoute
   '/styre/prosjekter/$boardProjectId': typeof StyreProsjekterBoardProjectIdRoute
@@ -601,6 +610,7 @@ export interface FileRouteTypes {
     | '/noter/arkiv/$workId'
     | '/noter/arkiv/liste'
     | '/noter/prosjekter/$projectId'
+    | '/noter/oppsett/$setupId'
     | '/noter/stativ/$projectId'
     | '/styre/moter/$meetingId'
     | '/styre/prosjekter/$boardProjectId'
@@ -659,6 +669,7 @@ export interface FileRouteTypes {
     | '/noter/arkiv/$workId'
     | '/noter/arkiv/liste'
     | '/noter/prosjekter/$projectId'
+    | '/noter/oppsett/$setupId'
     | '/noter/stativ/$projectId'
     | '/styre/moter/$meetingId'
     | '/styre/prosjekter/$boardProjectId'
@@ -720,6 +731,7 @@ export interface FileRouteTypes {
     | '/noter/arkiv/$workId'
     | '/noter/arkiv/liste'
     | '/noter/prosjekter/$projectId'
+    | '/noter_/oppsett/$setupId'
     | '/noter_/stativ/$projectId'
     | '/styre/moter/$meetingId'
     | '/styre/prosjekter/$boardProjectId'
@@ -775,6 +787,7 @@ export interface RootRouteChildren {
   ApiUploadPartRoute: typeof ApiUploadPartRoute
   ApiUploadStartRoute: typeof ApiUploadStartRoute
   BeskjederPostIdRedigerRoute: typeof BeskjederPostIdRedigerRoute
+  NoterOppsettSetupIdRoute: typeof NoterOppsettSetupIdRoute
   NoterStativProjectIdRoute: typeof NoterStativProjectIdRoute
   BeskjederPostIdIndexRoute: typeof BeskjederPostIdIndexRoute
   ApiMobileV1SplatRoute: typeof ApiMobileV1SplatRoute
@@ -1132,6 +1145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NoterProsjekterProjectIdRouteImport
       parentRoute: typeof NoterRouteRoute
     }
+    '/noter_/oppsett/$setupId': {
+      id: '/noter_/oppsett/$setupId'
+      path: '/noter/oppsett/$setupId'
+      fullPath: '/noter/oppsett/$setupId'
+      preLoaderRoute: typeof NoterOppsettSetupIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/noter_/stativ/$projectId': {
       id: '/noter_/stativ/$projectId'
       path: '/noter/stativ/$projectId'
@@ -1301,6 +1321,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiUploadPartRoute: ApiUploadPartRoute,
   ApiUploadStartRoute: ApiUploadStartRoute,
   BeskjederPostIdRedigerRoute: BeskjederPostIdRedigerRoute,
+  NoterOppsettSetupIdRoute: NoterOppsettSetupIdRoute,
   NoterStativProjectIdRoute: NoterStativProjectIdRoute,
   BeskjederPostIdIndexRoute: BeskjederPostIdIndexRoute,
   ApiMobileV1SplatRoute: ApiMobileV1SplatRoute,

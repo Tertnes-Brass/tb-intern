@@ -238,6 +238,34 @@ export const projectWorks = sqliteTable(
   (t) => [primaryKey({ columns: [t.projectId, t.workId] })],
 )
 
+// ---------- Sceneoppsett ----------
+
+// Tegninger av hvordan korpset og slagverket står på scenen (Excalidraw).
+// Et prosjekt kan ha flere (korps, slagverk, konkurranse), og de forsvinner med
+// prosjektet. `scene` er JSON — `{ elements, appState }` — validert av
+// `parseStageScene` i `src/lib/stage-scene.ts`; bilder lagres ikke.
+// `revision` er optimistisk låsing: en lagring må oppgi revisjonen den bygger
+// på, så to som redigerer samtidig aldri overskriver hverandre i stillhet.
+export const stageSetups = sqliteTable(
+  'stage_setups',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    // Merknader til arrangøren — kommer med i PDF-en.
+    notes: text('notes'),
+    scene: text('scene').notNull(),
+    revision: integer('revision').notNull().default(1),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('stage_setups_project_idx').on(t.projectId, t.createdAt)],
+)
+
 // ---------- Vikardeling ----------
 
 export const shareLinks = sqliteTable(

@@ -178,6 +178,13 @@
       "breakpoints": true
     },
     {
+      "idx": 25,
+      "version": "6",
+      "when": 1793612104193,
+      "tag": "0025_sceneoppsett",
+      "breakpoints": true
+    },
+    {
       "idx": 26,
       "version": "6",
       "when": 1793629134374,

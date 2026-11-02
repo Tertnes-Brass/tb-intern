@@ -46,6 +46,9 @@ export const SEED_ROLE_PERMISSIONS: Array<{ roleId: string; permission: string }
   { roleId: 'archivist', permission: 'archive.viewAll' },
   { roleId: 'archivist', permission: 'downloads.view' },
   { roleId: 'archivist', permission: 'posts.archive' },
+  // Sceneoppsettet følger `projects.manage` fra start (migrasjon 0025), men er
+  // en egen rettighet så en slagverksansvarlig kan få den alene.
+  { roleId: 'archivist', permission: 'stage.manage' },
   { roleId: 'conductor', permission: 'works.manage' },
   { roleId: 'conductor', permission: 'projects.manage' },
   { roleId: 'conductor', permission: 'shares.manage' },
@@ -58,6 +61,7 @@ export const SEED_ROLE_PERMISSIONS: Array<{ roleId: string; permission: string }
   // prosjekt-, medlems- eller admintilgang — se rollematrisen i /innstillinger.
   { roleId: 'conductor', permission: 'calendar.manage' },
   { roleId: 'conductor', permission: 'attendance.manage' },
+  { roleId: 'conductor', permission: 'stage.manage' },
   // Styremedlem har alt en musiker har, pluss styreområdet (/styre) og retten
   // til å publisere beskjeder «Fra styret» på veggen (/beskjeder).
   { roleId: 'board', permission: 'scores.view' },

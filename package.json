@@ -22,6 +22,7 @@
 	},
 	"dependencies": {
 		"@cloudflare/vite-plugin": "^1.26.0",
+		"@excalidraw/excalidraw": "0.18.1",
 		"@fontsource-variable/fraunces": "^5.2.9",
 		"@fontsource-variable/schibsted-grotesk": "^5.2.8",
 		"@fontsource/spline-sans-mono": "^5.2.8",
@@ -58,6 +59,12 @@
 		"onlyBuiltDependencies": [
 			"esbuild",
 			"lightningcss"
-		]
+		],
+		"overrides": {
+			"@excalidraw/excalidraw>nanoid": "^3.3.18",
+			"@excalidraw/mermaid-to-excalidraw>nanoid": "^5.1.16",
+			"lodash-es@<4.18.0": "^4.18.1",
+			"mermaid>katex": "^0.18.2"
+		}
 	}
 }

@@ -5,6 +5,7 @@ import { ProjectFormModal } from '../../../components/ProjectForm'
 import { ProjectOrderEditor } from '../../../components/ProjectOrderEditor'
 import { ProjectWorkEdition } from '../../../components/ProjectWorkEdition'
 import { RepertoireList } from '../../../components/Repertoire'
+import { StageSetupsSection } from '../../../components/stage/StageSetups'
 import { toast, toastError } from '../../../components/toast'
 import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
 import { ZipDownloadButton } from '../../../components/ZipDownload'
@@ -217,6 +218,8 @@ function ProjectPage() {
           </div>
         </section>
       )}
+
+      <StageSetupsSection projectId={p.id} setups={data.stageSetups} canEdit={data.canEditStage} />
 
       {data.canShare && <SharesSection projectId={p.id} myParts={data.myParts} repertoire={data.repertoire} />}
 
