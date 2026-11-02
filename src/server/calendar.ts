@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
+import { and, eq } from 'drizzle-orm'
 import { db } from '../db'
-import { eventSetlist } from '../db/schema'
+import { eventAttendance, eventSetlist } from '../db/schema'
 import type { CalendarEvent } from '../lib/ical'
 import { requireMe } from './access'
 import { type CalendarPayload, loadCalendar } from './calendar-feed'
@@ -15,14 +16,27 @@ export type { CalendarPayload }
 
 /** Hele kalendervinduet: fra i går og fire måneder frem (`lib/calendar-window.ts`). */
 export const getCalendar = createServerFn().handler(
-  async (): Promise<CalendarPayload & { keysWithPlan: string[] }> => {
-    await requireMe()
-    const payload = await loadCalendar(Date.now())
-    // Nøklene med minst ett punkt i øvingsplanen — bare til den diskrete
-    // markøren i lista. Ingen innhold, ingen navn: markøren sier at det finnes
-    // en plan, og planen selv er uansett åpen for alle innloggede.
-    const rows = await db().selectDistinct({ occurrenceKey: eventSetlist.occurrenceKey }).from(eventSetlist)
-    return { ...payload, keysWithPlan: rows.map((r) => r.occurrenceKey) }
+  async (): Promise<CalendarPayload & { keysWithPlan: string[]; myAbsentKeys: string[] }> => {
+    const me = await requireMe()
+    const d = db()
+    const [payload, rows, absent] = await Promise.all([
+      loadCalendar(Date.now()),
+      // Nøklene med minst ett punkt i øvingsplanen — bare til den diskrete
+      // markøren i lista. Ingen innhold, ingen navn: markøren sier at det finnes
+      // en plan, og planen selv er uansett åpen for alle innloggede.
+      d.selectDistinct({ occurrenceKey: eventSetlist.occurrenceKey }).from(eventSetlist),
+      // Mitt eget fravær. Siden alle regnes som kommer, er det dette lista må
+      // vise: «har jeg allerede meldt fra for torsdag?». Aldri andres.
+      d
+        .select({ occurrenceKey: eventAttendance.occurrenceKey })
+        .from(eventAttendance)
+        .where(and(eq(eventAttendance.userId, me.id), eq(eventAttendance.status, 'not_attending'))),
+    ])
+    return {
+      ...payload,
+      keysWithPlan: rows.map((r) => r.occurrenceKey),
+      myAbsentKeys: absent.map((r) => r.occurrenceKey),
+    }
   },
 )
 

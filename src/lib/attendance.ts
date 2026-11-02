@@ -11,6 +11,13 @@
  * gale. Siste skriving vinner; `source` (`self` | `admin`) og `registered_by`
  * er sporbarheten — man ser hvem som satte statusen, ikke bare hva den er.
  *
+ * **Fravær er unntaket (2. november 2026).** Alle aktive medlemmer regnes som
+ * kommer; man trykker bare når man IKKE kan («Kan ikke komme»), og angrer ved å
+ * fjerne raden igjen. Ingen rad = kommer. `attending` og `unsure` er fortsatt
+ * gyldige verdier — mobil-API v1 og installerte apper sender dem, og eldre rader
+ * har dem — men nettsiden lager dem ikke lenger: `attending` er det samme som
+ * ingen rad, og `unsure` vises som «Usikker» der den finnes.
+ *
  * **Ingen fraværsgrunn.** Feltet som finnes er en kort, valgfri kommentar, og
  * den følger samme innsyn som navnelisten (#82: «unngå å samle inn
  * fråværsgrunn eller andre sensitive opplysningar»).
@@ -34,8 +41,47 @@ export const ATTENDANCE_COMMENT_MAX = 200
 
 export const ATTENDANCE_LABELS: Record<AttendanceStatus, string> = {
   attending: 'Kommer',
-  not_attending: 'Kommer ikke',
+  not_attending: 'Kan ikke',
   unsure: 'Usikker',
+}
+
+/**
+ * Statusen slik den skal leses: `null` (ingen rad) og `attending` er det samme
+ * — medlemmet regnes som kommer. Bruk denne i stedet for å sammenligne med
+ * `'attending'`, så en gammel rad og en manglende rad aldri vises ulikt.
+ */
+export function effectiveStatus(status: AttendanceStatus | null | undefined): AttendanceStatus {
+  return status === 'not_attending' || status === 'unsure' ? status : 'attending'
+}
+
+/** Har medlemmet meldt noe annet enn «kommer»? Det er dette fraværsoversikten lister. */
+export function hasReportedAbsence(status: AttendanceStatus | null | undefined): boolean {
+  return effectiveStatus(status) !== 'attending'
+}
+
+/** Hurtigvalg som fyller ut kommentaren. Ikke et felt i databasen — bare tekst. */
+export const ABSENCE_REASONS = ['Jobb', 'Syk', 'Reise', 'Annet'] as const
+export type AbsenceReason = (typeof ABSENCE_REASONS)[number]
+
+const REASON_SEPARATOR = ' – '
+
+/** «Jobb – rekker kanskje siste halvtime». Tomt er `null`. */
+export function composeAbsenceComment(reason: AbsenceReason | null, text: string): string | null {
+  return [reason, text.trim()].filter(Boolean).join(REASON_SEPARATOR) || null
+}
+
+/**
+ * Det motsatte av `composeAbsenceComment`, så arket kan åpnes igjen med grunnen
+ * valgt og bare fritekstdelen i feltet — ellers ville «Jobb» blitt lagt til to
+ * ganger når man endrer en kommentar.
+ */
+export function splitAbsenceComment(comment: string | null | undefined): { reason: AbsenceReason | null; text: string } {
+  const value = comment ?? ''
+  for (const reason of ABSENCE_REASONS) {
+    if (value === reason) return { reason, text: '' }
+    if (value.startsWith(reason + REASON_SEPARATOR)) return { reason, text: value.slice(reason.length + REASON_SEPARATOR.length) }
+  }
+  return { reason: null, text: value }
 }
 
 /** Utsnittet av `Me` reglene faktisk bruker. */
@@ -114,38 +160,37 @@ export function attendanceSourceFor(viewer: AttendanceViewer, targetUserId: stri
 }
 
 export type AttendanceCounts = {
+  /** Aktive medlemmer som regnes som kommer — uten rad, eller med `attending`. */
   attending: number
   notAttending: number
   unsure: number
-  /** Aktive medlemmer uten svar. */
-  noReply: number
   /** Antall aktive medlemmer totalt. */
   total: number
 }
 
 /**
- * Tallene alle får se — også den som ikke får se navnelisten. «18 kommer · 3
- * kommer ikke» er ikke personopplysninger, det er om øvelsen kan gjennomføres.
+ * Tallene alle får se — også den som ikke får se navnelisten. «24 kommer · 3
+ * kan ikke» er ikke personopplysninger, det er om øvelsen kan gjennomføres.
+ * Siden fravær er unntaket, er «kommer» alle som ikke har meldt noe annet.
  */
 export function countAttendance(rows: Array<{ status: AttendanceStatus | null }>): AttendanceCounts {
-  const counts: AttendanceCounts = { attending: 0, notAttending: 0, unsure: 0, noReply: 0, total: rows.length }
+  const counts: AttendanceCounts = { attending: 0, notAttending: 0, unsure: 0, total: rows.length }
   for (const row of rows) {
-    if (row.status === 'attending') counts.attending++
-    else if (row.status === 'not_attending') counts.notAttending++
-    else if (row.status === 'unsure') counts.unsure++
-    else counts.noReply++
+    const status = effectiveStatus(row.status)
+    if (status === 'not_attending') counts.notAttending++
+    else if (status === 'unsure') counts.unsure++
+    else counts.attending++
   }
   return counts
 }
 
-/** «18 kommer · 3 kommer ikke · 2 usikre · 4 uten svar». Tomme ledd utelates. */
+/** «24 kommer · 3 kan ikke · 1 usikker». Tomme ledd utelates (bortsett fra «kommer»). */
 export function attendanceSummary(counts: AttendanceCounts): string {
-  const parts: string[] = []
-  if (counts.attending > 0) parts.push(`${counts.attending} kommer`)
-  if (counts.notAttending > 0) parts.push(`${counts.notAttending} kommer ikke`)
+  if (counts.total === 0) return 'Ingen aktive medlemmer'
+  const parts: string[] = [`${counts.attending} kommer`]
+  if (counts.notAttending > 0) parts.push(`${counts.notAttending} kan ikke`)
   if (counts.unsure > 0) parts.push(`${counts.unsure} ${counts.unsure === 1 ? 'usikker' : 'usikre'}`)
-  if (counts.noReply > 0) parts.push(`${counts.noReply} uten svar`)
-  return parts.length > 0 ? parts.join(' · ') : 'Ingen svar ennå'
+  return parts.join(' · ')
 }
 
 /** Medlemmer uten stemme havner her — de skal ikke forsvinne ut av oversikten. */

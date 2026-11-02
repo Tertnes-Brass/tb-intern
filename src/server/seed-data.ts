@@ -9,7 +9,7 @@ export const DEMO_SHARE_TOKEN = 'demo-vikar-sommerkonsert'
 export type SeedMember = {
   name: string
   email: string
-  roleId: 'admin' | 'archivist' | 'conductor' | 'board' | 'member'
+  roleId: 'admin' | 'archivist' | 'conductor' | 'board' | 'attendance' | 'member'
   partIds: string[]
 }
 
@@ -23,6 +23,7 @@ export const SEED_MEMBERS: SeedMember[] = [
   { name: 'Silje Tveit', email: 'silje@demo.tertnesbrass.no', roleId: 'member', partIds: ['percussion-1'] },
   { name: 'Ole Kristian Bø', email: 'ole@demo.tertnesbrass.no', roleId: 'archivist', partIds: ['bass-trombone'] },
   { name: 'Hilde Nordvik', email: 'hilde@demo.tertnesbrass.no', roleId: 'board', partIds: ['first-horn'] },
+  { name: 'Marte Solheim', email: 'marte@demo.tertnesbrass.no', roleId: 'attendance', partIds: ['second-baritone'] },
 ]
 
 // `isSystem` skrives eksplisitt: rollene her er plattformens egne og skal ikke
@@ -32,6 +33,7 @@ export const SEED_ROLES = [
   { id: 'archivist', name: 'Arkivar', isSystem: true },
   { id: 'conductor', name: 'Dirigent', isSystem: true },
   { id: 'board', name: 'Styremedlem', isSystem: true },
+  { id: 'attendance', name: 'Fraværsansvarlig', isSystem: true },
   { id: 'member', name: 'Musiker', isSystem: true },
 ] as const
 
@@ -62,6 +64,11 @@ export const SEED_ROLE_PERMISSIONS: Array<{ roleId: string; permission: string }
   { roleId: 'board', permission: 'board.manage' },
   { roleId: 'board', permission: 'posts.publish' },
   { roleId: 'board', permission: 'forum.moderate' },
+  // Fraværsansvarlig: alt en musiker har, pluss hele oppmøtelista og
+  // fraværsoversikten (/fravaer). Ingen prosjekt-, medlems- eller admintilgang.
+  // Prod får rollen fra migrasjon 0026_fravaersansvarlig.sql.
+  { roleId: 'attendance', permission: 'scores.view' },
+  { roleId: 'attendance', permission: 'attendance.manage' },
   { roleId: 'member', permission: 'scores.view' },
 ]
 
@@ -602,14 +609,19 @@ export type SeedAttendance = {
   registeredByEmail: string | null
 }
 
+// Fravær er unntaket: alle uten rad regnes som kommer. `attending` finnes bare
+// fra eldre klienter, og demodataene viser derfor bare det som faktisk føres.
 export const SEED_ATTENDANCE: SeedAttendance[] = [
-  { email: 'ingrid@demo.tertnesbrass.no', status: 'attending', comment: null, registeredByEmail: null },
-  { email: 'astrid@demo.tertnesbrass.no', status: 'unsure', comment: 'Kommer senest 19:30', registeredByEmail: null },
-  { email: 'karim@demo.tertnesbrass.no', status: 'attending', comment: null, registeredByEmail: null },
+  {
+    email: 'astrid@demo.tertnesbrass.no',
+    status: 'not_attending',
+    comment: 'Jobb – rekker kanskje siste halvtime',
+    registeredByEmail: null,
+  },
   {
     email: 'jonas@demo.tertnesbrass.no',
     status: 'not_attending',
     comment: 'Meldt fra på telefon',
-    registeredByEmail: 'dirigent@demo.tertnesbrass.no',
+    registeredByEmail: 'marte@demo.tertnesbrass.no',
   },
 ]

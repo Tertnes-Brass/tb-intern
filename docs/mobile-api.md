@@ -39,7 +39,7 @@ expired and revoked sessions receive a JSON 401 on the native API.
 | Method | Path below `/api/mobile/v1/` | Behavior |
 | --- | --- | --- |
 | GET | `snapshot` | v1 member profile, calendar availability, upcoming events and own attendance, published visible posts, next project and permitted part/score PDF metadata |
-| PUT | `events/{occurrenceKey}/attendance` | `{status: "attending" | "not_attending" | "unsure" | null}`; existing event identity, own member only |
+| PUT | `events/{occurrenceKey}/attendance` | `{status: "attending" | "not_attending" | "unsure" | null}`; existing event identity, own member only. Since 2 November 2026 absence is the exception: `null` and `"attending"` both mean the member is expected (the web only offers «Kan ikke komme» and clearing it). All four values stay valid in v1 and are stored as sent |
 | POST | `posts` | `{body}` creates an ordinary plain-text draft; returns `{id}` |
 | POST | `posts/{id}/publish` | `{}` publishes the caller's draft using existing checks; no bulk announcement email |
 | GET | `posts/{id}` | readable post and comments, with resolved mentions, plain text fallback and optional native Markdown source; also records a read receipt (`post_reads`) for the unread count on the web — the response is unchanged |

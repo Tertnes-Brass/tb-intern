@@ -36,10 +36,10 @@ describe('mentionPushMessage', () => {
 })
 
 describe('rsvpReminderMessage', () => {
-  it('spør og lenker til forekomsten', () => {
+  it('minner om å melde fravær — alle regnes som kommer — og lenker til forekomsten', () => {
     expect(rsvpReminderMessage({ occurrenceKey: 'abc.20261028T170000Z', title: 'Øvelse', when: 'i morgen kl. 19:00' })).toEqual({
-      title: 'Kommer du i morgen kl. 19:00?',
-      body: 'Øvelse — du har ikke svart ennå.',
+      title: 'Øvelse i morgen kl. 19:00',
+      body: 'Kan du ikke komme? Trykk her og meld fravær.',
       url: '/kalender/abc.20261028T170000Z',
       tag: 'rsvp:abc.20261028T170000Z',
     })
@@ -55,9 +55,9 @@ describe('rsvpReminderRecipients', () => {
     { userId: 'd', isActive: true, pref: 'all' as const },
   ]
 
-  it('gir bare aktive som ikke har svart og ikke har slått det av, én gang hver', () => {
-    expect(rsvpReminderRecipients({ subscribers, answered: new Set() })).toEqual(['a', 'd'])
-    expect(rsvpReminderRecipients({ subscribers, answered: new Set(['a']) })).toEqual(['d'])
+  it('gir bare aktive som ikke har meldt fravær og ikke har slått det av, én gang hver', () => {
+    expect(rsvpReminderRecipients({ subscribers, settled: new Set() })).toEqual(['a', 'd'])
+    expect(rsvpReminderRecipients({ subscribers, settled: new Set(['a']) })).toEqual(['d'])
   })
 })
 

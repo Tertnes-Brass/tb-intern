@@ -230,7 +230,7 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
 
 /**
  * Mitt svar og de første punktene i øvingsplanen for hero-hendelsen. To små
- * oppslag på nøkkelen; ingen rad betyr «ikke svart» og «ingen plan ennå».
+ * oppslag på nøkkelen; ingen rad betyr «kommer» (fravær er unntaket) og «ingen plan ennå».
  * Selve skrivingen går gjennom `setMyAttendance` som på detaljsiden.
  */
 async function heroEventDetails(me: Me, occurrenceKey: string): Promise<NonNullable<HubPayload['heroEvent']>> {

@@ -1,4 +1,5 @@
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
+import { ATTENDANCE_PERMISSION } from '../../lib/attendance'
 import { EmptyState, Kicker, SectionHeading, Stamp } from '../../components/ui'
 import { CALENDAR_WINDOW_LABEL } from '../../lib/calendar-window'
 import { formatDate, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../../lib/format'
@@ -80,7 +81,19 @@ function PlanMark() {
   )
 }
 
-function EventRow({ event, hasPlan }: { event: CalendarEvent; hasPlan: boolean }) {
+/** Mitt eget fravær — det eneste oppmøtet lista viser, siden alle andre regnes som kommer. */
+function AbsentMark() {
+  return (
+    <span
+      title="Du har meldt fravær"
+      className="inline-flex shrink-0 items-center font-mono text-[0.6rem] uppercase tracking-[0.14em] text-oxblood"
+    >
+      Fravær
+    </span>
+  )
+}
+
+function EventRow({ event, hasPlan, absent }: { event: CalendarEvent; hasPlan: boolean; absent: boolean }) {
   return (
     <li className="hairline-row">
       <Link
@@ -99,6 +112,7 @@ function EventRow({ event, hasPlan }: { event: CalendarEvent; hasPlan: boolean }
               {event.location ? ` · ${event.location}` : ''}
             </span>
             {hasPlan && <PlanMark />}
+            {absent && <AbsentMark />}
           </p>
         </div>
         <span className="hidden shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-brass sm:inline">
@@ -115,6 +129,9 @@ function CalendarPage() {
   // Hero-hendelsen gjentas ikke i lista under.
   const rest = next ? data.events.filter((e) => e.id !== next.id) : data.events
   const withPlan = new Set(data.keysWithPlan)
+  const absentKeys = new Set(data.myAbsentKeys)
+  const { me } = Route.useRouteContext()
+  const canManageAttendance = !!me && (me.permissions.includes('*') || me.permissions.includes(ATTENDANCE_PERMISSION))
 
   return (
     <div className="space-y-14">
@@ -154,6 +171,7 @@ function CalendarPage() {
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 {next.location && <Stamp tone="brass" wrap>{next.location}</Stamp>}
                 {next.allDay && <Stamp>Hele dagen</Stamp>}
+                {absentKeys.has(next.occurrenceKey) && <Stamp tone="oxblood">Du har meldt fravær</Stamp>}
               </div>
             </div>
 
@@ -181,14 +199,30 @@ function CalendarPage() {
 
       {data.configured && !data.error && rest.length > 0 && (
         <section className="rise" style={{ animationDelay: '120ms' }}>
-          <SectionHeading kicker={CALENDAR_WINDOW_LABEL} title="Kommende" className="mb-6" />
+          <SectionHeading
+            kicker={CALENDAR_WINDOW_LABEL}
+            title="Kommende"
+            className="mb-6"
+            action={
+              canManageAttendance ? (
+                <Link to="/fravaer" className="link-brass text-sm">
+                  Fraværsoversikt →
+                </Link>
+              ) : undefined
+            }
+          />
           <div className="space-y-8">
             {groupByMonth(rest).map((group) => (
               <div key={group.key}>
                 <h3 className="kicker mb-1">{group.label}</h3>
                 <ul>
                   {group.events.map((event) => (
-                    <EventRow key={event.id} event={event} hasPlan={withPlan.has(event.occurrenceKey)} />
+                    <EventRow
+                      key={event.id}
+                      event={event}
+                      hasPlan={withPlan.has(event.occurrenceKey)}
+                      absent={absentKeys.has(event.occurrenceKey)}
+                    />
                   ))}
                 </ul>
               </div>

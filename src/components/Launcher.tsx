@@ -17,6 +17,7 @@ const AREA_TILES: Partial<Record<HubAreaTo, { icon: IconName; hint: string }>> =
   '/medlemmer': { icon: 'people', hint: 'Hvem spiller hva' },
   '/gruppeledere': { icon: 'star', hint: 'Oversikt og chat' },
   '/styre': { icon: 'board', hint: 'Oppgaver og møter' },
+  '/fravaer': { icon: 'absence', hint: 'Hvem kan ikke komme' },
   '/innstillinger/nedlastinger': { icon: 'search', hint: 'Hvem har åpnet hva' },
   '/innstillinger': { icon: 'sliders', hint: 'Besetning og roller' },
 }

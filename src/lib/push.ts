@@ -66,6 +66,11 @@ export function mentionPushMessage(input: {
   }
 }
 
+/**
+ * Dagen før: «Øvelse i morgen kl. 19:00 — Kan du ikke komme? Meld fravær.»
+ * Alle regnes som kommer, så varselet spør ikke om svar — det minner om at
+ * fravær må meldes, og trykket går rett til hendelsen der knappen står.
+ */
 export function rsvpReminderMessage(event: {
   occurrenceKey: string
   title: string
@@ -73,8 +78,8 @@ export function rsvpReminderMessage(event: {
   when: string
 }): PushMessage {
   return {
-    title: `Kommer du ${event.when}?`,
-    body: `${event.title} — du har ikke svart ennå.`,
+    title: `${event.title} ${event.when}`,
+    body: 'Kan du ikke komme? Trykk her og meld fravær.',
     url: `/kalender/${event.occurrenceKey}`,
     tag: `rsvp:${event.occurrenceKey}`,
   }
@@ -84,17 +89,18 @@ export const RSVP_REMINDER_CHOICES = ['all', 'off'] as const
 export type RsvpReminderChoice = (typeof RSVP_REMINDER_CHOICES)[number]
 
 /**
- * Hvem som får påminnelsen om oppmøte for én hendelse: aktive medlemmer med
- * minst én enhet som tar imot varsler, som ikke har svart, og som ikke har
- * slått påminnelsen av (ingen rad = på).
+ * Hvem som får påminnelsen for én hendelse: aktive medlemmer med minst én enhet
+ * som tar imot varsler, som ikke har slått påminnelsen av (ingen rad = på), og
+ * som ikke allerede har avgjort saken — `settled` er dem som har meldt fravær
+ * eller (fra eldre klienter) svart «kommer». En «usikker» får påminnelsen.
  */
 export function rsvpReminderRecipients(input: {
   subscribers: Array<{ userId: string; isActive: boolean; pref: RsvpReminderChoice | null }>
-  answered: ReadonlySet<string>
+  settled: ReadonlySet<string>
 }): string[] {
   const out = new Set<string>()
   for (const s of input.subscribers) {
-    if (!s.isActive || s.pref === 'off' || input.answered.has(s.userId)) continue
+    if (!s.isActive || s.pref === 'off' || input.settled.has(s.userId)) continue
     out.add(s.userId)
   }
   return [...out]
