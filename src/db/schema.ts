@@ -573,7 +573,13 @@ export const posts = sqliteTable(
   (t) => [index('posts_published_idx').on(t.publishedAt)],
 )
 
-// Kommentartråd under et innlegg. Kronologisk, ingen nøsting.
+// Kommentartråd under et innlegg. To nivåer (svar på svar, se `src/lib/threads.ts`):
+// `parent_id` er toppkommentaren svaret står under, `reply_to_id` den konkrete
+// kommentaren det svarer på (lik `parent_id`, eller et annet svar i samme tråd).
+// En kommentar som noen har svart på, blir et «slettet»-merke (`deleted_at`,
+// tom tekst, ingen forfatter) i stedet for å forsvinne — ellers ville svarene
+// mistet sammenhengen. Fremmednøklene er SET NULL som siste skanse; slettingen
+// i `deleteComment` lar dem aldri slå inn.
 export const postComments = sqliteTable(
   'post_comments',
   {
@@ -583,10 +589,17 @@ export const postComments = sqliteTable(
       .references(() => posts.id, { onDelete: 'cascade' }),
     authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
     body: text('body').notNull(),
+    parentId: text('parent_id').references((): AnySQLiteColumn => postComments.id, { onDelete: 'set null' }),
+    replyToId: text('reply_to_id').references((): AnySQLiteColumn => postComments.id, { onDelete: 'set null' }),
+    deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },
-  (t) => [index('post_comments_post_idx').on(t.postId, t.createdAt)],
+  (t) => [
+    index('post_comments_post_idx').on(t.postId, t.createdAt),
+    index('post_comments_parent_idx').on(t.parentId),
+    index('post_comments_reply_to_idx').on(t.replyToId),
+  ],
 )
 
 // Medlemsomtaler i en kommentar (#83). Teksten inneholder markøren
@@ -891,14 +904,24 @@ export const forumTopics = sqliteTable('forum_topics', {
   activityAt: integer('activity_at').notNull(),
 }, (t) => [index('forum_topics_activity_idx').on(t.activityAt)])
 
+// Svar på svar (se `src/lib/threads.ts`): `parent_id` er svaret på tråden som
+// dette står under (null = svar rett på tråden), `reply_to_id` det konkrete
+// svaret det svarer på. Forumsvar kan ikke slettes; SET NULL er siste skanse
+// hvis det noen gang kommer, slik at ingen andres tekst forsvinner med.
 export const forumReplies = sqliteTable('forum_replies', {
   id: text('id').primaryKey(),
   topicId: text('topic_id').notNull().references(() => forumTopics.id, { onDelete: 'cascade' }),
   authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
   body: text('body').notNull(),
+  parentId: text('parent_id').references((): AnySQLiteColumn => forumReplies.id, { onDelete: 'set null' }),
+  replyToId: text('reply_to_id').references((): AnySQLiteColumn => forumReplies.id, { onDelete: 'set null' }),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
-}, (t) => [index('forum_replies_topic_idx').on(t.topicId, t.createdAt)])
+}, (t) => [
+  index('forum_replies_topic_idx').on(t.topicId, t.createdAt),
+  index('forum_replies_parent_idx').on(t.parentId, t.createdAt),
+  index('forum_replies_reply_to_idx').on(t.replyToId),
+])
 
 // Exact reply receipts: opening one page never clears unread replies on another.
 export const forumReplyReads = sqliteTable('forum_reply_reads', {

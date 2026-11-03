@@ -117,7 +117,13 @@ export async function handleMobileAPI(request: Request, path: string): Promise<R
         await markPostRead({ data: { id } }).catch((err) => console.error('[mobile] markPostRead:', err))
         return mobileJSON({
           post: { ...mobilePost(result.post), body: mentionPlainText(postPlainText(result.post.body, result.post.format), result.post.mentions), ...(result.post.format === 'markdown' ? { markdown: mentionPlainText(result.post.body, result.post.mentions) } : {}) },
-          comments: result.comments.map((comment) => ({ id: comment.id, author: comment.author.name, body: mentionPlainText(comment.body, comment.mentions), date: comment.createdAt })),
+          // Flat og kronologisk, som før svar på svar fantes (v1). `parentId`/`replyToId` er
+          // tillegg; et «slettet»-merke er ingen kommentar og utelates, så `parentId` kan
+          // peke på en id som ikke står i lista.
+          comments: result.comments.filter((comment) => !comment.deleted).map((comment) => ({
+            id: comment.id, author: comment.author.name, body: mentionPlainText(comment.body, comment.mentions), date: comment.createdAt,
+            parentId: comment.parentId, replyToId: comment.replyToId,
+          })),
         })
       }
       if (segments.length === 3 && request.method === 'POST') {
@@ -131,9 +137,9 @@ export async function handleMobileAPI(request: Request, path: string): Promise<R
           return mobileJSON({ ok: true })
         }
         if (segments[2] === 'comments') {
-          const data = await mobileBody(request, z.object({ body: z.string().trim().min(1).max(4000) }).strict())
-          await addComment({ data: { postId: id, body: data.body } })
-          return mobileJSON({ ok: true }, 201)
+          const data = await mobileBody(request, z.object({ body: z.string().trim().min(1).max(4000), replyToId: z.string().min(1).max(100).nullish() }).strict())
+          const created = await addComment({ data: { postId: id, body: data.body, replyToId: data.replyToId } })
+          return mobileJSON({ ok: true, id: created.id }, 201)
         }
       }
     }

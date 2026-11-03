@@ -67,10 +67,15 @@ await json(`posts/${draft.id}/publish`, member, 'POST', {})
 assert.equal((await json('snapshot', member)).posts.filter((post) => post.id === draft.id).length, 1)
 assert.deepEqual(await json(`posts/${draft.id}/like`, member, 'POST', {}), { mine: true, count: 1 })
 assert.deepEqual(await json(`posts/${draft.id}/like`, member, 'POST', {}), { mine: false, count: 0 })
-await json(`posts/${draft.id}/comments`, member, 'POST', { body: 'Local comment test' })
+const comment = await json(`posts/${draft.id}/comments`, member, 'POST', { body: 'Local comment test' })
+const reply = await json(`posts/${draft.id}/comments`, member, 'POST', { body: 'Local reply test', replyToId: comment.id })
 const detail = await json(`posts/${draft.id}`, member)
 assert.equal(detail.post.body, 'Local native API integration test')
-assert.equal(detail.comments.at(-1).body, 'Local comment test')
+assert.deepEqual(detail.comments.slice(-2).map((c) => [c.body, c.parentId, c.replyToId]), [
+  ['Local comment test', null, null],
+  ['Local reply test', comment.id, comment.id],
+])
+assert.equal(reply.ok, true)
 assert.equal((await request('/api/auth/sign-out', member, 'POST', {})).status, 200)
 assert.equal((await request(snapshotPath, member)).status, 401, 'logout revokes bearer session')
-console.log('PASS: signed sessions, invalid/revoked tokens, cookie/CSRF boundary, member/board visibility, PDF permissions, attendance, draft/publish, reactions and comments.')
+console.log('PASS: signed sessions, invalid/revoked tokens, cookie/CSRF boundary, member/board visibility, PDF permissions, attendance, draft/publish, reactions, comments and replies.')

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deviceLabel, mentionPushMessage, postPushMessage, rsvpReminderMessage, rsvpReminderRecipients } from './push'
+import { commentReplyPushMessage, deviceLabel, mentionPushMessage, postPushMessage, rsvpReminderMessage, rsvpReminderRecipients } from './push'
 
 describe('postPushMessage', () => {
   const base = { id: 'p1', heading: 'Øvelsen flyttes', important: false, official: true, authorName: 'Hilde' }
@@ -32,6 +32,24 @@ describe('mentionPushMessage', () => {
       'Ingrid nevnte deg i en kommentar',
     )
     expect(mentionPushMessage({ postId: 'p1', authorName: 'Ingrid', excerpt: 'Hei', where: 'post' }).title).toBe('Ingrid nevnte deg')
+  })
+
+  it('åpner rett på kommentaren omtalen står i', () => {
+    expect(mentionPushMessage({ postId: 'p1', commentId: 'c1', authorName: 'Ingrid', excerpt: 'Hei', where: 'comment' }).url).toBe(
+      '/beskjeder/p1#kommentar-c1',
+    )
+    expect(mentionPushMessage({ postId: 'p1', authorName: 'Ingrid', excerpt: 'Hei', where: 'post' }).url).toBe('/beskjeder/p1')
+  })
+})
+
+describe('commentReplyPushMessage', () => {
+  it('sier hvem som svarte og åpner rett på svaret', () => {
+    expect(commentReplyPushMessage({ postId: 'p1', commentId: 'c2', authorName: 'Jonas', excerpt: 'Takk @Silje' })).toEqual({
+      title: 'Jonas svarte på kommentaren din',
+      body: 'Takk @Silje',
+      url: '/beskjeder/p1#kommentar-c2',
+      tag: 'comment-reply:p1',
+    })
   })
 })
 

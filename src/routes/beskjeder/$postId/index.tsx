@@ -3,6 +3,9 @@ import { postAttachmentUrl } from '../../../lib/post-attachments'
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { CommentComposer } from '../../../components/CommentComposer'
+import { Icon } from '../../../components/Icons'
+import { useThreadMark } from '../../../components/useThreadMark'
+import { buildThreads, foldChildren, replyContext } from '../../../lib/threads'
 import { LikeButton } from '../../../components/PostCard'
 import { rememberPostRead } from '../../../lib/read-posts-client'
 import { toast, toastError } from '../../../components/toast'
@@ -101,22 +104,62 @@ function PostBody({ body, format, mentions }: { body: string; format: PostFormat
   )
 }
 
+type Comment = Awaited<ReturnType<typeof getPost>>['comments'][number]
+/** Svaret man er i ferd med å skrive: hva det svarer på, og roten det havner under. */
+type CommentReplyTarget = { id: string; rootId: string; name: string }
+
+const commentDomId = (id: string) => `kommentar-${id}`
+const commentRef = (c: Comment) => ({ id: c.id, parentId: c.parentId, replyToId: c.replyToId, createdAt: c.createdAt })
+
+/** Kommentaren `#kommentar-<id>` i adressen peker på (fra et varsel eller en e-post). */
+function hashCommentId(): string | null {
+  if (typeof window === 'undefined') return null
+  const match = /^#kommentar-([\w-]{1,100})$/.exec(window.location.hash)
+  return match ? match[1] : null
+}
+
+/**
+ * Kommentarene med svar på svar (`src/lib/threads.ts`): toppkommentarene
+ * kronologisk, svarene innrykket under dem. «Svar» åpner feltet nederst i
+ * tråden det havner i, ikke nederst på siden.
+ */
 function CommentThread({
   postId,
   comments,
   canComment,
 }: {
   postId: string
-  comments: Awaited<ReturnType<typeof getPost>>['comments']
+  comments: Comment[]
   canComment: boolean
 }) {
   const router = useRouter()
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [replying, setReplying] = useState<CommentReplyTarget | null>(null)
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
+  const [focusId, setFocusId] = useState<string | null>(null)
+  const { markedId, markElement } = useThreadMark()
+  const threads = useMemo(() => buildThreads(comments, commentRef), [comments])
+  const count = comments.filter((c) => !c.deleted).length
 
-  const submit = async (body: string) => {
+  // Lenket rett til en kommentar: rull dit én gang når siden vises.
+  useEffect(() => {
+    const id = hashCommentId()
+    if (!id) return
+    setFocusId(id)
+    markElement(commentDomId(id))
+  }, [markElement])
+
+  const expand = (rootId: string) => setExpanded((prev) => new Set(prev).add(rootId))
+
+  const submit = async (body: string, target: CommentReplyTarget | null) => {
     try {
-      await addComment({ data: { postId, body } })
+      const result = await addComment({ data: { postId, body, replyToId: target?.id ?? null } })
       await router.invalidate()
+      if (target) {
+        setReplying(null)
+        expand(target.rootId)
+        markElement(commentDomId(result.id))
+      }
     } catch (err) {
       toastError(err)
       // Videre til skrivefeltet, som beholder teksten så den ikke går tapt.
@@ -128,6 +171,7 @@ function CommentThread({
     setDeleting(id)
     try {
       await deleteComment({ data: { id } })
+      if (replying?.id === id) setReplying(null)
       await router.invalidate()
     } catch (err) {
       toastError(err)
@@ -136,46 +180,128 @@ function CommentThread({
     }
   }
 
+  const item = (comment: Comment, rootId: string, siblings: Comment[] | null) => {
+    const domId = commentDomId(comment.id)
+    const marked = markedId === domId
+    if (comment.deleted) {
+      return (
+        <li key={comment.id} id={domId} className={`thread-item flex gap-2.5 ${marked ? 'thread-marked' : ''}`}>
+          <span className="h-8 w-8 shrink-0 rounded-full border border-dashed border-line" aria-hidden />
+          <p className="flex-1 px-1 py-2 text-sm italic text-ink-faint">Kommentaren er slettet.</p>
+        </li>
+      )
+    }
+    const ctx = siblings ? replyContext(comment, siblings, commentRef) : null
+    return (
+      <li key={comment.id} id={domId} className={`thread-item flex gap-2.5 ${marked ? 'thread-marked' : ''}`}>
+        <Avatar name={comment.author.name} size="sm" />
+        <div className="sheet min-w-0 flex-1 px-3.5 py-2.5">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="min-w-0 truncate text-[0.82rem] font-semibold text-ink">{comment.author.name}</p>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="font-mono text-[0.58rem] uppercase tracking-[0.12em] text-ink-faint">
+                {formatDateTime(comment.createdAt)}
+              </span>
+              {comment.canDelete && (
+                <button
+                  type="button"
+                  onClick={() => void remove(comment.id)}
+                  disabled={deleting === comment.id}
+                  className="cursor-pointer text-[0.62rem] text-ink-faint transition-colors hover:text-danger disabled:opacity-50"
+                >
+                  Slett
+                </button>
+              )}
+            </div>
+          </div>
+          {ctx?.kind === 'sibling' && (
+            <button
+              type="button"
+              title="Vis kommentaren"
+              onClick={() => markElement(commentDomId(ctx.target.id))}
+              className="mt-0.5 inline-flex max-w-full cursor-pointer items-center gap-1 text-[0.72rem] text-ink-faint transition-colors hover:text-ink"
+            >
+              <Icon name="reply" size={12} />
+              <span className="truncate">
+                {ctx.target.deleted ? (
+                  'Svar på en slettet kommentar'
+                ) : (
+                  <>
+                    Svar til <strong className="font-semibold">{ctx.target.author.name}</strong>
+                  </>
+                )}
+              </span>
+            </button>
+          )}
+          {ctx?.kind === 'gone' && <p className="mt-0.5 text-[0.72rem] italic text-ink-faint">Svar på en slettet kommentar</p>}
+          {/* Omtaler blir chips og nettadresser blir lenker; brukerinnhold escapes av `renderCommentHtml`
+              (allowlist ved konstruksjon, som i markdown.ts). Linjeskift
+              beholdes av `whitespace-pre-wrap`, akkurat som før. */}
+          <p
+            className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink-soft"
+            dangerouslySetInnerHTML={{ __html: renderCommentHtml(comment.body, comment.mentions) }}
+          />
+          {canComment && (
+            <button
+              type="button"
+              aria-label={`Svar ${comment.author.name}`}
+              onClick={() => setReplying({ id: comment.id, rootId, name: comment.author.name })}
+              className="mt-1.5 inline-flex cursor-pointer items-center gap-1 text-[0.72rem] font-medium text-ink-faint transition-colors hover:text-ink"
+            >
+              <Icon name="reply" size={13} />
+              Svar
+            </button>
+          )}
+        </div>
+      </li>
+    )
+  }
+
   return (
     <section className="rise" style={{ animationDelay: '160ms' }}>
-      <h2 className="kicker mb-3">{commentCountLabel(comments.length)}</h2>
+      <h2 className="kicker mb-3">{commentCountLabel(count)}</h2>
 
       <ul className="space-y-3">
-        {comments.map((comment) => (
-          <li key={comment.id} className="flex gap-2.5">
-            <Avatar name={comment.author.name} size="sm" />
-            <div className="sheet min-w-0 flex-1 px-3.5 py-2.5">
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="text-[0.82rem] font-semibold text-ink">{comment.author.name}</p>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className="font-mono text-[0.58rem] uppercase tracking-[0.12em] text-ink-faint">
-                    {formatDateTime(comment.createdAt)}
-                  </span>
-                  {comment.canDelete && (
+        {threads.map((root) => {
+          const composerHere = canComment && replying?.rootId === root.id
+          const fold = expanded.has(root.id)
+            ? { hidden: 0, visible: root.children }
+            : foldChildren(root.children, {
+                mustShow: (c) => c.id === focusId || c.id === replying?.id || commentDomId(c.id) === markedId,
+              })
+          return (
+            <li key={root.id}>
+              <ul>{item(root, root.id, null)}</ul>
+              {(root.children.length > 0 || composerHere) && (
+                <div className="mt-2 ml-4 space-y-2 border-l-2 border-line pl-3 sm:ml-10 sm:pl-4">
+                  {fold.hidden > 0 && (
                     <button
                       type="button"
-                      onClick={() => void remove(comment.id)}
-                      disabled={deleting === comment.id}
-                      className="cursor-pointer text-[0.62rem] text-ink-faint transition-colors hover:text-danger disabled:opacity-50"
+                      onClick={() => expand(root.id)}
+                      className="cursor-pointer text-[0.78rem] font-medium text-brass-strong hover:underline"
                     >
-                      Slett
+                      Vis {fold.hidden === 1 ? 'ett tidligere svar' : `${fold.hidden} tidligere svar`}
                     </button>
                   )}
+                  <ul className="space-y-2">{fold.visible.map((child) => item(child, root.id, root.children))}</ul>
+                  {composerHere && replying && (
+                    <CommentComposer
+                      // Ny nøkkel per mål: et påbegynt svar til én person skal ikke stå igjen hos en annen.
+                      key={replying.id}
+                      postId={postId}
+                      replyTo={{ name: replying.name }}
+                      onCancel={() => setReplying(null)}
+                      onSubmit={(body) => submit(body, replying)}
+                    />
+                  )}
                 </div>
-              </div>
-              {/* Omtaler blir chips og nettadresser blir lenker; brukerinnhold escapes av `renderCommentHtml`
-                  (allowlist ved konstruksjon, som i markdown.ts). Linjeskift
-                  beholdes av `whitespace-pre-wrap`, akkurat som før. */}
-              <p
-                className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink-soft"
-                dangerouslySetInnerHTML={{ __html: renderCommentHtml(comment.body, comment.mentions) }}
-              />
-            </div>
-          </li>
-        ))}
+              )}
+            </li>
+          )
+        })}
       </ul>
 
-      {canComment && <CommentComposer postId={postId} onSubmit={submit} />}
+      {canComment && <CommentComposer postId={postId} onSubmit={(body) => submit(body, null)} />}
     </section>
   )
 }
@@ -306,7 +432,7 @@ function PostPage() {
         {!isDraft && (
           <div className="flex flex-wrap items-center gap-3 border-t border-line pt-4">
             <LikeButton postId={post.id} count={post.likeCount} mine={post.likedByMe} />
-            <span className="text-xs text-ink-faint">{commentCountLabel(data.comments.length)}</span>
+            <span className="text-xs text-ink-faint">{commentCountLabel(data.comments.filter((c) => !c.deleted).length)}</span>
           </div>
         )}
       </article>

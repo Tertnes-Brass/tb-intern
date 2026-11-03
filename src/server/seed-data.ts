@@ -528,6 +528,8 @@ export type SeedCommentData = {
    * faktisk finnes — id-en kan ikke stå her.
    */
   body: string
+  /** Svar på en annen demokommentar på samme innlegg (svar på svar). */
+  replyToId?: string
   /** Timer etter at innlegget ble publisert. */
   hoursAfter: number
 }
@@ -547,7 +549,16 @@ export const SEED_POST_COMMENTS: SeedCommentData[] = [
     postId: 'demo-post-notestativ',
     authorEmail: 'jonas@demo.tertnesbrass.no',
     body: '@[demo:silje@demo.tertnesbrass.no] perfekt, tusen takk! Legg det gjerne ved siden av slagverket.',
+    replyToId: 'demo-comment-1',
     hoursAfter: 3,
+  },
+  {
+    id: 'demo-comment-5',
+    postId: 'demo-post-notestativ',
+    authorEmail: 'silje@demo.tertnesbrass.no',
+    body: 'Gjør det! Står i den svarte kassa.',
+    replyToId: 'demo-comment-2',
+    hoursAfter: 4,
   },
   {
     id: 'demo-comment-3',

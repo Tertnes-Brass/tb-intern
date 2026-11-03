@@ -22,6 +22,7 @@ Intern kan nå legges på Hjem-skjermen og brukes som en app.
 **Varsler**
 - Under «Min profil» → «Varsler på denne enheten» kan du få push-varsler om nye beskjeder fra styret, når noen nevner deg, og «Kommer du i morgen?» dagen før en øvelse du ikke har svart på.
 - Forumet: du får varsel når noen svarer i en tråd du har startet eller svart i, og når noen nevner deg der. «Følg tråden» og «Slå av varsler» står øverst i hver tråd, og det samlede valget ligger under «Min profil».
+- **Svar på svar:** trykk «Svar» under et svar i forumet eller under en kommentar på en beskjed, så havner svaret ditt rett under — med «Svar til …» når du svarer på et svar. Den du svarer får et varsel, og varselet åpner rett på svaret.
 - På iPhone virker push-varsler bare når Intern er lagt på Hjem-skjermen (iOS 16.4 eller nyere).
 
 På PC er menyen den samme som før. Hjem er stokket om, stemmene åpnes i notestativet, og varsler kan slås på i nettleseren.

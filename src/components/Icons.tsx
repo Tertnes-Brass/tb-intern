@@ -126,6 +126,13 @@ const PATHS = {
       <path d="M10 8l-4 4 4 4M6 12h9" />
     </>
   ),
+  /** Pil som snur tilbake — «Svar» på et svar eller en kommentar. */
+  reply: (
+    <>
+      <path d="M9.5 6.5 4.5 11.5l5 5" />
+      <path d="M4.5 11.5h9a6 6 0 0 1 6 6v1" />
+    </>
+  ),
   refresh: (
     <>
       <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3" />

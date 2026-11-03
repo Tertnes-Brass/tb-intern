@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers'
 import { createServerFn } from '@tanstack/react-start'
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
 import {
@@ -42,6 +42,7 @@ import {
   type PostRecipient,
   canDeleteComment,
   canEditPost,
+  commentReplyRecipient,
   canReadPost,
   canNotifyPost,
   excerpt,
@@ -52,7 +53,8 @@ import {
 import { type Me, hasPermission, requireMe } from './access'
 import { canAttachImages } from './post-images'
 import { mentionEmail, postEmail, postMentionEmail, sendEmail } from './email'
-import { PUSH_TTL, mentionPushMessage, postPushMessage } from '../lib/push'
+import { PUSH_TTL, commentReplyPushMessage, commentUrl, mentionPushMessage, postPushMessage } from '../lib/push'
+import { replyPlacement } from '../lib/threads'
 import { sendPushToUsers, unreadCountsFor } from './push-send'
 
 /**
@@ -149,6 +151,15 @@ export type PostComment = {
   author: PostAuthor
   createdAt: number
   canDelete: boolean
+  /** Toppkommentaren svaret står under (svar på svar, `src/lib/threads.ts`); null = selv en toppkommentar. */
+  parentId: string | null
+  /** Kommentaren det konkret svarer på: `parentId`, eller et annet svar i samme tråd. */
+  replyToId: string | null
+  /**
+   * Slettet, men står igjen som merke fordi noen har svart på den. Teksten og
+   * forfatteren er fjernet i databasen, ikke bare skjult her.
+   */
+  deleted: boolean
   /**
    * Dagens navn på de omtalte, slått opp server-side (#83). En markør uten
    * treff her er en slettet bruker og vises som «Ukjent medlem» — aldri som et
@@ -250,7 +261,8 @@ async function decorate(
     d
       .select({ postId: postComments.postId, n: sql<number>`count(*)` })
       .from(postComments)
-      .where(inArray(postComments.postId, ids))
+      // Et «slettet»-merke er ikke en kommentar.
+      .where(and(inArray(postComments.postId, ids), isNull(postComments.deletedAt)))
       .groupBy(postComments.postId),
     d
       .select({ postId: postReactions.postId, userId: postReactions.userId })
@@ -397,12 +409,15 @@ export const getPost = createServerFn()
           body: postComments.body,
           authorId: postComments.authorId,
           authorName: user.name,
+          parentId: postComments.parentId,
+          replyToId: postComments.replyToId,
+          deletedAt: postComments.deletedAt,
           createdAt: postComments.createdAt,
         })
         .from(postComments)
         .leftJoin(user, eq(postComments.authorId, user.id))
         .where(eq(postComments.postId, row.id))
-        .orderBy(asc(postComments.createdAt)),
+        .orderBy(asc(postComments.createdAt), asc(postComments.id)),
     ])
 
     const item = toListItem(row, me, canPublish, extra, Number.MAX_SAFE_INTEGER)
@@ -424,7 +439,10 @@ export const getPost = createServerFn()
           body: c.body,
           author: { id: c.authorId, name: c.authorName ?? 'Ukjent' },
           createdAt: c.createdAt.getTime(),
-          canDelete: canDeleteComment(me, c, canPublish),
+          canDelete: !c.deletedAt && canDeleteComment(me, c, canPublish),
+          parentId: c.parentId,
+          replyToId: c.replyToId,
+          deleted: !!c.deletedAt,
           mentions: mentionsByComment.get(c.id) ?? [],
         }),
       ),
@@ -756,6 +774,8 @@ export const addComment = createServerFn({ method: 'POST' })
     z.object({
       postId: z.string().min(1),
       body: z.string().trim().min(1, 'Skriv noe først').max(4_000, 'Kommentaren er for lang'),
+      /** Svar på en annen kommentar. Serveren avgjør hvor svaret står (`replyPlacement`). */
+      replyToId: z.string().min(1).max(100).nullish(),
     }),
   )
   .handler(async ({ data }) => {
@@ -763,6 +783,26 @@ export const addComment = createServerFn({ method: 'POST' })
     const canPublish = hasPermission(me, PUBLISH_PERMISSION)
     const row = await readablePost(data.postId, canPublish, me)
     if (!row.publishedAt) throw new Error('Utkast kan ikke kommenteres')
+
+    // Kommentaren det svares på må høre til SAMME innlegg — ellers kunne et rått
+    // kall hengt et svar inn under et innlegg man ikke kan lese. Et «slettet»-
+    // merke tar ikke imot nye svar; svar heller på et av svarene under det.
+    const target = data.replyToId
+      ? (
+          await db()
+            .select({
+              id: postComments.id,
+              parentId: postComments.parentId,
+              authorId: postComments.authorId,
+              deletedAt: postComments.deletedAt,
+            })
+            .from(postComments)
+            .where(and(eq(postComments.id, data.replyToId), eq(postComments.postId, row.id)))
+            .limit(1)
+        )[0]
+      : undefined
+    if (data.replyToId && (!target || target.deletedAt)) throw new Error('Kommentaren du svarer på er slettet')
+    const placement = target ? replyPlacement(target) : { parentId: null, replyToId: null }
 
     // Omtalene valideres FØR kommentaren lagres. Klienten setter markørene, så
     // de er akkurat like betrodde som alt annet fra en nettleser: ingenting.
@@ -788,7 +828,7 @@ export const addComment = createServerFn({ method: 'POST' })
     const id = newId()
     await db()
       .insert(postComments)
-      .values({ id, postId: row.id, authorId: me.id, body: data.body, createdAt: ts, updatedAt: ts })
+      .values({ id, postId: row.id, authorId: me.id, body: data.body, ...placement, createdAt: ts, updatedAt: ts })
     if (mentionIds.length > 0) {
       // Den spørrbare koblingen. Cascader med kommentaren ved sletting.
       await db()
@@ -800,9 +840,14 @@ export const addComment = createServerFn({ method: 'POST' })
     // En feilende e-post skal aldri velte kommentaren — den er allerede lagret,
     // og teksten er det viktigste. Loggen er varselet om at noe er galt.
     try {
-      await notifyMentions({ post: row, commenterName: me.name, body: data.body, mentioned, recipients })
+      await notifyMentions({ post: row, commentId: id, commenterName: me.name, body: data.body, mentioned, recipients })
     } catch (err) {
       console.error('[omtaler] kunne ikke varsle om omtale:', err)
+    }
+    if (target?.authorId && target.authorId !== me.id) {
+      await pushSafely('svar på kommentar', () =>
+        notifyCommentReply({ post: row, commentId: id, commenterId: me.id, commenterName: me.name, body: data.body, repliedTo: target.authorId!, mentionIds, mentioned }),
+      )
     }
     // TODO(varsling): svar på eget innlegg bør kunne gi e-post/varsel senere.
     return { id }
@@ -816,6 +861,7 @@ export const addComment = createServerFn({ method: 'POST' })
  */
 async function notifyMentions(input: {
   post: Row
+  commentId: string
   commenterName: string
   body: string
   /** Alle validerte omtaler — brukes til å skrive navn i stedet for markører. */
@@ -824,7 +870,7 @@ async function notifyMentions(input: {
 }): Promise<void> {
   if (input.recipients.length === 0) return
   // URL-en bygges fra BETTER_AUTH_URL, aldri fra request-origin (AGENTS.md).
-  const url = `${new URL(env.BETTER_AUTH_URL).origin}/beskjeder/${input.post.id}`
+  const url = `${new URL(env.BETTER_AUTH_URL).origin}${commentUrl(input.post.id, input.commentId)}`
   const mail = mentionEmail({
     commenterName: input.commenterName,
     postHeading: postHeading({ title: input.post.title, body: postPlainText(input.post.body, input.post.format) }, 160),
@@ -842,6 +888,7 @@ async function notifyMentions(input: {
       input.recipients.map((r) => r.userId),
       mentionPushMessage({
         postId: input.post.id,
+        commentId: input.commentId,
         authorName: input.commenterName,
         excerpt: mentionPlainText(input.body, input.mentioned),
         where: 'comment',
@@ -851,6 +898,60 @@ async function notifyMentions(input: {
   )
 }
 
+/**
+ * Push til den man svarte på («Svar» under en kommentar). Bare push, som i
+ * forumet: e-post per svar ville blitt for mye. Regelen — og at en omtale i
+ * samme kommentar vinner — er den rene `commentReplyRecipient`.
+ */
+async function notifyCommentReply(input: {
+  post: Row
+  commentId: string
+  commenterId: string
+  commenterName: string
+  body: string
+  repliedTo: string
+  mentionIds: string[]
+  mentioned: MentionUser[]
+}): Promise<void> {
+  const { members, prefs } = await mentionCandidates()
+  const eligible = new Set(
+    mentionableMembers({ audience: input.post.audience, publishedAt: input.post.publishedAt?.getTime() ?? null }, members).map(
+      (m) => m.userId,
+    ),
+  )
+  const recipient = commentReplyRecipient({
+    commenterId: input.commenterId,
+    repliedTo: input.repliedTo,
+    mentioned: input.mentionIds,
+    eligible,
+    pref: (userId) => prefs.get(userId) ?? 'all',
+  })
+  if (!recipient) return
+  await sendPushToUsers(
+    [recipient],
+    commentReplyPushMessage({
+      postId: input.post.id,
+      commentId: input.commentId,
+      authorName: input.commenterName,
+      excerpt: mentionPlainText(input.body, input.mentioned),
+    }),
+    { ttl: PUSH_TTL.mention, urgency: 'high' },
+  )
+}
+
+/** Ingen andre kommentarer peker på denne — verken som tråd eller som svar. */
+const unreferenced = (id: string) =>
+  sql`not exists (select 1 from post_comments c where c.parent_id = ${id} or c.reply_to_id = ${id})`
+
+/**
+ * Sletter en kommentar. Har noen svart på den, blir den et «slettet»-merke:
+ * teksten, forfatteren og omtalene fjernes, men raden står, så svarene under
+ * beholder sammenhengen. Ellers forsvinner den helt — og et merke som dermed
+ * ikke lenger har noen svar å holde sammen, ryddes bort med den.
+ *
+ * Valget gjøres i ÉN `DELETE … WHERE NOT EXISTS`: kommer et svar inn samtidig,
+ * blir kommentaren et merke i stedet for at svaret mister tråden sin.
+ */
 export const deleteComment = createServerFn({ method: 'POST' })
   .validator(idInput)
   .handler(async ({ data }) => {
@@ -858,18 +959,53 @@ export const deleteComment = createServerFn({ method: 'POST' })
     const canPublish = hasPermission(me, PUBLISH_PERMISSION)
     const comment = (
       await db()
-        .select({ id: postComments.id, postId: postComments.postId, authorId: postComments.authorId })
+        .select({
+          id: postComments.id,
+          postId: postComments.postId,
+          authorId: postComments.authorId,
+          parentId: postComments.parentId,
+          replyToId: postComments.replyToId,
+          deletedAt: postComments.deletedAt,
+        })
         .from(postComments)
         .where(eq(postComments.id, data.id))
         .limit(1)
     )[0]
-    if (!comment) throw new Error('Fant ikke kommentaren')
+    if (!comment || comment.deletedAt) throw new Error('Fant ikke kommentaren')
     // Innlegget må være synlig for deg før du kan gjøre noe med tråden.
     await readablePost(comment.postId, canPublish, me)
     if (!canDeleteComment(me, comment, canPublish)) throw new Error('Du kan bare slette dine egne kommentarer')
+    const d = db()
     // Omtalene i `post_comment_mentions` forsvinner med kommentaren (cascade).
     // Brukerne står selvsagt urørt — det er koblingen som slettes, ikke folk.
-    await db().delete(postComments).where(eq(postComments.id, data.id))
+    const removed = await d.run(sql`delete from post_comments where id = ${comment.id} and ${unreferenced(comment.id)}`)
+    if (!removed.meta.changes) {
+      const now = new Date()
+      await d
+        .update(postComments)
+        .set({ body: '', authorId: null, deletedAt: now, updatedAt: now })
+        .where(eq(postComments.id, comment.id))
+      await d.delete(postCommentMentions).where(eq(postCommentMentions.commentId, comment.id))
+      return { ok: true }
+    }
+    // Rydd merker oppover som nå står uten svar (svar → svaret det svarte på →
+    // roten). Et merke kan bli fritt først når et ANNET merke er ryddet, så en
+    // id kan dukke opp i køen igjen; løkken ender likevel, for noe legges bare i
+    // køen når en rad faktisk ble slettet, og hver rad kan slettes én gang.
+    const queue = [comment.replyToId, comment.parentId].filter((id): id is string => !!id)
+    while (queue.length) {
+      const id = queue.shift()!
+      const marker = (
+        await d
+          .select({ parentId: postComments.parentId, replyToId: postComments.replyToId })
+          .from(postComments)
+          .where(and(eq(postComments.id, id), sql`${postComments.deletedAt} is not null`))
+          .limit(1)
+      )[0]
+      if (!marker) continue
+      const gone = await d.run(sql`delete from post_comments where id = ${id} and deleted_at is not null and ${unreferenced(id)}`)
+      if (gone.meta.changes) queue.push(...[marker.parentId, marker.replyToId].filter((x): x is string => !!x))
+    }
     return { ok: true }
   })
 

@@ -177,7 +177,7 @@ export function PushCard({ userId }: { userId: string }) {
         {configured && devices && (
           <PushChoice
             title="Svar i forumtråder du følger"
-            description="Et varsel når noen svarer i en tråd du har startet, svart i eller valgt å følge. Kommer det flere svar før du har lest, får du bare ett varsel. Hver tråd kan også dempes for seg. Bare som varsel, aldri på e-post."
+            description="Et varsel når noen svarer i en tråd du har startet, svart i eller valgt å følge. Kommer det flere svar før du har lest, får du bare ett varsel. Hver tråd kan også dempes for seg. Svar rett på noe du har skrevet følger valget for omtaler i stedet. Bare som varsel, aldri på e-post."
             current={devices.forumReplies}
             busy={busy === 'forum'}
             onChange={async (next) => {
