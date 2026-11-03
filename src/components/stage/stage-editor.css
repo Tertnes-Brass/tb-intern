@@ -1,0 +1,33 @@
+/*
+ * Excalidraw i internsidens farger: messing i stedet for lilla som
+ * aksentfarge. Lastes bare sammen med editoren (StageEditor.tsx), og er derfor
+ * ikke avgrenset til `.stage-editor`: dialogene (f.eks. «Eksporter bilde»)
+ * rendres utenfor editoren, i en egen `.excalidraw`-beholder.
+ * `html` foran gir høyere spesifisitet enn Excalidraw sine egne regler.
+ */
+html .excalidraw {
+  --color-primary: #95762a;
+  --color-primary-darker: #7a5f1d;
+  --color-primary-darkest: #5f4a16;
+  --color-primary-hover: #7a5f1d;
+  --color-primary-light: #f1e6c8;
+  --color-primary-light-darker: #e6d6ab;
+  --color-brand-hover: #7a5f1d;
+  --color-brand-active: #5f4a16;
+  --color-surface-primary-container: #f1e6c8;
+  --color-on-primary-container: #3d2f0b;
+  --color-selection: #95762a;
+}
+
+html .excalidraw.theme--dark {
+  --color-primary: #d3ac4d;
+  --color-primary-darker: #e7c468;
+  --color-primary-darkest: #f0d58d;
+  --color-primary-hover: #e7c468;
+  --color-primary-light: #4a3d1f;
+  --color-primary-light-darker: #5a4a24;
+  --color-brand-hover: #e7c468;
+  --color-brand-active: #f0d58d;
+  --color-surface-primary-container: #4a3d1f;
+  --color-on-primary-container: #f3e3b5;
+}

@@ -1,30 +1,27 @@
-# Intern som app på telefonen
+# Sceneoppsett: tegn riggen og send den til arrangøren
 
-Intern kan nå legges på Hjem-skjermen og brukes som en app.
+Hvert prosjekt kan nå ha ett eller flere **sceneoppsett** — en tegning av hvordan korpset og slagverket skal stå, laget i et tegneverktøy rett i Intern.
 
-- **iPhone/iPad:** åpne intern.tertnesbrass.com i Safari → Del → «Legg til på Hjem-skjerm».
-- **Android:** Chrome viser «Installer app» (eller bruk menyen → «Legg til på startskjermen»).
+**Slik finner du det**
+- Åpne et prosjekt under Noter → Prosjekter. Nederst er det en ny seksjon, «Sceneoppsett».
+- «+ Nytt oppsett» (dirigent, arkivar og alle med den nye tilgangen «Sceneoppsett»). Start fra:
+  - **Standard**: hesteskoen vi vanligvis står i, med slagverket rundt. Oppsettet og tellereglene er hentet fra Kims egen sceneplan-app.
+  - **Storband**: trommesettet i midten og kornettene bakerst.
+  - **Slagverk**, **Tom scene**, eller et oppsett fra et tidligere prosjekt.
+- Skriv inn hvor stor scenen er.
 
-**På telefonen**
-- Fanelinje nederst: Hjem · Forum · Beskjeder · Noter · Kalender. Tallet på Beskjeder viser hvor mange beskjeder du ikke har åpnet de siste 14 dagene.
-- Trykk på bildet ditt oppe til høyre for «Meg og mer»: profil, Medlemmer, styret og gruppeledere (hvis du har tilgang), varsler, noter lagret offline, lyst/mørkt og utlogging.
-- Dialoger kommer opp nedenfra og kan dras ned for å lukkes.
+**I tegneverktøyet**
+- Til høyre ligger ferdige komponenter: stol med notestativ for hver gruppe, pauker, stortromme, trommesett, stavspill, rørklokker, cymbaler, bongos, triangel, tamburin, dirigentpodium, praktikabler, strøm og mer. Trykk for å sette inn, eller dra dit den skal stå.
+- Velg en eller flere stoler for å gjøre dem til **dobbel stol** (en ekstra stol til instrument og dempere).
+- Har du flyttet dirigenten eller stolene, trykker du **Snu mot dirigenten**, så peker notestativene riktig vei igjen.
+- Dobbeltklikk på en stol for å skrive navn. Rutenettet har én tykk linje per meter.
+- «Utstyr og merknader» teller opp stoler og notestativ automatisk, og viser slagverket fra venstre slik riggerne ser det. Der står også kontaktpersonen (deg, ferdig utfylt) og merknadene til arrangøren.
+- Alt lagres av seg selv. Har noen andre lagret samtidig, får du beskjed i stedet for at noe overskrives.
 
-**Hjem**
-- Neste øvelse eller konsert står øverst, og du kan svare «Kommer», «Usikker» eller «Kan ikke» rett der. Ved «Kan ikke» kan du velge en grunn.
-- En ulest «Viktig»-beskjed legger seg øverst til du har åpnet den.
+**Til arrangøren**
+- «Last ned PDF» gir et A4-ark med tegningen, prosjekt, dato og sted, kontaktperson, utstyrslisten, slagverket i riggerekkefølge og merknadene — klart til å sendes.
+- PNG/SVG finnes under menyen oppe til venstre, og hele tegningen kan lastes ned som en .excalidraw-fil.
 
-**Notestativet**
-- Stemmene dine åpnes i fullskjerm i appen, i programrekkefølge. Sveip eller trykk på kanten for å bla, eller bruk bladvender/piltaster. Skjermen holdes våken.
-- «Nattlys» gir mørke noter, og «Lytt» spiller lytteeksemplene.
-- Slå på «Tilgjengelig offline» under «Mine noter», så kan du åpne notene uten nett, for eksempel i en kirke uten dekning.
+Alle som ser prosjektet, kan åpne oppsettet og se hvor de sitter.
 
-**Varsler**
-- Under «Min profil» → «Varsler på denne enheten» kan du få push-varsler om nye beskjeder fra styret, når noen nevner deg, og «Kommer du i morgen?» dagen før en øvelse du ikke har svart på.
-- Forumet: du får varsel når noen svarer i en tråd du har startet eller svart i, og når noen nevner deg der. «Følg tråden» og «Slå av varsler» står øverst i hver tråd, og det samlede valget ligger under «Min profil».
-- **Svar på svar:** trykk «Svar» under et svar i forumet eller under en kommentar på en beskjed, så havner svaret ditt rett under — med «Svar til …» når du svarer på et svar. Den du svarer får et varsel, og varselet åpner rett på svaret.
-- På iPhone virker push-varsler bare når Intern er lagt på Hjem-skjermen (iOS 16.4 eller nyere).
-
-På PC er menyen den samme som før. Hjem er stokket om, stemmene åpnes i notestativet, og varsler kan slås på i nettleseren.
-
-**Prøv gjerne:** legg Intern på Hjem-skjermen, slå på varsler, svar på neste øvelse fra Hjem, og åpne en stemme med flymodus på etter å ha slått på «Tilgjengelig offline».
+**Prøv gjerne:** lag et Standard-oppsett, flytt dirigenten og trykk «Snu mot dirigenten», gjør et par stoler doble, og last ned PDF-en. Lag også et Storband-oppsett og se om det ligner det vi faktisk gjør.

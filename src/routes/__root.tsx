@@ -64,8 +64,9 @@ function RootLayout() {
     pathname === '/glemt-passord' ||
     pathname === '/tilbakestill-passord' ||
     pathname.startsWith('/v/') ||
-    // Notestativet er fullskjerm: ingen meny, ingen fanelinje.
-    pathname.startsWith('/noter/stativ/')
+    // Notestativet og sceneoppsettet er fullskjerm: ingen meny, ingen fanelinje.
+    pathname.startsWith('/noter/stativ/') ||
+    pathname.startsWith('/noter/oppsett/')
 
   if (bare || !me) {
     return (

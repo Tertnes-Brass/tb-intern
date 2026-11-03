@@ -316,6 +316,35 @@ snike seg inn. Reglene:
   prosjektkoblingen godtar kun **publiserte** prosjekter — et utkast er ikke
   synlig for medlemmene, og navnet skulle ikke lekket via en kobling.
 
+## 5e. Sceneoppsett (`stage.manage`, 2. november 2026)
+
+Prosjektene fikk tegninger av riggen (Excalidraw), se `docs/sceneoppsett.md`.
+Ingen filer og ingen R2 — tegningen er JSON i `stage_setups.scene`, og bilder
+lagres ikke. Reglene:
+
+| Aktør | Lese oppsett | Lage, endre, slette |
+|---|---|---|
+| Medlem | Når prosjektet er publisert og ikke passert (som prosjektsiden) | Nei |
+| Arkivinnsyn (`archive.viewAll`/`works.manage`) | + tidligere prosjekter | Nei |
+| `stage.manage` | + tidligere **publiserte** prosjekter — aldri utkast | Ja, der hen kan lese |
+| `projects.manage` | Alt, også utkast | Bare med `stage.manage` i tillegg |
+| Admin (`*`) | Alt | Ja |
+
+- **Lesing følger prosjektet.** `canReadStageSetups` bygger på
+  `projectReadError` i `src/lib/project-access.ts`, som også `getProject`
+  bruker — regelen finnes ett sted.
+- **Like svar.** «Finnes ikke» og «ingen tilgang» gir begge «Fant ikke
+  sceneoppsettet», så en id ikke røper at et utkast finnes.
+- **Validering ved hver skriving** (`parseStageScene`): kun vektorelementer
+  (ikke `image`/`embeddable`/`iframe`), trygge lenker (http(s)/mailto/relativ,
+  kontrolltegn fjernet før skjemasjekken), maks 1 MB / 5 000 elementer, og et
+  lukket sett av `appState`-felt. Også malene og kopiene går gjennom den.
+- **Ingen stille overskriving.** `saveStageSetup` er en compare-and-set på
+  `revision`; en utdatert lagring får `{ ok: false, conflict }`.
+- **Egen rettighet, seedet bredt.** Migrasjon 0025 gir `stage.manage` til alle
+  roller som har `projects.manage`. Den er egen fordi en slagverksansvarlig skal
+  kunne tegne riggen uten å kunne endre programmet eller publisere.
+
 ## 6. Produktvalg før fase 4 (avgjort — historikk)
 
 Alle valg ble avgjort før deploy, i tråd med de anbefalte alternativene (se

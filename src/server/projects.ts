@@ -6,6 +6,9 @@ import { parts, projectWorks, projects, seasons, workFiles, workLinks, workEditi
 import { resolveEdition } from './work-editions-store'
 import { newId } from '../lib/id'
 import { PERCUSSION_MAX_LENGTH, parsePercussionSetup, showPercussionFor } from '../lib/percussion'
+import { projectReadError } from '../lib/project-access'
+import { STAGE_PERMISSION } from '../lib/stage-scene'
+import { listStageSetupsForProject } from './stage-setup-store'
 import {
   hasFullArchiveAccess,
   hasPermission,
@@ -236,25 +239,17 @@ export const getProject = createServerFn()
     if (!project) throw new Error('Fant ikke prosjektet')
 
     const canManage = hasPermission(me, 'projects.manage')
-    if (!project.isPublished && !canManage) throw new Error('Prosjektet er ikke publisert ennå')
     const canBrowseArchive = hasFullArchiveAccess(me)
     const today = new Date().toISOString().slice(0, 10)
-    if (
-      project.isPublished &&
-      (!project.eventDate || project.eventDate < today) &&
-      !canManage &&
-      !canBrowseArchive
-    ) {
-      throw new Error('Prosjektet er ikke lenger tilgjengelig')
-    }
+    const readError = projectReadError(project, { canManage, canBrowseArchive }, today)
+    if (readError) throw new Error(readError)
 
     const inAccessibleProject =
       project.isPublished && !!project.eventDate && project.eventDate >= today
-    const repertoire = await assembleRepertoire(
-      d,
-      project.id,
-      memberFileAccessContext(me, inAccessibleProject),
-    )
+    const [repertoire, stageSetups] = await Promise.all([
+      assembleRepertoire(d, project.id, memberFileAccessContext(me, inAccessibleProject)),
+      listStageSetupsForProject(d, project.id),
+    ])
 
     return {
       project,
@@ -262,6 +257,9 @@ export const getProject = createServerFn()
       canManage,
       canShare: hasPermission(me, 'shares.manage'),
       myParts: me.parts,
+      // Den som ser prosjektet, ser oppsettene (samme regel, se `canReadStageSetups`).
+      stageSetups,
+      canEditStage: hasPermission(me, STAGE_PERMISSION),
     }
   })
 

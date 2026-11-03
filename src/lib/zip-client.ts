@@ -38,7 +38,7 @@ function reasonFor(status: number): string {
 }
 
 /** Ber nettleseren lagre blobben under `fileName`. */
-function saveBlob(blob: Blob, fileName: string) {
+export function saveBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
