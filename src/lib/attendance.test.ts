@@ -5,9 +5,13 @@ import {
   attendanceSummary,
   canSeeMemberAttendance,
   canSetAttendanceFor,
+  composeAbsenceComment,
   countAttendance,
+  effectiveStatus,
   groupBySection,
+  hasReportedAbsence,
   normalizeAttendanceComment,
+  splitAbsenceComment,
 } from './attendance'
 
 const medlem = { id: 'u-medlem', permissions: ['scores.view'], leadsPartIds: [] }
@@ -88,7 +92,7 @@ describe('attendanceSourceFor', () => {
   })
 })
 
-describe('countAttendance og attendanceSummary', () => {
+describe('countAttendance og attendanceSummary — fravær er unntaket', () => {
   const rows = [
     { status: 'attending' as const },
     { status: 'attending' as const },
@@ -97,20 +101,73 @@ describe('countAttendance og attendanceSummary', () => {
     { status: null },
   ]
 
-  it('teller hver status og de som ikke har svart', () => {
-    expect(countAttendance(rows)).toEqual({ attending: 2, notAttending: 1, unsure: 1, noReply: 1, total: 5 })
+  it('regner alle uten fravær som kommer — ingen rad og «attending» er det samme', () => {
+    expect(countAttendance(rows)).toEqual({ attending: 3, notAttending: 1, unsure: 1, total: 5 })
+    expect(countAttendance([{ status: null }, { status: null }])).toEqual({
+      attending: 2,
+      notAttending: 0,
+      unsure: 0,
+      total: 2,
+    })
   })
 
   it('skriver tallene på norsk, med riktig entall/flertall', () => {
-    expect(attendanceSummary(countAttendance(rows))).toBe('2 kommer · 1 kommer ikke · 1 usikker · 1 uten svar')
-    expect(
-      attendanceSummary(countAttendance([{ status: 'unsure' }, { status: 'unsure' }])),
-    ).toBe('2 usikre')
+    expect(attendanceSummary(countAttendance(rows))).toBe('3 kommer · 1 kan ikke · 1 usikker')
+    expect(attendanceSummary(countAttendance([{ status: 'unsure' }, { status: 'unsure' }]))).toBe(
+      '0 kommer · 2 usikre',
+    )
   })
 
-  it('sier fra når ingen har svart', () => {
-    expect(attendanceSummary(countAttendance([]))).toBe('Ingen svar ennå')
-    expect(attendanceSummary(countAttendance([{ status: null }]))).toBe('1 uten svar')
+  it('sier at alle kommer når ingen har meldt fravær', () => {
+    expect(attendanceSummary(countAttendance([{ status: null }, { status: null }]))).toBe('2 kommer')
+    expect(attendanceSummary(countAttendance([]))).toBe('Ingen aktive medlemmer')
+  })
+})
+
+describe('effectiveStatus og hasReportedAbsence', () => {
+  it('leser manglende rad og «attending» som kommer', () => {
+    expect(effectiveStatus(null)).toBe('attending')
+    expect(effectiveStatus(undefined)).toBe('attending')
+    expect(effectiveStatus('attending')).toBe('attending')
+    expect(hasReportedAbsence(null)).toBe(false)
+    expect(hasReportedAbsence('attending')).toBe(false)
+  })
+
+  it('beholder fravær og (gamle) «usikker»-rader', () => {
+    expect(effectiveStatus('not_attending')).toBe('not_attending')
+    expect(effectiveStatus('unsure')).toBe('unsure')
+    expect(hasReportedAbsence('not_attending')).toBe(true)
+    expect(hasReportedAbsence('unsure')).toBe(true)
+  })
+})
+
+describe('composeAbsenceComment og splitAbsenceComment', () => {
+  it('setter sammen grunn og fritekst, og gjør tomt til null', () => {
+    expect(composeAbsenceComment('Jobb', '  rekker siste halvtime ')).toBe('Jobb – rekker siste halvtime')
+    expect(composeAbsenceComment('Syk', '')).toBe('Syk')
+    expect(composeAbsenceComment(null, 'på tur')).toBe('på tur')
+    expect(composeAbsenceComment(null, '   ')).toBeNull()
+  })
+
+  it('tar grunnen ut igjen, så den ikke legges til to ganger ved endring', () => {
+    expect(splitAbsenceComment('Jobb – rekker siste halvtime')).toEqual({ reason: 'Jobb', text: 'rekker siste halvtime' })
+    expect(splitAbsenceComment('Syk')).toEqual({ reason: 'Syk', text: '' })
+    expect(splitAbsenceComment('Meldt fra på telefon')).toEqual({ reason: null, text: 'Meldt fra på telefon' })
+    expect(splitAbsenceComment(null)).toEqual({ reason: null, text: '' })
+  })
+
+  it('gjenkjenner bare hele hurtigvalg, ikke et ord som tilfeldigvis starter likt', () => {
+    expect(splitAbsenceComment('Jobbmøte i Oslo')).toEqual({ reason: null, text: 'Jobbmøte i Oslo' })
+  })
+
+  it('er hverandres motsatte', () => {
+    for (const [reason, text] of [
+      ['Reise', 'fly hjem 21:00'],
+      ['Annet', ''],
+      [null, 'kommer etter pausen'],
+    ] as const) {
+      expect(splitAbsenceComment(composeAbsenceComment(reason, text))).toEqual({ reason, text })
+    }
   })
 })
 

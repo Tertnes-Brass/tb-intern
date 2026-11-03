@@ -188,9 +188,10 @@ function RsvpReminderChoice({
 }) {
   return (
     <div className="border-t border-line pt-4">
-      <p className="text-[0.95rem] font-semibold text-ink">Påminnelse om oppmøte</p>
+      <p className="text-[0.95rem] font-semibold text-ink">Påminnelse dagen før</p>
       <p className="mt-1 text-xs leading-relaxed text-ink-soft">
-        Et varsel dagen før en øvelse eller konsert du ikke har svart på. Bare som varsel, aldri på e-post.
+        Et varsel dagen før en øvelse eller konsert, så du rekker å melde fravær hvis du ikke kan komme. Ikke hvis du
+        allerede har meldt fravær. Bare som varsel, aldri på e-post.
       </p>
       <div className="mt-3 flex gap-2">
         {(['all', 'off'] as const).map((value) => (

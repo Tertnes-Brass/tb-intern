@@ -3,13 +3,7 @@ import { useEffect, useState } from 'react'
 import { toast, toastError } from '../../components/toast'
 import { RsvpControl } from '../../components/Rsvp'
 import { Button, EmptyState, Kicker, Modal, SectionHeading, Stamp } from '../../components/ui'
-import {
-  ATTENDANCE_COMMENT_MAX,
-  ATTENDANCE_LABELS,
-  ATTENDANCE_STATUSES,
-  type AttendanceStatus,
-  attendanceSummary,
-} from '../../lib/attendance'
+import { ATTENDANCE_LABELS, attendanceSummary, effectiveStatus } from '../../lib/attendance'
 import { formatDate, formatDateTime, formatDuration, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../../lib/format'
 import { SETLIST_NOTE_MAX, SETLIST_TITLE_MAX } from '../../lib/setlist'
 import {
@@ -20,7 +14,6 @@ import {
   searchWorksForEvent,
   setLinkedProject,
   setMemberAttendance,
-  setMyAttendance,
   updateSetlistItem,
 } from '../../server/event-meta'
 
@@ -555,10 +548,24 @@ function CustomItemDialog({
 function AttendanceSection({ data, occurrenceKey }: { data: Detail; occurrenceKey: string }) {
   return (
     <section className="rise space-y-6" style={{ animationDelay: '160ms' }}>
-      <SectionHeading kicker={attendanceSummary(data.counts)} title="Oppmøte" />
+      <SectionHeading
+        kicker={attendanceSummary(data.counts)}
+        title="Oppmøte"
+        action={
+          data.canManageAttendance ? (
+            <Link to="/fravaer" className="link-brass text-sm">
+              Fraværsoversikt →
+            </Link>
+          ) : undefined
+        }
+      />
       <MyRsvp data={data} occurrenceKey={occurrenceKey} />
       {data.groups ? (
         <div className="space-y-6">
+          <p className="text-sm text-ink-soft">
+            Alle regnes som kommer til de selv melder fravær. Du kan også registrere fravær for noen som har gitt
+            beskjed på annen måte.
+          </p>
           {data.groups.map((group) => (
             <div key={group.section}>
               <h3 className="kicker mb-1">{group.label}</h3>
@@ -572,7 +579,7 @@ function AttendanceSection({ data, occurrenceKey }: { data: Detail; occurrenceKe
         </div>
       ) : (
         <p className="text-sm text-ink-soft">
-          Hvem som har svart hva, er bare synlig for dirigent, fraværsansvarlig og gruppelederne for sin egen
+          Hvem som har meldt fravær, er bare synlig for dirigent, fraværsansvarlig og gruppelederne for sin egen
           stemmegruppe. Tallene over gjelder hele korpset.
         </p>
       )}
@@ -581,111 +588,25 @@ function AttendanceSection({ data, occurrenceKey }: { data: Detail; occurrenceKe
 }
 
 function MyRsvp({ data, occurrenceKey }: { data: Detail; occurrenceKey: string }) {
-  // En hendelse som er borte fra kalenderen (`OrphanPage`) har ingen tid å
-  // svare på — da vises bare registreringene, ikke «Mitt svar».
-  if (!data.event) return null
-  return <MyRsvpControls data={data} event={data.event} occurrenceKey={occurrenceKey} />
-}
-
-function MyRsvpControls({
-  data,
-  event,
-  occurrenceKey,
-}: {
-  data: Detail
-  event: NonNullable<Detail['event']>
-  occurrenceKey: string
-}) {
   const router = useRouter()
-  const current = data.myAttendance
-  const [clearing, setClearing] = useState(false)
-  const [comment, setComment] = useState(current?.comment ?? '')
-  const [savingComment, setSavingComment] = useState(false)
+  // En hendelse som er borte fra kalenderen (`OrphanPage`) har ingen tid å
+  // svare på — da vises bare registreringene, ikke «Ditt oppmøte».
+  if (!data.event) return null
+  const event = data.event
   const date = toOsloDate(event.start)
-
-  useEffect(() => {
-    setComment(current?.comment ?? '')
-  }, [current?.comment])
-
-  const saveComment = async () => {
-    if (!current) return
-    setSavingComment(true)
-    try {
-      await setMyAttendance({ data: { occurrenceKey, status: current.status, comment } })
-      await router.invalidate()
-    } catch (err) {
-      toastError(err)
-    } finally {
-      setSavingComment(false)
-    }
-  }
-
   return (
     <div className="sheet px-4 py-4 sm:px-5">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="kicker">Mitt svar</p>
-        {current && (
-          <Button
-            size="sm"
-            variant="ghost"
-            loading={clearing}
-            onClick={async () => {
-              setClearing(true)
-              try {
-                await setMyAttendance({ data: { occurrenceKey, status: null, comment: null } })
-                await router.invalidate()
-              } catch (err) {
-                toastError(err)
-              } finally {
-                setClearing(false)
-              }
-            }}
-          >
-            Nullstill
-          </Button>
-        )}
-      </div>
-      {/* Samme kontroll som på Hjem: tre trykk, og et ark med grunn og
-          kommentar for «Kan ikke». */}
-      <div className="max-w-md">
-        <RsvpControl
-          occurrenceKey={occurrenceKey}
-          eventLabel={`${event.title} · ${formatWeekday(date)} ${formatDate(date)}${event.allDay ? '' : `, ${formatTimeRange(event.start, null)}`}`}
-          current={current}
-          onSaved={() => router.invalidate()}
-          showComment={false}
-        />
-      </div>
-      {current && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            className="field-input max-w-sm !text-base sm:!text-sm"
-            placeholder="Kort kommentar (valgfri) — «kommer 19:30»"
-            value={comment}
-            maxLength={ATTENDANCE_COMMENT_MAX}
-            onChange={(e) => setComment(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void saveComment()
-            }}
-          />
-          {comment !== (current.comment ?? '') && (
-            <Button size="sm" loading={savingComment} onClick={saveComment}>
-              Lagre
-            </Button>
-          )}
-        </div>
-      )}
-      {!current && (
-        <p className="mt-3 text-xs text-ink-faint">Du har ikke svart ennå. Svaret kan endres når som helst.</p>
-      )}
+      <p className="kicker mb-3">Ditt oppmøte</p>
+      {/* Samme kontroll som på Hjem: ett trykk på «Kan ikke komme», og et ark
+          med grunn og kommentar. */}
+      <RsvpControl
+        occurrenceKey={occurrenceKey}
+        eventLabel={`${event.title} · ${formatWeekday(date)} ${formatDate(date)}${event.allDay ? '' : `, ${formatTimeRange(event.start, null)}`}`}
+        current={data.myAttendance}
+        onSaved={() => router.invalidate()}
+      />
     </div>
   )
-}
-
-const STATUS_TONE: Record<AttendanceStatus, 'brass' | 'oxblood' | 'neutral'> = {
-  attending: 'brass',
-  not_attending: 'oxblood',
-  unsure: 'neutral',
 }
 
 function MemberRow({
@@ -697,6 +618,7 @@ function MemberRow({
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
+  const status = effectiveStatus(member.status)
 
   const setStatus = async (value: string) => {
     setBusy(true)
@@ -705,7 +627,9 @@ function MemberRow({
         data: {
           occurrenceKey,
           userId: member.userId,
-          status: value === '' ? null : (value as AttendanceStatus),
+          // «Kommer» er ingen rad: fravær er unntaket.
+          status: value === 'not_attending' || value === 'unsure' ? value : null,
+          comment: value === 'not_attending' && member.status === 'not_attending' ? member.comment : null,
         },
       })
       await router.invalidate()
@@ -719,32 +643,38 @@ function MemberRow({
   return (
     <li className="hairline-row flex items-center gap-3 px-4 py-2.5 sm:px-5">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-ink">{member.name}</p>
+        <p className={`truncate text-sm font-medium ${status === 'attending' ? 'text-ink' : 'text-oxblood'}`}>
+          {member.name}
+        </p>
         <p className="truncate text-xs text-ink-faint">
           {member.partName ?? 'Uten stemme'}
-          {member.source === 'admin' && member.registeredByName ? ` · registrert av ${member.registeredByName}` : ''}
+          {status !== 'attending' && member.source === 'admin' && member.registeredByName
+            ? ` · registrert av ${member.registeredByName}`
+            : ''}
         </p>
-        {member.comment && <p className="mt-0.5 text-xs italic text-ink-soft">«{member.comment}»</p>}
+        {status !== 'attending' && member.comment && (
+          <p className="mt-0.5 text-xs italic text-ink-soft">«{member.comment}»</p>
+        )}
       </div>
       {member.canEdit ? (
         <select
           className="field-input !w-auto shrink-0 !text-base sm:!text-xs"
-          value={member.status ?? ''}
+          value={status === 'attending' ? '' : status}
           disabled={busy}
           onChange={(e) => setStatus(e.target.value)}
           aria-label={`Oppmøte for ${member.name}`}
         >
-          <option value="">Ikke svart</option>
-          {ATTENDANCE_STATUSES.map((status) => (
-            <option key={status} value={status}>
-              {ATTENDANCE_LABELS[status]}
-            </option>
-          ))}
+          <option value="">{ATTENDANCE_LABELS.attending}</option>
+          <option value="not_attending">{ATTENDANCE_LABELS.not_attending}</option>
+          {/* «Usikker» lages ikke lenger, men en gammel rad skal vises riktig. */}
+          {status === 'unsure' && <option value="unsure">{ATTENDANCE_LABELS.unsure}</option>}
         </select>
-      ) : member.status ? (
-        <Stamp tone={STATUS_TONE[member.status]}>{ATTENDANCE_LABELS[member.status]}</Stamp>
+      ) : status === 'attending' ? (
+        <span className="shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint">
+          {ATTENDANCE_LABELS.attending}
+        </span>
       ) : (
-        <span className="shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint">Ikke svart</span>
+        <Stamp tone={status === 'not_attending' ? 'oxblood' : 'neutral'}>{ATTENDANCE_LABELS[status]}</Stamp>
       )}
     </li>
   )

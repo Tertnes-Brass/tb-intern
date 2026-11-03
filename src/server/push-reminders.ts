@@ -1,4 +1,4 @@
-import { and, eq, ne } from 'drizzle-orm'
+import { and, eq, inArray, ne } from 'drizzle-orm'
 import { db } from '../db'
 import { eventAttendance, memberProfiles, notificationPreferences, pushSubscriptions, settings } from '../db/schema'
 import { shouldRunReminders } from '../lib/board'
@@ -11,8 +11,10 @@ import { pushConfigured, sendPushToUsers } from './push-send'
 const RSVP_SETTINGS_KEY = 'push.rsvp.lastRunDate'
 
 /**
- * «Kommer du i morgen?» — push dagen før hver hendelse med klokkeslett, til
- * medlemmer som har slått på varsler på en enhet og ikke har svart. Kjøres av
+ * «Øvelse i morgen kl. 19:00 — kan du ikke komme?» — push dagen før hver
+ * hendelse med klokkeslett, til medlemmer som har slått på varsler på en enhet
+ * og ikke allerede har meldt fravær. Alle regnes som kommer, så varselet er en
+ * påminnelse om å melde fra, ikke en forespørsel om svar. Kjøres av
  * den daglige cron-en i `src/worker.ts` (07:00 UTC), og maks én gang per dag
  * (compare-and-set i `settings`, som for styrepåminnelsene).
  *
@@ -49,13 +51,18 @@ export async function runRsvpReminders(now: Date = new Date()): Promise<{ ran: b
     for (const event of events) {
       // Én hendelse som feiler skal ikke ta med seg resten — dagen er allerede tatt.
       try {
-        const answeredRows = await d
+        const settledRows = await d
           .select({ userId: eventAttendance.userId })
           .from(eventAttendance)
-          .where(eq(eventAttendance.occurrenceKey, event.occurrenceKey))
+          .where(
+            and(
+              eq(eventAttendance.occurrenceKey, event.occurrenceKey),
+              inArray(eventAttendance.status, ['not_attending', 'attending']),
+            ),
+          )
         const recipients = rsvpReminderRecipients({
           subscribers: subscribers.map((s) => ({ ...s, pref: (s.pref ?? null) as RsvpReminderChoice | null })),
-          answered: new Set(answeredRows.map((r) => r.userId)),
+          settled: new Set(settledRows.map((r) => r.userId)),
         })
         if (recipients.length === 0) continue
         const result = await sendPushToUsers(

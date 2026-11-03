@@ -26,6 +26,7 @@ import { Route as BeskjederNyRouteImport } from './routes/beskjeder/ny'
 import { Route as ForumIndexRouteImport } from './routes/forum/index'
 import { Route as ForumTopicIdRouteImport } from './routes/forum/$topicId'
 import { Route as ForumNyRouteImport } from './routes/forum/ny'
+import { Route as FravaerIndexRouteImport } from './routes/fravaer/index'
 import { Route as GruppeledereIndexRouteImport } from './routes/gruppeledere/index'
 import { Route as InnstillingerIndexRouteImport } from './routes/innstillinger/index'
 import { Route as InnstillingerNedlastingerRouteImport } from './routes/innstillinger/nedlastinger'
@@ -151,6 +152,11 @@ const ForumTopicIdRoute = ForumTopicIdRouteImport.update({
 const ForumNyRoute = ForumNyRouteImport.update({
   id: '/forum/ny',
   path: '/forum/ny',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FravaerIndexRoute = FravaerIndexRouteImport.update({
+  id: '/fravaer/',
+  path: '/fravaer/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GruppeledereIndexRoute = GruppeledereIndexRouteImport.update({
@@ -388,6 +394,7 @@ export interface FileRoutesByFullPath {
   '/arkiv/': typeof ArkivIndexRoute
   '/beskjeder/': typeof BeskjederIndexRoute
   '/forum/': typeof ForumIndexRoute
+  '/fravaer/': typeof FravaerIndexRoute
   '/gruppeledere/': typeof GruppeledereIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
   '/kalender/': typeof KalenderIndexRoute
@@ -445,6 +452,7 @@ export interface FileRoutesByTo {
   '/arkiv': typeof ArkivIndexRoute
   '/beskjeder': typeof BeskjederIndexRoute
   '/forum': typeof ForumIndexRoute
+  '/fravaer': typeof FravaerIndexRoute
   '/gruppeledere': typeof GruppeledereIndexRoute
   '/innstillinger': typeof InnstillingerIndexRoute
   '/kalender': typeof KalenderIndexRoute
@@ -506,6 +514,7 @@ export interface FileRoutesById {
   '/arkiv/': typeof ArkivIndexRoute
   '/beskjeder/': typeof BeskjederIndexRoute
   '/forum/': typeof ForumIndexRoute
+  '/fravaer/': typeof FravaerIndexRoute
   '/gruppeledere/': typeof GruppeledereIndexRoute
   '/innstillinger/': typeof InnstillingerIndexRoute
   '/kalender/': typeof KalenderIndexRoute
@@ -568,6 +577,7 @@ export interface FileRouteTypes {
     | '/arkiv/'
     | '/beskjeder/'
     | '/forum/'
+    | '/fravaer/'
     | '/gruppeledere/'
     | '/innstillinger/'
     | '/kalender/'
@@ -625,6 +635,7 @@ export interface FileRouteTypes {
     | '/arkiv'
     | '/beskjeder'
     | '/forum'
+    | '/fravaer'
     | '/gruppeledere'
     | '/innstillinger'
     | '/kalender'
@@ -685,6 +696,7 @@ export interface FileRouteTypes {
     | '/arkiv/'
     | '/beskjeder/'
     | '/forum/'
+    | '/fravaer/'
     | '/gruppeledere/'
     | '/innstillinger/'
     | '/kalender/'
@@ -745,6 +757,7 @@ export interface RootRouteChildren {
   ArkivIndexRoute: typeof ArkivIndexRoute
   BeskjederIndexRoute: typeof BeskjederIndexRoute
   ForumIndexRoute: typeof ForumIndexRoute
+  FravaerIndexRoute: typeof FravaerIndexRoute
   InnstillingerIndexRoute: typeof InnstillingerIndexRoute
   KalenderIndexRoute: typeof KalenderIndexRoute
   MedlemmerIndexRoute: typeof MedlemmerIndexRoute
@@ -886,6 +899,13 @@ declare module '@tanstack/react-router' {
       path: '/forum/ny'
       fullPath: '/forum/ny'
       preLoaderRoute: typeof ForumNyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fravaer/': {
+      id: '/fravaer/'
+      path: '/fravaer'
+      fullPath: '/fravaer/'
+      preLoaderRoute: typeof FravaerIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/gruppeledere/': {
@@ -1263,6 +1283,7 @@ const rootRouteChildren: RootRouteChildren = {
   ArkivIndexRoute: ArkivIndexRoute,
   BeskjederIndexRoute: BeskjederIndexRoute,
   ForumIndexRoute: ForumIndexRoute,
+  FravaerIndexRoute: FravaerIndexRoute,
   InnstillingerIndexRoute: InnstillingerIndexRoute,
   KalenderIndexRoute: KalenderIndexRoute,
   MedlemmerIndexRoute: MedlemmerIndexRoute,

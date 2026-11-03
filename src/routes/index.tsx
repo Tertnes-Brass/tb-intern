@@ -141,7 +141,7 @@ function HubPage() {
             </div>
             {data.heroEvent && (
               <div className="sheet mt-6 px-4 py-4 sm:px-5 md:max-w-xl">
-                <p className="kicker mb-3">Kommer du?</p>
+                <p className="kicker mb-3">Oppmøte</p>
                 <RsvpControl
                   occurrenceKey={hero.event.occurrenceKey}
                   eventLabel={`${hero.event.title} · ${formatWeekday(toOsloDate(hero.event.start))} ${formatDate(toOsloDate(hero.event.start))}${hero.event.allDay ? '' : `, ${formatTime(hero.event.start)}`}`}

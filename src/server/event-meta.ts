@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import { and, asc, eq, like, or, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, like, ne, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db, type Db } from '../db'
 import {
@@ -15,6 +15,7 @@ import {
 } from '../db/schema'
 import {
   ATTENDANCE_COMMENT_MAX,
+  ATTENDANCE_PERMISSION,
   ATTENDANCE_STATUSES,
   CALENDAR_PERMISSION,
   type AttendanceStatus,
@@ -374,6 +375,150 @@ export const getEventDetail = createServerFn()
       groups,
     }
   })
+
+// ---------- Fraværsoversikt (attendance.manage) ----------
+
+export type AbsenceRow = {
+  userId: string
+  name: string
+  partName: string | null
+  /** Aldri `attending` — oversikten lister bare dem som har meldt noe annet. */
+  status: Exclude<AttendanceStatus, 'attending'>
+  comment: string | null
+  source: 'self' | 'admin'
+  registeredByName: string | null
+  updatedAt: number
+}
+
+export type AbsenceOverviewEvent = {
+  occurrenceKey: string
+  title: string
+  start: string
+  end: string | null
+  allDay: boolean
+  location: string | null
+  counts: ReturnType<typeof countAttendance>
+  absences: AbsenceRow[]
+}
+
+/** D1 tar maks 100 bundne parametere per spørring; nøklene sendes i biter. */
+const KEY_CHUNK = 80
+
+/**
+ * Fraværsoversikten på /fravaer: hver kommende hendelse i kalendervinduet, med
+ * hvem som har meldt fravær. Fravær er unntaket — alle andre regnes som kommer
+ * — så oversikten er lista over unntak, ikke over svar.
+ *
+ * Gated på `attendance.manage` (ikke `attendanceScope`): en gruppeleder ser
+ * fortsatt sin egen seksjon på detaljsiden, men oversikten over hele korpset er
+ * fraværsansvarligs (og dirigentens) verktøy. Deaktiverte medlemmer er ute,
+ * akkurat som i tallene på detaljsiden.
+ */
+export const getAbsenceOverview = createServerFn().handler(async () => {
+  await requirePermission(ATTENDANCE_PERMISSION)
+  const d = db()
+  const now = Date.now()
+  const [calendar, roster] = await Promise.all([loadCalendar(now), activeRoster(d)])
+
+  // Samme «ikke over ennå» som mobil-API-et: en øvelse som pågår, står fortsatt.
+  const events = calendar.events.filter((e) => Date.parse(e.end ?? e.start) >= now)
+  const keys = events.map((e) => e.occurrenceKey)
+
+  const rows: Array<{
+    occurrenceKey: string
+    userId: string
+    status: AttendanceStatus
+    comment: string | null
+    source: 'self' | 'admin'
+    registeredBy: string | null
+    updatedAt: Date
+  }> = []
+  for (let i = 0; i < keys.length; i += KEY_CHUNK) {
+    rows.push(
+      ...(await d
+        .select({
+          occurrenceKey: eventAttendance.occurrenceKey,
+          userId: eventAttendance.userId,
+          status: eventAttendance.status,
+          comment: eventAttendance.comment,
+          source: eventAttendance.source,
+          registeredBy: eventAttendance.registeredBy,
+          updatedAt: eventAttendance.updatedAt,
+        })
+        .from(eventAttendance)
+        .where(
+          and(
+            inArray(eventAttendance.occurrenceKey, keys.slice(i, i + KEY_CHUNK)),
+            ne(eventAttendance.status, 'attending'),
+          ),
+        )),
+    )
+  }
+
+  const memberById = new Map(roster.map((m) => [m.id, m]))
+  // Den som registrerte kan være deaktivert siden; navnet skal likevel vises.
+  const registrarIds = [...new Set(rows.map((r) => r.registeredBy).filter((id): id is string => !!id))].filter(
+    (id) => !memberById.has(id),
+  )
+  const registrarNames = new Map(roster.map((m) => [m.id, m.name]))
+  for (let i = 0; i < registrarIds.length; i += KEY_CHUNK) {
+    const found = await d
+      .select({ id: user.id, name: user.name })
+      .from(user)
+      .where(inArray(user.id, registrarIds.slice(i, i + KEY_CHUNK)))
+    for (const u of found) registrarNames.set(u.id, u.name)
+  }
+
+  const byEvent = new Map<string, AbsenceRow[]>()
+  for (const row of rows) {
+    const member = memberById.get(row.userId)
+    if (!member || row.status === 'attending') continue
+    const list = byEvent.get(row.occurrenceKey) ?? []
+    list.push({
+      userId: row.userId,
+      name: member.name,
+      partName: member.partName,
+      status: row.status,
+      comment: row.comment,
+      source: row.source,
+      registeredByName: row.source === 'admin' && row.registeredBy ? (registrarNames.get(row.registeredBy) ?? null) : null,
+      updatedAt: row.updatedAt.getTime(),
+    })
+    byEvent.set(row.occurrenceKey, list)
+  }
+
+  const sortKey = new Map(roster.map((m) => [m.id, m.sortOrder]))
+  const overview: AbsenceOverviewEvent[] = events.map((event) => {
+    const absences = (byEvent.get(event.occurrenceKey) ?? []).sort(
+      (a, b) =>
+        // «Kan ikke» før «usikker», så besetningsrekkefølge, så navn.
+        (a.status === b.status ? 0 : a.status === 'not_attending' ? -1 : 1) ||
+        (sortKey.get(a.userId) ?? 999) - (sortKey.get(b.userId) ?? 999) ||
+        a.name.localeCompare(b.name, 'nb'),
+    )
+    const statusById = new Map(absences.map((a) => [a.userId, a.status]))
+    return {
+      occurrenceKey: event.occurrenceKey,
+      title: event.title,
+      start: event.start,
+      end: event.end,
+      allDay: event.allDay,
+      location: event.location,
+      counts: countAttendance(roster.map((m) => ({ status: statusById.get(m.id) ?? null }))),
+      absences,
+    }
+  })
+
+  return {
+    configured: calendar.configured,
+    error: calendar.error,
+    events: overview,
+    /** Til «Registrer fravær»: alle aktive medlemmer, alfabetisk. */
+    members: roster
+      .map((m) => ({ id: m.id, name: m.name, partName: m.partName }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'nb')),
+  }
+})
 
 /**
  * Verkssøk for øvingsplanen. Egen funksjon, gated på `calendar.manage`:

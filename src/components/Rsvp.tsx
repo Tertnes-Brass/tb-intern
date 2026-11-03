@@ -1,112 +1,115 @@
 import { useEffect, useState } from 'react'
-import { ATTENDANCE_COMMENT_MAX, type AttendanceStatus } from '../lib/attendance'
+import {
+  ABSENCE_REASONS,
+  ATTENDANCE_COMMENT_MAX,
+  type AbsenceReason,
+  type AttendanceStatus,
+  composeAbsenceComment,
+  effectiveStatus,
+  splitAbsenceComment,
+} from '../lib/attendance'
 import { setMyAttendance } from '../server/event-meta'
 import { Icon } from './Icons'
 import { toastError } from './toast'
 import { BottomSheet, Button } from './ui'
 
-/** Kortere enn `ATTENDANCE_LABELS` — tre knapper skal få plass på én linje. */
-const SEGMENTS: Array<{ status: AttendanceStatus; label: string }> = [
-  { status: 'attending', label: 'Kommer' },
-  { status: 'unsure', label: 'Usikker' },
-  { status: 'not_attending', label: 'Kan ikke' },
-]
-
-/** Hurtigvalg som fyller ut kommentaren. Ikke et felt i databasen — bare tekst. */
-const REASONS = ['Jobb', 'Syk', 'Reise', 'Annet'] as const
-
 export type MyAttendance = { status: AttendanceStatus; comment: string | null } | null
 
+const HEADLINE: Record<AttendanceStatus, string> = {
+  attending: 'Vi regner med deg',
+  not_attending: 'Du har meldt fravær',
+  unsure: 'Du har svart «usikker»',
+}
+
 /**
- * «Kommer du?» — tre knapper i ett trykk, og et ark for «Kan ikke» der man kan
- * legge til hvorfor. Skriver til samme rad som detaljsiden og fraværsoversikten
- * (`setMyAttendance`, én status per medlem per forekomst).
+ * Oppmøte der fravær er unntaket: alle regnes som kommer, og det eneste man
+ * trenger å trykke er «Kan ikke komme». Det åpner et ark med valgfri grunn og
+ * kommentar. Etterpå kan fraværet endres, eller angres med «Jeg kommer likevel»
+ * (som fjerner raden — ingen rad betyr kommer).
  *
- * Svaret vises med en gang (optimistisk); `onSaved` lar kalleren laste data på
- * nytt i bakgrunnen.
+ * Skriver til samme rad som detaljsiden og fraværsoversikten
+ * (`setMyAttendance`, én status per medlem per forekomst). Svaret vises med en
+ * gang (optimistisk); `onSaved` lar kalleren laste data på nytt i bakgrunnen.
  */
 export function RsvpControl({
   occurrenceKey,
   eventLabel,
   current,
   onSaved,
-  showComment = true,
 }: {
   occurrenceKey: string
   /** «Øvelse · onsdag 28. oktober, 19:00» — vises i arket. */
   eventLabel: string
   current: MyAttendance
   onSaved?: () => void | Promise<void>
-  /** Detaljsiden har sitt eget kommentarfelt og skjuler linjen her. */
-  showComment?: boolean
 }) {
   const [mine, setMine] = useState<MyAttendance>(current)
-  const [busy, setBusy] = useState<AttendanceStatus | null>(null)
+  const [busy, setBusy] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
 
   useEffect(() => setMine(current), [current?.status, current?.comment])
 
-  const write = async (status: AttendanceStatus | null, comment: string | null) => {
+  const status = effectiveStatus(mine?.status)
+
+  const write = async (next: AttendanceStatus | null, comment: string | null) => {
     const before = mine
-    setMine(status ? { status, comment } : null)
-    setBusy(status)
+    setMine(next ? { status: next, comment } : null)
+    setBusy(true)
     try {
-      await setMyAttendance({ data: { occurrenceKey, status, comment } })
+      await setMyAttendance({ data: { occurrenceKey, status: next, comment } })
       await onSaved?.()
     } catch (err) {
       setMine(before)
       toastError(err)
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
 
+  const detail =
+    status === 'attending'
+      ? 'Trykk bare hvis du ikke kan komme.'
+      : (mine?.comment ?? (status === 'unsure' ? 'Gi beskjed når du vet om du kan komme.' : 'Ingen kommentar.'))
+
   return (
     <>
-      <div className="grid grid-cols-3 gap-1 rounded-[11px] bg-paper-sunken p-1" role="radiogroup" aria-label="Kommer du?">
-        {SEGMENTS.map((seg) => {
-          const active = mine?.status === seg.status
-          return (
-            <button
-              key={seg.status}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              disabled={busy !== null}
-              onClick={() => {
-                if (seg.status === 'not_attending') setSheetOpen(true)
-                // Mellom «Kommer» og «Usikker» følger kommentaren med («kommer
-                // 19:30»); en fraværsgrunn gjør det ikke.
-                else if (!active) void write(seg.status, mine?.status === 'not_attending' ? null : (mine?.comment ?? null))
-              }}
-              className={`flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-[8px] px-2 text-[0.88rem] font-medium transition-colors disabled:cursor-wait ${
-                active
-                  ? seg.status === 'not_attending'
-                    ? 'bg-paper-raised text-oxblood shadow-[var(--shadow-soft)]'
-                    : 'bg-brass text-paper-raised shadow-[var(--shadow-soft)] dark:text-paper'
-                  : 'text-ink-soft'
-              }`}
-            >
-              {busy === seg.status ? (
-                <span className="spinner" aria-hidden />
-              ) : (
-                active && seg.status === 'attending' && <Icon name="check" size={16} strokeWidth={2.2} />
-              )}
-              {seg.label}
-            </button>
-          )
-        })}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-1 basis-56 items-center gap-3" aria-live="polite">
+          <StatusMark status={status} />
+          <div className="min-w-0">
+            <p className={`text-[0.95rem] font-semibold leading-snug ${status === 'not_attending' ? 'text-oxblood' : 'text-ink'}`}>
+              {HEADLINE[status]}
+            </p>
+            <p className="mt-0.5 break-words text-xs leading-relaxed text-ink-soft">{detail}</p>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {status === 'attending' ? (
+            <Button disabled={busy} onClick={() => setSheetOpen(true)}>
+              Kan ikke komme
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant={status === 'not_attending' ? 'ghost' : 'secondary'}
+                disabled={busy}
+                onClick={() => setSheetOpen(true)}
+              >
+                {status === 'not_attending' ? 'Endre' : 'Kan ikke komme'}
+              </Button>
+              <Button loading={busy} onClick={() => void write(null, null)}>
+                {status === 'not_attending' ? 'Jeg kommer likevel' : 'Jeg kommer'}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
-      {showComment && mine?.comment && (
-        <p className="mt-2 text-xs text-ink-soft">
-          <span className="text-ink-faint">Kommentar:</span> {mine.comment}
-        </p>
-      )}
       <AbsenceSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
         eventLabel={eventLabel}
-        initialComment={mine?.status === 'not_attending' ? (mine.comment ?? '') : ''}
+        editing={status === 'not_attending'}
+        initialComment={status === 'not_attending' ? (mine?.comment ?? '') : ''}
         onSubmit={async (comment) => {
           setSheetOpen(false)
           await write('not_attending', comment)
@@ -116,31 +119,53 @@ export function RsvpControl({
   )
 }
 
-/** Arket bak «Kan ikke»: valgfri grunn og kommentar, så «Registrer fravær». */
+function StatusMark({ status }: { status: AttendanceStatus }) {
+  const tone =
+    status === 'not_attending'
+      ? 'bg-oxblood/10 text-oxblood'
+      : status === 'unsure'
+        ? 'bg-paper-sunken text-ink-soft'
+        : 'bg-[var(--brass-soft)] text-brass-strong'
+  return (
+    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tone}`} aria-hidden>
+      {status === 'unsure' ? (
+        <span className="display-title text-base font-semibold leading-none">?</span>
+      ) : (
+        <Icon name={status === 'not_attending' ? 'close' : 'check'} size={16} strokeWidth={2.2} />
+      )}
+    </span>
+  )
+}
+
+/** Arket bak «Kan ikke komme»: valgfri grunn og kommentar, så «Meld fravær». */
 function AbsenceSheet({
   open,
   onClose,
   eventLabel,
+  editing,
   initialComment,
   onSubmit,
 }: {
   open: boolean
   onClose: () => void
   eventLabel: string
+  /** Fraværet finnes allerede — knappen sier «Lagre», ikke «Meld fravær». */
+  editing: boolean
   initialComment: string
   onSubmit: (comment: string | null) => Promise<void>
 }) {
-  const [reason, setReason] = useState<string | null>(null)
+  const [reason, setReason] = useState<AbsenceReason | null>(null)
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open) return
-    setReason(null)
-    setText(initialComment)
+    const initial = splitAbsenceComment(initialComment)
+    setReason(initial.reason)
+    setText(initial.text)
   }, [open, initialComment])
 
-  const comment = [reason, text.trim()].filter(Boolean).join(' – ') || null
+  const comment = composeAbsenceComment(reason, text)
   const tooLong = (comment?.length ?? 0) > ATTENDANCE_COMMENT_MAX
 
   return (
@@ -165,22 +190,7 @@ function AbsenceSheet({
         </div>
       }
     >
-      <p className="mb-2 text-[0.8rem] font-medium text-ink-soft">Hvorfor? (valgfritt)</p>
-      <div className="flex flex-wrap gap-2">
-        {REASONS.map((r) => (
-          <button
-            key={r}
-            type="button"
-            aria-pressed={reason === r}
-            onClick={() => setReason(reason === r ? null : r)}
-            className={`min-h-10 cursor-pointer rounded-full border px-4 text-sm font-medium transition-colors ${
-              reason === r ? 'border-brass bg-[var(--brass-soft)] text-brass-strong' : 'border-line-strong text-ink-soft'
-            }`}
-          >
-            {r}
-          </button>
-        ))}
-      </div>
+      <AbsenceReasonPicker value={reason} onChange={setReason} />
       <label className="mt-5 block">
         <span className="mb-1.5 block text-[0.8rem] font-medium text-ink-soft">Kommentar</span>
         <textarea
@@ -207,8 +217,38 @@ function AbsenceSheet({
           }
         }}
       >
-        Registrer fravær
+        {editing ? 'Lagre' : 'Meld fravær'}
       </Button>
     </BottomSheet>
+  )
+}
+
+/** Hurtigvalgene for grunn. Deles med registreringen på /fravaer. */
+export function AbsenceReasonPicker({
+  value,
+  onChange,
+}: {
+  value: AbsenceReason | null
+  onChange: (next: AbsenceReason | null) => void
+}) {
+  return (
+    <>
+      <p className="mb-2 text-[0.8rem] font-medium text-ink-soft">Hvorfor? (valgfritt)</p>
+      <div className="flex flex-wrap gap-2">
+        {ABSENCE_REASONS.map((r) => (
+          <button
+            key={r}
+            type="button"
+            aria-pressed={value === r}
+            onClick={() => onChange(value === r ? null : r)}
+            className={`min-h-10 cursor-pointer rounded-full border px-4 text-sm font-medium transition-colors ${
+              value === r ? 'border-brass bg-[var(--brass-soft)] text-brass-strong' : 'border-line-strong text-ink-soft'
+            }`}
+          >
+            {r}
+          </button>
+        ))}
+      </div>
+    </>
   )
 }

@@ -79,7 +79,10 @@ export const file = (id: string, title: string, name: string, kind = 'pdf', pref
 export const dateLabel = (value: number | string | Date | null | undefined): string => value == null ? '' : new Date(value).toLocaleDateString('nb-NO', { timeZone: 'Europe/Oslo' });
 export const options = <T>(rows: T[], value: (r: T) => string, label: (r: T) => string): Choice[] => rows.map(r => choice(value(r), label(r)));
 export const directions = [choice('up', 'Opp'), choice('down', 'Ned')];
-export const attendanceOptions = [choice('attending', 'Kommer'), choice('unsure', 'Usikker'), choice('not_attending', 'Kan ikke')];
+// Fravær er unntaket: «Kommer» (standard) og «Kan ikke komme». En gammel
+// «usikker»-rad vises med eget valg der den finnes (se `attendanceChoices`).
+export const attendanceOptions = [choice('attending', 'Kommer'), choice('not_attending', 'Kan ikke komme')];
+export const attendanceChoices = (current: string | null | undefined): Choice[] => current === 'unsure' ? [...attendanceOptions, choice('unsure', 'Usikker')] : attendanceOptions;
 export const taskStatuses = [choice('open', 'Åpen'), choice('in_progress', 'Pågår'), choice('done', 'Ferdig')];
 export const projectStatuses = [choice('active', 'Aktiv'), choice('archived', 'Arkivert'), choice('done', 'Ferdig')];
 export function filterAction(fields: Field[], query: URLSearchParams): Action {

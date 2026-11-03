@@ -107,6 +107,7 @@ export type HubAreaTo =
   | '/medlemmer'
   | '/gruppeledere'
   | '/styre'
+  | '/fravaer'
   | '/innstillinger/nedlastinger'
   | '/innstillinger'
 
@@ -145,6 +146,9 @@ function allows(permissions: string[], permission: string): boolean {
  * (docs/designprinsipper.md §6), men beholder kortet her — hub-en har plass, og
  * området må fortsatt ha en vei inn (§4).
  *
+ * Fravær har heller ingen toppmeny-oppføring (taket i §6): kortet her, flisen
+ * i «Meg og mer» og lenkene fra Kalender er veien inn.
+ *
  * Gruppeledere (#81) er det ene kortet som ikke kan avgjøres av rettighetene
  * alene: det krever i tillegg en aktiv leiarbinding, derfor `opts.leadsPartIds`.
  */
@@ -170,6 +174,13 @@ export function areasFor(
       to: '/styre',
       label: 'Styre',
       description: 'Oppgaver, møter og dokumenter for styret.',
+    })
+  }
+  if (allows(permissions, 'attendance.manage')) {
+    areas.push({
+      to: '/fravaer',
+      label: 'Fravær',
+      description: 'Se hvem som har meldt fravær fremover, og registrer fravær for andre.',
     })
   }
   if (allows(permissions, 'downloads.view')) {

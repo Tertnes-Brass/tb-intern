@@ -176,6 +176,13 @@
       "when": 1792971707552,
       "tag": "0024_push-okt",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1793629134374,
+      "tag": "0026_fravaersansvarlig",
+      "breakpoints": true
     }
   ]
 }

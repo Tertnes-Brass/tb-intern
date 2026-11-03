@@ -289,6 +289,15 @@ snike seg inn. Reglene:
 - **Bare aktive medlemmer.** `requireMe()` avviser deaktiverte, og
   `setMemberAttendance` slår opp målets profil og svarer likt på «finnes ikke»
   og «er deaktivert».
+- **Fraværsoversikten `/fravaer` (2. november 2026)** viser navn og
+  kommentarer for alle kommende hendelser på én gang, og er derfor gated på
+  `attendance.manage`/`*` alene (`getAbsenceOverview` → `requirePermission`) —
+  ikke på `attendanceScope`. En gruppeleder har fortsatt bare sine seksjoner,
+  og bare på detaljruta. Rollen «Fraværsansvarlig» (`attendance`) er
+  `scores.view` + `attendance.manage`: ingen prosjekt-, medlems- eller
+  admintilgang. Samtidig ble fravær unntaket (alle regnes som kommer), men
+  innsynstrappen over er uendret — den gjelder nå i praksis hvem som har meldt
+  fravær.
 - **Ingen fraværsgrunn.** Feltet er en kort kommentar (200 tegn, trimmet), og
   den følger navnelisten i innsynstrappen over. Skal noe sensitivt sies, sies
   det utenfor systemet.

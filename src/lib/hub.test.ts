@@ -109,9 +109,20 @@ describe('areasFor', () => {
       '/kalender',
       '/medlemmer',
       '/styre',
+      '/fravaer',
       '/innstillinger/nedlastinger',
       '/innstillinger',
     ])
+  })
+
+  // Fravær har ingen toppmeny-oppføring (§6) — kortet og flisen er veien inn.
+  it('gir Fravær til fraværsansvarlig (attendance.manage), ikke til et vanlig medlem', () => {
+    expect(areasFor(['scores.view', 'attendance.manage']).map((a) => a.to)).toContain('/fravaer')
+    expect(areasFor(['scores.view']).map((a) => a.to)).not.toContain('/fravaer')
+  })
+
+  it('gir ikke Fravær til en gruppeleder — de ser egen seksjon på hendelsen', () => {
+    expect(areasFor(['members.manage.section'], { leadsPartIds: ['flugel'] }).map((a) => a.to)).not.toContain('/fravaer')
   })
 
   // Gruppeledere (#81): rettighet OG aktiv leiarbinding — samme regel som
@@ -148,6 +159,7 @@ describe('areasFor', () => {
       '/medlemmer',
       '/gruppeledere',
       '/styre',
+      '/fravaer',
       '/innstillinger/nedlastinger',
       '/innstillinger',
     ])
