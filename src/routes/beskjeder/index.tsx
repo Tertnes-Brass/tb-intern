@@ -2,6 +2,8 @@ import { Link, createFileRoute, redirect } from '@tanstack/react-router'
 import { z } from 'zod'
 import { PostCard } from '../../components/PostCard'
 import { Button, EmptyState, Kicker } from '../../components/ui'
+import { seenThisSession } from '../../lib/read-posts-client'
+import { UNREAD_WINDOW_DAYS } from '../../lib/unread'
 import { listPosts } from '../../server/posts'
 
 /**
@@ -15,13 +17,14 @@ import { listPosts } from '../../server/posts'
 
 const filterSchema = z.object({
   // Validert så visningen kan lenkes til (docs/designprinsipper.md §4).
-  vis: z.enum(['alt', 'styret', 'arkivar', 'viktig']).default('alt').catch('alt'),
+  vis: z.enum(['alt', 'ulest', 'styret', 'arkivar', 'viktig']).default('alt').catch('alt'),
 })
 
 type Filter = z.infer<typeof filterSchema>['vis']
 
 const FILTERS: Array<{ value: Filter; label: string }> = [
   { value: 'alt', label: 'Alt' },
+  { value: 'ulest', label: 'Ulest' },
   { value: 'styret', label: 'Fra styret' },
   { value: 'arkivar', label: 'Fra notearkivar' },
   { value: 'viktig', label: 'Viktig' },
@@ -42,8 +45,21 @@ function PostsPage() {
   const data = Route.useLoaderData()
   const { vis } = Route.useSearch()
 
+  // Samme regel som merket på kortet: et innlegg du har åpnet i denne økten er
+  // lest, selv om lista ennå ikke er hentet på nytt.
+  const isUnread = (post: (typeof data.posts)[number]) => post.unread && !seenThisSession(post.id)
+  const unreadCount = data.posts.filter(isUnread).length
+
   const visible = data.posts.filter((post) =>
-    vis === 'styret' ? post.official : vis === 'arkivar' ? post.fromArchive : vis === 'viktig' ? post.importance === 'important' : true,
+    vis === 'ulest'
+      ? isUnread(post)
+      : vis === 'styret'
+        ? post.official
+        : vis === 'arkivar'
+          ? post.fromArchive
+          : vis === 'viktig'
+            ? post.importance === 'important'
+            : true,
   )
 
   return (
@@ -76,6 +92,12 @@ function PostsPage() {
               }`}
             >
               {filter.label}
+              {filter.value === 'ulest' && unreadCount > 0 && (
+                <>
+                  {' '}
+                  <span className="tabular ml-1 font-mono text-[0.68rem]">{unreadCount}</span>
+                </>
+              )}
             </Link>
           ))}
         </nav>
@@ -93,7 +115,13 @@ function PostsPage() {
       <section className="rise space-y-3" style={{ animationDelay: '120ms' }}>
         {visible.length === 0 ? (
           <EmptyState
-            title={vis === 'alt' ? 'Ingenting på veggen ennå' : 'Ingen innlegg i dette filteret'}
+            title={
+              vis === 'alt'
+                ? 'Ingenting på veggen ennå'
+                : vis === 'ulest'
+                  ? 'Du har lest alt'
+                  : 'Ingen innlegg i dette filteret'
+            }
             action={
               vis === 'alt' ? (
                 <Link to="/beskjeder/ny">
@@ -108,7 +136,9 @@ function PostsPage() {
           >
             {vis === 'alt'
               ? 'Del en beskjed, et bilde fra konserten eller et spørsmål til resten av korpset.'
-              : 'Prøv et annet filter.'}
+              : vis === 'ulest'
+                ? `Ingen uleste beskjeder fra de siste ${UNREAD_WINDOW_DAYS} dagene.`
+                : 'Prøv et annet filter.'}
           </EmptyState>
         ) : (
           visible.map((post) => <PostCard key={post.id} post={post} />)
