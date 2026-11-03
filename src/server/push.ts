@@ -4,6 +4,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
 import { notificationPreferences, pushSubscriptions } from '../db/schema'
+import { FORUM_REPLY_CHOICES } from '../lib/forum'
 import { newId } from '../lib/id'
 import { PUSH_TTL, RSVP_REMINDER_CHOICES, deviceLabel } from '../lib/push'
 import { isAllowedPushEndpoint } from '../lib/web-push'
@@ -161,13 +162,14 @@ export const listMyPushDevices = createServerFn().handler(async () => {
     .from(pushSubscriptions)
     .where(eq(pushSubscriptions.userId, me.id))
   const prefs = await db()
-    .select({ rsvpReminders: notificationPreferences.rsvpReminders })
+    .select({ rsvpReminders: notificationPreferences.rsvpReminders, forumReplies: notificationPreferences.forumReplies })
     .from(notificationPreferences)
     .where(eq(notificationPreferences.userId, me.id))
     .limit(1)
   return {
     configured: pushConfigured(),
     rsvpReminders: prefs[0]?.rsvpReminders ?? 'all',
+    forumReplies: prefs[0]?.forumReplies ?? 'all',
     devices: rows.map((r) => ({
       endpoint: r.endpoint,
       label: r.label ?? 'Ukjent enhet',
@@ -186,5 +188,17 @@ export const updateMyRsvpReminders = createServerFn({ method: 'POST' })
       .insert(notificationPreferences)
       .values({ userId: me.id, rsvpReminders: data.rsvpReminders })
       .onConflictDoUpdate({ target: notificationPreferences.userId, set: { rsvpReminders: data.rsvpReminders } })
+    return { ok: true }
+  })
+
+/** Nye svar i forumtråder du følger (kun push). Ingen rad = på. */
+export const updateMyForumReplies = createServerFn({ method: 'POST' })
+  .validator(z.object({ forumReplies: z.enum(FORUM_REPLY_CHOICES) }))
+  .handler(async ({ data }) => {
+    const me = await requireMe()
+    await db()
+      .insert(notificationPreferences)
+      .values({ userId: me.id, forumReplies: data.forumReplies })
+      .onConflictDoUpdate({ target: notificationPreferences.userId, set: { forumReplies: data.forumReplies } })
     return { ok: true }
   })

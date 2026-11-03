@@ -1,4 +1,4 @@
-import { mentionDraft, renderCommentHtml, toMarkers, type MentionUser } from './mentions'
+import { mentionDraft, mentionPlainText, renderCommentHtml, toMarkers, type MentionUser } from './mentions'
 
 export const FORUM_ALL = { id: 'forum:all', name: 'Alle i korpset' }
 export const FORUM_ALL_MARKER = '@[all]'
@@ -21,4 +21,9 @@ export function forumMentionDraft(body: string, users: MentionUser[]) {
 export function forumMentionHtml(body: string, users: MentionUser[]) {
   return body.split(FORUM_ALL_MARKER).map((part) => renderCommentHtml(part, users))
     .join('<span class="mention">@Alle i korpset</span>')
+}
+
+/** Ren tekst til push-varsler: `@Navn` og `@Alle i korpset`, aldri markørene. */
+export function forumPlainText(body: string, users: MentionUser[]) {
+  return body.split(FORUM_ALL_MARKER).map((part) => mentionPlainText(part, users)).join(`@${FORUM_ALL.name}`)
 }

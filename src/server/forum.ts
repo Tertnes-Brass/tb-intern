@@ -1,12 +1,13 @@
 import { checkForumMentions, forumMembers, forumMentionNames } from './forum-mentions'
+import { notifyForum } from './forum-notify'
 import { FORUM_ALL, FORUM_ALL_MARKER } from '../lib/forum-mentions'
 import { mentionMarker, mentionMatches, rankMentionCandidates } from '../lib/mentions'
 import { createServerFn } from '@tanstack/react-start'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
-import { forumTopics as topics, forumReplies as replies, forumReplyReads as reads, user } from '../db/schema'
-import { canEditForumText, canModerateForum } from '../lib/forum'
+import { forumFollows as follows, forumTopics as topics, forumReplies as replies, forumReplyReads as reads, user } from '../db/schema'
+import { canEditForumText, canModerateForum, followsForumTopic } from '../lib/forum'
 import { requireMe, requirePermission } from './access'
 
 const id = z.string().min(1).max(100)
@@ -40,6 +41,7 @@ export const createForumTopic = createServerFn({ method: 'POST' }).validator(top
   const topicId = crypto.randomUUID()
   const now = Date.now()
   await d.insert(topics).values({ ...data, id: topicId, authorId: me.id, createdAt: now, updatedAt: now, activityAt: now })
+  await notifyForum({ topicId, topicTitle: data.title, replyId: null, authorId: me.id, authorName: me.name, body: data.body })
   return { id: topicId }
 })
 
@@ -55,7 +57,13 @@ export const getForumTopic = createServerFn().validator(z.object({ id, page })).
   }).from(replies).leftJoin(user, eq(user.id, replies.authorId))
     .where(eq(replies.topicId, data.id)).orderBy(desc(replies.createdAt), desc(replies.id)).limit(PAGE_SIZE + 1).offset(data.page * PAGE_SIZE)
   const mentions = await forumMentionNames([topic.topic.body, ...rows.slice(0, PAGE_SIZE).map((r) => r.reply.body)])
-  return { ...topic, mentions, canEdit: canEditForumText(me, topic.topic.authorId, topic.topic.locked), canModerate: canModerateForum(me.permissions),
+  const [follow, participated] = await Promise.all([
+    d.select({ following: follows.following }).from(follows).where(and(eq(follows.topicId, data.id), eq(follows.userId, me.id))).get(),
+    topic.topic.authorId === me.id ? true
+      : d.select({ id: replies.id }).from(replies).where(and(eq(replies.topicId, data.id), eq(replies.authorId, me.id))).limit(1).get().then(Boolean),
+  ])
+  const following = followsForumTopic({ explicit: follow?.following ?? null, participated })
+  return { ...topic, mentions, following, canEdit: canEditForumText(me, topic.topic.authorId, topic.topic.locked), canModerate: canModerateForum(me.permissions),
     replies: rows.slice(0, PAGE_SIZE).map((r) => ({ ...r, canEdit: canEditForumText(me, r.reply.authorId, topic.topic.locked) })), hasMore: rows.length > PAGE_SIZE }
 })
 
@@ -69,7 +77,9 @@ export const replyToForum = createServerFn({ method: 'POST' }).validator(z.objec
   const result = await d.run(sql`insert into forum_replies (id, topic_id, author_id, body, created_at, updated_at)
     select ${replyId}, id, ${me.id}, ${data.body}, ${now}, ${now} from forum_topics where id = ${data.topicId} and locked = 0`)
   if (!result.meta.changes) throw new Error('Emnet er låst eller finnes ikke.')
-  await d.update(topics).set({ activityAt: sql`max(${topics.activityAt}, ${now})` }).where(eq(topics.id, data.topicId))
+  const [topic] = await d.update(topics).set({ activityAt: sql`max(${topics.activityAt}, ${now})` }).where(eq(topics.id, data.topicId))
+    .returning({ title: topics.title })
+  await notifyForum({ topicId: data.topicId, topicTitle: topic?.title ?? '', replyId, authorId: me.id, authorName: me.name, body: data.body })
   return { page: 0 }
 })
 
@@ -78,6 +88,11 @@ export const editForumText = createServerFn({ method: 'POST' }).validator(z.obje
   const d = db()
   await checkForumMentions(data.body)
   const moderator = canModerateForum(me.permissions)
+  // Teksten før redigeringen: bare omtaler som er NYE skal varsles.
+  const before = data.kind === 'topic'
+    ? await d.select({ body: topics.body, topicId: topics.id, title: topics.title }).from(topics).where(eq(topics.id, data.id)).get()
+    : await d.select({ body: replies.body, topicId: replies.topicId, title: topics.title }).from(replies)
+      .innerJoin(topics, eq(topics.id, replies.topicId)).where(eq(replies.id, data.id)).get()
   if (data.kind === 'topic') {
     const result = await d.update(topics).set({ body: data.body, updatedAt: Date.now() }).where(and(eq(topics.id, data.id),
       moderator ? undefined : and(eq(topics.authorId, me.id), eq(topics.locked, false)))).returning({ id: topics.id })
@@ -87,6 +102,24 @@ export const editForumText = createServerFn({ method: 'POST' }).validator(z.obje
       moderator ? undefined : and(eq(replies.authorId, me.id), sql`exists (select 1 from forum_topics where id = ${replies.topicId} and locked = 0)`))).returning({ id: replies.id })
     if (!result.length) throw new Error('Du kan ikke redigere denne teksten.')
   }
+  if (before) await notifyForum({ topicId: before.topicId, topicTitle: before.title, replyId: null, authorId: me.id,
+    authorName: me.name, body: data.body, previousBody: before.body })
+})
+
+/**
+ * «Følg tråden» / «Slå av varsler». Raden er alltid eksplisitt, også når den
+ * sier det samme som standarden — `updated_at` er da tidspunktet man begynte å
+ * følge, som `notifyForum` måler «lest seg opp» fra.
+ */
+export const setForumFollow = createServerFn({ method: 'POST' }).validator(z.object({ topicId: id, following: z.boolean() })).handler(async ({ data }) => {
+  const me = await requireMe()
+  const d = db()
+  const topic = await d.select({ id: topics.id }).from(topics).where(eq(topics.id, data.topicId)).get()
+  if (!topic) throw new Error('Emnet finnes ikke.')
+  const now = Date.now()
+  await d.insert(follows).values({ topicId: data.topicId, userId: me.id, following: data.following, updatedAt: now })
+    .onConflictDoUpdate({ target: [follows.topicId, follows.userId], set: { following: data.following, updatedAt: now } })
+  return { following: data.following }
 })
 
 export const setForumLock = createServerFn({ method: 'POST' }).validator(z.object({ id, locked: z.boolean() })).handler(async ({ data }) => {

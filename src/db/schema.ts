@@ -732,6 +732,11 @@ export const notificationPreferences = sqliteTable('notification_preferences', {
   rsvpReminders: text('rsvp_reminders', { enum: ['all', 'off'] })
     .notNull()
     .default('all'),
+  // Push-varsel om nye svar i forumtråder du følger (kun push, aldri e-post).
+  // Hvilke tråder du følger, står i `forum_follows` og `followsForumTopic`.
+  forumReplies: text('forum_replies', { enum: ['all', 'off'] })
+    .notNull()
+    .default('all'),
 })
 
 // Web Push: én rad per nettleser/enhet som har slått på varsler (PWA på
@@ -900,3 +905,13 @@ export const forumReplyReads = sqliteTable('forum_reply_reads', {
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   replyId: text('reply_id').notNull().references(() => forumReplies.id, { onDelete: 'cascade' }),
 }, (t) => [primaryKey({ columns: [t.userId, t.replyId] }), index('forum_reply_reads_reply_idx').on(t.replyId)])
+
+// Eksplisitte valg om å følge en tråd. Den som startet tråden eller har svart i
+// den, følger den uten rad; en rad med `following = false` demper tråden, en med
+// `true` følger den uten å ha skrevet noe. Regelen er `followsForumTopic`.
+export const forumFollows = sqliteTable('forum_follows', {
+  topicId: text('topic_id').notNull().references(() => forumTopics.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  following: integer('following', { mode: 'boolean' }).notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.topicId, t.userId] }), index('forum_follows_user_idx').on(t.userId)])

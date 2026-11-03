@@ -5,7 +5,8 @@ import { useForumRefresh } from '../../components/useForumRefresh'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { Button, Field, Stamp } from '../../components/ui'
-import { editForumText, getForumTopic, markForumRepliesRead, replyToForum, searchForumMentions, setForumLock } from '../../server/forum'
+import { editForumText, getForumTopic, markForumRepliesRead, replyToForum, searchForumMentions, setForumFollow, setForumLock } from '../../server/forum'
+import { Icon } from '../../components/Icons'
 import { refreshShellCounts } from '../../lib/shell-events'
 
 export const Route = createFileRoute('/forum/$topicId')({
@@ -75,10 +76,17 @@ function TopicPage() {
     <Link to="/forum" search={{ page: 0 }} className="link-quiet">← Forum</Link>
     <header className="space-y-3"><h1 className="display-title break-words text-3xl font-semibold sm:text-4xl">{topic.title}</h1>
       {topic.locked && <Stamp>Låst for nye svar</Stamp>}
-      {data.canModerate && <Button size="sm" disabled={busy} onClick={async () => {
-        setBusy(true); setError(''); try { await setForumLock({ data: { id: topic.id, locked: !topic.locked } }); await router.invalidate() }
-        catch (e) { setError(e instanceof Error ? e.message : 'Kunne ikke endre tråden.') } finally { setBusy(false) }
-      }}>{topic.locked ? 'Åpne tråden igjen' : 'Lås tråden'}</Button>}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" disabled={busy} aria-pressed={data.following} title={data.following ? 'Du får varsel om nye svar i denne tråden' : undefined} onClick={async () => {
+          setBusy(true); setError(''); try { await setForumFollow({ data: { topicId: topic.id, following: !data.following } }); await router.invalidate() }
+          catch (e) { setError(e instanceof Error ? e.message : 'Kunne ikke endre varslene.') } finally { setBusy(false) }
+        }}><Icon name="bell" size={14} />{data.following ? 'Slå av varsler' : 'Følg tråden'}</Button>
+        {data.canModerate && <Button size="sm" disabled={busy} onClick={async () => {
+          setBusy(true); setError(''); try { await setForumLock({ data: { id: topic.id, locked: !topic.locked } }); await router.invalidate() }
+          catch (e) { setError(e instanceof Error ? e.message : 'Kunne ikke endre tråden.') } finally { setBusy(false) }
+        }}>{topic.locked ? 'Åpne tråden igjen' : 'Lås tråden'}</Button>}
+      </div>
+      {data.following && <p className="text-xs text-ink-faint">Du følger tråden og får varsel om nye svar på enheter der du har slått på varsler.</p>}
     </header>
     <ForumText key={topic.id} {...topic} kind="topic" mentions={data.mentions} author={data.author} canEdit={data.canEdit} />
     {error && <p role="alert" className="text-danger">{error}</p>}
