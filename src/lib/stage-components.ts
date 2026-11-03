@@ -7,7 +7,8 @@
  * `'chair'`, `'timpani'`). Merket overlever kopiering, lim inn og duplisering i
  * Excalidraw, og det er det `equipmentList` teller: utstyrslisten til
  * arrangøren lages fra tegningen, ikke fra en liste noen må holde i takt med
- * den.
+ * den. Derfor er også en dobbel stol to stoler i tegningen, og stativet ved
+ * slagverket en egen strek — det som telles, er det som vises.
  *
  * Målestokk: {@link STAGE_SCALE} px per meter, og instrumentene er tegnet i
  * omtrent riktig størrelse sett ovenfra.
@@ -64,6 +65,10 @@ export type StageItemKind =
   | 'tubular-bells'
   | 'tam-tam'
   | 'cymbal'
+  | 'clash-cymbals'
+  | 'bongos'
+  | 'triangle'
+  | 'tambourine'
   | 'trap-table'
   | 'power'
   | 'microphone'
@@ -90,12 +95,35 @@ export const COUNTED_ITEMS: ReadonlyArray<{ kind: StageItemKind; one: string; ma
   { kind: 'tubular-bells', one: 'Rørklokker (sett)', many: 'Rørklokker (sett)' },
   { kind: 'tam-tam', one: 'Tam-tam', many: 'Tam-tam' },
   { kind: 'cymbal', one: 'Hengende cymbal', many: 'Hengende cymbaler' },
+  { kind: 'clash-cymbals', one: 'Clash cymbals (par)', many: 'Clash cymbals (par)' },
+  { kind: 'bongos', one: 'Bongos', many: 'Bongos' },
+  { kind: 'triangle', one: 'Triangel', many: 'Triangler' },
+  { kind: 'tambourine', one: 'Tamburin', many: 'Tamburiner' },
   { kind: 'trap-table', one: 'Slagverksbord', many: 'Slagverksbord' },
   { kind: 'power', one: 'Strømuttak', many: 'Strømuttak' },
   { kind: 'microphone', one: 'Mikrofon', many: 'Mikrofoner' },
 ]
 
 export type EquipmentLine = { key: string; label: string; count: number }
+
+/** Instrumentene i riggerekkefølgen — ikke stoler, stativ, krakker eller bord. */
+const RIG_KINDS: ReadonlySet<string> = new Set<StageItemKind>([
+  'timpani',
+  'bass-drum',
+  'snare',
+  'drum-kit',
+  'xylophone',
+  'marimba',
+  'vibraphone',
+  'glockenspiel',
+  'tubular-bells',
+  'tam-tam',
+  'cymbal',
+  'clash-cymbals',
+  'bongos',
+  'triangle',
+  'tambourine',
+])
 
 type Countable = {
   isDeleted?: boolean
@@ -111,6 +139,11 @@ export function stageKind(el: Countable): string | null {
   return typeof tb === 'string' ? tb : null
 }
 
+/** En ekstra stol som hører til en plass (dobbel stol), ikke en egen musiker. */
+export function isExtraChair(el: Countable): boolean {
+  return stageKind(el) === 'chair' && (el.customData as Record<string, unknown>).extra === true
+}
+
 /** «2 × 1 m» — lengste side først, så en dreid praktikabel teller som samme størrelse. */
 export function formatMeters(width: number, height: number): string {
   const fmt = (px: number) => {
@@ -124,14 +157,19 @@ export function formatMeters(width: number, height: number): string {
 /**
  * Teller utstyret i tegningen. Praktikabler telles per størrelse, siden «4
  * praktikabler» ikke sier en arrangør nok. Slettede elementer telles ikke.
+ *
+ * `instruments: false` utelater slagverksinstrumentene — de står i
+ * {@link percussionRigOrder} i stedet, i PDF-en og i panelet, så ikke samme
+ * pauke står to steder.
  */
-export function equipmentList(elements: readonly Countable[]): EquipmentLine[] {
+export function equipmentList(elements: readonly Countable[], opts: { instruments?: boolean } = {}): EquipmentLine[] {
   const counts = new Map<string, number>()
   const risers = new Map<string, number>()
   for (const el of elements) {
     if (el.isDeleted) continue
     const kind = stageKind(el)
     if (!kind) continue
+    if (opts.instruments === false && RIG_KINDS.has(kind)) continue
     if (kind === 'riser') {
       const size = formatMeters(el.width, el.height)
       risers.set(size, (risers.get(size) ?? 0) + 1)
@@ -159,23 +197,130 @@ export function stageSize(elements: readonly (Countable & { type?: string })[]):
   return stage ? formatMeters(stage.width, stage.height) : null
 }
 
+/**
+ * Slagverket fra venstre mot høyre slik slagverkerne ser det, med ryggen mot
+ * bakveggen og ansiktet mot salen — altså fra høyre mot venstre i tegningen,
+ * der publikum er nederst. Det er lista riggerne går etter.
+ *
+ * Ett instrument er én komponent (innerste gruppe): fire pauker i samme sett
+ * blir «Pauker (4)», ikke fire linjer. Står to like langt til siden, kommer den
+ * bakerste først.
+ */
+export function percussionRigOrder(elements: readonly (Countable & { id: string; x: number; y: number; groupIds?: readonly string[] })[]): string[] {
+  const units = new Map<string, { kind: string; count: number; minX: number; maxX: number; minY: number; maxY: number }>()
+  for (const el of elements) {
+    if (el.isDeleted) continue
+    const kind = stageKind(el)
+    if (!kind || !RIG_KINDS.has(kind)) continue
+    const key = `${el.groupIds?.[0] ?? el.id}|${kind}`
+    const unit = units.get(key) ?? { kind, count: 0, minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
+    unit.count++
+    unit.minX = Math.min(unit.minX, el.x)
+    unit.maxX = Math.max(unit.maxX, el.x + el.width)
+    unit.minY = Math.min(unit.minY, el.y)
+    unit.maxY = Math.max(unit.maxY, el.y + el.height)
+    units.set(key, unit)
+  }
+  const names = new Map(COUNTED_ITEMS.map((i) => [i.kind as string, i]))
+  return [...units.values()]
+    .map((u) => ({ ...u, cx: (u.minX + u.maxX) / 2, cy: (u.minY + u.maxY) / 2 }))
+    .sort((a, b) => b.cx - a.cx || a.cy - b.cy)
+    .map((u) => {
+      const item = names.get(u.kind)!
+      return u.count > 1 ? `${item.many} (${u.count})` : item.one
+    })
+}
+
 // ---------- Byggeklosser ----------
 
-const CHAIR_W = 76
-const CHAIR_H = 46
+export const CHAIR_W = 76
+export const CHAIR_H = 46
 const STAND_LENGTH = 36
+/** Avstanden fra kanten av stolen/instrumentet til stativet. */
+const STAND_GAP = 12
+/** Hvor langt den ekstra stolen i en dobbel stol stikker ut bak. */
+export const EXTRA_CHAIR_OFFSET = 8
 
-type Point = { x: number; y: number }
+export type Point = { x: number; y: number }
+
+/** Enhetsvektoren fra `from` mot `to`; rett ned (mot salen) når de faller sammen. */
+export function direction(from: Point, to: Point): Point {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const len = Math.hypot(dx, dy)
+  return len < 1 ? { x: 0, y: 1 } : { x: dx / len, y: dy / len }
+}
+
+/**
+ * Endepunktene til et notestativ like utenfor en form (midt i `center`,
+ * `width` × `height`), på siden mot `facing`. Stativet står på tvers av
+ * retningen, så det peker ut hvor musikeren ser.
+ */
+export function standPoints(center: Point, width: number, height: number, facing: Point): [[number, number], [number, number]] {
+  const { x: dx, y: dy } = direction(center, facing)
+  // Avstanden fra midten til kanten av formen i retning (dx, dy).
+  const edge = Math.min(
+    Math.abs(dx) < 1e-6 ? Infinity : width / 2 / Math.abs(dx),
+    Math.abs(dy) < 1e-6 ? Infinity : height / 2 / Math.abs(dy),
+  )
+  return across({ x: center.x + dx * (edge + STAND_GAP), y: center.y + dy * (edge + STAND_GAP) }, { x: dx, y: dy })
+}
+
+/** Et stativ midt i `at`, på tvers av retningen `toward`. */
+function across(at: Point, toward: Point): [[number, number], [number, number]] {
+  const px = -toward.y * (STAND_LENGTH / 2)
+  const py = toward.x * (STAND_LENGTH / 2)
+  return [
+    [at.x - px, at.y - py],
+    [at.x + px, at.y + py],
+  ]
+}
+
+/**
+ * Stativet i et paukesett: i buen, mellom de midterste paukene, der
+ * paukeristen ser. `radius` er avstanden fra krakken til paukene.
+ */
+export function timpaniStandPoints(stool: Point, radius: number, toward: Point): [[number, number], [number, number]] {
+  return across({ x: stool.x + toward.x * (radius + 4), y: stool.y + toward.y * (radius + 4) }, toward)
+}
+
+function standToward(
+  ctx: ElementContext,
+  center: Point,
+  width: number,
+  height: number,
+  facing: Point,
+  groupIds: string[],
+): SceneElement {
+  return line(ctx, {
+    points: standPoints(center, width, height, facing),
+    strokeWidth: 3,
+    groupIds,
+    customData: { tb: 'stand' },
+  })
+}
+
+/** Stativ ved et instrument: utenfor det som er tegnet (ikke teksten), mot `facing`. */
+function withStand(ctx: ElementContext, elements: SceneElement[], facing: Point): SceneElement[] {
+  const box = bounds(elements.filter((e) => e.type !== 'text'))
+  const center = { x: box.minX + box.width / 2, y: box.minY + box.height / 2 }
+  return [...elements, standToward(ctx, center, box.width, box.height, facing, elements[0]!.groupIds)]
+}
 
 /**
  * Stol med notestativ. Stolen dreies aldri (teksten skal kunne leses); det er
  * stativet som viser hvilken vei musikeren ser — mot `facing`.
+ *
+ * `chairs: 2` er en dobbel stol: en ekstra stol til instrumenter og
+ * dempere, tegnet så den stikker ut bak den første. Den telles som en stol, men
+ * har ikke navn og ikke eget stativ.
  */
 export function chairWithStand(
   ctx: ElementContext,
-  o: { cx: number; cy: number; label: string; section: StageSection; facing: Point; groupIds?: string[] },
+  o: { cx: number; cy: number; label: string; section: StageSection; facing: Point; chairs?: 1 | 2; groupIds?: string[] },
 ): SceneElement[] {
   const groupIds = o.groupIds ?? [ctx.id()]
+  const center = { x: o.cx, y: o.cy }
   const chair = rect(ctx, {
     x: o.cx - CHAIR_W / 2,
     y: o.cy - CHAIR_H / 2,
@@ -187,54 +332,36 @@ export function chairWithStand(
     customData: { tb: 'chair', section: o.section },
   })
   const name = label(ctx, chair, { text: o.label, fontSize: 13 })
-  return [chair, name, standToward(ctx, { x: o.cx, y: o.cy }, CHAIR_W, CHAIR_H, o.facing, groupIds)]
+  const stand = standToward(ctx, center, CHAIR_W, CHAIR_H, o.facing, groupIds)
+  // Først i lista = underst: den ekstra stolen ligger bak den med navnet.
+  const extra = o.chairs === 2 ? [extraChair(ctx, chair, direction(center, o.facing))] : []
+  return [...extra, chair, name, stand]
 }
 
-/** Et notestativ (tykk strek) like utenfor en form, på siden mot `facing`. */
-function standToward(
-  ctx: ElementContext,
-  center: Point,
-  width: number,
-  height: number,
-  facing: Point,
-  groupIds: string[],
-): SceneElement {
-  let dx = facing.x - center.x
-  let dy = facing.y - center.y
-  const len = Math.hypot(dx, dy)
-  if (len < 1) {
-    dx = 0
-    dy = 1
-  } else {
-    dx /= len
-    dy /= len
-  }
-  // Avstanden fra midten til kanten av formen i retning (dx, dy).
-  const edge = Math.min(
-    Math.abs(dx) < 1e-6 ? Infinity : width / 2 / Math.abs(dx),
-    Math.abs(dy) < 1e-6 ? Infinity : height / 2 / Math.abs(dy),
-  )
-  const sx = center.x + dx * (edge + 12)
-  const sy = center.y + dy * (edge + 12)
-  const px = -dy * (STAND_LENGTH / 2)
-  const py = dx * (STAND_LENGTH / 2)
-  return line(ctx, {
-    points: [
-      [sx - px, sy - py],
-      [sx + px, sy + py],
-    ],
-    strokeWidth: 3,
-    groupIds,
-    customData: { tb: 'stand' },
+/** Den ekstra stolen bak `chair`, motsatt vei av `toward`. */
+export function extraChair(ctx: ElementContext, chair: SceneElement, toward: Point): SceneElement {
+  const cx = chair.x + chair.width / 2 - toward.x * EXTRA_CHAIR_OFFSET
+  const cy = chair.y + chair.height / 2 - toward.y * EXTRA_CHAIR_OFFSET
+  return rect(ctx, {
+    x: cx - chair.width / 2,
+    y: cy - chair.height / 2,
+    width: chair.width,
+    height: chair.height,
+    rounded: true,
+    backgroundColor: typeof chair.backgroundColor === 'string' ? chair.backgroundColor : SECTION_FILL.other,
+    strokeColor: typeof chair.strokeColor === 'string' ? chair.strokeColor : undefined,
+    groupIds: chair.groupIds,
+    customData: { tb: 'chair', extra: true },
   })
 }
 
-/** Liten tekst rett under en form, i samme gruppe. */
-function caption(ctx: ElementContext, shape: SceneElement, value: string, fontSize = 12): SceneElement {
+/** Liten tekst rett under (eller over) en form, i samme gruppe. */
+function caption(ctx: ElementContext, shape: SceneElement, value: string, fontSize = 12, above = false): SceneElement {
+  const offset = 6 + fontSize * 0.7
   return text(ctx, {
     text: value,
     cx: shape.x + shape.width / 2,
-    cy: shape.y + shape.height + 6 + fontSize * 0.7,
+    cy: above ? shape.y - offset : shape.y + shape.height + offset,
     fontSize,
     groupIds: shape.groupIds,
   })
@@ -260,16 +387,75 @@ function labeledBox(
 
 function circleWithCaption(
   ctx: ElementContext,
-  o: { kind: StageItemKind; size: number; text: string; fill: string },
+  o: { kind: StageItemKind; size: number; text: string; fill: string; captionAbove?: boolean },
 ): SceneElement[] {
   const groupIds = [ctx.id()]
   const shape = ellipse(ctx, { cx: 0, cy: 0, width: o.size, backgroundColor: o.fill, groupIds, customData: { tb: o.kind } })
-  return [shape, caption(ctx, shape, o.text)]
+  return [shape, caption(ctx, shape, o.text, 12, o.captionAbove)]
 }
 
-/** Paukesett i en bue foran pauker-krakken. Største pauke til høyre sett fra salen. */
-export function timpaniSet(ctx: ElementContext, o: { cx: number; cy: number; sizes: number[]; groupIds?: string[] }) {
+/** Musikere ser mot dirigenten, som står nedenfor dem i tegningen. */
+const DOWN: Point = { x: 0, y: 1000 }
+
+/** Stavspillene: lengde × dybde i px (landskap, slik de står foran en slagverker som ser mot salen). */
+const MALLETS = {
+  xylophone: { length: 160, depth: 50, text: 'Xylofon', narrow: 'Xylofon' },
+  marimba: { length: 240, depth: 80, text: 'Marimba', narrow: 'Marimba' },
+  vibraphone: { length: 140, depth: 60, text: 'Vibrafon', narrow: 'Vibrafon' },
+  glockenspiel: { length: 100, depth: 40, text: 'Klokkespill', narrow: 'Klokke-\nspill' },
+} as const
+
+export type MalletKind = keyof typeof MALLETS
+
+/**
+ * Et stavspill med stativ mot `facing`. `upright` står på langs i tegningen
+ * (slagverkeren står ved siden av, som langs sidekanten i standardoppsettet);
+ * da ligger navnet oppå som vanlig tekst, så det står vannrett og kan leses.
+ */
+export function malletInstrument(
+  ctx: ElementContext,
+  kind: MalletKind,
+  o: { cx?: number; cy?: number; facing?: Point; upright?: boolean } = {},
+): SceneElement[] {
+  const spec = MALLETS[kind]
+  const cx = o.cx ?? 0
+  const cy = o.cy ?? 0
+  if (!o.upright) {
+    const box = translate(
+      labeledBox(ctx, { kind, width: spec.length, height: spec.depth, text: spec.text, fill: SECTION_FILL.perc, fontSize: kind === 'glockenspiel' ? 12 : 13 }),
+      cx,
+      cy,
+    )
+    return withStand(ctx, box, o.facing ?? { x: cx, y: cy + 1000 })
+  }
+  const groupIds = [ctx.id()]
+  const box = rect(ctx, {
+    x: cx - spec.depth / 2,
+    y: cy - spec.length / 2,
+    width: spec.depth,
+    height: spec.length,
+    rounded: true,
+    backgroundColor: SECTION_FILL.perc,
+    groupIds,
+    customData: { tb: kind },
+  })
+  const name = text(ctx, { text: spec.narrow, cx, cy, fontSize: 12, groupIds })
+  return withStand(ctx, [box, name], o.facing ?? { x: cx, y: cy + 1000 })
+}
+
+/**
+ * Paukesett i en bue foran pauker-krakken, med stativ mot `facing`. Største
+ * pauke på paukeristens venstre side. Standard er at paukeristen ser mot salen.
+ */
+export function timpaniSet(
+  ctx: ElementContext,
+  o: { cx: number; cy: number; sizes: number[]; facing?: Point; groupIds?: string[] },
+) {
   const groupIds = o.groupIds ?? [ctx.id()]
+  const facing = o.facing ?? { x: o.cx, y: o.cy + 1000 }
+  const toward = direction({ x: o.cx, y: o.cy }, facing)
+  // Vinklene er tegnet for en paukerist som ser rett ned (90°), og dreies mot `facing`.
+  const turn = Math.atan2(toward.y, toward.x) - Math.PI / 2
   // Tommer → cm: 23" = 58 cm, 26" = 66, 29" = 74, 32" = 81.
   const cm = (inch: number) => Math.round(inch * 2.54)
   const angles: Record<number, number[]> = { 1: [90], 2: [120, 60], 3: [150, 90, 30], 4: [160, 120, 60, 20], 5: [170, 135, 90, 45, 10] }
@@ -279,7 +465,7 @@ export function timpaniSet(ctx: ElementContext, o: { cx: number; cy: number; siz
     ellipse(ctx, { cx: o.cx, cy: o.cy, width: 36, backgroundColor: NEUTRAL_FILL, groupIds, customData: { tb: 'stool' } }),
   ]
   sorted.forEach((inch, i) => {
-    const angle = ((angles[sorted.length] ?? angles[4]!)[i]! * Math.PI) / 180
+    const angle = ((angles[sorted.length] ?? angles[4]!)[i]! * Math.PI) / 180 + turn
     const drum = ellipse(ctx, {
       cx: o.cx + Math.cos(angle) * radius,
       cy: o.cy + Math.sin(angle) * radius,
@@ -290,10 +476,18 @@ export function timpaniSet(ctx: ElementContext, o: { cx: number; cy: number; siz
     })
     out.push(drum, label(ctx, drum, { text: `${inch}"`, fontSize: 12 }))
   })
+  out.push(
+    line(ctx, {
+      points: timpaniStandPoints({ x: o.cx, y: o.cy }, radius, toward),
+      strokeWidth: 3,
+      groupIds,
+      customData: { tb: 'stand' },
+    }),
+  )
   return out
 }
 
-function drumKit(ctx: ElementContext): SceneElement[] {
+export function drumKit(ctx: ElementContext, o: { cx?: number; cy?: number; facing?: Point } = {}): SceneElement[] {
   const groupIds = [ctx.id()]
   const g = { groupIds }
   const perc = SECTION_FILL.perc
@@ -318,7 +512,49 @@ function drumKit(ctx: ElementContext): SceneElement[] {
     ellipse(ctx, { cx: -52, cy: 36, width: 44, backgroundColor: CYMBAL_FILL, opacity: 85, ...g }), // ride
     ellipse(ctx, { cx: 46, cy: 42, width: 40, backgroundColor: CYMBAL_FILL, opacity: 85, ...g }), // crash
   ]
-  return [area, ...parts, caption(ctx, area, 'Trommesett', 13)]
+  const cx = o.cx ?? 0
+  const cy = o.cy ?? 0
+  const kit = translate([area, ...parts, caption(ctx, area, 'Trommesett', 13, true)], cx, cy)
+  return withStand(ctx, kit, o.facing ?? { x: cx, y: cy + 1000 })
+}
+
+/** Et instrument (boks med navn) med stativ — stortromma. */
+function bassDrum(ctx: ElementContext, o: { facing?: Point } = {}) {
+  return withStand(ctx, labeledBox(ctx, { kind: 'bass-drum', width: 90, height: 55, text: 'Stortromme', fill: SECTION_FILL.perc, fontSize: 12 }), o.facing ?? DOWN)
+}
+
+function snare(ctx: ElementContext, o: { facing?: Point } = {}) {
+  return withStand(ctx, circleWithCaption(ctx, { kind: 'snare', size: 40, text: 'Skarptromme', fill: SECTION_FILL.perc, captionAbove: true }), o.facing ?? DOWN)
+}
+
+function clashCymbals(ctx: ElementContext): SceneElement[] {
+  const groupIds = [ctx.id()]
+  const left = ellipse(ctx, { cx: -17, cy: 0, width: 36, backgroundColor: CYMBAL_FILL, groupIds, customData: { tb: 'clash-cymbals' } })
+  const right = ellipse(ctx, { cx: 17, cy: 0, width: 36, backgroundColor: CYMBAL_FILL, groupIds })
+  return [left, right, caption(ctx, { ...left, x: -35, width: 70 }, 'Clash cymbals')]
+}
+
+function bongos(ctx: ElementContext): SceneElement[] {
+  const groupIds = [ctx.id()]
+  const small = ellipse(ctx, { cx: -14, cy: 0, width: 24, backgroundColor: SECTION_FILL.perc, groupIds, customData: { tb: 'bongos' } })
+  const big = ellipse(ctx, { cx: 14, cy: 0, width: 30, backgroundColor: SECTION_FILL.perc, groupIds })
+  return [small, big, caption(ctx, { ...big, x: -29, width: 58 }, 'Bongos')]
+}
+
+function triangle(ctx: ElementContext): SceneElement[] {
+  const groupIds = [ctx.id()]
+  const shape = line(ctx, {
+    points: [
+      [0, -14],
+      [14, 11],
+      [-14, 11],
+      [0, -14],
+    ],
+    strokeWidth: 2,
+    groupIds,
+    customData: { tb: 'triangle' },
+  })
+  return [shape, caption(ctx, shape, 'Triangel')]
 }
 
 function podium(ctx: ElementContext, o: { cx: number; cy: number; facing: Point; groupIds?: string[] }) {
@@ -413,15 +649,20 @@ export type StageComponentDef = {
   build: (ctx: ElementContext) => SceneElement[]
 }
 
-/** Musikere ser mot dirigenten, som står nedenfor dem i tegningen. */
-const DOWN: Point = { x: 0, y: 1000 }
-
 const musician = (id: string, labelText: string, section: StageSection, hint?: string): StageComponentDef => ({
   id,
   group: 'musikere',
   label: labelText,
   hint: hint ?? 'Stol med notestativ',
   build: (ctx) => chairWithStand(ctx, { cx: 0, cy: 0, label: labelText, section, facing: DOWN }),
+})
+
+const mallet = (kind: MalletKind, labelText: string): StageComponentDef => ({
+  id: kind,
+  group: 'slagverk',
+  label: labelText,
+  hint: 'Med notestativ',
+  build: (ctx) => malletInstrument(ctx, kind),
 })
 
 export const STAGE_COMPONENTS: readonly StageComponentDef[] = [
@@ -455,54 +696,23 @@ export const STAGE_COMPONENTS: readonly StageComponentDef[] = [
     id: 'timpani-4',
     group: 'slagverk',
     label: 'Pauker (4)',
-    hint: '32", 29", 26" og 23" med krakk',
+    hint: '32", 29", 26" og 23" med krakk og stativ',
     build: (ctx) => timpaniSet(ctx, { cx: 0, cy: 0, sizes: [32, 29, 26, 23] }),
   },
   {
     id: 'timpani-2',
     group: 'slagverk',
     label: 'Pauker (2)',
-    hint: '29" og 26" med krakk',
+    hint: '29" og 26" med krakk og stativ',
     build: (ctx) => timpaniSet(ctx, { cx: 0, cy: 0, sizes: [29, 26] }),
   },
-  {
-    id: 'bass-drum',
-    group: 'slagverk',
-    label: 'Stortromme',
-    build: (ctx) => labeledBox(ctx, { kind: 'bass-drum', width: 90, height: 55, text: 'Stortromme', fill: SECTION_FILL.perc, fontSize: 12 }),
-  },
-  {
-    id: 'snare',
-    group: 'slagverk',
-    label: 'Skarptromme',
-    build: (ctx) => circleWithCaption(ctx, { kind: 'snare', size: 40, text: 'Skarptromme', fill: SECTION_FILL.perc }),
-  },
-  { id: 'drum-kit', group: 'slagverk', label: 'Trommesett', build: drumKit },
-  {
-    id: 'xylophone',
-    group: 'slagverk',
-    label: 'Xylofon',
-    build: (ctx) => labeledBox(ctx, { kind: 'xylophone', width: 160, height: 50, text: 'Xylofon', fill: SECTION_FILL.perc }),
-  },
-  {
-    id: 'marimba',
-    group: 'slagverk',
-    label: 'Marimba',
-    build: (ctx) => labeledBox(ctx, { kind: 'marimba', width: 240, height: 80, text: 'Marimba', fill: SECTION_FILL.perc }),
-  },
-  {
-    id: 'vibraphone',
-    group: 'slagverk',
-    label: 'Vibrafon',
-    build: (ctx) => labeledBox(ctx, { kind: 'vibraphone', width: 140, height: 60, text: 'Vibrafon', fill: SECTION_FILL.perc }),
-  },
-  {
-    id: 'glockenspiel',
-    group: 'slagverk',
-    label: 'Klokkespill',
-    build: (ctx) =>
-      labeledBox(ctx, { kind: 'glockenspiel', width: 100, height: 40, text: 'Klokkespill', fill: SECTION_FILL.perc, fontSize: 12 }),
-  },
+  { id: 'bass-drum', group: 'slagverk', label: 'Stortromme', hint: 'Med notestativ', build: (ctx) => bassDrum(ctx) },
+  { id: 'snare', group: 'slagverk', label: 'Skarptromme', hint: 'Med notestativ', build: (ctx) => snare(ctx) },
+  { id: 'drum-kit', group: 'slagverk', label: 'Trommesett', hint: 'Med krakk og notestativ', build: (ctx) => drumKit(ctx) },
+  mallet('xylophone', 'Xylofon'),
+  mallet('marimba', 'Marimba'),
+  mallet('vibraphone', 'Vibrafon'),
+  mallet('glockenspiel', 'Klokkespill'),
   {
     id: 'tubular-bells',
     group: 'slagverk',
@@ -526,11 +736,20 @@ export const STAGE_COMPONENTS: readonly StageComponentDef[] = [
     label: 'Hengende cymbal',
     build: (ctx) => circleWithCaption(ctx, { kind: 'cymbal', size: 46, text: 'Cymbal', fill: CYMBAL_FILL }),
   },
+  { id: 'clash-cymbals', group: 'slagverk', label: 'Clash cymbals', hint: 'Et par, med holder', build: clashCymbals },
+  { id: 'bongos', group: 'slagverk', label: 'Bongos', build: bongos },
+  { id: 'triangle', group: 'slagverk', label: 'Triangel', build: triangle },
+  {
+    id: 'tambourine',
+    group: 'slagverk',
+    label: 'Tamburin',
+    build: (ctx) => circleWithCaption(ctx, { kind: 'tambourine', size: 30, text: 'Tamburin', fill: CYMBAL_FILL }),
+  },
   {
     id: 'trap-table',
     group: 'slagverk',
     label: 'Slagverksbord',
-    hint: 'Bord til småinstrumenter',
+    hint: 'Stikkebord / bord til småinstrumenter',
     build: (ctx) => labeledBox(ctx, { kind: 'trap-table', width: 90, height: 50, text: 'Bord', fill: NEUTRAL_FILL }),
   },
   {

@@ -4,6 +4,7 @@ import {
   STAGE_MAX_ELEMENTS,
   STAGE_SCENE_MAX_BYTES,
   canReadStageSetups,
+  normalizeStageContact,
   isSafeElementLink,
   normalizeStageNotes,
   normalizeStageTitle,
@@ -154,5 +155,20 @@ describe('projectReadError', () => {
 describe('stageFileName', () => {
   it('fjerner tegn som er ulovlige i filnavn', () => {
     expect(stageFileName('NM: Div 1/2', 'Korps*oppsett', 'pdf')).toBe('NM- Div 1-2 – Korps-oppsett.pdf')
+  })
+})
+
+describe('normalizeStageContact', () => {
+  it('trimmer, kutter og gjør tomt til null', () => {
+    expect(normalizeStageContact({ name: '  Kari   Nordmann ', email: '', phone: ' 99 99 99 99 ' })).toEqual({
+      contactName: 'Kari Nordmann',
+      contactEmail: null,
+      contactPhone: '99 99 99 99',
+    })
+    expect(normalizeStageContact({ name: 'x'.repeat(500) }).contactName).toHaveLength(120)
+  })
+
+  it('godtar en halvskrevet e-post — feltet lagres mens man skriver', () => {
+    expect(normalizeStageContact({ email: 'ola@' }).contactEmail).toBe('ola@')
   })
 })

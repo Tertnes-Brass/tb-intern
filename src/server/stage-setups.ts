@@ -2,14 +2,16 @@ import { createServerFn } from '@tanstack/react-start'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db, type Db } from '../db'
-import { projects, stageSetups, user } from '../db/schema'
+import { memberProfiles, projects, stageSetups, user } from '../db/schema'
 import { newId } from '../lib/id'
 import {
   EMPTY_STAGE_APP_STATE,
+  STAGE_CONTACT_MAX,
   STAGE_NOTES_MAX,
   STAGE_PERMISSION,
   STAGE_TITLE_MAX,
   canReadStageSetups,
+  normalizeStageContact,
   normalizeStageNotes,
   normalizeStageTitle,
   parseStageScene,
@@ -80,16 +82,31 @@ async function readableSetup(d: Db, me: Me, id: string) {
 
 const idSchema = z.string().min(1).max(64)
 
+/** Den innloggede som kontaktperson: navn, e-post og telefon fra profilen. */
+async function contactFor(d: Db, me: Me) {
+  const profile = (
+    await d.select({ phone: memberProfiles.phone }).from(memberProfiles).where(eq(memberProfiles.authUserId, me.id)).limit(1)
+  )[0]
+  return { name: me.name, email: me.email, phone: profile?.phone ?? '' }
+}
+
 export const getStageSetup = createServerFn()
   .validator(z.object({ id: idSchema }))
   .handler(async ({ data }) => {
     const me = await requireMe()
-    const row = await readableSetup(db(), me, data.id)
+    const d = db()
+    const row = await readableSetup(d, me, data.id)
+    const canEdit = hasPermission(me, STAGE_PERMISSION)
     return {
       setup: {
         id: row.setup.id,
         title: row.setup.title,
         notes: row.setup.notes,
+        contact: {
+          name: row.setup.contactName ?? '',
+          email: row.setup.contactEmail ?? '',
+          phone: row.setup.contactPhone ?? '',
+        },
         revision: row.setup.revision,
         updatedAt: row.setup.updatedAt.getTime(),
         updatedByName: row.updatedByName,
@@ -104,7 +121,9 @@ export const getStageSetup = createServerFn()
         eventDate: row.project.eventDate,
         venue: row.project.venue,
       },
-      canEdit: hasPermission(me, STAGE_PERMISSION),
+      canEdit,
+      // Til «Bruk meg» i kontaktfeltene. Bare ens egne opplysninger.
+      myContact: canEdit ? await contactFor(d, me) : null,
     }
   })
 
@@ -155,6 +174,9 @@ export const createStageSetup = createServerFn({ method: 'POST' })
       projectId: project.id,
       title,
       notes,
+      // Den som lager oppsettet, er som regel den arrangøren skal snakke med —
+      // også når tegningen er kopiert fra et annet prosjekt.
+      ...normalizeStageContact(await contactFor(d, me)),
       // Også malene går gjennom valideringen: det som lagres, er alltid noe
       // `saveStageSetup` selv ville godtatt.
       scene: JSON.stringify(parseStageScene(scene)),
@@ -174,6 +196,13 @@ export const saveStageSetup = createServerFn({ method: 'POST' })
       expectedRevision: z.number().int().min(0),
       title: z.string().max(STAGE_TITLE_MAX * 2).optional(),
       notes: z.string().max(STAGE_NOTES_MAX * 2).nullable().optional(),
+      contact: z
+        .object({
+          name: z.string().max(STAGE_CONTACT_MAX.name * 2),
+          email: z.string().max(STAGE_CONTACT_MAX.email * 2),
+          phone: z.string().max(STAGE_CONTACT_MAX.phone * 2),
+        })
+        .optional(),
       scene: z.unknown().optional(),
     }),
   )
@@ -185,6 +214,7 @@ export const saveStageSetup = createServerFn({ method: 'POST' })
     const values: Partial<typeof stageSetups.$inferInsert> = { updatedAt: new Date(), updatedBy: me.id }
     if (data.title !== undefined) values.title = normalizeStageTitle(data.title)
     if (data.notes !== undefined) values.notes = normalizeStageNotes(data.notes)
+    if (data.contact !== undefined) Object.assign(values, normalizeStageContact(data.contact))
     if (data.scene !== undefined) values.scene = JSON.stringify(parseStageScene(data.scene))
 
     const saved = await d

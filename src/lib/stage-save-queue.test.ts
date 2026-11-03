@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type StageDraft, type StageWriteResult, StageSaveQueue, stableSnapshot } from './stage-save-queue'
 
-const draft = (title: string, scene: unknown = { elements: [] }): StageDraft => ({ title, notes: '', scene })
+const draft = (title: string, scene: unknown = { elements: [] }): StageDraft => ({ title, notes: '', contact: { name: '', email: '', phone: '' }, scene })
 
 function deferred<T>() {
   let resolve!: (v: T) => void

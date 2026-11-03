@@ -11,7 +11,12 @@
  * tatt fra `CanvasSaveQueue` i trestl).
  */
 
-export type StageDraft = { title: string; notes: string; scene: unknown }
+export type StageDraft = {
+  title: string
+  notes: string
+  contact: { name: string; email: string; phone: string }
+  scene: unknown
+}
 
 export type SaveStatus = 'saved' | 'pending' | 'saving' | 'error' | 'conflict'
 

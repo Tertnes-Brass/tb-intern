@@ -256,6 +256,11 @@ export const stageSetups = sqliteTable(
     title: text('title').notNull(),
     // Merknader til arrangøren — kommer med i PDF-en.
     notes: text('notes'),
+    // Den arrangøren skal kontakte om riggen — kommer med i PDF-en. Fylles ut
+    // med den som lager oppsettet, og kan endres.
+    contactName: text('contact_name'),
+    contactEmail: text('contact_email'),
+    contactPhone: text('contact_phone'),
     scene: text('scene').notNull(),
     revision: integer('revision').notNull().default(1),
     createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),

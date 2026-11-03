@@ -48,12 +48,13 @@ export type ElementContext = {
   now: number
 }
 
-const ID_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+/** 64 tegn — `byte & 63` gir da hvert tegn like ofte (en `%` ville ikke det). */
+const ID_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_-'
 
 export function randomElementId(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(20))
+  const bytes = crypto.getRandomValues(new Uint8Array(21))
   let out = ''
-  for (const b of bytes) out += ID_ALPHABET[b % ID_ALPHABET.length]
+  for (const b of bytes) out += ID_ALPHABET[b & 63]
   return out
 }
 
@@ -244,8 +245,24 @@ export function bounds(elements: readonly SceneElement[]) {
     if (el.isDeleted) continue
     // Linjer: x/y er første punkt, og de andre punktene kan ligge til venstre/over.
     const points = Array.isArray(el.points) ? (el.points as Array<[number, number]>) : null
-    const xs = points ? points.map((p) => el.x + p[0]) : [el.x, el.x + el.width]
-    const ys = points ? points.map((p) => el.y + p[1]) : [el.y, el.y + el.height]
+    let xs = points ? points.map((p) => el.x + p[0]) : [el.x, el.x + el.width]
+    let ys = points ? points.map((p) => el.y + p[1]) : [el.y, el.y + el.height]
+    const angle = typeof el.angle === 'number' ? el.angle : 0
+    if (!points && angle) {
+      // En dreid form: hjørnene dreies om midten.
+      const cx = el.x + el.width / 2
+      const cy = el.y + el.height / 2
+      const cos = Math.cos(angle)
+      const sin = Math.sin(angle)
+      const corners = [
+        [-el.width / 2, -el.height / 2],
+        [el.width / 2, -el.height / 2],
+        [el.width / 2, el.height / 2],
+        [-el.width / 2, el.height / 2],
+      ].map(([dx, dy]) => [cx + dx! * cos - dy! * sin, cy + dx! * sin + dy! * cos] as const)
+      xs = corners.map((c) => c[0])
+      ys = corners.map((c) => c[1])
+    }
     minX = Math.min(minX, ...xs)
     minY = Math.min(minY, ...ys)
     maxX = Math.max(maxX, ...xs)

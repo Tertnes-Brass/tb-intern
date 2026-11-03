@@ -76,7 +76,7 @@ type Source = 'copy' | StageTemplateId
 
 function CreateStageSetupModal({ projectId, open, onClose }: { projectId: string; open: boolean; onClose: () => void }) {
   const router = useRouter()
-  const [source, setSource] = useState<Source>('brass-band')
+  const [source, setSource] = useState<Source>(STAGE_TEMPLATES[0].id)
   const [title, setTitle] = useState('')
   const [titleTouched, setTitleTouched] = useState(false)
   const [width, setWidth] = useState('12')
@@ -87,7 +87,7 @@ function CreateStageSetupModal({ projectId, open, onClose }: { projectId: string
 
   useEffect(() => {
     if (!open) return
-    setSource('brass-band')
+    setSource(STAGE_TEMPLATES[0].id)
     setTitle(STAGE_TEMPLATES[0].title)
     setTitleTouched(false)
     setWidth(String(STAGE_TEMPLATES[0].size.width))

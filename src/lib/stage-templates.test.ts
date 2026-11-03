@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { equipmentList, stageKind, stageSize } from './stage-components'
+import { faceConductor } from './stage-arrange'
+import { equipmentList, isExtraChair, percussionRigOrder, stageKind, stageSize } from './stage-components'
 import { STAGE_SCALE, bounds } from './stage-elements'
 import { parseStageScene } from './stage-scene'
 import { STAGE_SIZE_LIMITS, STAGE_TEMPLATES, buildStageTemplate, clampStageSize } from './stage-templates'
@@ -14,25 +15,64 @@ describe('buildStageTemplate', () => {
     expect(new Set(elements.map((e) => e.id)).size).toBe(elements.length)
   })
 
-  it('brass band har full besetning: 25 stoler, stativ til alle + dirigent, fire pauker', () => {
-    const c = counts('brass-band')
-    expect(c.chair).toBe(25)
-    expect(c.stand).toBe(26)
+  it('standard er Kim Systads oppsett: 26 plasser, 39 stoler + paukekrakk, 35 notestativ', () => {
+    const c = counts('standard')
+    // 13 doble stoler: sopran, repiano, 2. og 3. kornett, bassene og trombonene.
+    expect(c.chair).toBe(39)
+    expect(c.stool).toBe(1)
+    // 26 plasser, dirigenten og åtte instrumenter med stativ.
+    expect(c.stand).toBe(35)
     expect(c.podium).toBe(1)
     expect(c.timpani).toBe(4)
     expect(c['drum-kit']).toBe(1)
+    expect(c['clash-cymbals']).toBe(1)
+    expect(c['tam-tam']).toBe(1)
   })
 
-  it('brass band-stolene overlapper ikke hverandre', () => {
-    const chairs = buildStageTemplate('brass-band').filter((e) => stageKind(e) === 'chair')
+  it('standard har slagverket i samme riggerekkefølge som Kims oppsett', () => {
+    expect(percussionRigOrder(buildStageTemplate('standard'))).toEqual([
+      'Pauker (4)',
+      'Trommesett',
+      'Stortromme',
+      'Tam-tam',
+      'Hengende cymbal',
+      'Clash cymbals (par)',
+      'Skarptromme',
+      'Klokkespill',
+      'Vibrafon',
+      'Xylofon',
+      'Marimba',
+    ])
+  })
+
+  it('storband har trommesettet i midten og kornettene bakerst', () => {
+    const elements = buildStageTemplate('big-band')
+    const kit = elements.find((e) => stageKind(e) === 'drum-kit')!
+    expect(kit.x + kit.width / 2).toBeCloseTo(0, 0)
+    const chairs = elements.filter((e) => stageKind(e) === 'chair' && !isExtraChair(e))
+    const cornets = chairs.filter((e) => (e.customData as { section?: string }).section === 'cornet')
+    const others = chairs.filter((e) => ['trombone', 'tuba', 'euph-bari'].includes((e.customData as { section?: string }).section ?? ''))
+    expect(cornets).toHaveLength(11)
+    expect(Math.max(...cornets.map((e) => e.y))).toBeLessThan(Math.min(...others.map((e) => e.y)))
+    expect(Math.max(...cornets.map((e) => e.y))).toBeLessThan(kit.y)
+  })
+
+  it.each([['standard'], ['big-band']] as const)('%s: stolene overlapper ikke hverandre (bortsett fra en dobbel stol med seg selv)', (id) => {
+    const chairs = buildStageTemplate(id).filter((e) => stageKind(e) === 'chair')
     for (let i = 0; i < chairs.length; i++) {
       for (let j = i + 1; j < chairs.length; j++) {
         const a = chairs[i]!
         const b = chairs[j]!
+        if (a.groupIds[0] === b.groupIds[0]) continue
         const overlap = a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
         expect(overlap, `${i} og ${j}`).toBe(false)
       }
     }
+  })
+
+  it.each(STAGE_TEMPLATES.map((t) => [t.id]))('%s: stativene står allerede mot dirigenten', (id) => {
+    const elements = buildStageTemplate(id)
+    expect(faceConductor(elements, { id: () => 'x', int: () => 1, now: 0 }).changed).toBe(0)
   })
 
   it.each(STAGE_TEMPLATES.map((t) => [t.id]))('%s holder seg innenfor scenen (bortsett fra publikum og målestokk)', (id) => {

@@ -1,7 +1,7 @@
 /**
  * PDF-en som sendes til arrangøren: tegningen på et liggende A4-ark, med
- * prosjekt, dato og sted øverst, og utstyrslisten og merknadene i en spalte
- * til høyre. Bygges i nettleseren med pdf-lib, som lastes først når noen
+ * prosjekt, dato og sted øverst, og kontaktperson, utstyrsliste, slagverket i
+ * riggerekkefølge og merknadene i en spalte til høyre. Bygges i nettleseren med pdf-lib, som lastes først når noen
  * trykker på knappen.
  *
  * Standardfonten (Helvetica) har bare WinAnsi-tegnsettet — æøå er med, men
@@ -19,6 +19,9 @@ export type StagePdfInput = {
   subtitle: string
   stageSize: string | null
   equipment: EquipmentLine[]
+  /** Slagverket fra venstre mot høyre, sett fra slagverket mot salen (`percussionRigOrder`). */
+  percussion: string[]
+  contact: { name: string; email: string; phone: string } | null
   notes: string | null
   /** «2. november 2026» */
   printedOn: string
@@ -124,16 +127,32 @@ export async function buildStagePdf(input: StagePdfInput): Promise<Blob> {
   const bodyBottom = MARGIN + 18
 
   // ---------- Spalten: utstyr og merknader ----------
-  type Row = { kind: 'heading' | 'item' | 'text' | 'space'; text: string; count?: number }
+  type Row = { kind: 'heading' | 'item' | 'text' | 'hint' | 'space'; text: string; count?: number }
   const rows: Row[] = []
+  const section = (heading: string) => {
+    if (rows.length) rows.push({ kind: 'space', text: '' })
+    rows.push({ kind: 'heading', text: heading })
+  }
+  const paragraph = (text: string, kind: 'text' | 'hint' = 'text') => {
+    for (const line of wrapText(winAnsi(text), regular, kind === 'hint' ? 8.5 : 9.5, COLUMN)) rows.push({ kind, text: line })
+  }
+  const contact = input.contact ? [input.contact.name, input.contact.email, input.contact.phone].map((v) => v.trim()).filter(Boolean) : []
+  if (contact.length > 0) {
+    section('KONTAKTPERSON')
+    for (const line of contact) paragraph(line)
+  }
   if (input.equipment.length > 0) {
-    rows.push({ kind: 'heading', text: 'UTSTYR' })
+    section('UTSTYR')
     for (const item of input.equipment) rows.push({ kind: 'item', text: winAnsi(item.label), count: item.count })
   }
+  if (input.percussion.length > 0) {
+    section('SLAGVERK FRA VENSTRE')
+    paragraph('Sett fra slagverket, mot salen', 'hint')
+    paragraph(input.percussion.join(', '))
+  }
   if (input.notes) {
-    if (rows.length) rows.push({ kind: 'space', text: '' })
-    rows.push({ kind: 'heading', text: 'MERKNADER' })
-    for (const line of wrapText(winAnsi(input.notes), regular, 9.5, COLUMN)) rows.push({ kind: 'text', text: line })
+    section('MERKNADER')
+    paragraph(input.notes)
   }
   const hasColumn = rows.length > 0
   const drawingRight = hasColumn ? pageW - MARGIN - COLUMN - GAP : pageW - MARGIN
@@ -158,7 +177,7 @@ export async function buildStagePdf(input: StagePdfInput): Promise<Blob> {
       color: rule,
     })
     for (const row of rows) {
-      const height = row.kind === 'heading' ? 16 : row.kind === 'space' ? 10 : row.kind === 'item' ? 15 : 13
+      const height = row.kind === 'heading' ? 16 : row.kind === 'space' ? 10 : row.kind === 'item' ? 15 : row.kind === 'hint' ? 12 : 13
       if (cy - height < bodyBottom) {
         // Fortsetter på et nytt ark, nå i full bredde.
         current = addPage()
@@ -182,6 +201,8 @@ export async function buildStagePdf(input: StagePdfInput): Promise<Blob> {
         })
       } else if (row.kind === 'text') {
         current.drawText(row.text, { x: colX, y: cy, size: 9.5, font: regular, color: ink })
+      } else if (row.kind === 'hint') {
+        current.drawText(row.text, { x: colX, y: cy, size: 8.5, font: regular, color: soft })
       }
     }
   }

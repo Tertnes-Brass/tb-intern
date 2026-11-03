@@ -109,6 +109,27 @@ export function normalizeStageNotes(input: string | null | undefined): string | 
   return notes || null
 }
 
+/** Kontaktpersonen arrangøren skal ringe. Tomme felt er tomme strenger på klienten. */
+export type StageContact = { name: string; email: string; phone: string }
+
+export const STAGE_CONTACT_MAX = { name: 120, email: 254, phone: 40 } as const
+
+export const EMPTY_STAGE_CONTACT: StageContact = { name: '', email: '', phone: '' }
+
+/**
+ * Trimmer og kutter kontaktfeltene; tomt blir `null` i databasen. Formatet
+ * sjekkes bevisst ikke: feltene lagres mens man skriver, og «ola@» midt i et
+ * ord skal ikke gi en lagringsfeil.
+ */
+export function normalizeStageContact(input: Partial<StageContact>) {
+  const clean = (value: string | undefined, max: number) => value?.replace(/\s+/g, ' ').trim().slice(0, max).trim() || null
+  return {
+    contactName: clean(input.name, STAGE_CONTACT_MAX.name),
+    contactEmail: clean(input.email, STAGE_CONTACT_MAX.email),
+    contactPhone: clean(input.phone, STAGE_CONTACT_MAX.phone),
+  }
+}
+
 export type StageReader = { canManageProjects: boolean; canBrowseArchive: boolean; canManageStage: boolean }
 
 /**

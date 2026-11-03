@@ -5,8 +5,12 @@ import {
   chairWithStand,
   equipmentList,
   formatMeters,
+  isExtraChair,
+  malletInstrument,
+  percussionRigOrder,
   stageKind,
   stageSize,
+  timpaniSet,
 } from './stage-components'
 import { type ElementContext, type SceneElement, bounds } from './stage-elements'
 import { parseStageScene } from './stage-scene'
@@ -124,6 +128,13 @@ describe('equipmentList', () => {
     expect(list).toEqual([])
   })
 
+  it('kan utelate slagverksinstrumentene, som står i riggerekkefølgen i stedet', () => {
+    const list = equipmentList([...buildStageComponent('timpani-4'), ...buildStageComponent('trap-table'), ...buildStageComponent('chair-perc')], {
+      instruments: false,
+    })
+    expect(list.map((l) => l.key)).toEqual(['chair', 'stand', 'stool', 'trap-table'])
+  })
+
   it('teller praktikabler per størrelse, uavhengig av retning', () => {
     const list = equipmentList([
       tagged('riser', { width: 200, height: 100 }),
@@ -138,8 +149,9 @@ describe('equipmentList', () => {
 
   it('teller komponentene slik de bygges', () => {
     const list = equipmentList([...buildStageComponent('timpani-4'), ...buildStageComponent('podium'), ...buildStageComponent('drum-kit')])
+    // Pauker, podium og trommesett har hvert sitt notestativ.
     expect(Object.fromEntries(list.map((l) => [l.key, l.count]))).toEqual({
-      stand: 1,
+      stand: 3,
       stool: 1,
       podium: 1,
       timpani: 4,
@@ -157,5 +169,98 @@ describe('formatMeters og stageSize', () => {
   it('finner scenen', () => {
     expect(stageSize(buildStageComponent('stage'))).toBe('10 × 6 m')
     expect(stageSize([])).toBeNull()
+  })
+})
+
+describe('dobbel stol', () => {
+  const build = (facing = { x: 0, y: 500 }) =>
+    chairWithStand(testContext(), { cx: 0, cy: 0, label: 'Sopran', section: 'cornet', facing, chairs: 2 })
+
+  it('er to stoler i tegningen, og begge telles', () => {
+    const elements = build()
+    expect(elements.filter((e) => stageKind(e) === 'chair')).toHaveLength(2)
+    expect(equipmentList(elements).find((l) => l.key === 'chair')?.count).toBe(2)
+    expect(equipmentList(elements).find((l) => l.key === 'stand')?.count).toBe(1)
+  })
+
+  it('legger den ekstra stolen bak — under den med navnet, på motsatt side av stativet', () => {
+    const elements = build({ x: 500, y: 0 })
+    const extra = elements.find(isExtraChair)!
+    const chair = elements.find((e) => stageKind(e) === 'chair' && !isExtraChair(e))!
+    expect(elements.indexOf(extra)).toBeLessThan(elements.indexOf(chair))
+    expect(extra.x).toBeLessThan(chair.x)
+    expect(extra.y).toBe(chair.y)
+    expect(extra.groupIds).toEqual(chair.groupIds)
+    expect(extra.boundElements).toBeNull()
+  })
+
+  it('en enkel stol har ingen ekstra stol', () => {
+    const elements = chairWithStand(testContext(), { cx: 0, cy: 0, label: 'Solo 1', section: 'cornet', facing: { x: 0, y: 500 } })
+    expect(elements.some(isExtraChair)).toBe(false)
+  })
+})
+
+describe('stativ ved slagverket', () => {
+  const standOf = (elements: SceneElement[]) => bounds(elements.filter((e) => stageKind(e) === 'stand'))
+
+  it.each(['timpani-4', 'timpani-2', 'bass-drum', 'snare', 'drum-kit', 'xylophone', 'marimba', 'vibraphone', 'glockenspiel'])(
+    '%s har ett notestativ mot salen',
+    (id) => {
+      const elements = buildStageComponent(id, { x: 0, y: 0 }, testContext())
+      expect(elements.filter((e) => stageKind(e) === 'stand')).toHaveLength(1)
+      const shapes = bounds(elements.filter((e) => e.type !== 'text' && stageKind(e) !== 'stand'))
+      expect(standOf(elements).minY).toBeGreaterThan(shapes.minY + shapes.height / 2)
+    },
+  )
+
+  it.each(['tam-tam', 'cymbal', 'clash-cymbals', 'bongos', 'triangle', 'tambourine', 'tubular-bells', 'trap-table'])(
+    '%s har ikke eget stativ',
+    (id) => {
+      expect(buildStageComponent(id, { x: 0, y: 0 }, testContext()).some((e) => stageKind(e) === 'stand')).toBe(false)
+    },
+  )
+
+  it('paukesettet vender mot `facing`, med stativet i buen', () => {
+    const elements = timpaniSet(testContext(), { cx: 0, cy: 0, sizes: [32, 29, 26, 23], facing: { x: -500, y: 0 } })
+    const drums = elements.filter((e) => stageKind(e) === 'timpani')
+    // Alle paukene står på venstre side av krakken, og stativet midt i buen.
+    for (const drum of drums) expect(drum.x + drum.width / 2).toBeLessThan(0)
+    const stand = standOf(elements)
+    expect(stand.minX + stand.width / 2).toBeCloseTo(-124, 0)
+    expect(stand.minY + stand.height / 2).toBeCloseTo(0, 0)
+  })
+
+  it('et stavspill på langs har vannrett navn og stativ mot `facing`', () => {
+    const elements = malletInstrument(testContext(), 'marimba', { cx: 0, cy: 0, upright: true, facing: { x: 1000, y: 0 } })
+    const box = elements.find((e) => stageKind(e) === 'marimba')!
+    expect(box.height).toBeGreaterThan(box.width)
+    expect(elements.find((e) => e.type === 'text')!.angle).toBe(0)
+    expect(standOf(elements).minX).toBeGreaterThan(box.x + box.width)
+  })
+})
+
+describe('percussionRigOrder', () => {
+  // Felles kontekst: hver komponent må få sin egen gruppe-id.
+  const ctx = testContext()
+  const at = (id: string, x: number, y = 0) => buildStageComponent(id, { x, y }, ctx)
+
+  it('går fra høyre mot venstre i tegningen — fra venstre sett fra slagverket', () => {
+    const order = percussionRigOrder([...at('marimba', -400), ...at('snare', 0), ...at('timpani-4', 500)])
+    expect(order).toEqual(['Pauker (4)', 'Skarptromme', 'Marimba'])
+  })
+
+  it('tar den bakerste først når to står like langt til siden', () => {
+    expect(percussionRigOrder([...at('snare', 0, 0), ...at('bass-drum', 0, -300)])).toEqual(['Stortromme', 'Skarptromme'])
+  })
+
+  it('teller ikke stoler, stativ, krakker og bord, og to sett pauker er to linjer', () => {
+    const order = percussionRigOrder([
+      ...at('chair-perc', 0),
+      ...at('stool', 100),
+      ...at('trap-table', 200),
+      ...at('timpani-2', -600),
+      ...at('timpani-2', 600),
+    ])
+    expect(order).toEqual(['Pauker (2)', 'Pauker (2)'])
   })
 })

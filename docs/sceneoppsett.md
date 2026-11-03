@@ -4,6 +4,11 @@ Tegninger av hvordan korpset og slagverket skal stå på scenen, per prosjekt �
 laget i en innebygd Excalidraw-editor med ferdige komponenter, og sendt til
 arrangøren som PDF med utstyrslisten talt opp.
 
+Standardoppsettet og tellereglene er hentet fra Kim Systads
+[easy-seatingplan](https://github.com/kimsystad/easy-seatingplan) (oktober
+2026), en frittstående side for det samme behovet. Ideene er tatt med — ikke
+koden eller symbolene (repoet har ingen lisens).
+
 Integrasjonen er modellert etter lerretene i trestl (`CanvasEditor.tsx`,
 `CanvasSaveQueue`), men uten sanntidssamarbeid: internsiden har ingen
 websockets eller Durable Objects, og to som tegner samtidig er sjeldent nok til
@@ -37,12 +42,13 @@ at en ærlig konflikt er bedre enn en stille overskriving.
 
 | Hva | Hvor |
 |---|---|
-| Tabell | `stage_setups` (migrasjon `0025_sceneoppsett.sql`, kun CREATE TABLE/INDEX + rettighetsseeding) |
+| Tabell | `stage_setups` (migrasjon `0025_sceneoppsett.sql`, kun CREATE TABLE/INDEX + rettighetsseeding; `0027_scene-kontakt.sql`, tre ADD COLUMN for kontaktpersonen — journal-idx 28, se kommentaren i fila) |
 | Serverfunksjoner | `src/server/stage-setups.ts` (`getStageSetup`, `createStageSetup`, `saveStageSetup`, `deleteStageSetup`, `listStageSetupSources`) |
 | Delt spørring | `src/server/stage-setup-store.ts` (lista på prosjektsiden, brukt av `getProject`) |
 | Regler og validering | `src/lib/stage-scene.ts` (`parseStageScene`, `canReadStageSetups`, grenser) |
 | Elementfabrikk | `src/lib/stage-elements.ts` — Excalidraw-elementer som rene data |
-| Komponenter og utstyrsliste | `src/lib/stage-components.ts` |
+| Komponenter, utstyrsliste og riggerekkefølge | `src/lib/stage-components.ts` |
+| Snu mot dirigenten, enkel/dobbel stol | `src/lib/stage-arrange.ts` |
 | Maler | `src/lib/stage-templates.ts` |
 | Autolagring | `src/lib/stage-save-queue.ts` |
 | Editor | `src/components/stage/StageEditor.tsx` (lastes kun via `StageEditorLoader.tsx`) |
@@ -65,7 +71,15 @@ Det gir tre ting:
   `customData.tb` (`'chair'`, `'stand'`, `'timpani'`, …). Merket følger med når
   Excalidraw kopierer, limer inn og dupliserer, og `equipmentList` teller det —
   ingen liste som må holdes i takt med tegningen. Praktikabler telles per
-  størrelse.
+  størrelse. Derfor er alt som telles, også synlig: en **dobbel stol** (en
+  ekstra stol til instrument og dempere) er en ekstra stol som stikker ut bak
+  den med navnet (`customData.extra`), og slagverket som spilles fra noter
+  (pauker, stortromme, skarptromme, trommesett og stavspillene) har sitt eget
+  **notestativ** i komponenten.
+
+En komponent er elementene i samme **innerste** gruppe (`groupIds[0]`).
+Excalidraw legger nye, ytre grupper bakerst, så en stol er fortsatt én
+komponent når noen grupperer hele kornettrekka.
 
 Målestokken er 100 px per meter, og rutenettet har en hovedlinje per meter.
 Stolene dreies aldri (navnet skal kunne leses); notestativet viser hvilken vei
@@ -73,9 +87,49 @@ musikeren ser. Komponentene ligger både i paletten (trykk eller dra) og i
 Excalidraw sitt «Bibliotek». Det man selv legger i biblioteket, huskes i
 `localStorage` på enheten.
 
-Malene: **Brass band** (full besetning i vanlig oppstilling, slagverk bak),
-**Slagverk** (riggen alene) og **Tom scene**. Scenen, «Publikum» og
-målestokken er låst i malene, så de ikke dras med når man flytter stoler.
+Malene (`src/lib/stage-templates.ts`):
+
+- **Standard** — Kims hestesko, 14 × 9 m: kornettene i to rekker langs venstre
+  side (solokornettene innerst), eufonier og barytoner innerst til høyre med
+  trombonene utenfor, hornene tvers over bak med flygelhornet i hjørnet og
+  bassene bak dem. Stavspillene står på langs ytterst til venstre (marimbaen
+  fremst), skarptromme, cymbaler og stortromme på bakerste rad med tam-tam bak,
+  trommesettet bak til høyre og paukene ytterst til høyre, dreid mot
+  dirigenten. Doble stoler etter Kims regel: sopran, repiano, 2. og 3.
+  kornett, bassene og trombonene. Det gir 39 stoler + paukekrakken og 35
+  notestativ — de samme tallene som i Kims app (40 stoler der, fordi han teller
+  krakken som stol).
+- **Storband** — trommesettet i midten, trombonene og bassene på hver sin side
+  av det, horn/barytoner/eufonier foran og kornettene på bakerste rad.
+- **Slagverk** — riggen alene, uten dirigent.
+- **Tom scene** — scenen, dirigenten og publikum.
+
+Scenen, «Publikum» og målestokken er låst i malene, så de ikke dras med når man
+flytter stoler. Malene er bare et utgangspunkt: et oppsett som ikke ligner noen
+av dem, lages fra «Tom scene» med komponentene, eller ved å kopiere et
+tidligere oppsett (som da blir korpsets egen mal). Testene låser at alle malene
+holder seg innenfor scenen, at stolene ikke overlapper, og at stativene
+allerede står mot dirigenten.
+
+### Snu mot dirigenten og doble stoler
+
+Velger man stoler eller instrumenter med stativ, kommer en liten verktøylinje
+over tegningen: **Enkel stol / Dobbel stol** og **Snu mot dirigenten** (også i
+hovedmenyen, for hele tegningen). Begge er rene funksjoner i
+`stage-arrange.ts` som tar hele elementlista og gir en ny tilbake, og editoren
+legger den inn med `updateScene` som ett steg i angre-historikken.
+
+- `faceConductor` flytter hvert stativ rundt stolen/instrumentet så det peker
+  mot nærmeste dirigentpodium, og den ekstra stolen bak på motsatt side.
+  Paukebuen dreies om krakken, med stativet i buen. Stolene dreies aldri (navnet
+  skal kunne leses). Uten utvalg gjelder det alle. Det er en knapp, ikke
+  automatikk som hos Kim: i et storband eller på en konsert skal noen stativ
+  kanskje peke mot salen, og da må de få stå.
+- `setChairCount` legger til eller fjerner den ekstra stolen. Fjerning er
+  `isDeleted: true`, så angre virker.
+- Knappene tar ikke fokus fra tegningen, og fokus legges tilbake etterpå —
+  ellers virker ikke ⌘Z/Esc før man klikker i den (`handleKeyboardGlobally` er
+  av).
 
 ### Lagring og konflikter
 
@@ -152,9 +206,18 @@ ved både opprettelse og lagring:
 ### Eksport
 
 - **PDF til arrangøren** (`stage-pdf.ts`): liggende A4 med tittel, prosjekt,
-  type, dato og sted, scenestørrelsen, tegningen, og en spalte med utstyrslisten
-  og merknadene. Helvetica har bare WinAnsi; `winAnsi` dropper emoji og
-  markerer manglende bokstaver med «?».
+  type, dato og sted, scenestørrelsen, tegningen, og en spalte med
+  kontaktperson, utstyr (stoler, stativ, krakker, podium, bord, praktikabler),
+  slagverket i riggerekkefølge og merknadene. Helvetica har bare WinAnsi;
+  `winAnsi` dropper emoji og markerer manglende bokstaver med «?».
+- **Slagverk fra venstre** (`percussionRigOrder`): instrumentene fra venstre mot
+  høyre slik slagverkerne ser det, med ansiktet mot salen — altså fra høyre mot
+  venstre i tegningen. Ett paukesett er én linje («Pauker (4)»). Instrumentene
+  står bare her, ikke også i utstyrslisten, så samme pauke ikke telles to
+  steder.
+- **Kontaktperson** (navn, e-post, telefon) fylles ut med den som lager
+  oppsettet (telefon fra profilen) og kan endres i «Utstyr og merknader».
+  Formatet sjekkes ikke, siden feltene lagres mens man skriver.
 - **PNG/SVG** via Excalidraw sin egen «Eksporter bilde».
 - **.excalidraw**-fil, som også kan importeres igjen (bilder utelates).
 
@@ -165,6 +228,10 @@ ved både opprettelse og lagring:
 - **Navn fra besetningen** på stolene. I dag skriver man navnet i stolen
   (dobbeltklikk). En automatisk utfylling må ta stilling til vikarer og
   fravær.
-- **Delt komponentbibliotek for korpset.** Egne bibliotekselementer ligger per
-  enhet.
+- **Delt komponentbibliotek og egne maler for korpset.** Egne
+  bibliotekselementer ligger per enhet; «kopier et tidligere oppsett» er malen
+  inntil videre.
+- **Engelsk PDF** til konkurranser i utlandet (Kims app har nynorsk og
+  engelsk). De faste tekstene og instrumentnavnene kan oversettes; navnene i
+  stolene er det brukeren skrev.
 - **Sanntidssamarbeid.**

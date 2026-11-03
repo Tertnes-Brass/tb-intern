@@ -36,14 +36,24 @@ import type { ExcalidrawElement, OrderedExcalidrawElement } from '@excalidraw/ex
 import { useBlocker } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { formatDate, formatDateTime, formatWeekday } from '../../lib/format'
-import { STAGE_COMPONENTS, buildStageComponent, equipmentList, stageSize } from '../../lib/stage-components'
-import { STAGE_FONT_FAMILY, type SceneElement } from '../../lib/stage-elements'
+import { type ArrangeResult, type StageSelection, describeSelection, faceConductor, setChairCount } from '../../lib/stage-arrange'
+import {
+  STAGE_COMPONENTS,
+  buildStageComponent,
+  equipmentList,
+  percussionRigOrder,
+  stageKind,
+  stageSize,
+} from '../../lib/stage-components'
+import { type ElementContext, STAGE_FONT_FAMILY, type SceneElement, elementContext } from '../../lib/stage-elements'
 import { StageSaveQueue } from '../../lib/stage-save-queue'
 import {
   EMPTY_STAGE_APP_STATE,
+  STAGE_CONTACT_MAX,
   STAGE_ELEMENT_TYPES,
   STAGE_NOTES_MAX,
   STAGE_TITLE_MAX,
+  type StageContact,
   stageFileName,
 } from '../../lib/stage-scene'
 import { saveBlob } from '../../lib/zip-client'
@@ -67,6 +77,12 @@ const CATALOG_PREFIX = 'tb-'
 const KIND_LABEL: Record<string, string> = { konsert: 'Konsert', konkurranse: 'Konkurranse', seminar: 'Seminar' }
 
 type Scene = { elements: SceneElement[]; appState: Record<string, unknown> }
+
+const NO_SELECTION: StageSelection = { chairs: 0, doubles: 0, stands: 0 }
+
+function selectedIds(appState: Pick<AppState, 'selectedElementIds'>): Set<string> {
+  return new Set(Object.keys(appState.selectedElementIds).filter((id) => appState.selectedElementIds[id]))
+}
 
 function sceneFrom(elements: readonly ExcalidrawElement[], appState: AppState): Scene {
   return {
@@ -122,7 +138,7 @@ export default function StageEditor({
   /** Hent siste versjon fra serveren og start editoren på nytt. */
   onReload: () => Promise<void>
 }) {
-  const { setup, project, canEdit } = data
+  const { setup, project, canEdit, myContact } = data
   const [scene] = useState(() => JSON.parse(setup.sceneJson) as Scene)
   const theme = useAppTheme()
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
@@ -132,7 +148,9 @@ export default function StageEditor({
   const [sheet, setSheet] = useState<null | 'components' | 'info'>(null)
   const [busy, setBusy] = useState<null | 'pdf' | 'delete' | 'reload'>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [selection, setSelection] = useState<StageSelection>(NO_SELECTION)
   const importInput = useRef<HTMLInputElement>(null)
+  const canvasRef = useRef<HTMLDivElement>(null)
 
   /** Har brukeren rørt tegningen? Første `onChange` før det er bare innlastingen. */
   const interacted = useRef(false)
@@ -143,15 +161,23 @@ export default function StageEditor({
   const warnedUnsupported = useRef(false)
   const fitted = useRef(false)
   const allowLeave = useRef(false)
+  const lastSelection = useRef<{ ids: unknown; key: string }>({ ids: null, key: '' })
 
   const [queue] = useState(
     () =>
       new StageSaveQueue(
-        { title: setup.title, notes: setup.notes ?? '', scene },
+        { title: setup.title, notes: setup.notes ?? '', contact: setup.contact, scene },
         setup.revision,
         (draft, expectedRevision) =>
           saveStageSetup({
-            data: { id: setup.id, expectedRevision, title: draft.title, notes: draft.notes, scene: draft.scene },
+            data: {
+              id: setup.id,
+              expectedRevision,
+              title: draft.title,
+              notes: draft.notes,
+              contact: draft.contact,
+              scene: draft.scene,
+            },
           }),
         rerender,
       ),
@@ -166,7 +192,7 @@ export default function StageEditor({
     pending.current = null
     setElements(scene.elements)
     if (!canEdit) return
-    const draft = { title: queue.draft.title, notes: queue.draft.notes, scene }
+    const draft = { ...queue.draft, scene }
     if (firstChange.current) {
       firstChange.current = false
       if (!interacted.current) return queue.rebase(draft)
@@ -176,7 +202,15 @@ export default function StageEditor({
 
   const onChange = useCallback(
     (els: readonly OrderedExcalidrawElement[], appState: AppState) => {
-      const key = `${hashElementsVersion(els)}|${appState.viewBackgroundColor}|${appState.gridSize}|${appState.gridStep}|${appState.gridModeEnabled}`
+      const hash = hashElementsVersion(els)
+      if (canEdit && (appState.selectedElementIds !== lastSelection.current.ids || lastKey.current.split('|')[0] !== String(hash))) {
+        // Verktøylinja over tegningen følger utvalget (og om stolene er doble).
+        const next = describeSelection(els as unknown as SceneElement[], selectedIds(appState))
+        const selectionKey = `${next.chairs}|${next.doubles}|${next.stands}`
+        if (selectionKey !== lastSelection.current.key) setSelection(next)
+        lastSelection.current = { ids: appState.selectedElementIds, key: selectionKey }
+      }
+      const key = `${hash}|${appState.viewBackgroundColor}|${appState.gridSize}|${appState.gridStep}|${appState.gridModeEnabled}`
       if (key === lastKey.current) return
       lastKey.current = key
       if (!fitted.current && apiRef.current) {
@@ -193,10 +227,10 @@ export default function StageEditor({
       clearTimeout(commitTimer.current)
       commitTimer.current = setTimeout(commit, firstChange.current ? 0 : 200)
     },
-    [commit],
+    [canEdit, commit],
   )
 
-  const updateDraft = (patch: { title?: string; notes?: string }) => {
+  const updateDraft = (patch: { title?: string; notes?: string; contact?: StageContact }) => {
     commit()
     queue.update({ ...queue.draft, ...patch })
   }
@@ -240,6 +274,15 @@ export default function StageEditor({
     } catch {}
   }, [])
 
+  /**
+   * Gir tastaturet tilbake til tegningen etter et trykk i paletten eller
+   * verktøylinja — ellers virker ikke ⌘Z/Ctrl+Z og Esc før man klikker i den
+   * (`handleKeyboardGlobally` er av, så Excalidraw lytter bare på seg selv).
+   */
+  const refocus = useCallback(() => {
+    canvasRef.current?.querySelector<HTMLElement>('.excalidraw-container')?.focus({ preventScroll: true })
+  }, [])
+
   /** Setter inn en komponent med senter i `at` (scenekoordinater), eller midt i bildet. */
   const insert = useCallback((id: string, at?: { x: number; y: number }) => {
     const api = apiRef.current
@@ -266,7 +309,49 @@ export default function StageEditor({
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     })
     api.setActiveTool({ type: 'selection' })
-  }, [])
+    refocus()
+  }, [refocus])
+
+  /**
+   * Kjører en endring fra `stage-arrange.ts` på hele tegningen, som ett steg i
+   * angre-historikken. Nye elementer (en ekstra stol) går gjennom
+   * `restoreElements` først, som alt annet vi setter inn.
+   */
+  const arrange = (
+    run: (elements: SceneElement[], ctx: ElementContext, selected: Set<string>) => ArrangeResult,
+    opts: { all?: boolean } = {},
+  ) => {
+    const api = apiRef.current
+    if (!api || !canEdit) return 0
+    interacted.current = true
+    const current = api.getSceneElementsIncludingDeleted() as unknown as SceneElement[]
+    const result = run(current, elementContext(), opts.all ? new Set() : selectedIds(api.getAppState()))
+    if (result.changed === 0) return 0
+    const existing = new Set(current.map((e) => e.id))
+    const fresh = new Map(
+      restoreElements(result.elements.filter((e) => !existing.has(e.id)) as unknown as ExcalidrawElement[], null).map((e) => [e.id, e]),
+    )
+    api.updateScene({
+      elements: result.elements.map((e) => fresh.get(e.id) ?? e) as unknown as ExcalidrawElement[],
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    })
+    refocus()
+    return result.changed
+  }
+
+  const turnToConductor = (all = false) => {
+    const api = apiRef.current
+    if (!api) return
+    if (!api.getSceneElements().some((e) => stageKind(e) === 'podium')) {
+      toast('Sett inn et dirigentpodium først (under «Scene»)', 'error')
+      refocus()
+      return
+    }
+    const changed = arrange((els, ctx, selected) => faceConductor(els, ctx, selected), { all })
+    toast(changed ? 'Stativene er snudd mot dirigenten. Angre med Ctrl/⌘+Z.' : 'Stativene står allerede mot dirigenten')
+  }
+
+  const setChairs = (count: 1 | 2) => arrange((els, ctx, selected) => setChairCount(els, ctx, selected, count))
 
   const subtitle = [
     KIND_LABEL[project.kind] ?? null,
@@ -305,7 +390,9 @@ export default function StageEditor({
         projectName: project.name,
         subtitle,
         stageSize: stageSize(els as unknown as SceneElement[]),
-        equipment: equipmentList(els as unknown as SceneElement[]),
+        equipment: equipmentList(els as unknown as SceneElement[], { instruments: false }),
+        percussion: percussionRigOrder(els as unknown as SceneElement[]),
+        contact: queue.draft.contact,
         notes: queue.draft.notes.trim() || null,
         printedOn: formatDate(new Date().toISOString().slice(0, 10)),
       })
@@ -370,14 +457,19 @@ export default function StageEditor({
     }
   }
 
-  const equipment = useMemo(() => equipmentList(elements), [elements])
+  const equipment = useMemo(() => equipmentList(elements, { instruments: false }), [elements])
+  const rigOrder = useMemo(() => percussionRigOrder(elements), [elements])
   const size = useMemo(() => stageSize(elements), [elements])
 
   const info = (
     <InfoPanel
       canEdit={canEdit}
       equipment={equipment}
+      rigOrder={rigOrder}
       stageSize={size}
+      contact={queue.draft.contact}
+      myContact={myContact}
+      onContact={(contact) => updateDraft({ contact })}
       notes={queue.draft.notes}
       onNotes={(notes) => updateDraft({ notes })}
       savedLine={
@@ -456,6 +548,7 @@ export default function StageEditor({
 
       <div className="flex min-h-0 flex-1">
         <div
+          ref={canvasRef}
           className="relative min-w-0 flex-1"
           onPointerDownCapture={() => (interacted.current = true)}
           onKeyDownCapture={() => (interacted.current = true)}
@@ -502,6 +595,12 @@ export default function StageEditor({
                 {canEdit && (
                   <MainMenu.Item onSelect={() => importInput.current?.click()}>Importer .excalidraw-fil</MainMenu.Item>
                 )}
+                {canEdit && (
+                  <>
+                    <MainMenu.Separator />
+                    <MainMenu.Item onSelect={() => turnToConductor(true)}>Snu alle stativ mot dirigenten</MainMenu.Item>
+                  </>
+                )}
                 <MainMenu.Separator />
                 {canEdit && <MainMenu.DefaultItems.ClearCanvas />}
                 <MainMenu.DefaultItems.Help />
@@ -515,6 +614,9 @@ export default function StageEditor({
               </MainMenu>
             </Excalidraw>
           </div>
+          {canEdit && (selection.chairs > 0 || selection.stands > 0) && (
+            <SelectionBar selection={selection} onChairs={setChairs} onFace={() => turnToConductor()} />
+          )}
         </div>
 
         <aside className="hidden w-80 shrink-0 flex-col border-l border-line bg-paper md:flex">
@@ -547,7 +649,8 @@ export default function StageEditor({
                 <StagePalette onInsert={(id) => insert(id)} />
                 <p className="mt-5 text-[0.74rem] leading-snug text-ink-faint">
                   Trykk for å sette inn midt i bildet, eller dra dit den skal stå. Dobbeltklikk på en stol for å skrive navn.
-                  Rutenettet har én hovedlinje per meter.
+                  Velg stoler for å gjøre dem doble eller snu stativene mot dirigenten. Rutenettet har én hovedlinje per
+                  meter.
                 </p>
               </>
             ) : (
@@ -630,21 +733,95 @@ function SaveStatus({ queue, canEdit }: { queue: StageSaveQueue; canEdit: boolea
   )
 }
 
+/**
+ * Verktøylinja over tegningen når stoler eller instrumenter med stativ er
+ * valgt: enkel/dobbel stol og «Snu mot dirigenten».
+ */
+function SelectionBar({
+  selection,
+  onChairs,
+  onFace,
+}: {
+  selection: StageSelection
+  onChairs: (count: 1 | 2) => void
+  onFace: () => void
+}) {
+  const segment = (active: boolean) =>
+    `cursor-pointer rounded-md px-2.5 py-1.5 text-[0.76rem] font-medium transition-colors ${
+      active ? 'bg-[var(--brass-soft)] text-brass-strong' : 'text-ink-soft hover:bg-paper-sunken hover:text-ink'
+    }`
+  const allDouble = selection.doubles === selection.chairs
+  return (
+    <div
+      role="toolbar"
+      aria-label="Valgte stoler og stativ"
+      // Knappene skal ikke ta fokus fra tegningen (angre, Esc, piltaster).
+      onMouseDown={(e) => e.preventDefault()}
+      className="absolute inset-x-0 top-16 z-[5] mx-auto flex w-fit max-w-[calc(100%-1.5rem)] flex-wrap items-center justify-center gap-1 rounded-xl border border-line bg-paper-raised/95 p-1 shadow-md backdrop-blur md:top-[4.6rem]"
+    >
+      {selection.chairs > 0 && (
+        <div role="group" aria-label="Stoler per plass" className="flex gap-0.5">
+          <button type="button" aria-pressed={selection.doubles === 0} className={segment(selection.doubles === 0)} onClick={() => onChairs(1)}>
+            Enkel stol
+          </button>
+          <button
+            type="button"
+            aria-pressed={allDouble}
+            className={segment(allDouble)}
+            onClick={() => onChairs(2)}
+            title="En ekstra stol til instrument og dempere — telles med i utstyrslisten"
+          >
+            Dobbel stol
+          </button>
+        </div>
+      )}
+      {selection.chairs > 0 && selection.stands > 0 && <span aria-hidden className="mx-0.5 h-5 w-px bg-line" />}
+      {selection.stands > 0 && (
+        <button type="button" className={segment(false)} onClick={onFace} title="Flytt notestativene så musikerne ser mot dirigentpodiet">
+          Snu mot dirigenten
+        </button>
+      )}
+    </div>
+  )
+}
+
 function InfoPanel({
   canEdit,
   equipment,
+  rigOrder,
   stageSize: size,
+  contact,
+  myContact,
+  onContact,
   notes,
   onNotes,
   savedLine,
 }: {
   canEdit: boolean
   equipment: ReturnType<typeof equipmentList>
+  rigOrder: string[]
   stageSize: string | null
+  contact: StageContact
+  myContact: StageContact | null
+  onContact: (contact: StageContact) => void
   notes: string
   onNotes: (notes: string) => void
   savedLine: string
 }) {
+  const contactEmpty = !contact.name.trim() && !contact.email.trim() && !contact.phone.trim()
+  const contactField = (key: keyof StageContact, text: string, type: string, autoComplete: string) => (
+    <label className="block">
+      <span className="mb-1 block text-[0.72rem] font-medium text-ink-soft">{text}</span>
+      <input
+        className="field-input text-[0.86rem]"
+        type={type}
+        autoComplete={autoComplete}
+        value={contact[key]}
+        maxLength={STAGE_CONTACT_MAX[key]}
+        onChange={(e) => onContact({ ...contact, [key]: e.target.value })}
+      />
+    </label>
+  )
   return (
     <div className="space-y-6">
       <section>
@@ -655,7 +832,7 @@ function InfoPanel({
         <h3 className="kicker mb-1.5">Utstyr</h3>
         {equipment.length === 0 ? (
           <p className="text-[0.82rem] leading-snug text-ink-faint">
-            Stoler, stativ og instrumenter fra komponentene telles her automatisk.
+            Stoler, stativ, krakker og bord fra komponentene telles her automatisk.
           </p>
         ) : (
           <ul>
@@ -668,6 +845,34 @@ function InfoPanel({
           </ul>
         )}
       </section>
+      {rigOrder.length > 0 && (
+        <section>
+          <h3 className="kicker mb-1.5">Slagverk fra venstre</h3>
+          <p className="text-[0.86rem] leading-relaxed text-ink">{rigOrder.join(', ')}</p>
+          <p className="mt-1 text-[0.74rem] leading-snug text-ink-faint">Sett fra slagverket, mot salen — slik riggerne leser det.</p>
+        </section>
+      )}
+      <section>
+        <h3 className="kicker mb-1.5">Kontaktperson</h3>
+        {canEdit ? (
+          <div className="space-y-2.5">
+            {contactField('name', 'Navn', 'text', 'name')}
+            {contactField('email', 'E-post', 'email', 'email')}
+            {contactField('phone', 'Telefon', 'tel', 'tel')}
+            {contactEmpty && myContact && (
+              <button type="button" className="link-brass cursor-pointer text-[0.78rem]" onClick={() => onContact(myContact)}>
+                Bruk mine opplysninger
+              </button>
+            )}
+          </div>
+        ) : contactEmpty ? (
+          <p className="text-[0.86rem] text-ink-soft">—</p>
+        ) : (
+          <p className="whitespace-pre-line text-[0.86rem] leading-relaxed text-ink-soft">
+            {[contact.name, contact.email, contact.phone].filter((v) => v.trim()).join('\n')}
+          </p>
+        )}
+      </section>
       <section>
         <h3 className="kicker mb-1.5">Merknader til arrangøren</h3>
         {canEdit ? (
@@ -676,10 +881,12 @@ function InfoPanel({
               className="field-input min-h-36 resize-y text-[0.86rem] leading-relaxed"
               value={notes}
               maxLength={STAGE_NOTES_MAX}
-              placeholder={'Rigging fra kl. 16:00\nVi tar med egne pauker\nTrenger strøm bak scenen\nKontakt: …'}
+              placeholder={'Rigging fra kl. 16:00\nVi tar med egne pauker\nTrenger strøm bak scenen'}
               onChange={(e) => onNotes(e.target.value)}
             />
-            <p className="mt-1.5 text-[0.74rem] leading-snug text-ink-faint">Kommer med i PDF-en, under utstyrslisten.</p>
+            <p className="mt-1.5 text-[0.74rem] leading-snug text-ink-faint">
+              Kommer med i PDF-en, sammen med kontaktpersonen og utstyrslisten.
+            </p>
           </>
         ) : (
           <p className="whitespace-pre-line text-[0.86rem] leading-relaxed text-ink-soft">{notes || '—'}</p>
