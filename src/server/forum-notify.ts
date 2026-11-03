@@ -3,7 +3,7 @@ import { db } from '../db'
 import { forumNotifyPlan, type ForumNotifyCandidate, type ForumReplyChoice } from '../lib/forum'
 import { forumPlainText } from '../lib/forum-mentions'
 import { parseMentions } from '../lib/mentions'
-import { PUSH_TTL, forumMentionPushMessage, forumReplyPushMessage } from '../lib/push'
+import { PUSH_TTL, forumDirectReplyPushMessage, forumMentionPushMessage, forumReplyPushMessage } from '../lib/push'
 import { forumMentionNames } from './forum-mentions'
 import { sendPushToUsers } from './push-send'
 
@@ -71,14 +71,16 @@ async function candidates(topicId: string, replyId: string | null, mentioned: st
 
 /**
  * Etter at et svar, en ny tråd eller en redigering er lagret. `previousBody` er
- * teksten før en redigering: da varsles bare omtaler som er NYE, og ingen
- * følgere (en redigering er ikke et nytt svar).
+ * teksten før en redigering: da varsles bare omtaler som er NYE, og verken
+ * følgere eller den det ble svart på (en redigering er ikke et nytt svar).
  */
 export async function notifyForum(input: {
   topicId: string
   topicTitle: string
-  /** Det nye svaret, eller null når det gjelder selve tråden. */
+  /** Svaret det gjelder (nytt eller redigert), eller null når det gjelder selve tråden. */
   replyId: string | null
+  /** Forfatteren av svaret det ble svart på («Svar» under et svar), ellers null. */
+  repliedTo?: string | null
   authorId: string
   authorName: string
   body: string
@@ -93,25 +95,26 @@ export async function notifyForum(input: {
     const plan = forumNotifyPlan({
       authorId: input.authorId,
       mentioned,
+      repliedTo: isNewReply ? input.repliedTo : null,
       candidates: await candidates(input.topicId, input.replyId, mentioned),
     })
     const reply = isNewReply ? plan.reply : []
-    if (!plan.mention.length && !reply.length) return
+    if (!plan.mention.length && !plan.direct.length && !reply.length) return
 
     const excerpt = forumPlainText(input.body, await forumMentionNames([input.body]))
+    const about = { topicId: input.topicId, replyId: input.replyId, authorName: input.authorName, excerpt }
     if (plan.mention.length) {
+      await sendPushToUsers(plan.mention, forumMentionPushMessage(about), { ttl: PUSH_TTL.mention, urgency: 'high' })
+    }
+    if (plan.direct.length && input.replyId) {
       await sendPushToUsers(
-        plan.mention,
-        forumMentionPushMessage({ topicId: input.topicId, authorName: input.authorName, excerpt }),
+        plan.direct,
+        forumDirectReplyPushMessage({ ...about, replyId: input.replyId, topicTitle: input.topicTitle }),
         { ttl: PUSH_TTL.mention, urgency: 'high' },
       )
     }
     if (reply.length) {
-      await sendPushToUsers(
-        reply,
-        forumReplyPushMessage({ topicId: input.topicId, topicTitle: input.topicTitle, authorName: input.authorName, excerpt }),
-        { ttl: PUSH_TTL.forum },
-      )
+      await sendPushToUsers(reply, forumReplyPushMessage({ ...about, topicTitle: input.topicTitle }), { ttl: PUSH_TTL.forum })
     }
   } catch (err) {
     console.error('[push] forum:', err)

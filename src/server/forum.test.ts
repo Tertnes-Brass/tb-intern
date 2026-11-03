@@ -37,6 +37,9 @@ beforeEach(() => {
   sqlite.exec(readFileSync(new URL('../../migrations/0016_diskusjonsforum.sql', import.meta.url), 'utf8'))
   sqlite.exec(readFileSync(new URL('../../migrations/0017_forum-ulest.sql', import.meta.url), 'utf8'))
   sqlite.exec(readFileSync(new URL('../../migrations/0027_forum-varsler.sql', import.meta.url), 'utf8'))
+  // 0029 legger også til kolonner i veggens kommentarer; tabellen må bare finnes.
+  sqlite.exec('CREATE TABLE post_comments (id text primary key, post_id text, author_id text, body text, created_at integer, updated_at integer)')
+  sqlite.exec(readFileSync(new URL('../../migrations/0029_svar-pa-svar.sql', import.meta.url), 'utf8'))
   // Exercise real Drizzle D1 queries against SQLite, including conditional writes.
   const prepare = (query: string) => {
     let values: any[] = []
@@ -186,7 +189,7 @@ it('shows newest replies first across pages and returns to the first page after 
   try {
     for (let n = 0; n < 32; n++) {
       clock.mockReturnValue(1800000000000 + n)
-      expect(await replyToForum({ data: { topicId: id, body: `Svar ${n}` } })).toEqual({ page: 0 })
+      expect(await replyToForum({ data: { topicId: id, body: `Svar ${n}` } })).toEqual({ id: expect.any(String), page: 0 })
     }
     const newest = await getForumTopic({ data: { id, page: 0 } })
     const older = await getForumTopic({ data: { id, page: 1 } })
@@ -206,14 +209,14 @@ describe('forum push', () => {
   const as = (id: 'one' | 'two' | 'three') => { state.me = { id, name: { one: 'Ingrid', two: 'Jonas', three: 'Karim' }[id], permissions: [] } }
   const readAll = async (id: string) => {
     const detail = await getForumTopic({ data: { id, page: 0 } })
-    const ids = detail.replies.filter((r) => r.unread).map((r) => r.reply.id)
+    const ids = detail.replies.flatMap((r) => [r, ...r.children]).filter((r) => r.unread).map((r) => r.reply.id)
     if (ids.length) await markForumRepliesRead({ data: { topicId: id, replyIds: ids } })
   }
 
   it('notifies the starter and earlier repliers, never the author, and once until they have read', async () => {
     const { id } = await topic()
     as('two'); await replyToForum({ data: { topicId: id, body: 'Jeg blir med' } })
-    expect(state.pushes).toEqual([{ to: ['one'], title: 'Jonas svarte i «Hvem blir med på fest?»', url: `/forum/${id}` }])
+    expect(state.pushes).toEqual([{ to: ['one'], title: 'Jonas svarte i «Hvem blir med på fest?»', url: expect.stringMatching(new RegExp(`^/forum/${id}\\?svar=`)) }])
     as('three'); await replyToForum({ data: { topicId: id, body: 'Jeg også' } })
     // Ingrid har ikke lest Jonas sitt svar ennå → ingen ny ping. Jonas har ikke uleste fra før.
     expect(state.pushes[1].to).toEqual(['two'])
@@ -256,7 +259,7 @@ describe('forum push', () => {
   it('pushes mentions once, instead of the reply push, and never for everyone', async () => {
     const { id } = await topic()
     as('two'); await replyToForum({ data: { topicId: id, body: '@[u:one] @[u:three] kommer dere?' } })
-    expect(state.pushes).toEqual([{ to: ['one', 'three'], title: 'Jonas nevnte deg i forumet', url: `/forum/${id}` }])
+    expect(state.pushes).toEqual([{ to: ['one', 'three'], title: 'Jonas nevnte deg i forumet', url: expect.stringMatching(new RegExp(`^/forum/${id}\\?svar=`)) }])
     state.pushes = []
     as('three'); await replyToForum({ data: { topicId: id, body: '@[all] fest!' } })
     // Ingrid har uleste og er ikke omtalt med navn; Jonas er oppdatert.
@@ -281,5 +284,126 @@ describe('forum push', () => {
     await expect(setForumFollow({ data: { topicId: 'missing', following: true } })).rejects.toThrow('Emnet finnes ikke.')
     state.me = null
     await expect(setForumFollow({ data: { topicId: 'x', following: true } })).rejects.toThrow('Login')
+  })
+})
+
+describe('replies to replies', () => {
+  let tick = 1800000000000
+  beforeEach(() => { vi.spyOn(Date, 'now').mockImplementation(() => ++tick) })
+  afterEach(() => { vi.restoreAllMocks() })
+  const as = (id: 'one' | 'two' | 'three') => { state.me = { id, name: { one: 'Ingrid', two: 'Jonas', three: 'Karim' }[id], permissions: [] } }
+  const row = (id: string) => sqlite.prepare('SELECT parent_id, reply_to_id FROM forum_replies WHERE id = ?').get(id)
+
+  it('keeps every reply one level deep under the reply it started from, and remembers who it answered', async () => {
+    const { id } = await topic()
+    as('two'); const root = await replyToForum({ data: { topicId: id, body: 'Jeg blir med' } })
+    as('three'); const child = await replyToForum({ data: { topicId: id, body: 'Jeg òg', replyToId: root.id } })
+    as('one'); const grandchild = await replyToForum({ data: { topicId: id, body: 'Flott, Karim!', replyToId: child.id } })
+    expect(row(root.id)).toEqual({ parent_id: null, reply_to_id: null })
+    expect(row(child.id)).toEqual({ parent_id: root.id, reply_to_id: root.id })
+    // Svar på et svar havner under SAMME rot, ikke dypere.
+    expect(row(grandchild.id)).toEqual({ parent_id: root.id, reply_to_id: child.id })
+    const detail = await getForumTopic({ data: { id, page: 0 } })
+    expect(detail.replies).toHaveLength(1)
+    expect(detail.replies[0].children.map((c) => [c.reply.body, c.author])).toEqual([['Jeg òg', 'Karim'], ['Flott, Karim!', 'Ingrid']])
+    expect(detail.replies[0].children[0].canEdit).toBe(false)
+    expect(detail.replies[0].children[1].canEdit).toBe(true)
+  })
+
+  it('never lets a raw call pick the placement or reach into another thread', async () => {
+    const { id } = await topic()
+    const other = await createForumTopic({ data: { title: 'Annen tråd', body: 'Hei' } })
+    const foreign = await replyToForum({ data: { topicId: other.id, body: 'Der borte' } })
+    await expect(replyToForum({ data: { topicId: id, body: 'Hit', replyToId: foreign.id } })).rejects.toThrow('finnes ikke i denne tråden')
+    await expect(replyToForum({ data: { topicId: id, body: 'Hit', replyToId: 'missing' } })).rejects.toThrow('finnes ikke i denne tråden')
+    // Et ukjent felt som `parentId` strippes av valideringen og kan ikke brukes.
+    const own = await replyToForum({ data: { topicId: id, body: 'Rot', parentId: foreign.id } as never })
+    expect(row(own.id)).toEqual({ parent_id: null, reply_to_id: null })
+    expect((await getForumTopic({ data: { id: other.id, page: 0 } })).replies[0].children).toEqual([])
+  })
+
+  it('respects the lock for replies to replies too', async () => {
+    const { id } = await topic()
+    const root = await replyToForum({ data: { topicId: id, body: 'Rot' } })
+    state.me!.permissions = ['forum.moderate']
+    await setForumLock({ data: { id, locked: true } })
+    state.me!.permissions = []
+    await expect(replyToForum({ data: { topicId: id, body: 'Svar', replyToId: root.id } })).rejects.toThrow('låst')
+  })
+
+  it('pages by replies to the thread, keeps sub-replies with their root, and finds the page of a linked reply', async () => {
+    const { id } = await topic()
+    const first = await replyToForum({ data: { topicId: id, body: 'Eldste rot' } })
+    for (let n = 0; n < 30; n++) await replyToForum({ data: { topicId: id, body: `Rot ${n}` } })
+    const late = await replyToForum({ data: { topicId: id, body: 'Sent svar på eldste', replyToId: first.id } })
+    // 31 røtter (svaret teller ikke): den eldste står alene på side 1, med svaret sitt.
+    expect(late.page).toBe(1)
+    const pageZero = await getForumTopic({ data: { id, page: 0 } })
+    expect(pageZero.replies).toHaveLength(30)
+    expect(pageZero.hasMore).toBe(true)
+    expect(pageZero.focus).toBeNull()
+    const linked = await getForumTopic({ data: { id, page: 0, svar: late.id } })
+    expect(linked.page).toBe(1)
+    expect(linked.focus).toBe(late.id)
+    expect(linked.replies.map((r) => r.reply.id)).toEqual([first.id])
+    expect(linked.replies[0].children.map((c) => c.reply.id)).toEqual([late.id])
+    // En gammel eller fremmed lenke ignoreres stille.
+    const stale = await getForumTopic({ data: { id, page: 0, svar: 'missing' } })
+    expect([stale.page, stale.focus, stale.replies.length]).toEqual([0, null, 30])
+    expect((await listForum({ data: { page: 0 } })).topics[0].replyCount).toBe(32)
+  })
+
+  it('counts and clears unread sub-replies like any other reply', async () => {
+    const { id } = await topic()
+    as('two'); const root = await replyToForum({ data: { topicId: id, body: 'Rot' } })
+    as('three'); const child = await replyToForum({ data: { topicId: id, body: '@[u:one] svar', replyToId: root.id } })
+    as('one')
+    expect((await listForum({ data: { page: 0 } })).topics[0]).toMatchObject({ unreadCount: 2, unreadMentionCount: 1 })
+    const detail = await getForumTopic({ data: { id, page: 0 } })
+    expect(detail.replies[0].children[0].unread).toBe(1)
+    expect(detail.mentions).toEqual([{ id: 'one', name: 'Ingrid' }])
+    await markForumRepliesRead({ data: { topicId: id, replyIds: [child.id] } })
+    expect((await listForum({ data: { page: 0 } })).topics[0]).toMatchObject({ unreadCount: 1, unreadMentionCount: 0 })
+  })
+
+  it('pushes the person replied to directly — even when behind or muted — and links to the reply', async () => {
+    const { id } = await topic()
+    as('two'); const root = await replyToForum({ data: { topicId: id, body: 'Jeg blir med' } })
+    as('three'); await replyToForum({ data: { topicId: id, body: 'Et svar på tråden' } })
+    as('two'); await setForumFollow({ data: { topicId: id, following: false } })
+    state.pushes = []
+    // Jonas har uleste svar og har dempet tråden, men svaret er rettet til ham.
+    as('one'); const answer = await replyToForum({ data: { topicId: id, body: 'Så bra, Jonas!', replyToId: root.id } })
+    expect(state.pushes).toEqual([
+      { to: ['two'], title: 'Ingrid svarte deg i «Hvem blir med på fest?»', url: `/forum/${id}?svar=${answer.id}` },
+      // Karim følger fortsatt tråden og har ingen uleste fra andre etter sitt eget svar.
+      { to: ['three'], title: 'Ingrid svarte i «Hvem blir med på fest?»', url: `/forum/${id}?svar=${answer.id}` },
+    ])
+  })
+
+  it('lets a mention win over the direct reply push, falls back to the thread push when mentions are off, and never pings yourself', async () => {
+    const { id } = await topic()
+    as('two'); const root = await replyToForum({ data: { topicId: id, body: 'Rot' } })
+    state.pushes = []
+    as('one'); await replyToForum({ data: { topicId: id, body: '@[u:two] ja!', replyToId: root.id } })
+    expect(state.pushes).toEqual([expect.objectContaining({ to: ['two'], title: 'Ingrid nevnte deg i forumet' })])
+    state.pushes = []
+    as('two'); await replyToForum({ data: { topicId: id, body: 'Svarer meg selv', replyToId: root.id } })
+    expect(state.pushes.some((p) => p.title.includes('svarte deg'))).toBe(false)
+    state.pushes = []
+    sqlite.exec("INSERT INTO notification_preferences (user_id, mentions) VALUES ('two', 'off')")
+    as('one'); await replyToForum({ data: { topicId: id, body: 'Ok', replyToId: root.id } })
+    expect(state.pushes).toEqual([expect.objectContaining({ to: ['two'], title: expect.stringContaining('svarte i') })])
+  })
+
+  it('does not push the person replied to again when the reply is edited', async () => {
+    const { id } = await topic()
+    as('two'); const root = await replyToForum({ data: { topicId: id, body: 'Rot' } })
+    as('one'); const answer = await replyToForum({ data: { topicId: id, body: 'Svar', replyToId: root.id } })
+    state.pushes = []
+    await editForumText({ data: { id: answer.id, kind: 'reply', body: 'Svar, rettet' } })
+    expect(state.pushes).toEqual([])
+    await editForumText({ data: { id: answer.id, kind: 'reply', body: 'Svar, rettet @[u:three]' } })
+    expect(state.pushes).toEqual([{ to: ['three'], title: 'Ingrid nevnte deg i forumet', url: `/forum/${id}?svar=${answer.id}` }])
   })
 })

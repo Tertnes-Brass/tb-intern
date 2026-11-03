@@ -42,9 +42,9 @@ expired and revoked sessions receive a JSON 401 on the native API.
 | PUT | `events/{occurrenceKey}/attendance` | `{status: "attending" | "not_attending" | "unsure" | null}`; existing event identity, own member only. Since 2 November 2026 absence is the exception: `null` and `"attending"` both mean the member is expected (the web only offers «Kan ikke komme» and clearing it). All four values stay valid in v1 and are stored as sent |
 | POST | `posts` | `{body}` creates an ordinary plain-text draft; returns `{id}` |
 | POST | `posts/{id}/publish` | `{}` publishes the caller's draft using existing checks; no bulk announcement email |
-| GET | `posts/{id}` | readable post and comments, with resolved mentions, plain text fallback and optional native Markdown source; also records a read receipt (`post_reads`) for the unread count on the web — the response is unchanged |
+| GET | `posts/{id}` | readable post and comments, with resolved mentions, plain text fallback and optional native Markdown source; also records a read receipt (`post_reads`) for the unread count on the web — the response is unchanged. Comments stay a flat, chronological list; each also has `parentId` and `replyToId` (both `null` for a top-level comment), see «Replies to comments» below |
 | POST | `posts/{id}/like` | `{}` toggles the caller's reaction; returns `{mine, count}`; do not retry automatically |
-| POST | `posts/{id}/comments` | `{body}` adds a comment with existing visibility and mention validation |
+| POST | `posts/{id}/comments` | `{body, replyToId?}` adds a comment with existing visibility and mention validation; returns `{ok, id}`. With `replyToId` it is a reply to that comment on the same post |
 
 Dates in this API are milliseconds since Unix epoch; event IDs are stable
 `occurrenceKey` values, never titles or mutable start-time IDs. `version: 1` is
@@ -54,6 +54,20 @@ breaking changes belong in a new API namespace.
 Post creation and publishing are separate so the native composer can retry
 publication using the same draft ID without creating another post. Existing
 mention notifications still follow the server's normal rules.
+
+### Replies to comments (added 3 November 2026, additive)
+
+Comments have two levels, like the web (`src/lib/threads.ts`). A reply to a
+top-level comment gets `parentId` = that comment; a reply to a reply stays
+under the SAME top-level comment (`parentId` unchanged) and records the reply it
+answered in `replyToId`. Clients only send `replyToId`; the server decides
+`parentId`. A comment that was deleted after someone replied to it is kept on
+the web as a «deleted» marker and is omitted from this API, so a `parentId` or
+`replyToId` may name a comment that is not in the list — show such replies as
+top-level (or «reply to a deleted comment»). Installed app versions that ignore
+the new fields keep showing the same flat list as before. Replying to a deleted
+comment is rejected with the usual JSON error. The person replied to gets a push
+notification under the same «mentions» preference as a mention.
 
 Returned file/image paths use `/api/files/{id}` and `/api/post-images/{id}`.
 These existing routes repeat authorization before streaming private R2 content.

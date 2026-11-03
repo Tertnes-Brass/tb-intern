@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers'
 import { and, eq, isNull } from 'drizzle-orm'
+import { replyPlacement } from '../lib/threads'
 import { db } from '../db'
 import {
   boardChannels,
@@ -370,6 +371,7 @@ export async function seedWallDemo(): Promise<void> {
   }
 
   const postById = new Map(SEED_POSTS.map((sp) => [sp.id, sp]))
+  const seedCommentById = new Map(SEED_POST_COMMENTS.map((sc) => [sc.id, sc]))
   for (const sc of SEED_POST_COMMENTS) {
     const authorId = userIdByEmail.get(sc.authorEmail) ?? null
     const parent = postById.get(sc.postId)
@@ -385,10 +387,26 @@ export async function seedWallDemo(): Promise<void> {
       mentionUserIds.push(id)
       return `@[u:${id}]`
     })
+    // Svar på svar: samme plassering som `addComment` gir (`replyPlacement`).
+    // Målet står tidligere i lista, så det finnes allerede.
+    const target = sc.replyToId ? seedCommentById.get(sc.replyToId) : undefined
+    let root = target
+    while (root?.replyToId && seedCommentById.has(root.replyToId)) root = seedCommentById.get(root.replyToId)
+    const placement =
+      target && root
+        ? replyPlacement({ id: target.id, parentId: root.id === target.id ? null : root.id })
+        : { parentId: null, replyToId: null }
     await d
       .insert(postComments)
-      .values({ id: sc.id, postId: sc.postId, authorId, body, createdAt, updatedAt: createdAt })
+      .values({ id: sc.id, postId: sc.postId, authorId, body, ...placement, createdAt, updatedAt: createdAt })
       .onConflictDoNothing()
+    if (target) {
+      // En database som ble seedet før svar på svar fantes, får trådene også.
+      await d
+        .update(postComments)
+        .set(placement)
+        .where(and(eq(postComments.id, sc.id), isNull(postComments.parentId)))
+    }
     if (authorId) {
       await d
         .update(postComments)

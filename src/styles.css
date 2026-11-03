@@ -634,6 +634,31 @@ select.field-input {
   }
 }
 
+/* Svaret man ble lenket til (fra et varsel, etter å ha svart, eller fra
+   «Svar til …») lyser kort opp, så øyet finner det i tråden. */
+.thread-item {
+  border-radius: 9px;
+  transition: background-color 0.25s;
+}
+.thread-marked {
+  animation: thread-mark 2.2s ease-out;
+}
+@keyframes thread-mark {
+  0%,
+  45% {
+    background-color: var(--brass-soft);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .thread-marked {
+    animation: none;
+    background-color: var(--brass-soft);
+  }
+}
+
 /* ---------- Diverse ---------- */
 .link-quiet {
   text-decoration: none;

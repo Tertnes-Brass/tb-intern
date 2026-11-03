@@ -234,10 +234,11 @@ function MentionNotificationsCard({ current }: { current: MentionNotificationCho
     <section className="sheet rise overflow-hidden" style={{ animationDelay: '108ms' }}>
       <div className="border-b border-line bg-paper-sunken/50 px-5 py-5 sm:px-6">
         <Kicker className="mb-2">Varsler</Kicker>
-        <h2 className="display-title text-2xl font-semibold text-ink">Når noen nevner deg</h2>
+        <h2 className="display-title text-2xl font-semibold text-ink">Når noen nevner eller svarer deg</h2>
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">
           Skriver noen «@» og navnet ditt på veggen, får du én e-post med lenke til innlegget — og et varsel på
-          enhetene der du har slått på varsler. I forumet får du bare varselet, ingen e-post.
+          enhetene der du har slått på varsler. I forumet får du bare varselet, ingen e-post. Trykker noen «Svar» på
+          noe du har skrevet — en kommentar eller et forumsvar — får du også et varsel, også i en tråd du har dempet.
         </p>
       </div>
       <div className="p-5 sm:p-6">
@@ -256,8 +257,8 @@ function MentionNotificationsCard({ current }: { current: MentionNotificationCho
           ))}
         </div>
         <p className="mt-3 text-xs leading-relaxed text-ink-faint">
-          Du blir aldri varslet når du nevner deg selv, og aldri mer enn én gang per kommentar. «Av» slår det av
-          helt — omtalen står fortsatt i kommentaren.
+          Du blir aldri varslet når du nevner eller svarer deg selv, og aldri mer enn én gang per kommentar. «Av» slår
+          det av helt — omtalen og svaret står fortsatt der.
         </p>
       </div>
     </section>

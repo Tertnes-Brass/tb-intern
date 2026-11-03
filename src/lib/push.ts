@@ -54,6 +54,8 @@ export function postPushMessage(post: {
 
 export function mentionPushMessage(input: {
   postId: string
+  /** Kommentaren omtalen står i — da åpner varselet rett på den. */
+  commentId?: string | null
   /** Den som skrev kommentaren eller innlegget. */
   authorName: string
   excerpt: string
@@ -62,9 +64,23 @@ export function mentionPushMessage(input: {
   return {
     title: input.where === 'comment' ? `${input.authorName} nevnte deg i en kommentar` : `${input.authorName} nevnte deg`,
     body: clip(input.excerpt),
-    url: `/beskjeder/${input.postId}`,
+    url: commentUrl(input.postId, input.commentId),
     tag: `mention:${input.postId}`,
   }
+}
+
+/**
+ * Adressen til et forumsvar: tråden, og `?svar=` når varselet gjelder ett
+ * bestemt svar. Serveren finner selv siden svaret står på (`getForumTopic`), og
+ * siden ruller dit og markerer det.
+ */
+export function forumReplyUrl(topicId: string, replyId?: string | null): string {
+  return replyId ? `/forum/${topicId}?svar=${encodeURIComponent(replyId)}` : `/forum/${topicId}`
+}
+
+/** Adressen til en kommentar på veggen. Alle kommentarene står på én side, så et anker holder. */
+export function commentUrl(postId: string, commentId?: string | null): string {
+  return commentId ? `/beskjeder/${postId}#kommentar-${commentId}` : `/beskjeder/${postId}`
 }
 
 /**
@@ -73,6 +89,7 @@ export function mentionPushMessage(input: {
  */
 export function forumReplyPushMessage(input: {
   topicId: string
+  replyId?: string | null
   topicTitle: string
   authorName: string
   excerpt: string
@@ -80,17 +97,56 @@ export function forumReplyPushMessage(input: {
   return {
     title: `${input.authorName} svarte i «${clip(input.topicTitle, 60)}»`,
     body: clip(input.excerpt),
-    url: `/forum/${input.topicId}`,
+    url: forumReplyUrl(input.topicId, input.replyId),
     tag: `forum:${input.topicId}`,
   }
 }
 
-export function forumMentionPushMessage(input: { topicId: string; authorName: string; excerpt: string }): PushMessage {
+/**
+ * Noen svarte rett på noe DU skrev i forumet («Svar» under ditt svar). Egen
+ * `tag`, så det ikke byttes ut av et vanlig trådvarsel som kommer etterpå.
+ */
+export function forumDirectReplyPushMessage(input: {
+  topicId: string
+  replyId: string
+  topicTitle: string
+  authorName: string
+  excerpt: string
+}): PushMessage {
+  return {
+    title: `${input.authorName} svarte deg i «${clip(input.topicTitle, 60)}»`,
+    body: clip(input.excerpt),
+    url: forumReplyUrl(input.topicId, input.replyId),
+    tag: `forum-reply-to:${input.topicId}`,
+  }
+}
+
+export function forumMentionPushMessage(input: {
+  topicId: string
+  replyId?: string | null
+  authorName: string
+  excerpt: string
+}): PushMessage {
   return {
     title: `${input.authorName} nevnte deg i forumet`,
     body: clip(input.excerpt),
-    url: `/forum/${input.topicId}`,
+    url: forumReplyUrl(input.topicId, input.replyId),
     tag: `forum-mention:${input.topicId}`,
+  }
+}
+
+/** Noen svarte på kommentaren din på veggen. */
+export function commentReplyPushMessage(input: {
+  postId: string
+  commentId: string
+  authorName: string
+  excerpt: string
+}): PushMessage {
+  return {
+    title: `${input.authorName} svarte på kommentaren din`,
+    body: clip(input.excerpt),
+    url: commentUrl(input.postId, input.commentId),
+    tag: `comment-reply:${input.postId}`,
   }
 }
 

@@ -243,6 +243,26 @@ export function canDeleteComment(
 }
 
 /**
+ * Hvem får push om at noen svarte på kommentaren deres? Svaret er rettet til én
+ * person, som en omtale, og følger derfor samme valg (`mentions` på
+ * /min-profil) og samme krav: aktivt medlem som kan lese innlegget (`eligible`,
+ * samme liste som omtalene valideres mot). Aldri til deg selv, og aldri i
+ * tillegg til en omtale i samme kommentar — da er omtalevarselet nok.
+ */
+export function commentReplyRecipient(input: {
+  commenterId: string
+  repliedTo: string | null
+  mentioned: readonly string[]
+  eligible: ReadonlySet<string>
+  pref: (userId: string) => 'all' | 'off'
+}): string | null {
+  const id = input.repliedTo
+  if (!id || id === input.commenterId || input.mentioned.includes(id)) return null
+  if (!input.eligible.has(id) || input.pref(id) === 'off') return null
+  return id
+}
+
+/**
  * Er «Send e-post» huket av når publiseringsflaten åpnes? Nei (#85).
  *
  * Å publisere og å sende masse-e-post er to forskjellige handlinger, og bare

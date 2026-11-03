@@ -38,10 +38,15 @@ export type ForumNotifyCandidate = {
 }
 
 /**
- * Hvem får push om et nytt svar? To grupper, og aldri begge for samme person:
+ * Hvem får push om et nytt svar? Tre grupper, og aldri mer enn én av dem for
+ * samme person (første treff vinner):
  *
  * - `mention`: omtalt i svaret (aktivt medlem, ikke skribenten, `mentions` ikke
- *   av). En direkte omtale varsler alltid, også med uleste svar i tråden.
+ *   av). En direkte omtale varsler alltid, også med uleste svar i tråden og i
+ *   en dempet tråd.
+ * - `direct`: den man svarte på («Svar» under et svar). Rettet til én person,
+ *   som en omtale — derfor samme valg (`mentions`) og samme unntak for uleste
+ *   svar og demping. Med `mentions` av faller man tilbake til `reply`.
  * - `reply`: følger tråden, har ikke slått av forumsvar, og har lest seg opp.
  *
  * «@Alle i korpset» er ikke med her — det ville vært en masseutsending uten
@@ -50,21 +55,24 @@ export type ForumNotifyCandidate = {
 export function forumNotifyPlan(input: {
   authorId: string
   mentioned: readonly string[]
+  /** Forfatteren av svaret det ble svart på, eller null for et svar rett på tråden. */
+  repliedTo?: string | null
   candidates: readonly ForumNotifyCandidate[]
-}): { mention: string[]; reply: string[] } {
+}): { mention: string[]; direct: string[]; reply: string[] } {
   const byId = new Map(input.candidates.map((c) => [c.userId, c]))
-  const mention: string[] = []
-  for (const id of new Set(input.mentioned)) {
+  const personal = (id: string) => {
     const c = byId.get(id)
-    if (!c || !c.isActive || id === input.authorId || c.mentions === 'off') continue
-    mention.push(id)
+    return !!c && c.isActive && id !== input.authorId && c.mentions !== 'off'
   }
-  const mentioned = new Set(mention)
+  const mention = [...new Set(input.mentioned)].filter(personal)
+  const taken = new Set(mention)
+  const direct = input.repliedTo && !taken.has(input.repliedTo) && personal(input.repliedTo) ? [input.repliedTo] : []
+  for (const id of direct) taken.add(id)
   const reply: string[] = []
   for (const c of input.candidates) {
-    if (!c.isActive || c.userId === input.authorId || mentioned.has(c.userId)) continue
+    if (!c.isActive || c.userId === input.authorId || taken.has(c.userId)) continue
     if (c.forumReplies === 'off' || !c.caughtUp || !followsForumTopic(c)) continue
     reply.push(c.userId)
   }
-  return { mention, reply }
+  return { mention, direct, reply }
 }

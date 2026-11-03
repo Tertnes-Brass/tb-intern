@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import { and, asc, desc, eq, gte, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import { db } from '../db'
 import {
   eventAttendance,
@@ -140,7 +140,7 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
         d
           .select({ postId: postComments.postId, n: sql<number>`count(*)` })
           .from(postComments)
-          .where(inArray(postComments.postId, postIds))
+          .where(and(inArray(postComments.postId, postIds), isNull(postComments.deletedAt)))
           .groupBy(postComments.postId),
         d
           .select({ postId: postReactions.postId, n: sql<number>`count(*)` })

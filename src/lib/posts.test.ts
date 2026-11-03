@@ -10,6 +10,7 @@ import {
   canReadPost,
   canNotifyPost,
   commentCountLabel,
+  commentReplyRecipient,
   escapeHtml,
   excerpt,
   imageExtension,
@@ -428,5 +429,23 @@ describe('e-postvarsling ved publisering', () => {
       expect(source).toContain('useState(DEFAULT_NOTIFY)')
       expect(source).not.toMatch(/const \[notify, setNotify\] = useState\(true\)/)
     }
+  })
+})
+
+describe('commentReplyRecipient', () => {
+  const base = { commenterId: 'me', repliedTo: 'silje', mentioned: [] as string[], eligible: new Set(['silje', 'me']), pref: () => 'all' as const }
+  it('varsler den man svarte på', () => {
+    expect(commentReplyRecipient(base)).toBe('silje')
+  })
+  it('aldri deg selv, og ingenting når svaret gjelder en slettet forfatter', () => {
+    expect(commentReplyRecipient({ ...base, repliedTo: 'me' })).toBeNull()
+    expect(commentReplyRecipient({ ...base, repliedTo: null })).toBeNull()
+  })
+  it('ikke i tillegg til en omtale i samme kommentar', () => {
+    expect(commentReplyRecipient({ ...base, mentioned: ['silje'] })).toBeNull()
+  })
+  it('bare til aktive medlemmer som kan lese innlegget, og ikke når omtaler er slått av', () => {
+    expect(commentReplyRecipient({ ...base, eligible: new Set(['me']) })).toBeNull()
+    expect(commentReplyRecipient({ ...base, pref: () => 'off' })).toBeNull()
   })
 })
