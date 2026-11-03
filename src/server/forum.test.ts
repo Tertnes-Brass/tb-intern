@@ -1,11 +1,17 @@
 import { DatabaseSync } from 'node:sqlite'
 import { readFileSync } from 'node:fs'
 import { drizzle } from 'drizzle-orm/d1'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({ me: null as null | { id: string; permissions: string[] }, db: null as any }))
+const state = vi.hoisted(() => ({ me: null as null | { id: string; name?: string; permissions: string[] }, db: null as any, pushes: [] as Array<{ to: string[]; title: string; url: string }> }))
 vi.mock('@tanstack/react-start', () => ({ createServerFn: () => ({ validator(schema: any) { return { handler: (fn: any) => async (arg: any) => fn({ data: schema.parse(arg.data) }) } } }) }))
 vi.mock('../db', () => ({ db: () => state.db }))
+vi.mock('./push-send', () => ({
+  sendPushToUsers: async (to: string[], message: { title: string; url: string }) => {
+    state.pushes.push({ to: [...to].sort(), title: message.title, url: message.url })
+    return { sent: to.length, failed: 0, removed: 0 }
+  },
+}))
 vi.mock('./access', () => ({
   requireMe: async () => { if (!state.me) throw new Error('Login'); return state.me },
   requirePermission: async (permission: string) => {
@@ -13,7 +19,7 @@ vi.mock('./access', () => ({
     return state.me
   },
 }))
-import { createForumTopic, editForumText, getForumTopic, listForum, markForumRepliesRead, replyToForum, searchForumMentions, setForumLock } from './forum'
+import { createForumTopic, editForumText, getForumTopic, listForum, markForumRepliesRead, replyToForum, searchForumMentions, setForumFollow, setForumLock } from './forum'
 
 let sqlite: DatabaseSync
 beforeEach(() => {
@@ -24,10 +30,13 @@ beforeEach(() => {
     CREATE TABLE member_profiles (auth_user_id text primary key, is_active integer);
     CREATE TABLE roles (id text primary key);
     CREATE TABLE role_permissions (role_id text references roles(id), permission text, primary key(role_id, permission));
-    INSERT INTO user VALUES ('one', 'Ingrid'), ('two', 'Jonas');
-    INSERT INTO member_profiles VALUES ('one', 1), ('two', 1);`)
+    CREATE TABLE notification_preferences (user_id text primary key references user(id) on delete cascade,
+      mentions text not null default 'all', rsvp_reminders text not null default 'all');
+    INSERT INTO user VALUES ('one', 'Ingrid'), ('two', 'Jonas'), ('three', 'Karim');
+    INSERT INTO member_profiles VALUES ('one', 1), ('two', 1), ('three', 1);`)
   sqlite.exec(readFileSync(new URL('../../migrations/0016_diskusjonsforum.sql', import.meta.url), 'utf8'))
   sqlite.exec(readFileSync(new URL('../../migrations/0017_forum-ulest.sql', import.meta.url), 'utf8'))
+  sqlite.exec(readFileSync(new URL('../../migrations/0027_forum-varsler.sql', import.meta.url), 'utf8'))
   // Exercise real Drizzle D1 queries against SQLite, including conditional writes.
   const prepare = (query: string) => {
     let values: any[] = []
@@ -40,7 +49,8 @@ beforeEach(() => {
     return statement
   }
   state.db = drizzle({ prepare } as any)
-  state.me = { id: 'one', permissions: [] }
+  state.me = { id: 'one', name: 'Ingrid', permissions: [] }
+  state.pushes = []
 })
 const topic = () => createForumTopic({ data: { title: 'Hvem blir med på fest?', body: 'På lørdag?' } })
 
@@ -186,4 +196,90 @@ it('shows newest replies first across pages and returns to the first page after 
     expect(newest.hasMore).toBe(true)
     expect(older.hasMore).toBe(false)
   } finally { clock.mockRestore() }
+})
+
+describe('forum push', () => {
+  // Hvert kall får sitt eget millisekund, som i virkeligheten.
+  let tick = 1800000000000
+  beforeEach(() => { vi.spyOn(Date, 'now').mockImplementation(() => ++tick) })
+  afterEach(() => { vi.restoreAllMocks() })
+  const as = (id: 'one' | 'two' | 'three') => { state.me = { id, name: { one: 'Ingrid', two: 'Jonas', three: 'Karim' }[id], permissions: [] } }
+  const readAll = async (id: string) => {
+    const detail = await getForumTopic({ data: { id, page: 0 } })
+    const ids = detail.replies.filter((r) => r.unread).map((r) => r.reply.id)
+    if (ids.length) await markForumRepliesRead({ data: { topicId: id, replyIds: ids } })
+  }
+
+  it('notifies the starter and earlier repliers, never the author, and once until they have read', async () => {
+    const { id } = await topic()
+    as('two'); await replyToForum({ data: { topicId: id, body: 'Jeg blir med' } })
+    expect(state.pushes).toEqual([{ to: ['one'], title: 'Jonas svarte i «Hvem blir med på fest?»', url: `/forum/${id}` }])
+    as('three'); await replyToForum({ data: { topicId: id, body: 'Jeg også' } })
+    // Ingrid har ikke lest Jonas sitt svar ennå → ingen ny ping. Jonas har ikke uleste fra før.
+    expect(state.pushes[1].to).toEqual(['two'])
+    as('one'); await readAll(id)
+    as('two'); await replyToForum({ data: { topicId: id, body: 'Tar med kake' } })
+    // Karim har ingen uleste fra andre etter sitt eget svar → får varsel.
+    expect(state.pushes[2].to).toEqual(['one', 'three'])
+  })
+
+  it('respects muting, explicit following and the profile switch', async () => {
+    const { id } = await topic()
+    as('two'); await setForumFollow({ data: { topicId: id, following: true } })
+    expect((await getForumTopic({ data: { id, page: 0 } })).following).toBe(true)
+    as('three'); await replyToForum({ data: { topicId: id, body: 'Hei' } })
+    expect(state.pushes[0].to).toEqual(['one', 'two'])
+    as('one'); await readAll(id); await setForumFollow({ data: { topicId: id, following: false } })
+    expect((await getForumTopic({ data: { id, page: 0 } })).following).toBe(false)
+    as('two'); await readAll(id)
+    sqlite.exec("INSERT INTO notification_preferences (user_id, forum_replies) VALUES ('three', 'off')")
+    as('two'); await replyToForum({ data: { topicId: id, body: 'Svar' } })
+    expect(state.pushes).toHaveLength(1)
+    // Å svare igjen opphever ikke en bevisst demping.
+    as('one'); await replyToForum({ data: { topicId: id, body: 'Mitt svar' } })
+    as('three'); sqlite.exec("UPDATE notification_preferences SET forum_replies = 'all' WHERE user_id = 'three'")
+    await readAll(id); await replyToForum({ data: { topicId: id, body: 'Enda et' } })
+    expect(state.pushes.at(-1)!.to).toEqual(['two'])
+  })
+
+  it('does not let old unread replies from before you joined hold notifications back', async () => {
+    const { id } = await topic()
+    as('two'); await replyToForum({ data: { topicId: id, body: 'Gammelt svar Karim aldri leste' } })
+    as('three'); await replyToForum({ data: { topicId: id, body: 'Karim blander seg inn' } })
+    as('one'); await readAll(id)
+    as('two'); await readAll(id)
+    state.pushes = []
+    as('one'); await replyToForum({ data: { topicId: id, body: 'Nytt' } })
+    expect(state.pushes[0].to).toEqual(['three', 'two'])
+  })
+
+  it('pushes mentions once, instead of the reply push, and never for everyone', async () => {
+    const { id } = await topic()
+    as('two'); await replyToForum({ data: { topicId: id, body: '@[u:one] @[u:three] kommer dere?' } })
+    expect(state.pushes).toEqual([{ to: ['one', 'three'], title: 'Jonas nevnte deg i forumet', url: `/forum/${id}` }])
+    state.pushes = []
+    as('three'); await replyToForum({ data: { topicId: id, body: '@[all] fest!' } })
+    // Ingrid har uleste og er ikke omtalt med navn; Jonas er oppdatert.
+    expect(state.pushes).toEqual([expect.objectContaining({ to: ['two'], title: expect.stringContaining('svarte i') })])
+    state.pushes = []
+    sqlite.exec("INSERT INTO notification_preferences (user_id, mentions) VALUES ('one', 'off')")
+    as('two'); await createForumTopic({ data: { title: 'Ny', body: '@[u:one] @[u:two] @[u:three]' } })
+    expect(state.pushes).toEqual([expect.objectContaining({ to: ['three'] })])
+  })
+
+  it('pushes only mentions added by an edit', async () => {
+    const { id } = await createForumTopic({ data: { title: 'Fest', body: '@[u:two] hei' } })
+    state.pushes = []
+    await editForumText({ data: { id, kind: 'topic', body: '@[u:two] hei @[u:three]' } })
+    expect(state.pushes).toEqual([expect.objectContaining({ to: ['three'] })])
+    state.pushes = []
+    await editForumText({ data: { id, kind: 'topic', body: '@[u:two] hei @[u:three]!' } })
+    expect(state.pushes).toEqual([])
+  })
+
+  it('requires a login and an existing thread to follow', async () => {
+    await expect(setForumFollow({ data: { topicId: 'missing', following: true } })).rejects.toThrow('Emnet finnes ikke.')
+    state.me = null
+    await expect(setForumFollow({ data: { topicId: 'x', following: true } })).rejects.toThrow('Login')
+  })
 })

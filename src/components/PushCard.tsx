@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { formatDateTime } from '../lib/format'
-import type { RsvpReminderChoice } from '../lib/push'
 import { currentPushSubscription, disablePush, enablePush, pushSupport, type PushSupport } from '../lib/push-client'
 import { isIos } from '../lib/pwa'
-import { getPushConfig, listMyPushDevices, sendTestPush, updateMyRsvpReminders } from '../server/push'
+import { getPushConfig, listMyPushDevices, sendTestPush, updateMyForumReplies, updateMyRsvpReminders } from '../server/push'
 import { Icon } from './Icons'
 import { toast, toastError } from './toast'
 import { Button, Kicker } from './ui'
@@ -14,13 +13,13 @@ type Devices = Awaited<ReturnType<typeof listMyPushDevices>>
  * «Varsler på denne enheten» på /min-profil. Push slås på per enhet — en
  * installert app på telefonen, Chrome på jobb-PC-en — og hva det varsles om,
  * styres av valgene under (de samme som for e-post). Påminnelsen om oppmøte
- * er det eneste som bare finnes som push.
+ * og svar i forumtråder finnes bare som push.
  */
 export function PushCard({ userId }: { userId: string }) {
   const [support, setSupport] = useState<PushSupport>('unsupported')
   const [enabledHere, setEnabledHere] = useState(false)
   const [devices, setDevices] = useState<Devices | null>(null)
-  const [busy, setBusy] = useState<'toggle' | 'test' | 'rsvp' | null>(null)
+  const [busy, setBusy] = useState<'toggle' | 'test' | 'rsvp' | 'forum' | null>(null)
   const [publicKey, setPublicKey] = useState<string | null>(null)
 
   const refresh = async () => {
@@ -155,7 +154,9 @@ export function PushCard({ userId }: { userId: string }) {
         )}
 
         {configured && devices && (
-          <RsvpReminderChoice
+          <PushChoice
+            title="Påminnelse dagen før"
+            description="Et varsel dagen før en øvelse eller konsert, så du rekker å melde fravær hvis du ikke kan komme. Ikke hvis du allerede har meldt fravær. Bare som varsel, aldri på e-post."
             current={devices.rsvpReminders}
             busy={busy === 'rsvp'}
             onChange={async (next) => {
@@ -172,27 +173,50 @@ export function PushCard({ userId }: { userId: string }) {
             }}
           />
         )}
+
+        {configured && devices && (
+          <PushChoice
+            title="Svar i forumtråder du følger"
+            description="Et varsel når noen svarer i en tråd du har startet, svart i eller valgt å følge. Kommer det flere svar før du har lest, får du bare ett varsel. Hver tråd kan også dempes for seg. Bare som varsel, aldri på e-post."
+            current={devices.forumReplies}
+            busy={busy === 'forum'}
+            onChange={async (next) => {
+              setBusy('forum')
+              try {
+                await updateMyForumReplies({ data: { forumReplies: next } })
+                setDevices({ ...devices, forumReplies: next })
+                toast('Varslingsvalget er lagret')
+              } catch (err) {
+                toastError(err)
+              } finally {
+                setBusy(null)
+              }
+            }}
+          />
+        )}
       </div>
     </section>
   )
 }
 
-function RsvpReminderChoice({
+/** Et på/av-valg for varsler som bare finnes som push. */
+function PushChoice({
+  title,
+  description,
   current,
   busy,
   onChange,
 }: {
-  current: RsvpReminderChoice
+  title: string
+  description: string
+  current: 'all' | 'off'
   busy: boolean
-  onChange: (next: RsvpReminderChoice) => void
+  onChange: (next: 'all' | 'off') => void
 }) {
   return (
     <div className="border-t border-line pt-4">
-      <p className="text-[0.95rem] font-semibold text-ink">Påminnelse dagen før</p>
-      <p className="mt-1 text-xs leading-relaxed text-ink-soft">
-        Et varsel dagen før en øvelse eller konsert, så du rekker å melde fravær hvis du ikke kan komme. Ikke hvis du
-        allerede har meldt fravær. Bare som varsel, aldri på e-post.
-      </p>
+      <p className="text-[0.95rem] font-semibold text-ink">{title}</p>
+      <p className="mt-1 text-xs leading-relaxed text-ink-soft">{description}</p>
       <div className="mt-3 flex gap-2">
         {(['all', 'off'] as const).map((value) => (
           <Button

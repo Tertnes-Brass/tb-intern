@@ -25,6 +25,7 @@ export const PUSH_TTL = {
   post: 3 * 24 * 60 * 60,
   mention: 3 * 24 * 60 * 60,
   rsvp: 18 * 60 * 60,
+  forum: 3 * 24 * 60 * 60,
 } as const
 
 const BODY_MAX = 160
@@ -63,6 +64,33 @@ export function mentionPushMessage(input: {
     body: clip(input.excerpt),
     url: `/beskjeder/${input.postId}`,
     tag: `mention:${input.postId}`,
+  }
+}
+
+/**
+ * Nytt svar i en forumtråd du følger. Samme `tag` per tråd: kommer det flere
+ * før du har lest, erstatter det nye det gamle i stedet for å stable seg.
+ */
+export function forumReplyPushMessage(input: {
+  topicId: string
+  topicTitle: string
+  authorName: string
+  excerpt: string
+}): PushMessage {
+  return {
+    title: `${input.authorName} svarte i «${clip(input.topicTitle, 60)}»`,
+    body: clip(input.excerpt),
+    url: `/forum/${input.topicId}`,
+    tag: `forum:${input.topicId}`,
+  }
+}
+
+export function forumMentionPushMessage(input: { topicId: string; authorName: string; excerpt: string }): PushMessage {
+  return {
+    title: `${input.authorName} nevnte deg i forumet`,
+    body: clip(input.excerpt),
+    url: `/forum/${input.topicId}`,
+    tag: `forum-mention:${input.topicId}`,
   }
 }
 

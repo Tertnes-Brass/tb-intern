@@ -237,7 +237,7 @@ function MentionNotificationsCard({ current }: { current: MentionNotificationCho
         <h2 className="display-title text-2xl font-semibold text-ink">Når noen nevner deg</h2>
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">
           Skriver noen «@» og navnet ditt på veggen, får du én e-post med lenke til innlegget — og et varsel på
-          enhetene der du har slått på varsler.
+          enhetene der du har slått på varsler. I forumet får du bare varselet, ingen e-post.
         </p>
       </div>
       <div className="p-5 sm:p-6">
