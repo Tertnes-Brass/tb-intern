@@ -20,6 +20,7 @@ import {
 } from '../db/schema'
 import { newId } from '../lib/id'
 import { postPlainText } from '../lib/markdown'
+import { isUnread } from '../lib/unread'
 import {
   type MentionCandidate,
   type MentionNotificationChoice,
@@ -124,6 +125,11 @@ export type PostListItem = {
   commentCount: number
   likeCount: number
   likedByMe: boolean
+  /**
+   * Samme regel som tallet på Beskjeder-fanen (`isUnread` i src/lib/unread.ts),
+   * så kortene som er merket «Ulest» alltid er de fanetallet teller.
+   */
+  unread: boolean
   /** De første bildene, til miniatyrrutenettet. */
   images: PostImage[]
   imageCount: number
@@ -233,13 +239,14 @@ async function decorate(
   mine: Set<string>
   images: Map<string, PostImage[]>
   mentions: Map<string, MentionUser[]>
+  read: Set<string>
 }> {
   const ids = rows.map((r) => r.id)
   if (ids.length === 0) {
-    return { comments: new Map(), likes: new Map(), mine: new Set(), images: new Map(), mentions: new Map() }
+    return { comments: new Map(), likes: new Map(), mine: new Set(), images: new Map(), mentions: new Map(), read: new Set() }
   }
   const d = db()
-  const [commentRows, reactionRows, imageRows, mentions] = await Promise.all([
+  const [commentRows, reactionRows, imageRows, mentions, readRows] = await Promise.all([
     d
       .select({ postId: postComments.postId, n: sql<number>`count(*)` })
       .from(postComments)
@@ -261,6 +268,10 @@ async function decorate(
       .where(inArray(postImages.postId, ids))
       .orderBy(asc(postImages.sortOrder), asc(postImages.createdAt)),
     postMentionsFor(ids),
+    d
+      .select({ postId: postReads.postId })
+      .from(postReads)
+      .where(and(eq(postReads.userId, me.id), inArray(postReads.postId, ids))),
   ])
 
   const likes = new Map<string, number>()
@@ -275,7 +286,14 @@ async function decorate(
     list.push({ id: img.id, fileName: img.fileName, width: img.width, height: img.height })
     images.set(img.postId, list)
   }
-  return { comments: new Map(commentRows.map((r) => [r.postId, r.n])), likes, mine, images, mentions }
+  return {
+    comments: new Map(commentRows.map((r) => [r.postId, r.n])),
+    likes,
+    mine,
+    images,
+    mentions,
+    read: new Set(readRows.map((r) => r.postId)),
+  }
 }
 
 /** Dagens navn på de omtalte i en håndfull innlegg. Én spørring. */
@@ -325,6 +343,16 @@ function toListItem(
     commentCount: extra.comments.get(row.id) ?? 0,
     likeCount: extra.likes.get(row.id) ?? 0,
     likedByMe: extra.mine.has(row.id),
+    unread: isUnread(
+      {
+        publishedAt: row.publishedAt ? row.publishedAt.getTime() : null,
+        authorId: row.authorId,
+        audience: row.audience,
+        read: extra.read.has(row.id),
+      },
+      { id: me.id, canSeeBoardPosts: canPublish },
+      Date.now(),
+    ),
     images: all.slice(0, imageLimit),
     imageCount: all.length,
     canEdit: canEditPost(me, row, canPublish),
