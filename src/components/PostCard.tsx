@@ -2,6 +2,7 @@ import { Link, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { formatDateTime } from '../lib/format'
 import { postImageUrl } from '../lib/post-images-client'
+import { seenThisSession } from '../lib/read-posts-client'
 import { commentCountLabel, reactionLabel, toggleReaction as nextReactionState } from '../lib/posts'
 import type { PostImage, PostListItem } from '../server/posts'
 import { toggleReaction } from '../server/posts'
@@ -97,6 +98,7 @@ export function LikeButton({
 
 export function PostCard({ post, draft }: { post: PostListItem; draft?: boolean }) {
   const when = draft ? `Sist endret ${formatDateTime(post.updatedAt)}` : formatDateTime(post.publishedAt ?? post.createdAt)
+  const unread = !draft && post.unread && !seenThisSession(post.id)
   return (
     <article
       className={`sheet px-4 py-4 sm:px-5 ${post.official || post.fromArchive ? 'border-brass/45 shadow-[inset_3px_0_0_var(--brass)]' : ''}`}
@@ -110,8 +112,12 @@ export function PostCard({ post, draft }: { post: PostListItem; draft?: boolean 
           <Avatar name={post.author.name} />
         )}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[0.85rem] font-semibold text-ink">
-            {post.official || post.fromArchive ? (post.fromArchive ? 'Notearkivar' : 'Styret') : post.author.name}
+          <p className="flex items-center gap-2 text-[0.85rem] font-semibold text-ink">
+            <span className="truncate">
+              {post.official || post.fromArchive ? (post.fromArchive ? 'Notearkivar' : 'Styret') : post.author.name}
+            </span>
+            {/* Samme uttrykk som uleste svar i forumet. */}
+            {unread && <span className="shrink-0 text-xs font-semibold text-brass-strong">● Ulest</span>}
           </p>
           <p className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-ink-faint">{when}</p>
         </div>

@@ -4,6 +4,7 @@ import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-rout
 import { useEffect, useMemo, useState } from 'react'
 import { CommentComposer } from '../../../components/CommentComposer'
 import { LikeButton } from '../../../components/PostCard'
+import { rememberPostRead } from '../../../lib/read-posts-client'
 import { toast, toastError } from '../../../components/toast'
 import { Avatar, Button, EmptyState, Kicker, Modal, Stamp } from '../../../components/ui'
 import { formatDateTime } from '../../../lib/format'
@@ -193,6 +194,7 @@ function PostPage() {
   // Lest først når siden faktisk vises — ikke når ruteren forhåndslaster den.
   useEffect(() => {
     if (isDraft) return
+    rememberPostRead(post.id)
     markPostRead({ data: { id: post.id } })
       .then(refreshShellCounts)
       .catch(() => {})
