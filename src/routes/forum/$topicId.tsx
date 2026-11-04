@@ -5,7 +5,7 @@ import { useForumRefresh } from '../../components/useForumRefresh'
 import { useThreadMark } from '../../components/useThreadMark'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
-import { Button, Field, Stamp } from '../../components/ui'
+import { BackArrow, Button, Field, Stamp } from '../../components/ui'
 import { editForumText, getForumTopic, markForumRepliesRead, replyToForum, searchForumMentions, setForumFollow, setForumLock } from '../../server/forum'
 import { Icon } from '../../components/Icons'
 import { refreshShellCounts } from '../../lib/shell-events'
@@ -223,7 +223,7 @@ function TopicPage() {
   }
 
   return <div className="mx-auto max-w-3xl space-y-5">
-    <Link to="/forum" search={{ page: 0 }} className="link-quiet">← Forum</Link>
+    <Link to="/forum" search={{ page: 0 }} className="back-link"><BackArrow />Forum</Link>
     <header className="space-y-3"><h1 className="display-title break-words text-3xl font-semibold sm:text-4xl">{topic.title}</h1>
       {topic.locked && <Stamp>Låst for nye svar</Stamp>}
       <div className="flex flex-wrap items-center gap-2">

@@ -7,7 +7,7 @@ import { ProjectWorkEdition } from '../../../components/ProjectWorkEdition'
 import { RepertoireList } from '../../../components/Repertoire'
 import { StageSetupsSection } from '../../../components/stage/StageSetups'
 import { toast, toastError } from '../../../components/toast'
-import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
+import { BackArrow, Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
 import { ZipDownloadButton } from '../../../components/ZipDownload'
 import { formatDate, formatDuration, formatWeekday, relativeDays } from '../../../lib/format'
 import { zipEntryName } from '../../../lib/zip'
@@ -76,9 +76,10 @@ function ProjectPage() {
       <header className="rise">
         <Link
           to="/noter/prosjekter"
-          className="link-quiet mb-4 inline-flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-brass-strong"
+          className="back-link mb-4"
         >
-          ← Prosjekter
+          <BackArrow />
+          Prosjekter
         </Link>
 
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">

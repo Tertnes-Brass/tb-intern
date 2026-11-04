@@ -3,7 +3,7 @@ import { forumMarkers } from '../../lib/forum-mentions'
 import type { MentionUser } from '../../lib/mentions'
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
-import { Button, Field } from '../../components/ui'
+import { BackArrow, Button, Field } from '../../components/ui'
 import { createForumTopic, searchForumMentions } from '../../server/forum'
 
 export const Route = createFileRoute('/forum/ny')({
@@ -19,7 +19,7 @@ function NewTopic() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   return <div className="mx-auto max-w-2xl space-y-6">
-    <Link to="/forum" search={{ page: 0 }} className="link-quiet">← Forum</Link>
+    <Link to="/forum" search={{ page: 0 }} className="back-link"><BackArrow />Forum</Link>
     <h1 className="display-title text-3xl font-semibold">Start en tråd</h1>
     <p className="text-ink-soft">Alle medlemmer kan lese tråden og svare.</p>
     <form className="sheet space-y-5 p-6" onSubmit={async (event) => {

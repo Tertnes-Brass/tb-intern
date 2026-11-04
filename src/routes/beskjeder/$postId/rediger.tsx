@@ -1,6 +1,6 @@
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
 import { PostForm } from '../../../components/PostForm'
-import { EmptyState, Kicker, Stamp } from '../../../components/ui'
+import { BackArrow, EmptyState, Kicker, Stamp } from '../../../components/ui'
 import { getPost } from '../../../server/posts'
 
 /**
@@ -31,9 +31,10 @@ function EditPostPage() {
         <Link
           to="/beskjeder/$postId"
           params={{ postId: post.id }}
-          className="link-quiet mb-4 inline-flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-brass-strong"
+          className="back-link mb-4"
         >
-          ← Tilbake til innlegget
+          <BackArrow />
+          Tilbake til innlegget
         </Link>
         <div className="flex flex-wrap items-center gap-2">
           <Kicker>Rediger</Kicker>

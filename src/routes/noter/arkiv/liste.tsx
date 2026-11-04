@@ -1,6 +1,6 @@
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
 import { useState } from 'react'
-import { Button, EmptyState, Field, Kicker, Stamp } from '../../../components/ui'
+import { BackArrow, Button, EmptyState, Field, Kicker, Stamp } from '../../../components/ui'
 import { ArchiveImport } from '../../../components/ArchiveImport'
 import { formatDate } from '../../../lib/format'
 import { listLegacyArchive } from '../../../server/legacy-archive'
@@ -32,7 +32,7 @@ function ArchiveListPage() {
   return (
     <div className="space-y-6">
       <header>
-        <Link to="/noter/arkiv" className="link-quiet text-sm text-ink-soft">← Arkivet</Link>
+        <Link to="/noter/arkiv" className="back-link"><BackArrow />Arkivet</Link>
         <Kicker className="mb-2 mt-5">Det fysiske notearkivet</Kicker>
         <h1 className="display-title text-4xl font-semibold italic sm:text-5xl">Arkivliste</h1>
         <p className="mt-3 max-w-3xl text-sm text-ink-soft">{entries.length} oppføringer fra den gamle arkivlisten. Arkivnumrene er bevart, og oppføringer uten nummer er fortsatt uten nummer. Listen endrer ikke verkene eller notefilene i det digitale arkivet.</p>

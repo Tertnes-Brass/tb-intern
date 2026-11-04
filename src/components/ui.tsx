@@ -69,6 +69,19 @@ export function Stamp({
 
 // ---------- Typografi ----------
 
+/**
+ * Pila i tilbakelenkene øverst på en detaljside (`.back-link` i styles.css):
+ * en chevron som i iOS, ikke et tekst-«←», så den kan vokse med lenken på
+ * berøringsskjerm.
+ */
+export function BackArrow() {
+  return (
+    <svg width="9" height="15" viewBox="0 0 9 15" fill="none" aria-hidden className="back-link-arrow shrink-0">
+      <path d="M7.5 1.5 1.5 7.5l6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export function Kicker({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <p className={`kicker ${className}`}>{children}</p>
 }

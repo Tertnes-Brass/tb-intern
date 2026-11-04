@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { BoardDocumentRow, BoardUploadButton } from '../../../components/BoardDocuments'
 import { BoardTaskRowItem, QuickAddTask } from '../../../components/BoardTasks'
 import { toast, toastError } from '../../../components/toast'
-import { Button, EmptyState, Field, Kicker, Modal } from '../../../components/ui'
+import { BackArrow, Button, EmptyState, Field, Kicker, Modal } from '../../../components/ui'
 import type { BoardTaskStatus } from '../../../lib/board'
 import { formatDate, formatWeekday } from '../../../lib/format'
 import {
@@ -71,9 +71,10 @@ function MeetingPage() {
       <header className="rise">
         <Link
           to="/styre/moter"
-          className="link-quiet mb-4 inline-flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-brass-strong"
+          className="back-link mb-4"
         >
-          ← Møter
+          <BackArrow />
+          Møter
         </Link>
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0">

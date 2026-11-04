@@ -1,7 +1,7 @@
 import { Link, createFileRoute, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { toast, toastError } from '../../components/toast'
-import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../components/ui'
+import { BackArrow, Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../components/ui'
 import { BOARD_TASK_STATUSES, BOARD_TASK_STATUS_LABEL, type BoardTaskStatus, dueLabel, isOverdue } from '../../lib/board'
 import { formatDate, formatDateTime } from '../../lib/format'
 import {
@@ -106,9 +106,10 @@ function BoardTaskPage() {
       <header className="rise">
         <Link
           to="/styre"
-          className="link-quiet mb-4 inline-flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-brass-strong"
+          className="back-link mb-4"
         >
-          ← Oppgaver
+          <BackArrow />
+          Oppgaver
         </Link>
         <div className="flex flex-wrap items-center gap-2">
           <Kicker>Oppgave</Kicker>

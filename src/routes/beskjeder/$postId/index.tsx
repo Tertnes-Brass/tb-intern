@@ -9,7 +9,7 @@ import { buildThreads, foldChildren, replyContext } from '../../../lib/threads'
 import { LikeButton } from '../../../components/PostCard'
 import { rememberPostRead } from '../../../lib/read-posts-client'
 import { toast, toastError } from '../../../components/toast'
-import { Avatar, Button, EmptyState, Kicker, Modal, Stamp } from '../../../components/ui'
+import { BackArrow, Avatar, Button, EmptyState, Kicker, Modal, Stamp } from '../../../components/ui'
 import { formatDateTime } from '../../../lib/format'
 import { markdownToHtml } from '../../../lib/markdown'
 import { type MentionUser, UNKNOWN_MENTION, postLineTokens, renderCommentHtml } from '../../../lib/mentions'
@@ -374,9 +374,10 @@ function PostPage() {
       <header className="rise">
         <Link
           to="/beskjeder"
-          className="link-quiet mb-4 inline-flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-brass-strong"
+          className="back-link mb-4"
         >
-          ← Veggen
+          <BackArrow />
+          Veggen
         </Link>
 
         <div className="flex flex-wrap items-center gap-2">

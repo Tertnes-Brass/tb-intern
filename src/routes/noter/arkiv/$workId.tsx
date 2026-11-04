@@ -4,7 +4,7 @@ import { PdfSplitterLauncher } from '../../../components/PdfSplitter'
 import { WorkEditions } from '../../../components/WorkEditions'
 import { WorkFormModal } from '../../../components/WorkForm'
 import { toast, toastError } from '../../../components/toast'
-import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
+import { BackArrow, Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
 import { ZipDownloadButton } from '../../../components/ZipDownload'
 import { PdfDownloadButton } from '../../../components/PdfDownload'
 import { formatBytes, formatDate, formatDuration } from '../../../lib/format'
@@ -70,8 +70,9 @@ function WorkPage() {
   return (
     <div className="space-y-10">
       <header className="rise">
-        <Link to="/noter/arkiv" className="link-quiet mb-4 inline-flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-brass-strong">
-          ← Arkivet
+        <Link to="/noter/arkiv" className="back-link mb-4">
+          <BackArrow />
+          Arkivet
         </Link>
         <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
           <div className="min-w-0">

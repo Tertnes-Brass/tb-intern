@@ -1,6 +1,6 @@
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
 import { PostForm } from '../../components/PostForm'
-import { Kicker } from '../../components/ui'
+import { BackArrow, Kicker } from '../../components/ui'
 
 /**
  * Skriveflaten for et nytt innlegg. Alle innloggede kan skrive på veggen;
@@ -23,9 +23,10 @@ function NewPostPage() {
       <header className="rise">
         <Link
           to="/beskjeder"
-          className="link-quiet mb-4 inline-flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-brass-strong"
+          className="back-link mb-4"
         >
-          ← Veggen
+          <BackArrow />
+          Veggen
         </Link>
         <Kicker className="mb-2">Nytt innlegg</Kicker>
         <h1 className="display-title text-3xl font-semibold italic text-ink sm:text-4xl">Skriv innlegg</h1>

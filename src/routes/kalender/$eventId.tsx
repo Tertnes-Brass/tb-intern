@@ -2,7 +2,7 @@ import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-rout
 import { useEffect, useState } from 'react'
 import { toast, toastError } from '../../components/toast'
 import { RsvpControl } from '../../components/Rsvp'
-import { Button, EmptyState, Kicker, Modal, SectionHeading, Stamp } from '../../components/ui'
+import { BackArrow, Button, EmptyState, Kicker, Modal, SectionHeading, Stamp } from '../../components/ui'
 import { ATTENDANCE_LABELS, attendanceSummary, effectiveStatus } from '../../lib/attendance'
 import { formatDate, formatDateTime, formatDuration, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../../lib/format'
 import { SETLIST_NOTE_MAX, SETLIST_TITLE_MAX } from '../../lib/setlist'
@@ -44,9 +44,10 @@ function BackLink() {
   return (
     <Link
       to="/kalender"
-      className="link-quiet mb-4 inline-flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-brass-strong"
+      className="back-link mb-4"
     >
-      ← Kalender
+      <BackArrow />
+      Kalender
     </Link>
   )
 }

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { BoardChat } from '../../../components/BoardChat'
 import { BoardTaskRowItem, QuickAddTask } from '../../../components/BoardTasks'
 import { toast, toastError } from '../../../components/toast'
-import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
+import { BackArrow, Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
 import {
   BOARD_PROJECT_STATUSES,
   BOARD_PROJECT_STATUS_LABEL,
@@ -63,9 +63,10 @@ function BoardProjectPage() {
       <header className="rise">
         <Link
           to="/styre/prosjekter"
-          className="link-quiet mb-4 inline-flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-brass-strong"
+          className="back-link mb-4"
         >
-          ← Prosjekter
+          <BackArrow />
+          Prosjekter
         </Link>
 
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
