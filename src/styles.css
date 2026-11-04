@@ -1148,203 +1148,202 @@ select.field-input {
    bare den ene primærmodulen på en side (notestativ-kortet) er et løftet ark
    (`.sheet`). Fraunces er for sidetitler og verkstitler; operative etiketter er
    Schibsted. */
-.surface-group {
-  background: var(--paper-raised);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-}
-.list-group {
-  background: var(--paper-raised);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  overflow: hidden;
-}
-.list-group > li + li,
-.list-group > .list-row + .list-row {
-  border-top: 1px solid var(--line);
-}
-.list-row-link {
-  transition: background-color 0.15s;
-}
-@media (hover: hover) {
-  .list-row-link:hover {
-    background: color-mix(in srgb, var(--paper-sunken) 55%, transparent);
+/* I `@layer components`, så Tailwind-utilities på samme element (mt-6,
+   border-brass/40, overflow-visible …) fortsatt vinner. */
+@layer components {
+  .surface-group {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
   }
-}
-.list-row-link:active {
-  background: var(--paper-sunken);
-}
-.group-label {
-  margin: 0 0 0.5rem 0.25rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--ink-faint);
-}
+  .list-group {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .list-group > li + li,
+  .list-group > .list-row + .list-row {
+    border-top: 1px solid var(--line);
+  }
+  .list-row-link {
+    transition: background-color 0.15s;
+  }
+  @media (hover: hover) {
+    .list-row-link:hover {
+      background: color-mix(in srgb, var(--paper-sunken) 55%, transparent);
+    }
+  }
+  .list-row-link:active {
+    background: var(--paper-sunken);
+  }
+  .group-label {
+    margin: 0 0 0.5rem 0.25rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--ink-faint);
+  }
 
-/* Segmentert kontroll (Segmented.tsx) */
-.segmented {
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--paper-sunken);
-}
-.segmented-stretch {
-  display: flex;
-  width: 100%;
-}
-.segmented-stretch .segmented-option {
-  flex: 1 1 0;
-}
-.segmented-option {
-  min-height: 2rem;
-  padding: 0 0.9rem;
-  border-radius: 8px;
-  font-size: 0.82rem;
-  font-weight: 500;
-  white-space: nowrap;
-  color: var(--ink-soft);
-  cursor: pointer;
-  transition: color 0.15s, background-color 0.15s, box-shadow 0.15s;
-}
-.segmented-option:hover {
-  color: var(--ink);
-}
-.segmented-option[aria-checked='true'] {
-  background: var(--paper-raised);
-  color: var(--ink);
-  box-shadow: 0 1px 2px rgba(43, 34, 16, 0.12), 0 0 0 1px var(--line);
-}
-.segmented-option:disabled {
-  opacity: 0.5;
-  pointer-events: none;
-}
-@media (pointer: coarse) {
+  /* Segmentert kontroll (Segmented.tsx) */
+  .segmented {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--paper-sunken);
+  }
+  .segmented-stretch {
+    display: flex;
+    width: 100%;
+  }
+  .segmented-stretch .segmented-option {
+    flex: 1 1 0;
+  }
   .segmented-option {
-    min-height: 2.5rem;
-    padding: 0 1rem;
-    font-size: 0.9rem;
+    min-height: 2rem;
+    padding: 0 0.9rem;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: color 0.15s, background-color 0.15s, box-shadow 0.15s;
+  }
+  .segmented-option:hover {
+    color: var(--ink);
+  }
+  .segmented-option[aria-checked='true'] {
+    background: var(--paper-raised);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(43, 34, 16, 0.12), 0 0 0 1px var(--line);
+  }
+  .segmented-option:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  @media (pointer: coarse) {
+    .segmented-option {
+      min-height: 2.5rem;
+      padding: 0 1rem;
+      font-size: 0.9rem;
+    }
+  }
+
+  /* «Administrer»-menyen (ActionMenu.tsx) */
+  .action-pop {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 40;
+    min-width: 17rem;
+    padding: 0.35rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--line-strong);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lift);
+    animation: fadein 0.14s ease-out both;
+  }
+  .action-menu-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.55rem 0.7rem;
+    border-radius: 8px;
+    text-align: left;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--ink);
+    cursor: pointer;
+    transition: background-color 0.12s;
+  }
+  .action-menu-item:hover,
+  .action-menu-item:focus-visible {
+    background: var(--paper-sunken);
+    outline: none;
+  }
+  .action-menu-item:disabled {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .action-menu-icon {
+    color: var(--ink-faint);
+  }
+  .action-menu-hint {
+    display: block;
+    margin-top: 1px;
+    font-size: 0.74rem;
+    font-weight: 400;
+    color: var(--ink-faint);
+  }
+  .action-menu-danger,
+  .action-menu-danger .action-menu-icon {
+    color: var(--danger);
+  }
+  .action-menu-sep {
+    height: 1px;
+    margin: 0.35rem 0.4rem;
+    background: var(--line);
+  }
+  .action-sheet-list {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper-raised);
+  }
+  .action-sheet-list .action-menu-item {
+    min-height: 3.25rem;
+    padding: 0.7rem 1rem;
+    border-radius: 0;
+    font-size: 1rem;
+  }
+  .action-sheet-list .action-menu-item + .action-menu-item {
+    border-top: 1px solid var(--line);
+  }
+  .action-sheet-list .action-menu-sep {
+    height: 6px;
+    margin: 0;
+    background: var(--paper-sunken);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .action-sheet-list .action-menu-hint {
+    font-size: 0.8rem;
+  }
+
+  /* Den store messingknappen «Åpne notestativet» — primærhandlingen i noteområdet. */
+  .stand-cta {
+    display: flex;
+    min-height: 60px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: 0 1.25rem;
+    border-radius: 14px;
+    background: var(--brass);
+    color: var(--paper-raised);
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    box-shadow: 0 1px 2px rgba(43, 34, 16, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    transition: background-color 0.15s, transform 0.1s;
+  }
+  .dark .stand-cta {
+    color: var(--paper);
+  }
+  .stand-cta:hover {
+    background: var(--brass-strong);
+  }
+  .stand-cta:active {
+    transform: translateY(1px);
   }
 }
 
-/* «Administrer»-menyen (ActionMenu.tsx) */
-.action-pop {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 40;
-  min-width: 17rem;
-  padding: 0.35rem;
-  background: var(--paper-raised);
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  box-shadow: var(--shadow-lift);
-  animation: fadein 0.14s ease-out both;
-}
-.action-menu-item {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.55rem 0.7rem;
-  border-radius: 8px;
-  text-align: left;
-  font-size: 0.88rem;
-  font-weight: 500;
-  color: var(--ink);
-  cursor: pointer;
-  transition: background-color 0.12s;
-}
-.action-menu-item:hover,
-.action-menu-item:focus-visible {
-  background: var(--paper-sunken);
-  outline: none;
-}
-.action-menu-item:disabled {
-  opacity: 0.45;
-  pointer-events: none;
-}
-.action-menu-icon {
-  color: var(--ink-faint);
-}
-.action-menu-hint {
-  display: block;
-  margin-top: 1px;
-  font-size: 0.74rem;
-  font-weight: 400;
-  color: var(--ink-faint);
-}
-.action-menu-danger,
-.action-menu-danger .action-menu-icon {
-  color: var(--danger);
-}
-.action-menu-sep {
-  height: 1px;
-  margin: 0.35rem 0.4rem;
-  background: var(--line);
-}
-.action-sheet-list {
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--paper-raised);
-}
-.action-sheet-list .action-menu-item {
-  min-height: 3.25rem;
-  padding: 0.7rem 1rem;
-  border-radius: 0;
-  font-size: 1rem;
-}
-.action-sheet-list .action-menu-item + .action-menu-item {
-  border-top: 1px solid var(--line);
-}
-.action-sheet-list .action-menu-sep {
-  height: 6px;
-  margin: 0;
-  background: var(--paper-sunken);
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-.action-sheet-list .action-menu-hint {
-  font-size: 0.8rem;
-}
-
-/* Den store messingknappen «Åpne notestativet» — primærhandlingen i noteområdet. */
-.stand-cta {
-  display: flex;
-  min-height: 60px;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-  padding: 0 1.25rem;
-  border-radius: 14px;
-  background: var(--brass);
-  color: var(--paper-raised);
-  font-size: 1rem;
-  font-weight: 600;
-  text-decoration: none;
-  box-shadow: 0 1px 2px rgba(43, 34, 16, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  transition: background-color 0.15s, transform 0.1s;
-}
-.dark .stand-cta {
-  color: var(--paper);
-}
-.stand-cta:hover {
-  background: var(--brass-strong);
-}
-.stand-cta:active {
-  transform: translateY(1px);
-}
-
-/* Sidekolonnen på prosjektsiden og i arkivet: følger med når man ruller
-   (i installert iOS-app ruller `.app-shell`, og sticky virker der også). */
-.aside-sticky {
-  position: sticky;
-  top: calc(56px + 1.25rem);
-}
-/* Kompakt nedtrekksliste i en filterrad — samme høyde som `Segmented`. */
+/* Kompakt nedtrekksliste i en filterrad — samme høyde som `Segmented`. Utenfor
+   laget, siden den skal vinne over `.field-input` (som heller ikke er i et lag). */
 .field-input.compact-select {
   min-height: 2.25rem;
   padding-top: 0.3rem;
@@ -1356,4 +1355,11 @@ select.field-input {
     min-height: 2.75rem;
     font-size: 16px;
   }
+}
+
+/* Sidekolonnen på prosjektsiden og i arkivet: følger med når man ruller
+   (i installert iOS-app ruller `.app-shell`, og sticky virker der også). */
+@utility aside-sticky {
+  position: sticky;
+  top: calc(56px + 1.25rem);
 }

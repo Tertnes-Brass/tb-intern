@@ -163,7 +163,7 @@ function ProjectPage() {
       </header>
 
         <aside className="rise md:col-start-2 md:row-span-2 md:row-start-1 md:pt-1" style={{ animationDelay: '60ms' }}>
-          <div className="space-y-3 md:aside-sticky">
+          <div className="space-y-3 md:aside-sticky md:max-h-[calc(100dvh-9rem)] md:overflow-y-auto md:pb-4">
             {standFileIds.length > 0 ? (
               <>
                 <Link to="/noter/stativ/$projectId" params={{ projectId: p.id }} className="stand-cta">

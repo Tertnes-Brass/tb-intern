@@ -95,7 +95,7 @@ export function Launcher({
       <Link
         to="/min-profil"
         onClick={onClose}
-        className="sheet link-quiet flex items-center gap-3.5 px-4 py-3.5 active:bg-paper-sunken"
+        className="surface-group link-quiet flex items-center gap-3.5 px-4 py-3.5 active:bg-paper-sunken"
       >
         <Avatar name={me.name} />
         <span className="min-w-0 flex-1">
@@ -109,7 +109,7 @@ export function Launcher({
 
       {areas.length > 0 && (
         <>
-          <p className="kicker mb-2.5 mt-6">Dine områder</p>
+          <p className="group-label mt-6">Dine områder</p>
           <ul className="grid grid-cols-3 gap-2.5">
             {areas.map((area) => {
               const tile = AREA_TILES[area.to] ?? { icon: 'chevronRight' as IconName, hint: '' }
@@ -122,7 +122,7 @@ export function Launcher({
                   <Link
                     to={area.to}
                     onClick={onClose}
-                    className="sheet link-quiet relative flex min-h-[104px] flex-1 flex-col justify-between gap-3 px-3 py-3 active:bg-paper-sunken"
+                    className="surface-group link-quiet relative flex min-h-[104px] flex-1 flex-col justify-between gap-3 px-3 py-3 active:bg-paper-sunken"
                   >
                     <Icon name={tile.icon} size={24} className="text-brass-strong" />
                     {overdue && (
@@ -144,7 +144,7 @@ export function Launcher({
         </>
       )}
 
-      <div className="sheet mt-6 divide-y divide-[var(--line)] overflow-hidden">
+      <div className="surface-group mt-6 divide-y divide-[var(--line)] overflow-hidden">
         <Link to="/min-profil" hash="varsler" onClick={onClose} className="link-quiet flex min-h-[52px] items-center gap-3 px-4 active:bg-paper-sunken">
           <GroupIcon name="bell" />
           <span className="flex-1 text-[0.95rem] text-ink">Varsler</span>
@@ -212,7 +212,7 @@ export function Launcher({
             router.navigate({ to: '/login' })
           }
         }}
-        className="sheet mt-4 flex min-h-[52px] w-full cursor-pointer items-center justify-center gap-2 text-[0.95rem] font-semibold text-danger active:bg-paper-sunken disabled:opacity-60"
+        className="surface-group mt-4 flex min-h-[52px] w-full cursor-pointer items-center justify-center gap-2 text-[0.95rem] font-semibold text-danger active:bg-paper-sunken disabled:opacity-60"
       >
         {signingOut ? <span className="spinner" aria-hidden /> : <Icon name="logout" size={19} />}
         Logg ut
