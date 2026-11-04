@@ -1,10 +1,12 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { toast, toastError } from '../../components/toast'
+import { DateTile, ListHeader, eventDayLabel, eventTimeLabel, rsvpEventLabel } from '../../components/calendar/parts'
+import { Icon } from '../../components/Icons'
 import { RsvpControl } from '../../components/Rsvp'
-import { BackArrow, Button, EmptyState, Kicker, Modal, SectionHeading, Stamp } from '../../components/ui'
+import { BackArrow, Button, EmptyState, Kicker, Modal, Stamp } from '../../components/ui'
 import { ATTENDANCE_LABELS, attendanceSummary, effectiveStatus } from '../../lib/attendance'
-import { formatDate, formatDateTime, formatDuration, formatTimeRange, formatWeekday, relativeDays, toOsloDate } from '../../lib/format'
+import { formatDate, formatDateTime, formatDuration, relativeDays, toOsloDate } from '../../lib/format'
 import { SETLIST_NOTE_MAX, SETLIST_TITLE_MAX } from '../../lib/setlist'
 import {
   addSetlistItem,
@@ -27,6 +29,10 @@ import {
  * Alt innsyn er avgjort SERVER-side i `getEventDetail`: `groups` er `null` for
  * den som bare skal se tall, og inneholder kun egne seksjoner for en
  * gruppeleder. Denne filen viser det den får — den filtrerer ikke selv.
+ *
+ * Rekkefølgen (4. november 2026): hendelsen, så «Ditt oppmøte» — det de fleste
+ * åpner siden for — så øvingsplanen og til sist navnelistene. Fra 768 px står
+ * oppmøtet i en egen spalte til høyre for planen (`.event-layout`).
  */
 
 export const Route = createFileRoute('/kalender/$eventId')({
@@ -62,34 +68,44 @@ function EventDetailPage() {
   const date = toOsloDate(event.start)
 
   return (
-    <div className="space-y-12">
-      <header className="rise">
+    <div className="event-layout">
+      <header className="event-head rise">
         <BackLink />
-        <Kicker className="mb-3">{relativeDays(date)}</Kicker>
-        <h1 className="display-title break-words text-[clamp(2rem,5.5vw,3.4rem)] font-semibold italic leading-[1.02] text-ink [hyphens:auto]">
-          {event.title}
-        </h1>
-        <p className="mt-3 text-[0.95rem] leading-relaxed text-ink-soft">
-          {formatWeekday(date)} {formatDate(date)}
-          {event.allDay ? '' : ` · ${formatTimeRange(event.start, event.end)}`}
-        </p>
-        {event.description && (
-          <p className="mt-3 max-w-xl whitespace-pre-line text-sm leading-relaxed text-ink-soft">{event.description}</p>
-        )}
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          {event.location && <Stamp tone="brass" wrap>{event.location}</Stamp>}
-          {event.allDay && <Stamp>Hele dagen</Stamp>}
-          {data.linkedProject && (
-            <Link to="/noter/prosjekter/$projectId" params={{ projectId: data.linkedProject.id }}>
-              <Stamp wrap className="cursor-pointer">{data.linkedProject.name}</Stamp>
-            </Link>
-          )}
+        <div className="flex gap-4">
+          <DateTile iso={date} size="lg" tone="brass" />
+          <div className="min-w-0 flex-1 pt-0.5">
+            <Kicker className="mb-1.5">{relativeDays(date)}</Kicker>
+            <h1 className="display-title break-words text-[clamp(1.9rem,5.5vw,3rem)] font-semibold italic leading-[1.02] text-ink [hyphens:auto]">
+              {event.title}
+            </h1>
+            <p className="mt-2 text-[0.95rem] leading-snug text-ink-soft">
+              <span className="text-ink">{eventDayLabel(event)}</span> · {eventTimeLabel(event)}
+            </p>
+            {event.location && (
+              <p className="mt-1 flex items-start gap-1.5 text-[0.95rem] leading-snug text-ink-soft">
+                <Icon name="pin" size={15} className="mt-[3px] shrink-0 text-brass" />
+                <span className="min-w-0 break-words">{event.location}</span>
+              </p>
+            )}
+            {data.linkedProject && (
+              <Link
+                to="/noter/prosjekter/$projectId"
+                params={{ projectId: data.linkedProject.id }}
+                className="mt-2.5 inline-flex"
+              >
+                <Stamp wrap className="cursor-pointer">{data.linkedProject.name}</Stamp>
+              </Link>
+            )}
+          </div>
         </div>
-        <div className="staff-rule mt-7 w-full opacity-50" aria-hidden />
+        {event.description && (
+          <p className="mt-4 max-w-xl whitespace-pre-line text-sm leading-relaxed text-ink-soft">{event.description}</p>
+        )}
       </header>
 
+      <AttendanceCard data={data} occurrenceKey={eventId} />
       <PlanSection data={data} occurrenceKey={eventId} />
-      <AttendanceSection data={data} occurrenceKey={eventId} />
+      <RosterSection data={data} occurrenceKey={eventId} />
     </div>
   )
 }
@@ -118,7 +134,6 @@ function OrphanPage({ data }: { data: Detail }) {
             Sto i kalenderen {formatDateTime(data.snapshot.start)}.
           </p>
         )}
-        <div className="staff-rule mt-7 w-full opacity-50" aria-hidden />
       </header>
 
       <EmptyState title={hasSnapshot ? 'Ikke i kalenderen lenger' : 'Fant ingen hendelse'}>
@@ -132,7 +147,8 @@ function OrphanPage({ data }: { data: Detail }) {
       {showsLocal && (
         <>
           <PlanSection data={data} occurrenceKey={data.occurrenceKey} />
-          <AttendanceSection data={data} occurrenceKey={data.occurrenceKey} />
+          <AttendanceCard data={data} occurrenceKey={data.occurrenceKey} />
+          <RosterSection data={data} occurrenceKey={data.occurrenceKey} />
         </>
       )}
     </div>
@@ -160,15 +176,15 @@ function PlanSection({ data, occurrenceKey }: { data: Detail; occurrenceKey: str
   }
 
   return (
-    <section className="rise" style={{ animationDelay: '80ms' }}>
-      <SectionHeading
-        kicker={
+    <section className="event-plan rise" style={{ animationDelay: '80ms' }}>
+      <ListHeader
+        title="Øvingsplan"
+        meta={
           data.setlist.length > 0
             ? `${data.setlist.length} ${data.setlist.length === 1 ? 'punkt' : 'punkter'}`
             : undefined
         }
-        title="Øvingsplan"
-        className="mb-4"
+        className="mb-1"
         action={
           data.canManagePlan ? (
             <div className="flex flex-wrap gap-2">
@@ -184,15 +200,15 @@ function PlanSection({ data, occurrenceKey }: { data: Detail; occurrenceKey: str
       />
 
       {data.setlist.length === 0 ? (
-        <EmptyState title="Ingen øvingsplan ennå">
+        <p className="py-3 text-sm text-ink-soft">
           {data.canManagePlan
-            ? 'Legg inn verkene i den rekkefølgen de skal øves, så vet alle hva de skal ha framme.'
+            ? 'Ingen plan ennå. Legg inn verkene i den rekkefølgen de skal øves, så vet alle hva de skal ha framme.'
             : 'Dirigenten har ikke lagt inn hva som skal øves på denne gangen.'}
-        </EmptyState>
+        </p>
       ) : (
-        <ol className="sheet overflow-hidden">
+        <ol>
           {data.setlist.map((item, index) => (
-            <li key={item.id} className="hairline-row flex items-start gap-3 px-4 py-3 sm:px-5">
+            <li key={item.id} className="hairline-row flex items-start gap-3 py-3">
               <span className="display-title tabular mt-0.5 w-6 shrink-0 text-right text-sm font-semibold text-ink-faint">
                 {index + 1}
               </span>
@@ -546,67 +562,71 @@ function CustomItemDialog({
 
 // ---------- Oppmøte ----------
 
-function AttendanceSection({ data, occurrenceKey }: { data: Detail; occurrenceKey: string }) {
+/**
+ * «Ditt oppmøte» og tallene for hele korpset — én flate, rett under hendelsen
+ * (på iPad i høyre spalte). Navnelistene står i `RosterSection`, nederst.
+ */
+function AttendanceCard({ data, occurrenceKey }: { data: Detail; occurrenceKey: string }) {
+  const router = useRouter()
+  const event = data.event
   return (
-    <section className="rise space-y-6" style={{ animationDelay: '160ms' }}>
-      <SectionHeading
-        kicker={attendanceSummary(data.counts)}
-        title="Oppmøte"
-        action={
-          data.canManageAttendance ? (
-            <Link to="/fravaer" className="link-brass text-sm">
-              Fraværsoversikt →
-            </Link>
-          ) : undefined
-        }
-      />
-      <MyRsvp data={data} occurrenceKey={occurrenceKey} />
-      {data.groups ? (
-        <div className="space-y-6">
-          <p className="text-sm text-ink-soft">
-            Alle regnes som kommer til de selv melder fravær. Du kan også registrere fravær for noen som har gitt
-            beskjed på annen måte.
+    <section className="event-side rise" style={{ animationDelay: '40ms' }} aria-label="Oppmøte">
+      <div className="next-card">
+        {/* En hendelse som er borte fra kalenderen (`OrphanPage`) har ingen tid
+            å svare på — da vises bare tallene. */}
+        {event && (
+          <div className="px-4 pb-4 pt-5 sm:px-5">
+            <p className="kicker mb-3">Ditt oppmøte</p>
+            {/* Samme kontroll som på Hjem: ett trykk på «Kan ikke komme», og et
+                ark med grunn og kommentar. */}
+            <RsvpControl
+              occurrenceKey={occurrenceKey}
+              eventLabel={rsvpEventLabel(event)}
+              current={data.myAttendance}
+              onSaved={() => router.invalidate()}
+            />
+          </div>
+        )}
+        <div className={`px-4 py-3.5 sm:px-5 ${event ? 'next-card-row' : 'pt-5'}`}>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <p className="text-sm">
+              <span className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-brass">Oppmøte</span>
+              <span className="ml-2 text-ink">{attendanceSummary(data.counts)}</span>
+            </p>
+            {data.canManageAttendance && (
+              <Link to="/fravaer" className="link-brass hit text-sm">
+                Fraværsoversikt
+              </Link>
+            )}
+          </div>
+          <p className="mt-1.5 text-xs leading-relaxed text-ink-faint">
+            {data.groups
+              ? 'Alle regnes som kommer til de selv melder fravær. Du kan registrere fravær for noen som har gitt beskjed på annen måte — se navnelisten.'
+              : 'Hvem som har meldt fravær, ser bare dirigent, fraværsansvarlig og gruppelederne for sin egen stemmegruppe.'}
           </p>
-          {data.groups.map((group) => (
-            <div key={group.section}>
-              <h3 className="kicker mb-1">{group.label}</h3>
-              <ul className="sheet overflow-hidden">
-                {group.members.map((member) => (
-                  <MemberRow key={member.userId} member={member} occurrenceKey={occurrenceKey} />
-                ))}
-              </ul>
-            </div>
-          ))}
         </div>
-      ) : (
-        <p className="text-sm text-ink-soft">
-          Hvem som har meldt fravær, er bare synlig for dirigent, fraværsansvarlig og gruppelederne for sin egen
-          stemmegruppe. Tallene over gjelder hele korpset.
-        </p>
-      )}
+      </div>
     </section>
   )
 }
 
-function MyRsvp({ data, occurrenceKey }: { data: Detail; occurrenceKey: string }) {
-  const router = useRouter()
-  // En hendelse som er borte fra kalenderen (`OrphanPage`) har ingen tid å
-  // svare på — da vises bare registreringene, ikke «Ditt oppmøte».
-  if (!data.event) return null
-  const event = data.event
-  const date = toOsloDate(event.start)
+/** Navnelistene per stemmegruppe — bare for dem serveren har gitt dem til. */
+function RosterSection({ data, occurrenceKey }: { data: Detail; occurrenceKey: string }) {
+  if (!data.groups) return null
   return (
-    <div className="sheet px-4 py-4 sm:px-5">
-      <p className="kicker mb-3">Ditt oppmøte</p>
-      {/* Samme kontroll som på Hjem: ett trykk på «Kan ikke komme», og et ark
-          med grunn og kommentar. */}
-      <RsvpControl
-        occurrenceKey={occurrenceKey}
-        eventLabel={`${event.title} · ${formatWeekday(date)} ${formatDate(date)}${event.allDay ? '' : `, ${formatTimeRange(event.start, null)}`}`}
-        current={data.myAttendance}
-        onSaved={() => router.invalidate()}
-      />
-    </div>
+    <section className="event-people rise space-y-6" style={{ animationDelay: '120ms' }}>
+      <ListHeader title="Hvem kommer" meta={attendanceSummary(data.counts)} />
+      {data.groups.map((group) => (
+        <div key={group.section}>
+          <h3 className="kicker mb-1">{group.label}</h3>
+          <ul>
+            {group.members.map((member) => (
+              <MemberRow key={member.userId} member={member} occurrenceKey={occurrenceKey} />
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
   )
 }
 
@@ -642,7 +662,7 @@ function MemberRow({
   }
 
   return (
-    <li className="hairline-row flex items-center gap-3 px-4 py-2.5 sm:px-5">
+    <li className="hairline-row flex items-center gap-3 py-2.5">
       <div className="min-w-0 flex-1">
         <p className={`truncate text-sm font-medium ${status === 'attending' ? 'text-ink' : 'text-oxblood'}`}>
           {member.name}

@@ -1337,3 +1337,46 @@ select.field-input {
     column-gap: 3rem;
   }
 }
+
+/* Hendelsen (/kalender/$eventId): én spalte på telefon i rekkefølgen
+   hendelse → ditt oppmøte → plan → navneliste. Fra 768 px står oppmøtet i en
+   egen spalte til høyre, på linje med tittelen, og planen og navnelistene til
+   venstre. Reglene gjelder bare inne i `.event-layout`. */
+.event-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 1.75rem;
+}
+@media (min-width: 768px) {
+  .event-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 330px);
+    grid-template-areas:
+      'head side'
+      'plan side'
+      'people side';
+    grid-template-rows: auto auto 1fr;
+    column-gap: 2rem;
+    row-gap: 2rem;
+    align-items: start;
+  }
+  .event-layout .event-head {
+    grid-area: head;
+  }
+  .event-layout .event-side {
+    grid-area: side;
+    position: sticky;
+    top: calc(56px + env(safe-area-inset-top) + 1.25rem);
+  }
+  .event-layout .event-plan {
+    grid-area: plan;
+  }
+  .event-layout .event-people {
+    grid-area: people;
+  }
+}
+@media (min-width: 1024px) {
+  .event-layout {
+    grid-template-columns: minmax(0, 1fr) 360px;
+    column-gap: 3rem;
+  }
+}
