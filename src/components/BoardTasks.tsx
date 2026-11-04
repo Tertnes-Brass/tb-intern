@@ -41,7 +41,7 @@ function TaskCheckbox({
       disabled={busy}
       aria-pressed={done}
       aria-label={done ? 'Merk som ikke ferdig' : 'Merk som ferdig'}
-      className={`mt-0.5 grid h-[22px] w-[22px] shrink-0 cursor-pointer place-items-center rounded-[7px] border transition-colors disabled:opacity-50 ${
+      className={`hit mt-px grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-full border-[1.5px] transition-colors disabled:opacity-50 ${
         done
           ? 'border-brass bg-brass text-paper-raised dark:text-paper'
           : 'border-line-strong text-transparent hover:border-brass hover:text-brass/40'
@@ -97,7 +97,7 @@ export function BoardTaskRowItem({
   }
 
   return (
-    <li className="hairline-row flex items-start gap-3 px-4 py-3 sm:px-5">
+    <li className="hairline-row flex items-start gap-3.5 px-4 py-3.5 sm:px-5">
       <TaskCheckbox status={task.status} busy={busy} onToggle={toggle} />
       <Link
         to="/styre/$taskId"
@@ -105,7 +105,7 @@ export function BoardTaskRowItem({
         className="link-quiet min-w-0 flex-1"
       >
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className={`text-[0.95rem] font-medium leading-snug ${done ? 'text-ink-faint line-through' : 'text-ink'}`}>
+          <span className={`text-[0.98rem] font-medium leading-snug ${done ? 'text-ink-faint line-through' : 'text-ink'}`}>
             {task.title}
           </span>
           {!hideBoardProject && task.boardProjectTitle && (
@@ -115,10 +115,22 @@ export function BoardTaskRowItem({
         {meta.length > 0 && (
           <span className="mt-0.5 block truncate text-xs text-ink-soft">{meta.join(' · ')}</span>
         )}
+        {/* Telefon: fristen under tittelen, ikke i en egen kolonne som presser den. */}
+        {((task.dueDate && !done) || task.status === 'in_progress') && (
+          <span className="mt-1 flex flex-wrap gap-x-2 text-xs font-medium sm:hidden">
+            {task.dueDate && !done && (
+              <span className={overdue ? 'text-danger' : 'text-ink-faint'}>
+                {overdue ? 'Forfalt · ' : 'Frist '}
+                {formatDateShort(task.dueDate)}
+              </span>
+            )}
+            {task.status === 'in_progress' && <span className="text-brass-strong">Pågår</span>}
+          </span>
+        )}
       </Link>
       {task.dueDate && !done && (
         <span
-          className={`shrink-0 whitespace-nowrap font-mono text-[0.62rem] uppercase tracking-[0.12em] ${
+          className={`hidden shrink-0 whitespace-nowrap font-mono sm:inline text-[0.62rem] uppercase tracking-[0.12em] ${
             overdue ? 'text-danger' : 'text-ink-faint'
           }`}
           title={dueLabel(task.dueDate, today)}
@@ -128,7 +140,7 @@ export function BoardTaskRowItem({
         </span>
       )}
       {task.status === 'in_progress' && (
-        <span className="shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.12em] text-brass">Pågår</span>
+        <span className="hidden shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.12em] text-brass sm:inline">Pågår</span>
       )}
     </li>
   )

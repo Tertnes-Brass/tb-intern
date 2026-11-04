@@ -1,7 +1,7 @@
 import { Link, createFileRoute, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { toast, toastError } from '../../../components/toast'
-import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
+import { Button, EmptyState, Field, Modal, PageHeader, Stamp } from '../../../components/ui'
 import { formatDate, formatWeekday } from '../../../lib/format'
 import { createMeeting, listMeetings } from '../../../server/board'
 
@@ -15,19 +15,20 @@ function MeetingsPage() {
   const [creating, setCreating] = useState(false)
 
   return (
-    <div className="space-y-8">
-      <header className="rise flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <Kicker className="mb-2">Styrearbeidet</Kicker>
-          <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Møter</h1>
-        </div>
-        <Button variant="primary" onClick={() => setCreating(true)}>
-          Nytt møte
-        </Button>
-      </header>
+    <div className="space-y-7">
+      <PageHeader
+        className="rise"
+        title="Møter"
+        summary={data.meetings.length > 0 ? `${data.meetings.length} ${data.meetings.length === 1 ? 'møte' : 'møter'}` : undefined}
+        action={
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            Nytt møte
+          </Button>
+        }
+      />
 
       {data.meetings.length === 0 ? (
-        <div className="sheet rise" style={{ animationDelay: '80ms' }}>
+        <div className="surface-group rise" style={{ animationDelay: '80ms' }}>
           <EmptyState
             title="Ingen møter ennå"
             action={
@@ -40,17 +41,15 @@ function MeetingsPage() {
           </EmptyState>
         </div>
       ) : (
-        <ul className="rise grid gap-3 sm:grid-cols-2" style={{ animationDelay: '80ms' }}>
+        <ul className="rise list-group" style={{ animationDelay: '80ms' }}>
           {data.meetings.map((m) => (
             <li key={m.id}>
               <Link
                 to="/styre/moter/$meetingId"
                 params={{ meetingId: m.id }}
-                className={`sheet sheet-hover link-quiet flex h-full items-center gap-5 px-5 py-4 ${
-                  m.date < data.today ? 'opacity-80' : ''
-                }`}
+                className="list-row-link link-quiet flex min-h-[68px] items-center gap-4 px-4 py-3 sm:gap-5 sm:px-5"
               >
-                <span className="flex w-12 shrink-0 flex-col items-center" aria-hidden>
+                <span className={`flex w-11 shrink-0 flex-col items-center ${m.date < data.today ? 'opacity-60' : ''}`} aria-hidden>
                   <span className="display-title tabular text-[1.7rem] font-semibold leading-none text-ink">
                     {Number(m.date.slice(8, 10))}
                   </span>
@@ -59,7 +58,7 @@ function MeetingsPage() {
                   </span>
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="display-title block truncate text-[1.15rem] font-semibold">{m.title}</span>
+                  <span className="display-title block truncate text-[1.1rem] font-semibold text-ink">{m.title}</span>
                   <span className="mt-0.5 block text-xs text-ink-soft">
                     {formatWeekday(m.date)} {formatDate(m.date)}
                     {m.taskCount > 0 ? ` · ${m.taskCount} oppgaver` : ''}

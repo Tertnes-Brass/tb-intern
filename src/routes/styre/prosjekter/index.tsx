@@ -1,7 +1,7 @@
 import { Link, createFileRoute, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { toast, toastError } from '../../../components/toast'
-import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
+import { Button, EmptyState, Field, Modal, PageHeader, Stamp } from '../../../components/ui'
 import { isProjectOverdue, projectProgress } from '../../../lib/board'
 import { formatDate } from '../../../lib/format'
 import { createBoardProject, listBoardProjects } from '../../../server/board'
@@ -21,19 +21,20 @@ function BoardProjectsPage() {
   const closed = data.projects.filter((p) => p.status !== 'active')
 
   return (
-    <div className="space-y-8">
-      <header className="rise flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <Kicker className="mb-2">Styrearbeidet</Kicker>
-          <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Prosjekter</h1>
-        </div>
-        <Button variant="primary" onClick={() => setCreating(true)}>
-          Nytt prosjekt
-        </Button>
-      </header>
+    <div className="space-y-7">
+      <PageHeader
+        className="rise"
+        title="Prosjekter"
+        summary={data.projects.length > 0 ? `${active.length} aktive` : undefined}
+        action={
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            Nytt prosjekt
+          </Button>
+        }
+      />
 
       {data.projects.length === 0 ? (
-        <div className="sheet rise" style={{ animationDelay: '80ms' }}>
+        <div className="surface-group rise" style={{ animationDelay: '80ms' }}>
           <EmptyState
             title="Ingen styreprosjekter ennå"
             action={
@@ -49,13 +50,13 @@ function BoardProjectsPage() {
       ) : (
         <div className="space-y-8">
           {active.length === 0 ? (
-            <div className="sheet rise" style={{ animationDelay: '80ms' }}>
+            <div className="surface-group rise" style={{ animationDelay: '80ms' }}>
               <EmptyState title="Ingen aktive prosjekter">
                 Alt er ferdig eller arkivert. De ligger nederst.
               </EmptyState>
             </div>
           ) : (
-            <ul className="rise grid gap-3" style={{ animationDelay: '80ms' }}>
+            <ul className="rise list-group" style={{ animationDelay: '80ms' }}>
               {active.map((p) => (
                 <ProjectCard key={p.id} project={p} today={data.today} />
               ))}
@@ -67,14 +68,14 @@ function BoardProjectsPage() {
               <button
                 type="button"
                 onClick={() => setShowClosed((v) => !v)}
-                className="kicker mb-2 flex cursor-pointer items-center gap-2 transition-colors hover:text-brass-strong"
+                className="group-label hit flex cursor-pointer items-center gap-2 transition-colors hover:text-ink"
                 aria-expanded={showClosed}
               >
                 Ferdig og arkivert ({closed.length})
                 <span aria-hidden>{showClosed ? '−' : '+'}</span>
               </button>
               {showClosed && (
-                <ul className="grid gap-3">
+                <ul className="list-group">
                   {closed.map((p) => (
                     <ProjectCard key={p.id} project={p} today={data.today} />
                   ))}
@@ -107,11 +108,11 @@ function ProjectCard({ project, today }: { project: ProjectListItem; today: stri
       <Link
         to="/styre/prosjekter/$boardProjectId"
         params={{ boardProjectId: project.id }}
-        className={`sheet sheet-hover link-quiet block px-5 py-4 ${project.status !== 'active' ? 'opacity-80' : ''}`}
+        className={`list-row-link link-quiet block px-4 py-4 sm:px-5 ${project.status !== 'active' ? 'opacity-75' : ''}`}
       >
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
           <div className="min-w-0 flex-1">
-            <span className="display-title block truncate text-[1.15rem] font-semibold">{project.title}</span>
+            <span className="display-title block truncate text-[1.1rem] font-semibold text-ink">{project.title}</span>
             <span className="mt-0.5 block truncate text-xs text-ink-soft">{meta.join(' · ')}</span>
           </div>
           <div className="flex shrink-0 items-center gap-2">

@@ -2,7 +2,7 @@ import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { BoardDocumentRow, BoardUploadButton } from '../../../components/BoardDocuments'
 import { toast, toastError } from '../../../components/toast'
-import { Button, EmptyState, Kicker, Modal } from '../../../components/ui'
+import { Button, EmptyState, Modal, PageHeader } from '../../../components/ui'
 import { formatDate } from '../../../lib/format'
 import { deleteDocument, listDocuments, updateDocument } from '../../../server/board'
 
@@ -17,23 +17,22 @@ function DocumentsPage() {
   const [pending, setPending] = useState<{ id: string; title: string } | null>(null)
 
   return (
-    <div className="space-y-8">
-      <header className="rise flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <Kicker className="mb-2">Styrearbeidet</Kicker>
-          <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Dokumenter</h1>
-        </div>
-        <BoardUploadButton onUploaded={() => router.invalidate()} />
-      </header>
+    <div className="space-y-7">
+      <PageHeader
+        className="rise"
+        title="Dokumenter"
+        summary={data.documents.length > 0 ? 'Kan bare åpnes av dem som har styretilgang.' : undefined}
+        action={<BoardUploadButton onUploaded={() => router.invalidate()} />}
+      />
 
       {data.documents.length === 0 ? (
-        <div className="sheet rise" style={{ animationDelay: '80ms' }}>
+        <div className="surface-group rise" style={{ animationDelay: '80ms' }}>
           <EmptyState title="Ingen dokumenter ennå">
             Referater, budsjetter og kontrakter. Filene kan bare åpnes av dem som har styretilgang.
           </EmptyState>
         </div>
       ) : (
-        <ul className="sheet rise overflow-hidden" style={{ animationDelay: '80ms' }}>
+        <ul className="surface-group rise overflow-hidden" style={{ animationDelay: '80ms' }}>
           {data.documents.map((doc) => (
             <BoardDocumentRow
               key={doc.id}
