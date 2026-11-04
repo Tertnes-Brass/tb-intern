@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { type MentionUser, toMarkers } from '../lib/mentions'
 import { searchMentionableMembers } from '../server/posts'
 import { MentionTextarea } from './MentionTextarea'
+import { Glyph } from './compose/Composer'
 import { Button } from './ui'
 
 /**
@@ -18,12 +19,17 @@ import { Button } from './ui'
  *
  * Forslagslista legges OVER feltet: kommentarfeltet ligger nederst i tråden, og
  * på mobil står det rett over tastaturet når det har fokus. Plassen er der oppe.
+ *
+ * `variant="dock"` er feltet i linjen nederst på detaljsiden (`.comment-dock`):
+ * én linje som vokser med teksten (opp til ~6 linjer) og en rund sendeknapp,
+ * som i en meldingsapp.
  */
 export function CommentComposer({
   postId,
   onSubmit,
   replyTo,
   onCancel,
+  variant = 'inline',
 }: {
   postId: string
   /** Kalles med den ferdige teksten (markører, ikke navn). Kaster den, beholdes teksten. */
@@ -34,11 +40,21 @@ export function CommentComposer({
    */
   replyTo?: { name: string }
   onCancel?: () => void
+  variant?: 'inline' | 'dock'
 }) {
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
   /** Medlemmene som FAKTISK er valgt fra lista — grunnlaget for `toMarkers`. */
   const [chosen, setChosen] = useState<MentionUser[]>([])
+  const dockRef = useRef<HTMLTextAreaElement>(null)
+
+  // Dokk-feltet vokser med teksten, så man ser hva man skriver.
+  useEffect(() => {
+    const el = dockRef.current
+    if (!el || variant !== 'dock') return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight + 2, 160)}px`
+  }, [body, variant])
 
   const submit = async () => {
     const text = toMarkers(body, chosen)
@@ -54,6 +70,38 @@ export function CommentComposer({
     } finally {
       setBusy(false)
     }
+  }
+
+  if (variant === 'dock') {
+    return (
+      <div className="flex items-end gap-2">
+        <MentionTextarea
+          textareaRef={dockRef}
+          wrapperClassName="min-w-0 flex-1"
+          className="field-input comment-dock-input"
+          rows={1}
+          value={body}
+          onChange={setBody}
+          chosen={chosen}
+          onChosenChange={setChosen}
+          search={(query) => searchMentionableMembers({ data: { postId, query } })}
+          onEnter={() => void submit()}
+          aria-label="Ny kommentar"
+          placeholder="Skriv en kommentar …"
+        />
+        <Button
+          type="button"
+          variant="primary"
+          loading={busy}
+          disabled={!body.trim()}
+          onClick={() => void submit()}
+          aria-label="Kommenter"
+          className="comment-dock-send"
+        >
+          {!busy && <Glyph name="send" size={18} />}
+        </Button>
+      </div>
+    )
   }
 
   const field = (

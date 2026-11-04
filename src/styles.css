@@ -1596,3 +1596,99 @@ select.field-input {
     border-style: dashed;
   }
 }
+
+@layer components {
+  /* Kommentarfeltet nederst på et innlegg. På berøringsskjerm klistrer det
+     seg over fanelinjen (58 px + hjem-indikatoren); mens feltet har fokus er
+     fanelinjen skjult (regelen øverst i fila), og da står det helt nede. Med
+     mus fra 1024 px står det bare under kommentarene. */
+  .comment-dock {
+    margin-top: 1.25rem;
+  }
+  @media (max-width: 1023.98px), (pointer: coarse) {
+    .comment-dock {
+      position: sticky;
+      bottom: calc(58px + env(safe-area-inset-bottom));
+      z-index: 20;
+      margin: 1.25rem -1rem 0;
+      padding: 0.55rem 1rem;
+      background: color-mix(in srgb, var(--paper) 94%, transparent);
+      -webkit-backdrop-filter: saturate(1.4) blur(14px);
+      backdrop-filter: saturate(1.4) blur(14px);
+      border-top: 1px solid var(--line);
+    }
+    body:has(.comment-dock textarea:focus) .comment-dock {
+      bottom: env(safe-area-inset-bottom);
+    }
+  }
+  @media ((max-width: 1023.98px) or (pointer: coarse)) and (min-width: 640px) {
+    .comment-dock {
+      margin-inline: -1.5rem;
+      padding-inline: 1.5rem;
+    }
+  }
+  .comment-dock-send {
+    width: 44px;
+    height: 44px;
+    padding: 0 !important;
+    border-radius: 9999px !important;
+    flex-shrink: 0;
+  }
+
+  /* Handlingene i «Administrer innlegget». */
+  .manage-list {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper-raised);
+  }
+  .manage-list > :is(a, button) {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.1rem;
+    min-height: 56px;
+    padding: 0.6rem 1rem;
+    text-align: left;
+    text-decoration: none;
+    color: var(--ink);
+    cursor: pointer;
+    transition: background-color 0.15s;
+  }
+  .manage-list > :is(a, button) + :is(a, button) {
+    border-top: 1px solid var(--line);
+  }
+  .manage-list > :is(a, button):hover,
+  .manage-list > :is(a, button):active {
+    background: var(--paper-sunken);
+  }
+  .manage-list > :is(a, button) > span {
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .manage-list > :is(a, button) > small {
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: var(--ink-faint);
+  }
+  .manage-list > .is-danger > span {
+    color: var(--danger);
+  }
+  .manage-list > button:disabled {
+    opacity: 0.55;
+    pointer-events: none;
+  }
+}
+
+/* Utenfor laget: `.field-input` er ulaget, og runde hjørner og høyde her skal
+   vinne over den. */
+.comment-dock-input {
+  min-height: 44px;
+  max-height: 160px;
+  resize: none;
+  border-radius: 22px;
+  padding: 0.6rem 1rem;
+  line-height: 1.4;
+}
