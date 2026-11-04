@@ -115,7 +115,9 @@ function CalendarPage() {
               className="link-quiet inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line-strong px-3.5 text-[0.8rem] font-medium text-ink transition-colors pointer-coarse:min-h-11 can-hover:hover:border-brass can-hover:hover:text-brass-strong"
             >
               <Icon name="absence" size={16} className="text-brass" />
-              Fravær<span className="max-sm:hidden">soversikt</span>
+              <span>
+                Fravær<span className="max-sm:hidden">soversikt</span>
+              </span>
             </Link>
           ) : undefined
         }
