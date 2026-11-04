@@ -36,12 +36,19 @@ export function RsvpControl({
   eventLabel,
   current,
   onSaved,
+  compact = false,
 }: {
   occurrenceKey: string
   /** «Øvelse · onsdag 28. oktober, 19:00» — vises i arket. */
   eventLabel: string
   current: MyAttendance
   onSaved?: () => void | Promise<void>
+  /**
+   * Tett variant for «Neste»-modulen på Hjem: når man regnes som kommer, er
+   * det én linje — status til venstre, «Kan ikke komme» til høyre — uten
+   * forklaringen under (knappen sier det selv). Andre statuser vises som før.
+   */
+  compact?: boolean
 }) {
   const [mine, setMine] = useState<MyAttendance>(current)
   const [busy, setBusy] = useState(false)
@@ -70,6 +77,37 @@ export function RsvpControl({
     status === 'attending'
       ? 'Trykk bare hvis du ikke kan komme.'
       : (mine?.comment ?? (status === 'unsure' ? 'Gi beskjed når du vet om du kan komme.' : 'Ingen kommentar.'))
+
+  const sheet = (
+    <AbsenceSheet
+      open={sheetOpen}
+      onClose={() => setSheetOpen(false)}
+      eventLabel={eventLabel}
+      editing={status === 'not_attending'}
+      initialComment={status === 'not_attending' ? (mine?.comment ?? '') : ''}
+      onSubmit={async (comment) => {
+        setSheetOpen(false)
+        await write('not_attending', comment)
+      }}
+    />
+  )
+
+  if (compact && status === 'attending') {
+    return (
+      <>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5" aria-live="polite">
+            <StatusMark status={status} small />
+            <p className="min-w-0 text-[0.9rem] font-semibold leading-snug text-ink">{HEADLINE[status]}</p>
+          </div>
+          <Button className="shrink-0" disabled={busy} onClick={() => setSheetOpen(true)}>
+            Kan ikke komme
+          </Button>
+        </div>
+        {sheet}
+      </>
+    )
+  }
 
   return (
     <>
@@ -104,22 +142,12 @@ export function RsvpControl({
           )}
         </div>
       </div>
-      <AbsenceSheet
-        open={sheetOpen}
-        onClose={() => setSheetOpen(false)}
-        eventLabel={eventLabel}
-        editing={status === 'not_attending'}
-        initialComment={status === 'not_attending' ? (mine?.comment ?? '') : ''}
-        onSubmit={async (comment) => {
-          setSheetOpen(false)
-          await write('not_attending', comment)
-        }}
-      />
+      {sheet}
     </>
   )
 }
 
-function StatusMark({ status }: { status: AttendanceStatus }) {
+function StatusMark({ status, small = false }: { status: AttendanceStatus; small?: boolean }) {
   const tone =
     status === 'not_attending'
       ? 'bg-oxblood/10 text-oxblood'
@@ -127,11 +155,11 @@ function StatusMark({ status }: { status: AttendanceStatus }) {
         ? 'bg-paper-sunken text-ink-soft'
         : 'bg-[var(--brass-soft)] text-brass-strong'
   return (
-    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tone}`} aria-hidden>
+    <span className={`grid shrink-0 place-items-center rounded-full ${small ? 'h-7 w-7' : 'h-9 w-9'} ${tone}`} aria-hidden>
       {status === 'unsure' ? (
         <span className="display-title text-base font-semibold leading-none">?</span>
       ) : (
-        <Icon name={status === 'not_attending' ? 'close' : 'check'} size={16} strokeWidth={2.2} />
+        <Icon name={status === 'not_attending' ? 'close' : 'check'} size={small ? 14 : 16} strokeWidth={2.2} />
       )}
     </span>
   )

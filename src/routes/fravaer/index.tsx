@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icons'
 import { AbsenceReasonPicker } from '../../components/Rsvp'
 import { toast, toastError } from '../../components/toast'
-import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../components/ui'
+import { Button, EmptyState, Field, Modal, PageHeader, Stamp } from '../../components/ui'
 import {
   ATTENDANCE_COMMENT_MAX,
   ATTENDANCE_LABELS,
@@ -84,22 +84,20 @@ function AbsencePage() {
   const withAbsence = data.events.filter((e) => e.absences.length > 0).length
 
   return (
-    <div className="space-y-10">
-      <header className="rise flex flex-wrap items-end justify-between gap-4">
-        <div className="max-w-2xl">
-          <Kicker className="mb-2">Oppmøte</Kicker>
-          <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Fravær</h1>
-          <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-            Alle regnes som kommer til de selv melder fravær. Her ser du unntakene for øvelser og konserter fremover —
-            og kan registrere fravær for noen som har gitt beskjed på telefon eller e-post.
-          </p>
-        </div>
-        {ready && data.events.length > 0 && (
-          <Button variant="primary" onClick={() => setDialog({ open: true, occurrenceKey: null })}>
-            Registrer fravær
-          </Button>
-        )}
-      </header>
+    <div className="space-y-8">
+      <PageHeader
+        className="rise"
+        kicker="Oppmøte"
+        title="Fravær"
+        summary="Alle regnes som kommer til de selv melder fravær — her er unntakene fremover."
+        action={
+          ready && data.events.length > 0 ? (
+            <Button variant="primary" onClick={() => setDialog({ open: true, occurrenceKey: null })}>
+              Registrer fravær
+            </Button>
+          ) : undefined
+        }
+      />
 
       {!data.configured ? (
         <EmptyState title="Kalenderen er ikke koblet til ennå">
