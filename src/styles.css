@@ -1422,3 +1422,177 @@ select.field-input {
 .composer-body:focus {
   outline: none;
 }
+
+@layer components {
+  /* Veggens filterrad: brikker som kan dras sidelengs, kant til kant på
+     telefon. Raden har 4 px luft over og under, så `.hit`-flaten på 44 pt
+     ikke klippes av rullingen. */
+  .wall-chips {
+    display: flex;
+    gap: 0.4rem;
+    margin: 0 -1rem;
+    padding: 4px 1rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .wall-chips::-webkit-scrollbar {
+    display: none;
+  }
+  @media (min-width: 640px) {
+    .wall-chips {
+      margin: 0;
+      padding: 4px 0;
+    }
+  }
+  .wall-chip {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.4rem;
+    height: 36px;
+    padding: 0 0.9rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 9999px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    text-decoration: none;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .wall-chip:hover {
+    border-color: var(--brass);
+    color: var(--ink);
+  }
+  .wall-chip.is-on {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--paper);
+  }
+  .wall-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 0.35rem;
+    border-radius: 9999px;
+    background: var(--brass-soft);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--brass-strong);
+  }
+  .wall-chip.is-on .wall-count {
+    background: color-mix(in srgb, var(--paper) 22%, transparent);
+    color: var(--paper);
+  }
+
+  /* Utkastene (filteret «Utkast» på telefon og iPad på høykant). */
+  .wall-drafts {
+    border: 1px dashed var(--line-strong);
+    border-radius: 12px;
+    background: var(--paper-sunken);
+  }
+  .wall-draft {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 52px;
+    padding: 0.45rem 0.9rem;
+    text-decoration: none;
+    transition: background-color 0.15s;
+  }
+  .wall-draft:hover {
+    background: color-mix(in srgb, var(--paper-raised) 60%, transparent);
+  }
+  .wall-draft svg {
+    width: 7px;
+    height: 12px;
+    color: var(--ink-faint);
+    transform: rotate(180deg);
+  }
+  .wall-rail .wall-draft {
+    padding-inline: 0.25rem;
+  }
+
+  /* Sidespalten på iPad på tvers og desktop. */
+  .wall-rail {
+    position: sticky;
+    top: calc(var(--shell-top) + 1.5rem);
+  }
+  .wall-rail-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-height: 40px;
+    padding: 0 0.75rem;
+    border-radius: 9px;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+    text-decoration: none;
+    transition: background-color 0.15s, color 0.15s;
+  }
+  .wall-rail-link:hover {
+    background: var(--paper-sunken);
+    color: var(--ink);
+  }
+  .wall-rail-link.is-on {
+    background: var(--paper-sunken);
+    color: var(--ink);
+    font-weight: 600;
+    box-shadow: inset 2px 0 0 var(--brass);
+  }
+  @media (pointer: coarse) {
+    .wall-rail-link {
+      min-height: 44px;
+    }
+  }
+
+  /* Kortet på veggen. */
+  .post-card {
+    padding: 0.95rem 1rem 0.8rem;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper-raised);
+  }
+  @media (min-width: 640px) {
+    .post-card {
+      padding: 1.1rem 1.25rem 0.9rem;
+    }
+  }
+  /* Liker / kommentarer: små brikker, 44 pt trykkflate via `.hit`. */
+  .post-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    height: 32px;
+    padding: 0 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .post-chip:hover {
+    border-color: var(--brass);
+    color: var(--brass-strong);
+  }
+  .post-chip.is-on {
+    border-color: var(--brass);
+    background: var(--brass-soft);
+    color: var(--brass-strong);
+  }
+  .post-chip:disabled {
+    opacity: 0.6;
+  }
+}
+
+@layer components {
+  .wall-chip.is-draft:not(.is-on) {
+    border-style: dashed;
+  }
+}
