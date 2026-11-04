@@ -306,7 +306,7 @@ function NoteEditor({
           setValue(item.note ?? '')
           setOpen(true)
         }}
-        className="mt-1 cursor-pointer font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint transition-colors hover:text-brass-strong"
+        className="mt-1 inline-flex cursor-pointer items-center font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint transition-colors hover:text-brass-strong pointer-coarse:-mb-2 pointer-coarse:min-h-11"
       >
         {item.note ? 'Endre merknad' : 'Legg til merknad'}
       </button>
@@ -370,7 +370,7 @@ function IconButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={`grid h-8 w-8 cursor-pointer place-items-center rounded-[7px] text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink disabled:pointer-events-none disabled:opacity-30 ${
+      className={`grid h-8 w-8 cursor-pointer place-items-center rounded-[7px] text-ink-faint pointer-coarse:h-11 pointer-coarse:w-11 transition-colors hover:bg-paper-sunken hover:text-ink disabled:pointer-events-none disabled:opacity-30 ${
         danger ? 'hover:!bg-danger/10 hover:!text-danger' : ''
       }`}
     >

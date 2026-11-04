@@ -292,7 +292,7 @@ function ManageRowButtons({
   }
 
   const btn =
-    'grid h-9 w-9 sm:h-8 sm:w-8 cursor-pointer place-items-center rounded-md text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink disabled:opacity-30 disabled:pointer-events-none'
+    'grid h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 sm:pointer-fine:h-8 sm:pointer-fine:w-8 cursor-pointer place-items-center rounded-md text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink disabled:opacity-30 disabled:pointer-events-none'
 
   return (
     <>

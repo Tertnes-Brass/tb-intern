@@ -110,7 +110,7 @@ function PartsSection({ data }: { data: Data }) {
               >
                 <span className="flex shrink-0 flex-col">
                   <button
-                    className="grid h-8 w-8 cursor-pointer place-items-center rounded text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink disabled:opacity-25 disabled:pointer-events-none sm:h-5 sm:w-6"
+                    className="grid h-8 w-8 cursor-pointer place-items-center rounded text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink disabled:opacity-25 disabled:pointer-events-none sm:pointer-fine:h-5 sm:pointer-fine:w-6"
                     disabled={busy === p.id || peerIdx <= 0}
                     aria-label="Flytt opp"
                     onClick={() => act(p.id, () => movePart({ data: { id: p.id, direction: 'up' } }))}
@@ -118,7 +118,7 @@ function PartsSection({ data }: { data: Data }) {
                     <Chevron dir="up" />
                   </button>
                   <button
-                    className="grid h-8 w-8 cursor-pointer place-items-center rounded text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink disabled:opacity-25 disabled:pointer-events-none sm:h-5 sm:w-6"
+                    className="grid h-8 w-8 cursor-pointer place-items-center rounded text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink disabled:opacity-25 disabled:pointer-events-none sm:pointer-fine:h-5 sm:pointer-fine:w-6"
                     disabled={busy === p.id || peerIdx === peers.length - 1}
                     aria-label="Flytt ned"
                     onClick={() => act(p.id, () => movePart({ data: { id: p.id, direction: 'down' } }))}
