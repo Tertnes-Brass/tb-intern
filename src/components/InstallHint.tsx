@@ -15,12 +15,13 @@ function dismissedRecently(): boolean {
   }
 }
 
-type Mode = 'hidden' | 'ios' | 'prompt'
+type Mode = 'hidden' | 'ios' | 'ipad' | 'prompt'
 
 /**
- * Kortet som foreslår å legge Intern på Hjem-skjermen. Vises bare på telefon,
- * bare når appen ikke allerede er installert, og aldri igjen på en måned etter
- * «Ikke nå».
+ * Kortet som foreslår å legge Intern på Hjem-skjermen. Vises bare på
+ * berøringsskjerm (telefon og nettbrett — iPad-en på notestativet er en av de
+ * viktigste enhetene), bare når appen ikke allerede er installert, og aldri
+ * igjen på en måned etter «Ikke nå».
  *
  * iOS har ingen installasjonsknapp en nettside kan trykke på, så der forklarer
  * kortet veien via Del-menyen. Android/Chrome gir en ekte forespørsel
@@ -31,10 +32,14 @@ export function InstallHint() {
 
   useEffect(() => {
     const decide = () => {
-      const phone = window.matchMedia('(max-width: 767px) and (pointer: coarse)').matches
-      if (!phone || isStandalone() || dismissedRecently()) return setMode('hidden')
+      const touch = window.matchMedia('(pointer: coarse)').matches
+      if (!touch || isStandalone() || dismissedRecently()) return setMode('hidden')
       if (getInstallPrompt()) return setMode('prompt')
-      setMode(isIos() ? 'ios' : 'hidden')
+      if (!isIos()) return setMode('hidden')
+      // Safari på iPad har Del-knappen øverst til høyre, på iPhone nederst.
+      // iPadOS utgir seg for å være en Mac, men har berøringspunkter.
+      const ipad = /iPad/.test(navigator.userAgent) || (navigator.userAgent.includes('Macintosh') && navigator.maxTouchPoints > 1)
+      setMode(ipad ? 'ipad' : 'ios')
     }
     decide()
     return onInstallPromptChange(decide)
@@ -54,10 +59,10 @@ export function InstallHint() {
       <img src="/icons/icon-192.png" alt="" width={52} height={52} className="h-13 w-13 shrink-0 rounded-[12px] border border-line" />
       <div className="min-w-0">
         <p className="display-title text-[1.05rem] font-semibold text-ink">Legg Intern på Hjem-skjermen</p>
-        {mode === 'ios' ? (
+        {mode === 'ios' || mode === 'ipad' ? (
           <p className="mt-1 text-sm leading-relaxed text-ink-soft">
             Da åpner den i fullskjerm som en vanlig app. Trykk <ShareGlyph /> <b className="font-semibold text-ink">Del</b>{' '}
-            nederst i Safari, og velg «Legg til på Hjem-skjerm».
+            {mode === 'ipad' ? 'øverst til høyre' : 'nederst'} i Safari, og velg «Legg til på Hjem-skjerm».
           </p>
         ) : (
           <p className="mt-1 text-sm leading-relaxed text-ink-soft">
