@@ -1,7 +1,9 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { toast, toastError } from '../../components/toast'
-import { Button, Field, Kicker, Modal, Stamp } from '../../components/ui'
+import { ActionMenu } from '../../components/ActionMenu'
+import { Icon } from '../../components/Icons'
+import { Button, Field, Modal, PageHeader, Stamp } from '../../components/ui'
 import { SECTION_LABELS } from '../../lib/taxonomy'
 import {
   createPart,
@@ -37,22 +39,28 @@ function SettingsPage() {
   const canViewDownloads = !!me && (me.permissions.includes('*') || me.permissions.includes('downloads.view'))
 
   return (
-    <div className="space-y-12">
-      <header className="rise">
-        <Kicker className="mb-2">Administrasjon</Kicker>
-        <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Innstillinger</h1>
-        <p className="mt-2 text-sm text-ink-soft">Besetning og roller for korpset. Endringer gjelder umiddelbart.</p>
-        {/*
-          Filtilganger er ikke lenger i toppmenyen (docs/designprinsipper.md §6).
-          Området har fortsatt eget inngangspunkt — herfra og fra «Områder» på
-          hub-en. URL-en er uendret, så gamle lenker virker.
-        */}
-        {canViewDownloads && (
-          <Link to="/innstillinger/nedlastinger" className="mt-5 inline-block">
-            <Button variant="secondary">Filtilganger — hvem har åpnet en fil? →</Button>
-          </Link>
-        )}
-      </header>
+    <div className="space-y-10">
+      {/*
+        Filtilganger er ikke lenger i toppmenyen (docs/designprinsipper.md §6).
+        Området har fortsatt eget inngangspunkt — herfra og fra «Områder» på
+        hub-en. URL-en er uendret, så gamle lenker virker.
+      */}
+      <PageHeader
+        className="rise"
+        title="Innstillinger"
+        summary="Besetning og roller for korpset. Endringer gjelder umiddelbart."
+        action={
+          canViewDownloads && (
+            <Link
+              to="/innstillinger/nedlastinger"
+              className="inline-flex min-h-10 items-center gap-1 rounded-[9px] border border-line-strong bg-paper-raised px-3.5 text-sm font-medium text-ink transition-colors hover:border-brass hover:text-brass-strong pointer-coarse:min-h-11"
+            >
+              Filtilganger
+              <Icon name="chevronRight" size={15} />
+            </Link>
+          )
+        }
+      />
 
       <PartsSection data={data} />
       <RolesSection data={data} />
@@ -86,17 +94,18 @@ function PartsSection({ data }: { data: Data }) {
     <section className="rise" style={{ animationDelay: '80ms' }}>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="display-title text-2xl font-semibold text-ink">Besetning</h2>
+          <h2 className="display-title text-xl font-semibold text-ink">Besetning</h2>
           <p className="mt-1 text-sm text-ink-soft">
             {data.parts.length} stemmer. Aliasene avgjør hvordan filnavn gjenkjennes ved opplasting.
           </p>
         </div>
-        <Button variant="primary" onClick={() => setCreating(true)}>
+        <Button size="sm" onClick={() => setCreating(true)}>
           + Ny stemme
         </Button>
       </div>
 
-      <div className="sheet overflow-hidden">
+      {/* Ikke klippet, så ⋯-menyen per rad kan henge under raden. */}
+      <div className="surface-group">
         <ul className="divide-y divide-[var(--line)]">
           {data.parts.map((p) => {
             // Søsken = rader på samme nivå: rot-stemmer seg imellom, understemmer innenfor forelderen
@@ -110,7 +119,7 @@ function PartsSection({ data }: { data: Data }) {
               >
                 <span className="flex shrink-0 flex-col">
                   <button
-                    className="grid h-8 w-8 cursor-pointer place-items-center rounded text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink disabled:opacity-25 disabled:pointer-events-none sm:pointer-fine:h-5 sm:pointer-fine:w-6"
+                    className="grid h-8 w-8 cursor-pointer place-items-center rounded-md text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink disabled:opacity-25 disabled:pointer-events-none pointer-coarse:h-11 pointer-coarse:w-11 sm:pointer-fine:h-5 sm:pointer-fine:w-6"
                     disabled={busy === p.id || peerIdx <= 0}
                     aria-label="Flytt opp"
                     onClick={() => act(p.id, () => movePart({ data: { id: p.id, direction: 'up' } }))}
@@ -118,7 +127,7 @@ function PartsSection({ data }: { data: Data }) {
                     <Chevron dir="up" />
                   </button>
                   <button
-                    className="grid h-8 w-8 cursor-pointer place-items-center rounded text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink disabled:opacity-25 disabled:pointer-events-none sm:pointer-fine:h-5 sm:pointer-fine:w-6"
+                    className="grid h-8 w-8 cursor-pointer place-items-center rounded-md text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink disabled:opacity-25 disabled:pointer-events-none pointer-coarse:h-11 pointer-coarse:w-11 sm:pointer-fine:h-5 sm:pointer-fine:w-6"
                     disabled={busy === p.id || peerIdx === peers.length - 1}
                     aria-label="Flytt ned"
                     onClick={() => act(p.id, () => movePart({ data: { id: p.id, direction: 'down' } }))}
@@ -164,25 +173,27 @@ function PartsSection({ data }: { data: Data }) {
                         </option>
                       ))}
                   </select>
-                  <button
-                    onClick={() => setEditing(p)}
-                    className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:bg-paper-sunken hover:text-ink"
-                  >
-                    Rediger
-                  </button>
-                  <button
-                    disabled={busy === p.id}
-                    onClick={() => {
-                      if (p.fileCount > 0) {
-                        toast(`«${p.nameNo}» er i bruk på ${p.fileCount} fil(er) og kan ikke slettes`, 'error')
-                        return
-                      }
-                      act(p.id, () => deletePart({ data: { id: p.id } }))
-                    }}
-                    className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-medium text-danger/80 transition-colors hover:bg-danger/10 hover:text-danger"
-                  >
-                    Slett
-                  </button>
+                  <ActionMenu
+                    iconOnly
+                    label={`Mer for ${p.nameNo}`}
+                    title={p.nameNo}
+                    items={[
+                      { label: 'Rediger stemmen', hint: 'Navn, seksjon og alias', icon: 'sliders', onSelect: () => setEditing(p) },
+                      {
+                        label: 'Slett stemmen',
+                        icon: 'close',
+                        tone: 'danger',
+                        disabled: busy === p.id,
+                        onSelect: () => {
+                          if (p.fileCount > 0) {
+                            toast(`«${p.nameNo}» er i bruk på ${p.fileCount} fil(er) og kan ikke slettes`, 'error')
+                            return
+                          }
+                          act(p.id, () => deletePart({ data: { id: p.id } }))
+                        },
+                      },
+                    ]}
+                  />
                 </span>
               </li>
             )
@@ -363,15 +374,15 @@ function RolesSection({ data }: { data: Data }) {
     <section className="rise" style={{ animationDelay: '160ms' }}>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="display-title text-2xl font-semibold text-ink">Roller og tilgang</h2>
+          <h2 className="display-title text-xl font-semibold text-ink">Roller og tilgang</h2>
           <p className="mt-1 text-sm text-ink-soft">Hvilke rettigheter hver rolle har. Administrator har alltid full tilgang.</p>
         </div>
-        <Button variant="secondary" onClick={() => setCreating(true)}>
+        <Button size="sm" onClick={() => setCreating(true)}>
           + Ny rolle
         </Button>
       </div>
 
-      <div className="sheet relative overflow-x-auto overscroll-x-contain after:pointer-events-none after:absolute after:inset-y-px after:right-px after:w-8 after:rounded-r-[13px] after:bg-gradient-to-l after:from-[var(--paper-raised)] after:to-transparent md:after:hidden">
+      <div className="surface-group relative overflow-x-auto overscroll-x-contain after:pointer-events-none after:absolute after:inset-y-px after:right-px after:w-8 after:rounded-r-[13px] after:bg-gradient-to-l after:from-[var(--paper-raised)] after:to-transparent md:after:hidden">
         <table className="w-full min-w-[640px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-line">
@@ -415,13 +426,13 @@ function RolesSection({ data }: { data: Data }) {
                   const on = role.isAdmin || role.permissions.includes(perm.key)
                   return (
                     <td key={perm.key} className="px-2 py-1 text-center">
-                      <label className="flex min-h-[40px] cursor-pointer items-center justify-center">
+                      <label className="flex min-h-[40px] cursor-pointer items-center justify-center pointer-coarse:min-h-11">
                         <input
                           type="checkbox"
                           checked={on}
                           disabled={role.isAdmin || busy === `${role.id}:${perm.key}`}
                           onChange={(e) => toggle(role.id, perm.key, e.target.checked)}
-                          className="h-4 w-4 cursor-pointer accent-[var(--brass)] disabled:cursor-not-allowed disabled:opacity-50"
+                          className="h-4 w-4 cursor-pointer accent-[var(--brass)] disabled:cursor-not-allowed disabled:opacity-50 pointer-coarse:h-5 pointer-coarse:w-5"
                           aria-label={`${role.name}: ${perm.label}`}
                         />
                       </label>
@@ -444,7 +455,7 @@ function RolesSection({ data }: { data: Data }) {
                           setBusy(null)
                         }
                       }}
-                      className="-mx-2 -my-1 inline-flex items-center px-2 py-2 font-mono text-[0.62rem] uppercase tracking-wide text-danger/70 transition-colors hover:text-danger"
+                      className="-mx-2 -my-1 inline-flex min-h-9 cursor-pointer items-center rounded-md px-2.5 text-[0.8rem] font-medium text-danger/80 transition-colors hover:bg-danger/10 hover:text-danger pointer-coarse:min-h-11"
                     >
                       Slett
                     </button>
