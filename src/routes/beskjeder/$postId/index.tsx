@@ -6,10 +6,12 @@ import { CommentComposer } from '../../../components/CommentComposer'
 import { Icon } from '../../../components/Icons'
 import { useThreadMark } from '../../../components/useThreadMark'
 import { buildThreads, foldChildren, replyContext } from '../../../lib/threads'
-import { LikeButton } from '../../../components/PostCard'
+import { LikeButton, SenderMark, postSender } from '../../../components/PostCard'
+import { Glyph } from '../../../components/compose/Composer'
+import { shortWhen } from '../../../components/compose/when'
 import { rememberPostRead } from '../../../lib/read-posts-client'
 import { toast, toastError } from '../../../components/toast'
-import { BackArrow, Avatar, Button, EmptyState, Kicker, Modal, Stamp } from '../../../components/ui'
+import { Avatar, BackArrow, BottomSheet, Button, buttonClass, EmptyState, Modal, Stamp } from '../../../components/ui'
 import { formatDateTime } from '../../../lib/format'
 import { markdownToHtml } from '../../../lib/markdown'
 import { type MentionUser, UNKNOWN_MENTION, postLineTokens, renderCommentHtml } from '../../../lib/mentions'
@@ -36,6 +38,12 @@ import {
 
 /**
  * Hele innlegget med bilder, reaksjoner og kommentartråd.
+ *
+ * Leseflaten først: tittel, avsenderlinje og tekst. Det forfatteren og styret
+ * kan gjøre med innlegget (send på nytt, rediger, avpubliser, slett) bor i ett
+ * ark bak «Administrer», ikke som fire knapper under tråden; et utkast har i
+ * tillegg «Rediger · Publiser» rett over teksten. Kommentarfeltet ligger fast
+ * nederst på berøringsskjerm (`.comment-dock`).
  *
  * Ren tekst (`plain_text`, alt som fantes før #79) rendres som React-noder:
  * avsnittene bevares som skrevet og URL-er blir klikkbare, men ingenting blir
@@ -199,15 +207,15 @@ function CommentThread({
           <div className="flex items-baseline justify-between gap-3">
             <p className="min-w-0 truncate text-[0.82rem] font-semibold text-ink">{comment.author.name}</p>
             <div className="flex shrink-0 items-center gap-2">
-              <span className="font-mono text-[0.58rem] uppercase tracking-[0.12em] text-ink-faint">
-                {formatDateTime(comment.createdAt)}
-              </span>
+              <time className="text-[0.72rem] text-ink-faint" title={formatDateTime(comment.createdAt)}>
+                {shortWhen(comment.createdAt)}
+              </time>
               {comment.canDelete && (
                 <button
                   type="button"
                   onClick={() => void remove(comment.id)}
                   disabled={deleting === comment.id}
-                  className="cursor-pointer text-[0.62rem] text-ink-faint transition-colors hover:text-danger disabled:opacity-50"
+                  className="hit cursor-pointer text-[0.72rem] text-ink-faint transition-colors hover:text-danger disabled:opacity-50"
                 >
                   Slett
                 </button>
@@ -246,7 +254,7 @@ function CommentThread({
               type="button"
               aria-label={`Svar ${comment.author.name}`}
               onClick={() => setReplying({ id: comment.id, rootId, name: comment.author.name })}
-              className="mt-1.5 inline-flex cursor-pointer items-center gap-1 text-[0.72rem] font-medium text-ink-faint transition-colors hover:text-ink"
+              className="hit mt-1.5 inline-flex cursor-pointer items-center gap-1 text-[0.75rem] font-medium text-ink-faint transition-colors hover:text-ink"
             >
               <Icon name="reply" size={13} />
               Svar
@@ -258,7 +266,8 @@ function CommentThread({
   }
 
   return (
-    <section className="rise" style={{ animationDelay: '160ms' }}>
+    <>
+    <section className="rise" style={{ animationDelay: '160ms' }} aria-label="Kommentarer">
       <h2 className="kicker mb-3">{commentCountLabel(count)}</h2>
 
       <ul className="space-y-3">
@@ -278,7 +287,7 @@ function CommentThread({
                     <button
                       type="button"
                       onClick={() => expand(root.id)}
-                      className="cursor-pointer text-[0.78rem] font-medium text-brass-strong hover:underline"
+                      className="hit cursor-pointer text-[0.78rem] font-medium text-brass-strong hover:underline"
                     >
                       Vis {fold.hidden === 1 ? 'ett tidligere svar' : `${fold.hidden} tidligere svar`}
                     </button>
@@ -301,8 +310,17 @@ function CommentThread({
         })}
       </ul>
 
-      {canComment && <CommentComposer postId={postId} onSubmit={(body) => submit(body, null)} />}
     </section>
+    {/* Nytt kommentarfelt: på berøringsskjerm ligger det fast nederst, over
+        fanelinjen (`.comment-dock` i styles.css) — det er alltid innen
+        rekkevidde, uansett hvor langt ned i innlegget man er. Skjules mens man
+        svarer i en tråd, så det ikke står to skrivefelt på skjermen. */}
+    {canComment && !replying && (
+      <div className="comment-dock">
+        <CommentComposer variant="dock" postId={postId} onSubmit={(body) => submit(body, null)} />
+      </div>
+    )}
+    </>
   )
 }
 
@@ -312,6 +330,7 @@ function PostPage() {
   const post = data.post
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmPublish, setConfirmPublish] = useState(false)
+  const [manageOpen, setManageOpen] = useState(false)
   // Avslått som standard (#85): publisering og masseutsending er to handlinger.
   const [notify, setNotify] = useState(DEFAULT_NOTIFY)
   const [busy, setBusy] = useState<'resend' | 'publish' | 'unpublish' | 'delete' | null>(null)
@@ -369,43 +388,79 @@ function PostPage() {
       await router.navigate({ to: '/beskjeder' })
     })
 
+  const canPublishDraft = isDraft && post.canEdit
+  const deliveryLine = data.delivery
+    ? [
+        `E-post: ${data.delivery.sent} sendt`,
+        data.delivery.logged > 0 ? `${data.delivery.logged} loggført lokalt` : null,
+        data.delivery.failed > 0 ? `${data.delivery.failed} feilet` : null,
+        data.delivery.pending > 0 ? `${data.delivery.pending} mangler` : 'alle mottakere har fått den',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : null
+
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto max-w-2xl">
       <header className="rise">
-        <Link
-          to="/beskjeder"
-          className="back-link mb-4"
-        >
+        <Link to="/beskjeder" className="back-link mb-3">
           <BackArrow />
           Veggen
         </Link>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Kicker>{isDraft ? 'Utkast' : post.fromArchive ? 'Beskjed fra notearkivar' : post.official ? 'Beskjed fra styret' : 'Innlegg'}</Kicker>
-          {(post.official || post.fromArchive) && <Stamp tone="brass">{post.fromArchive ? 'Fra notearkivar' : 'Fra styret'}</Stamp>}
-          {post.importance === 'important' && <Stamp tone="oxblood">Viktig</Stamp>}
-          {post.audience === 'board' && <Stamp>Kun styret</Stamp>}
-          {isDraft && <Stamp tone="oxblood">Ikke publisert</Stamp>}
-        </div>
+        {(post.importance === 'important' || post.audience === 'board' || isDraft) && (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            {isDraft && <Stamp tone="oxblood">Utkast</Stamp>}
+            {post.importance === 'important' && <Stamp tone="oxblood">Viktig</Stamp>}
+            {post.audience === 'board' && <Stamp>Kun styret</Stamp>}
+          </div>
+        )}
 
         {post.title && (
-          <h1 className="display-title mt-2 break-words text-[clamp(2rem,5vw,3.2rem)] font-semibold italic leading-[1.05] text-ink [hyphens:auto]">
+          <h1 className="display-title break-words text-[clamp(1.85rem,5vw,2.8rem)] font-semibold leading-[1.08] text-ink [hyphens:auto]">
             {post.title}
           </h1>
         )}
 
-        <div className="mt-3 flex items-center gap-2.5">
-          <Avatar name={post.official ? 'Tertnes Brass' : post.author.name} size="sm" />
-          <p className="font-mono text-[0.66rem] uppercase tracking-[0.14em] text-ink-soft">
-            {post.fromArchive ? `Notearkivar · ${post.author.name}` : post.official ? `Styret · ${post.author.name}` : post.author.name} ·{' '}
-            {isDraft ? `sist endret ${formatDateTime(post.updatedAt)}` : formatDateTime(post.publishedAt!)}
-          </p>
+        <div className="mt-4 flex items-center gap-3 border-y border-line py-3">
+          <SenderMark post={post} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[0.9rem] font-semibold leading-tight text-ink">
+              {postSender(post)}
+              {(post.official || post.fromArchive) && <span className="font-normal text-ink-soft"> · {post.author.name}</span>}
+            </p>
+            <p className="mt-0.5 text-[0.78rem] text-ink-faint">
+              {isDraft ? `Sist endret ${formatDateTime(post.updatedAt)}` : formatDateTime(post.publishedAt!)}
+            </p>
+          </div>
+          {post.canEdit && (
+            <Button size="sm" variant="ghost" onClick={() => setManageOpen(true)} aria-haspopup="dialog" className="shrink-0">
+              <Glyph name="more" size={18} />
+              Administrer
+            </Button>
+          )}
         </div>
-
-        <div className="staff-rule mt-6 w-full opacity-50" aria-hidden />
       </header>
 
-      <article className="rise space-y-5" style={{ animationDelay: '80ms' }}>
+      {canPublishDraft && (
+        <div className="rise mt-5 flex flex-wrap items-center gap-3 rounded-[12px] border border-dashed border-line-strong bg-paper-sunken px-4 py-3" style={{ animationDelay: '40ms' }}>
+          <p className="min-w-0 flex-1 text-sm text-ink-soft">
+            {data.canPublish
+              ? 'Utkastet er kun synlig for dem som kan publisere beskjeder.'
+              : 'Innlegget er ikke publisert ennå.'}
+          </p>
+          <div className="flex gap-2">
+            <Link to="/beskjeder/$postId/rediger" params={{ postId: post.id }} className={buttonClass('secondary', 'sm')}>
+              Rediger
+            </Link>
+            <Button size="sm" variant="primary" onClick={() => setConfirmPublish(true)}>
+              Publiser
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <article className="rise mt-6 space-y-5" style={{ animationDelay: '80ms' }}>
         <PostBody body={post.body} format={post.format} mentions={post.mentions} />
         {post.images.length > 0 && (
           <ul className="space-y-3">
@@ -423,80 +478,90 @@ function PostPage() {
             ))}
           </ul>
         )}
-        {data.attachments.length > 0 && <section className="sheet space-y-3 p-4">
-          <h2 className="kicker">Vedlegg</h2>
-          <ul className="space-y-3">{data.attachments.map((file) => <li key={file.id}>
-            <a href={postAttachmentUrl(file.id)} download className="link-brass break-all">Last ned {file.fileName}</a>
-            <span className="ml-2 text-xs text-ink-faint">{formatBytes(file.size)}</span>
-          </li>)}</ul>
-        </section>}
+        {data.attachments.length > 0 && (
+          <section className="rounded-[12px] border border-line" aria-label="Vedlegg">
+            <h2 className="kicker px-4 pt-3">Vedlegg</h2>
+            <ul className="divide-y divide-line">
+              {data.attachments.map((file) => (
+                <li key={file.id}>
+                  <a href={postAttachmentUrl(file.id)} download className="flex min-h-12 items-center gap-3 px-4 py-2 text-sm no-underline hover:bg-paper-sunken">
+                    <Glyph name="clip" size={16} />
+                    <span className="min-w-0 flex-1 break-all text-brass-strong">
+                      <span className="sr-only">Last ned </span>
+                      {file.fileName}
+                    </span>
+                    <span className="shrink-0 text-xs text-ink-faint">{formatBytes(file.size)}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         {!isDraft && (
-          <div className="flex flex-wrap items-center gap-3 border-t border-line pt-4">
+          <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
             <LikeButton postId={post.id} count={post.likeCount} mine={post.likedByMe} />
-            <span className="text-xs text-ink-faint">{commentCountLabel(data.comments.filter((c) => !c.deleted).length)}</span>
           </div>
         )}
       </article>
 
-      {!isDraft && <CommentThread postId={post.id} comments={data.comments} canComment />}
+      {!isDraft && (
+        <div className="mt-8">
+          <CommentThread postId={post.id} comments={data.comments} canComment />
+        </div>
+      )}
 
       {post.canEdit && (
-        <section className="sheet rise space-y-4 px-5 py-5" style={{ animationDelay: '200ms' }}>
-          <div>
-            <Kicker className="mb-1">{data.canPublish ? 'Styret' : 'Ditt innlegg'}</Kicker>
-            <p className="text-sm leading-relaxed text-ink-soft">
-              {isDraft ? (
-                data.canPublish
-                  ? 'Utkastet er kun synlig for dem som kan publisere beskjeder.'
-                  : 'Innlegget er ikke publisert ennå.'
-              ) : data.delivery ? (
-                <>
-                  E-post: {data.delivery.sent} sendt
-                  {data.delivery.logged > 0 ? ` · ${data.delivery.logged} loggført lokalt` : ''}
-                  {data.delivery.failed > 0 ? ` · ${data.delivery.failed} feilet` : ''}
-                  {data.delivery.pending > 0 ? ` · ${data.delivery.pending} mangler` : ' · alle mottakere har fått den'}
-                  .
-                </>
-              ) : (
-                'Du kan redigere eller slette innlegget ditt.'
-              )}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
+        <BottomSheet
+          open={manageOpen}
+          onClose={() => setManageOpen(false)}
+          label="Administrer innlegget"
+          header={
+            <div className="pb-1 pt-2">
+              <p className="display-title text-lg font-semibold text-ink">Administrer innlegget</p>
+              <p className="mt-0.5 text-xs leading-snug text-ink-faint">
+                {isDraft
+                  ? data.canPublish
+                    ? 'Utkastet er kun synlig for dem som kan publisere beskjeder.'
+                    : 'Innlegget er ikke publisert ennå.'
+                  : (deliveryLine ?? 'Du kan redigere eller slette innlegget ditt.')}
+              </p>
+            </div>
+          }
+        >
+          <div className="manage-list">
             {isDraft ? (
-              <Button variant="primary" onClick={() => setConfirmPublish(true)}>
-                Publiser
-              </Button>
+              <button type="button" onClick={() => { setManageOpen(false); setConfirmPublish(true) }}>
+                <span>Publiser</span>
+                <small>Gjør innlegget synlig, med valg om varsel.</small>
+              </button>
             ) : (
               data.delivery && (
-                <Button
-                  variant="primary"
-                  onClick={() => void resend()}
-                  loading={busy === 'resend'}
-                  disabled={data.delivery?.pending === 0}
-                >
-                  Send e-post på nytt
-                </Button>
+                <button type="button" onClick={() => void resend()} disabled={busy === 'resend' || data.delivery.pending === 0}>
+                  <span>{busy === 'resend' ? 'Sender …' : 'Send e-post på nytt'}</span>
+                  <small>
+                    {data.delivery.pending === 0
+                      ? 'Alle mottakere har fått den. Ingen får den samme beskjeden to ganger.'
+                      : 'Går bare til dem som mangler varselet.'}
+                  </small>
+                </button>
               )
             )}
             <Link to="/beskjeder/$postId/rediger" params={{ postId: post.id }}>
-              <Button>Rediger</Button>
+              <span>Rediger</span>
+              <small>Tekst, bilder{data.canPublish ? ', vedlegg' : ''} og valg.</small>
             </Link>
             {!isDraft && data.canPublish && (
-              <Button onClick={() => void unpublish()} loading={busy === 'unpublish'}>
-                Avpubliser
-              </Button>
+              <button type="button" onClick={() => void unpublish().then(() => setManageOpen(false))} disabled={busy === 'unpublish'}>
+                <span>{busy === 'unpublish' ? 'Avpubliserer …' : 'Avpubliser'}</span>
+                <small>Tar innlegget av veggen og gjør det til et utkast igjen.</small>
+              </button>
             )}
-            <Button variant="danger" onClick={() => setConfirmDelete(true)}>
-              Slett
-            </Button>
+            <button type="button" className="is-danger" onClick={() => { setManageOpen(false); setConfirmDelete(true) }}>
+              <span>Slett</span>
+              <small>Sletter innlegget, kommentarene, bildene og vedleggene.</small>
+            </button>
           </div>
-          {!isDraft && data.delivery && data.delivery.pending === 0 && (
-            <p className="text-xs text-ink-faint">
-              «Send e-post på nytt» går bare til dem som mangler varselet — ingen får den samme beskjeden to ganger.
-            </p>
-          )}
-        </section>
+        </BottomSheet>
       )}
 
       <Modal open={confirmPublish} onClose={() => setConfirmPublish(false)} title="Publisere innlegget?" kicker="Veggen">

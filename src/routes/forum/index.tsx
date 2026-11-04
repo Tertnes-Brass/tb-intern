@@ -1,7 +1,8 @@
 import { useForumRefresh } from '../../components/useForumRefresh'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { listForum } from '../../server/forum'
-import { Kicker, Stamp } from '../../components/ui'
+import { BackArrow, buttonClass, EmptyState, PageHeader, Stamp } from '../../components/ui'
+import { shortWhen } from '../../components/compose/when'
 
 export const Route = createFileRoute('/forum/')({
   beforeLoad: ({ context }) => { if (!context.me) throw redirect({ to: '/login' }) },
@@ -13,26 +14,54 @@ export const Route = createFileRoute('/forum/')({
   component: ForumPage,
 })
 
+/**
+ * Forumet — trådene med siste aktivitet øverst. Kompakt sidehode med «Start en
+ * tråd», så én liste med like rader: tittel, én metadatalinje og uleste til
+ * høyre. Lesbar bredde også på iPad (ikke utstrakt).
+ */
 function ForumPage() {
   useForumRefresh()
   const { topics, hasMore } = Route.useLoaderData()
   const { page } = Route.useSearch()
-  return <div className="mx-auto max-w-3xl space-y-6">
-    <header className="flex flex-wrap items-end justify-between gap-4">
-      <div><Kicker>Korpset snakker sammen</Kicker><h1 className="display-title text-4xl font-semibold">Forum</h1>
-        <p className="mt-2 text-ink-soft">Spør om noe, foreslå en fest eller start en diskusjon.</p></div>
-      <Link className="inline-flex rounded-[9px] bg-brass px-4 py-2 text-sm font-medium text-paper-raised transition-colors hover:bg-brass-strong" to="/forum/ny">Start en tråd</Link>
-    </header>
-    <section className="sheet divide-y divide-line" aria-label="Diskusjoner">
-      {topics.length === 0 && <div className="p-8 text-ink-soft">{page ? 'Ingen flere tråder.' : 'Ingen tråder ennå. Start den første samtalen!'}</div>}
-      {topics.map((topic) => <Link key={topic.id} to="/forum/$topicId" params={{ topicId: topic.id }} search={{ page: 0 }} className="block px-4 py-3 transition-colors hover:bg-paper-sunken">
-        <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-semibold break-words">{topic.title}</h2>{topic.unreadCount > 0 && <span className="text-xs font-semibold text-brass-strong">● {topic.unreadCount} uleste svar</span>}{topic.unreadMentionCount > 0 && <span className="mention">@ Omtaler deg</span>}{topic.locked && <Stamp>Låst</Stamp>}</div>
-        <p className="mt-1 text-sm text-ink-soft">{topic.author ?? 'Tidligere medlem'} · {topic.replyCount} svar · Siste aktivitet {new Date(topic.activityAt).toLocaleDateString('nb-NO', { timeZone: 'Europe/Oslo' })}</p>
-      </Link>)}
-    </section>
-    <nav aria-label="Sider" className="flex justify-between">
-      {page > 0 ? <Link to="/forum" search={{ page: page - 1 }} className="link-quiet">← Forrige</Link> : <span />}
-      {hasMore && <Link to="/forum" search={{ page: page + 1 }} className="link-quiet">Neste →</Link>}
-    </nav>
+  return <div className="mx-auto max-w-2xl">
+    <PageHeader
+      className="rise"
+      title="Forum"
+      summary={page > 0 ? `Side ${page + 1}` : undefined}
+      action={<Link className={buttonClass('primary', 'sm')} to="/forum/ny">Start en tråd</Link>}
+    />
+    {topics.length === 0 ? <EmptyState
+      title={page ? 'Ingen flere tråder' : 'Ingen tråder ennå'}
+      action={page ? <Link to="/forum" search={{ page: 0 }} className={buttonClass('secondary')}>Til første side</Link> : <Link to="/forum/ny" className={buttonClass('primary')}>Start den første</Link>}
+    >{page ? undefined : 'Spør om noe, foreslå en fest eller start en diskusjon. Alle medlemmer kan lese og svare.'}</EmptyState>
+    : <ul className="forum-list rise mt-4" style={{ animationDelay: '60ms' }} aria-label="Diskusjoner">
+      {topics.map((topic) => {
+        const unread = topic.unreadCount > 0
+        return <li key={topic.id}>
+          <Link to="/forum/$topicId" params={{ topicId: topic.id }} search={{ page: 0 }} className="forum-row">
+            <span className="min-w-0 flex-1">
+              <span className={`block break-words text-[1rem] leading-snug text-ink ${unread ? 'font-bold' : 'font-semibold'}`}>{topic.title}</span>
+              <span className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[0.8rem] text-ink-faint">
+                <span>{topic.author ?? 'Tidligere medlem'}</span>
+                <span aria-hidden>·</span>
+                <span>{topic.replyCount === 1 ? '1 svar' : `${topic.replyCount} svar`}</span>
+                <span aria-hidden>·</span>
+                <span>{shortWhen(topic.activityAt)}</span>
+                {topic.locked && <Stamp className="ml-1">Låst</Stamp>}
+              </span>
+            </span>
+            <span className="flex shrink-0 items-center gap-2">
+              {topic.unreadMentionCount > 0 && <span className="mention" title="Omtaler deg">@</span>}
+              {unread && <span className="wall-count tabular" title={`${topic.unreadCount} uleste svar`}>{topic.unreadCount}<span className="sr-only"> uleste svar</span></span>}
+              <span className="forum-row-chevron" aria-hidden><BackArrow /></span>
+            </span>
+          </Link>
+        </li>
+      })}
+    </ul>}
+    {(page > 0 || hasMore) && <nav aria-label="Sider" className="mt-4 flex justify-between">
+      {page > 0 ? <Link to="/forum" search={{ page: page - 1 }} className={buttonClass('ghost', 'sm')}>← Nyere</Link> : <span />}
+      {hasMore && <Link to="/forum" search={{ page: page + 1 }} className={buttonClass('ghost', 'sm')}>Eldre →</Link>}
+    </nav>}
   </div>
 }

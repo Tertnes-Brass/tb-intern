@@ -380,3 +380,14 @@ export function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md'
     </span>
   )
 }
+
+// ---------- Lenke som ser ut som en knapp ----------
+
+/**
+ * Klassene til `Button`, for en `<Link>` som er en handling («Skriv innlegg»,
+ * «Start en tråd»). En `<Link>` rundt en `<Button>` er en knapp inni en lenke —
+ * to trykkmål i ett, og ugyldig HTML.
+ */
+export function buttonClass(variant: NonNullable<ButtonProps['variant']> = 'secondary', size: NonNullable<ButtonProps['size']> = 'md') {
+  return `${btnBase} ${btnVariants[variant]} ${btnSizes[size]} no-underline`
+}

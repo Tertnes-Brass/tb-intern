@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouter } from '@tanstack/react-router'
-import { useMemo, useRef, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { attachmentRejectionReason, MAX_POST_ATTACHMENTS, postAttachmentUrl, uploadPostAttachment, type PostAttachment } from '../lib/post-attachments'
 import { deletePostAttachment } from '../server/post-attachments'
 import { markdownToHtml } from '../lib/markdown'
@@ -19,7 +19,8 @@ import {
 import { createPost, deletePostImage, publishPost, searchMentionableForAudience, updatePost } from '../server/posts'
 import { MentionTextarea } from './MentionTextarea'
 import { toast, toastError } from './toast'
-import { Button, Field } from './ui'
+import { ComposerBar, ComposerLayout, ComposerTitle, Glyph, Segmented, ToolButton } from './compose/Composer'
+import { Button, Modal } from './ui'
 
 /**
  * Skjemaet bak «Skriv innlegg» og «Rediger» på veggen (#28). Samme komponent
@@ -28,6 +29,14 @@ import { Button, Field } from './ui'
  *
  * Flyten er alltid opprett → last opp bilder og vedlegg → publiser, slik at et innlegg
  * aldri blir synlig halvferdig og bilder aldri blir foreldreløse.
+ *
+ * Utformingen er skriveflaten i `compose/Composer.tsx`: «Avbryt · Nytt innlegg ·
+ * Publiser» klistret øverst, overskrift og tekst først, en verktøylinje for
+ * bilder og vedlegg, og valgene (avsender, målgruppe, viktighet, format) i en
+ * egen spalte på iPad og et sammenleggbart «Valg» på telefon. For `canPublish`
+ * åpner «Publiser» et ark med det som er valgt og avkryssingen for varsel —
+ * fortsatt AVSLÅTT som standard (`DEFAULT_NOTIFY`), og knappen sier om det
+ * sendes noe («Publiser og varsle» / «Publiser uten varsel»).
  *
  * Formatvalget (#79) er ikke privilegert: alle kan velge markdown når teksten
  * trenger overskrifter, lister eller en tabell. Forhåndsvisningen kjører samme
@@ -88,6 +97,15 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
   const navigate = useNavigate()
   const router = useRouter()
   const fileInput = useRef<HTMLInputElement>(null)
+  const attachmentInput = useRef<HTMLInputElement>(null)
+  const bodyId = useId()
+  const bodyHintId = useId()
+  const titleHintId = useId()
+  const notifyHintId = useId()
+  /** Telefon: «Valg» er lagt sammen til man åpner det. */
+  const [optionsOpen, setOptionsOpen] = useState(false)
+  /** Arket «Publisere innlegget?» med varslingsvalget — bare for `canPublish`. */
+  const [confirm, setConfirm] = useState(false)
   const [title, setTitle] = useState(post?.title ?? '')
   // Lagret tekst har markører; feltet skal vise navn. `draft` gjør om begge
   // veier, og `chosen` er grunnlaget `toMarkers` bruker ved lagring.
@@ -224,115 +242,97 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
     }
   }
 
-  return (
-    <form onSubmit={canPublish ? saveDraft : (e) => { e.preventDefault(); void publish() }} className="space-y-6">
-      <div>
-        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-[0.8rem] font-medium text-ink-soft">Tekst *</span>
-          <fieldset className="flex items-center gap-1 rounded-full border border-line p-0.5">
-            <legend className="sr-only">Format på teksten</legend>
-            {FORMATS.map((f) => (
-              <label
-                key={f.value}
-                className={`cursor-pointer rounded-full px-2.5 py-1 text-xs font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brass ${
-                  format === f.value
-                    ? 'bg-[var(--brass-soft)] text-brass-strong'
-                    : 'text-ink-faint hover:text-brass-strong'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="post-format"
-                  className="sr-only"
-                  value={f.value}
-                  checked={format === f.value}
-                  onChange={() => {
-                    setFormat(f.value)
-                    // «Forhåndsvisning» gir ikke mening for rein tekst.
-                    if (f.value !== 'markdown') setPreview(false)
-                  }}
-                />
-                {f.label}
-              </label>
-            ))}
-          </fieldset>
-        </div>
+  const blocked = busy !== null || removingAttachment !== null
+  const senderValue: 'member' | 'board' | 'archive' = fromArchive ? 'archive' : official ? 'board' : 'member'
+  const senderLabel = { member: 'Fra meg', board: 'Fra styret', archive: 'Fra notearkivar' }[senderValue]
+  const audienceLabel = AUDIENCES.find((a) => a.value === audience)!.label
+  const formatLabel = FORMATS.find((f) => f.value === format)!.label
+  // Linjen på «Valg»-knappen (telefon): hva som er valgt, uten å åpne.
+  const optionsSummary = canPublish
+    ? [senderLabel, audienceLabel, importance === 'important' ? 'Viktig' : null].filter(Boolean).join(' · ')
+    : formatLabel
 
-        {format === 'markdown' && (
-          <div className="mb-2 flex gap-2">
-            {[
-              { on: false, label: 'Skriv' },
-              { on: true, label: 'Forhåndsvisning' },
-            ].map((tab) => (
-              <button
-                key={tab.label}
-                type="button"
-                aria-pressed={preview === tab.on}
-                onClick={() => setPreview(tab.on)}
-                className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                  preview === tab.on
-                    ? 'border-brass bg-[var(--brass-soft)] text-brass-strong'
-                    : 'border-line text-ink-soft hover:border-brass hover:text-brass-strong'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        )}
+  const barActions = canPublish ? (
+    isPublished ? (
+      <Button type="submit" variant="primary" size="sm" loading={busy === 'draft'} disabled={blocked}>
+        Lagre
+      </Button>
+    ) : (
+      <>
+        <Button type="submit" variant="ghost" size="sm" loading={busy === 'draft'} disabled={blocked}>
+          Lagre<span className="max-sm:hidden"> utkast</span>
+        </Button>
+        <Button type="button" variant="primary" size="sm" loading={busy === 'publish'} disabled={blocked} onClick={() => setConfirm(true)}>
+          Publiser
+        </Button>
+      </>
+    )
+  ) : (
+    <Button type="submit" variant="primary" size="sm" loading={busy === 'publish'} disabled={blocked}>
+      {isPublished ? 'Lagre' : 'Publiser'}
+    </Button>
+  )
 
-        {preview && format === 'markdown' ? (
-          previewHtml ? (
-            // HTML-en kommer fra `markdownToHtml`, som bygger utdata av en
-            // allowlist og aldri slipper gjennom rå HTML eller farlige lenker.
-            <div
-              className="prose sheet min-h-40 px-4 py-3.5"
-              dangerouslySetInnerHTML={{ __html: previewHtml }}
-            />
-          ) : (
-            <p className="sheet min-h-40 px-4 py-3.5 text-sm text-ink-faint">Ingenting å vise ennå.</p>
-          )
+  const imageHint = `Inntil ${MAX_POST_IMAGES} bilder, maks 10 MB hver. Bildene er kun synlige for innloggede medlemmer.`
+  const attachmentHint = `Inntil ${MAX_POST_ATTACHMENTS} filer, maks 25 MB hver. De som kan lese beskjeden, kan laste ned vedleggene.`
+
+  const main = (
+    <div className="composer-sheet">
+      <ComposerTitle
+        label="Tittel (valgfri)"
+        placeholder="Tittel (valgfri)"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        maxLength={160}
+        aria-describedby={titleHintId}
+      />
+      <p id={titleHintId} className="sr-only">
+        Uten tittel vises første linje av teksten.
+      </p>
+
+      <label htmlFor={bodyId} className="sr-only">
+        Tekst
+      </label>
+      {preview && format === 'markdown' ? (
+        previewHtml ? (
+          // HTML-en kommer fra `markdownToHtml`, som bygger utdata av en
+          // allowlist og aldri slipper gjennom rå HTML eller farlige lenker.
+          <div className="prose composer-preview" dangerouslySetInnerHTML={{ __html: previewHtml }} />
         ) : (
-          <MentionTextarea
-            className="field-input min-h-40 w-full resize-y leading-relaxed"
-            value={body}
-            onChange={setBody}
-            chosen={chosen}
-            onChosenChange={setChosen}
-            // Målgruppen avgjør hvem som kan omtales — den er valgt her i
-            // skjemaet, og innlegget har kanskje ingen id ennå.
-            search={(query) => searchMentionableForAudience({ data: { audience, query } })}
-            // Ingen `onEnter`: her er enter et linjeskift, ikke «send».
-            placement="below"
-            placeholder={
-              format === 'markdown'
-                ? '## Øvelsen neste uke\n\n- Vi starter 19.00\n- Ta med **svart mappe**'
-                : canPublish
-                  ? 'Hei alle sammen!\n\nØvelsen neste uke er flyttet …'
-                  : 'Hva skjer?'
-            }
-            autoFocus
-          />
-        )}
-        <p className="mt-1 text-xs text-ink-faint">
-          {FORMATS.find((f) => f.value === format)!.hint} Skriv @ for å nevne noen.
-        </p>
-      </div>
-
-      <Field label="Tittel" hint="Valgfri. Uten tittel vises første linje av teksten.">
-        <input
-          className="field-input"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Øvelsen flyttes til tirsdag"
-          maxLength={160}
+          <p className="composer-preview text-sm text-ink-faint">Ingenting å vise ennå.</p>
+        )
+      ) : (
+        <MentionTextarea
+          id={bodyId}
+          aria-describedby={bodyHintId}
+          required
+          className="composer-body"
+          value={body}
+          onChange={setBody}
+          chosen={chosen}
+          onChosenChange={setChosen}
+          // Målgruppen avgjør hvem som kan omtales — den er valgt her i
+          // skjemaet, og innlegget har kanskje ingen id ennå.
+          search={(query) => searchMentionableForAudience({ data: { audience, query } })}
+          // Ingen `onEnter`: her er enter et linjeskift, ikke «send».
+          placement="below"
+          placeholder={
+            format === 'markdown'
+              ? '## Øvelsen neste uke\n\n- Vi starter 19.00\n- Ta med **svart mappe**'
+              : canPublish
+                ? 'Hei alle sammen!\n\nØvelsen neste uke er flyttet …'
+                : 'Hva skjer?'
+          }
+          autoFocus
         />
-      </Field>
+      )}
+      <p id={bodyHintId} className="composer-hint">
+        {FORMATS.find((f) => f.value === format)!.hint} Skriv @ for å nevne noen.
+      </p>
 
-      <div>
-        <p className="mb-1.5 text-[0.8rem] font-medium text-ink-soft">Bilder</p>
-        {(existingImages.length > 0 || files.length > 0) && (
-          <ul className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+      {(existingImages.length > 0 || files.length > 0) && (
+        <div className="px-4 pb-3 sm:px-5">
+          <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {existingImages.map((image) => (
               <li key={image.id} className="relative">
                 <img
@@ -346,7 +346,7 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
                   onClick={() => void removeExisting(image)}
                   disabled={busy !== null}
                   aria-label={`Fjern ${image.fileName}`}
-                  className="absolute right-1 top-1 grid h-6 w-6 cursor-pointer place-items-center rounded-full bg-paper/90 text-ink-soft transition-colors hover:text-danger"
+                  className="hit absolute right-1 top-1 grid h-7 w-7 cursor-pointer place-items-center rounded-full bg-paper/90 text-ink-soft transition-colors hover:text-danger"
                 >
                   ×
                 </button>
@@ -362,114 +362,286 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
                   onClick={() => setFiles((current) => current.filter((_, index) => index !== i))}
                   disabled={busy !== null}
                   aria-label={`Fjern ${file.name}`}
-                  className="absolute right-1 top-1 grid h-6 w-6 cursor-pointer place-items-center rounded-full bg-paper/90 text-ink-soft transition-colors hover:text-danger"
+                  className="hit absolute right-1 top-1 grid h-7 w-7 cursor-pointer place-items-center rounded-full bg-paper/90 text-ink-soft transition-colors hover:text-danger"
                 >
                   ×
                 </button>
               </li>
             ))}
           </ul>
-        )}
+          <p className="mt-1.5 text-xs text-ink-faint">{imageHint}</p>
+        </div>
+      )}
+
+      {canBoard && (existingAttachments.length > 0 || attachmentFiles.length > 0) && (
+        <div className="px-4 pb-3 sm:px-5">
+          <ul className="divide-y divide-line rounded-[9px] border border-line">
+            {existingAttachments.map((file) => (
+              <li key={file.id} className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
+                <a className="link-brass min-w-0 break-all" href={postAttachmentUrl(file.id)} download>
+                  {file.fileName}
+                </a>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={blocked}
+                  onClick={async () => {
+                    setRemovingAttachment(file.id)
+                    try {
+                      await deletePostAttachment({ data: { id: file.id } })
+                      setExistingAttachments((current) => current.filter((f) => f.id !== file.id))
+                      await router.invalidate()
+                    } catch (error) {
+                      toastError(error)
+                    } finally {
+                      setRemovingAttachment(null)
+                    }
+                  }}
+                  aria-label={`Fjern ${file.fileName}`}
+                >
+                  Fjern
+                </Button>
+              </li>
+            ))}
+            {attachmentFiles.map((file, index) => (
+              <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
+                <span className="min-w-0 break-all">
+                  {file.name} <span className="text-ink-faint">· ikke lastet opp ennå</span>
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy !== null}
+                  onClick={() => setAttachmentFiles((current) => current.filter((_, i) => i !== index))}
+                  aria-label={`Fjern ${file.name}`}
+                >
+                  Fjern
+                </Button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-xs text-ink-faint">{attachmentHint}</p>
+        </div>
+      )}
+
+      {/* Verktøylinjen. Filvelgerne er skjult og åpnes fra knappene; bildene
+          står først, så vedleggene (rekkefølgen testene leser dem i). */}
+      <div className="composer-toolbar">
         <input
           ref={fileInput}
           type="file"
           accept="image/jpeg,image/png,image/webp,image/gif,image/heic"
           multiple
+          tabIndex={-1}
+          aria-hidden
           onChange={(e) => addFiles(e.target.files)}
-          className="block w-full text-xs text-ink-soft file:mr-3 file:cursor-pointer file:rounded-[9px] file:border file:border-line-strong file:bg-paper-raised file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink hover:file:border-brass"
+          className="sr-only"
           disabled={busy !== null || imageBudget <= 0}
         />
-        <p className="mt-1 text-xs text-ink-faint">
-          Inntil {MAX_POST_IMAGES} bilder, maks 10 MB hver. Bildene er kun synlige for innloggede medlemmer.
-        </p>
+        <ToolButton
+          icon={<Glyph name="image" />}
+          title={imageHint}
+          disabled={busy !== null || imageBudget <= 0}
+          onClick={() => fileInput.current?.click()}
+        >
+          Bilder
+          {existingImages.length + files.length > 0 && (
+            <span className="tabular font-mono text-[0.7rem] text-ink-faint">{existingImages.length + files.length}</span>
+          )}
+        </ToolButton>
+        {canBoard && (
+          <>
+            <input
+              ref={attachmentInput}
+              type="file"
+              multiple
+              tabIndex={-1}
+              aria-hidden
+              className="sr-only"
+              disabled={blocked || attachmentBudget <= 0}
+              onChange={(event) => {
+                const picked = Array.from(event.target.files ?? []).filter((file) => {
+                  const reason = attachmentRejectionReason(file.size)
+                  if (reason) toast(`${file.name}: ${reason}`, 'error')
+                  return !reason
+                })
+                if (picked.length > attachmentBudget) toast(`Maks ${MAX_POST_ATTACHMENTS} vedlegg per beskjed`, 'error')
+                setAttachmentFiles((current) => [...current, ...picked.slice(0, Math.max(0, attachmentBudget))])
+                event.target.value = ''
+              }}
+            />
+            <ToolButton
+              icon={<Glyph name="clip" />}
+              title={attachmentHint}
+              aria-label="Legg til vedlegg"
+              disabled={blocked || attachmentBudget <= 0}
+              onClick={() => attachmentInput.current?.click()}
+            >
+              Vedlegg
+              {existingAttachments.length + attachmentFiles.length > 0 && (
+                <span className="tabular font-mono text-[0.7rem] text-ink-faint">
+                  {existingAttachments.length + attachmentFiles.length}
+                </span>
+              )}
+            </ToolButton>
+          </>
+        )}
+        {format === 'markdown' && (
+          <ToolButton active={preview} aria-pressed={preview} onClick={() => setPreview(!preview)}>
+            {preview ? 'Skriv' : 'Forhåndsvis'}
+          </ToolButton>
+        )}
+        <ToolButton
+          className="ml-auto min-w-0 shrink md:hidden"
+          icon={<Glyph name="options" />}
+          aria-expanded={optionsOpen}
+          aria-controls="composer-valg"
+          active={optionsOpen}
+          onClick={() => {
+            const opening = !optionsOpen
+            setOptionsOpen(opening)
+            // Valgene åpner seg under teksten — vis dem, i stedet for at de havner under bretten.
+            if (opening) requestAnimationFrame(() => document.getElementById('composer-valg')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))
+          }}
+        >
+          Valg
+          <span className="min-w-0 truncate font-normal text-ink-faint max-[360px]:hidden">{optionsSummary}</span>
+        </ToolButton>
       </div>
+    </div>
+  )
 
-      {canBoard && <div className="space-y-3">
-        <p className="text-[0.8rem] font-medium text-ink-soft">Vedlegg</p>
-        <p className="text-xs text-ink-faint">Inntil {MAX_POST_ATTACHMENTS} filer, maks 25 MB hver. De som kan lese beskjeden, kan laste ned vedleggene.</p>
-        {(existingAttachments.length > 0 || attachmentFiles.length > 0) && <ul className="sheet divide-y divide-line">
-          {existingAttachments.map((file) => <li key={file.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-            <a className="link-brass break-all" href={postAttachmentUrl(file.id)} download>{file.fileName}</a>
-            <Button type="button" disabled={busy !== null || removingAttachment !== null} onClick={async () => {
-              setRemovingAttachment(file.id)
-              try { await deletePostAttachment({ data: { id: file.id } }); setExistingAttachments((current) => current.filter((f) => f.id !== file.id)); await router.invalidate() }
-              catch (error) { toastError(error) }
-              finally { setRemovingAttachment(null) }
-            }} aria-label={`Fjern ${file.fileName}`}>Fjern</Button>
-          </li>)}
-          {attachmentFiles.map((file, index) => <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-            <span className="break-all">{file.name} <span className="text-ink-faint">· ikke lastet opp ennå</span></span>
-            <Button type="button" disabled={busy !== null} onClick={() => setAttachmentFiles((current) => current.filter((_, i) => i !== index))} aria-label={`Fjern ${file.name}`}>Fjern</Button>
-          </li>)}
-        </ul>}
-        <label className="block text-sm text-ink-soft">Legg til vedlegg
-          <input type="file" multiple disabled={busy !== null || removingAttachment !== null || attachmentBudget <= 0}
-            className="field-input mt-1" onChange={(event) => {
-              const picked = Array.from(event.target.files ?? []).filter((file) => {
-                const reason = attachmentRejectionReason(file.size)
-                if (reason) toast(`${file.name}: ${reason}`, 'error')
-                return !reason
-              })
-              if (picked.length > attachmentBudget) toast(`Maks ${MAX_POST_ATTACHMENTS} vedlegg per beskjed`, 'error')
-              setAttachmentFiles((current) => [...current, ...picked.slice(0, Math.max(0, attachmentBudget))])
-              event.target.value = ''
-            }} />
-        </label>
-      </div>}
-      {!post && savedPostId && <p className="text-sm text-ink-soft">Beskjeden er lagret. <Link to="/beskjeder/$postId" params={{ postId: savedPostId }} className="link-brass">Åpne den lagrede beskjeden</Link> for å fortsette senere.</p>}
+  const side = (
+    <div className="space-y-5">
+      {canPublish && (
+        <Segmented
+          legend="Avsender"
+          name="post-sender"
+          value={senderValue}
+          options={[
+            { value: 'member' as const, label: 'Meg' },
+            ...(canBoard ? [{ value: 'board' as const, label: 'Styret' }] : []),
+            { value: 'archive' as const, label: 'Notearkivar' },
+          ]}
+          onChange={(v) => {
+            setOfficial(v === 'board')
+            setFromArchive(v === 'archive')
+          }}
+          hint="Hvem beskjeden kommer fra. Navnet ditt følger innlegget."
+        />
+      )}
+      {canPublish && (
+        <Segmented
+          legend="Hvem skal se det?"
+          name="post-audience"
+          value={audience}
+          options={AUDIENCES.filter((a) => canBoard || a.value === 'all')}
+          onChange={setAudience}
+          hint={AUDIENCES.find((a) => a.value === audience)!.hint}
+        />
+      )}
+      {canPublish && (
+        <Segmented
+          legend="Viktighet"
+          name="post-importance"
+          value={importance}
+          options={IMPORTANCES}
+          onChange={setImportance}
+          hint={IMPORTANCES.find((i) => i.value === importance)!.hint}
+        />
+      )}
+      <Segmented
+        legend="Format på teksten"
+        name="post-format"
+        value={format}
+        options={FORMATS}
+        onChange={(value) => {
+          setFormat(value)
+          // «Forhåndsvis» gir ikke mening for rein tekst.
+          if (value !== 'markdown') setPreview(false)
+        }}
+      />
+      {!canPublish && (
+        <p className="text-xs leading-snug text-ink-faint">
+          Innlegget blir synlig for alle innloggede medlemmer{isPublished ? '' : ' når du publiserer'}.
+        </p>
+      )}
+      {canPublish && isPublished && (
+        <div className="border-t border-line pt-4">
+          <p className="composer-label">Varsling</p>
+          <p className="mb-3 text-xs leading-snug text-ink-faint">
+            Endringer vises med det samme. Varsel går kun til dem som ikke allerede har fått det.
+          </p>
+          <Button type="button" size="sm" className="w-full" disabled={blocked} onClick={() => setConfirm(true)}>
+            Lagre og varsle …
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+
+  return (
+    <form onSubmit={canPublish ? saveDraft : (e) => { e.preventDefault(); void publish() }} className="composer">
+      <ComposerBar
+        cancel={
+          post ? (
+            <Link to="/beskjeder/$postId" params={{ postId: post.id }} className="composer-cancel">
+              Avbryt
+            </Link>
+          ) : (
+            <Link to="/beskjeder" className="composer-cancel">
+              Avbryt
+            </Link>
+          )
+        }
+        title={!post ? 'Nytt innlegg' : isPublished ? 'Rediger innlegg' : 'Rediger utkast'}
+        actions={barActions}
+      />
+
+      {!post && savedPostId && (
+        <p className="composer-notice">
+          Beskjeden er lagret.{' '}
+          <Link to="/beskjeder/$postId" params={{ postId: savedPostId }} className="link-brass">
+            Åpne den lagrede beskjeden
+          </Link>{' '}
+          for å fortsette senere.
+        </p>
+      )}
+
+      <ComposerLayout main={main} side={side} sideOpen={optionsOpen} sideLabel="Valg for innlegget" />
 
       {canPublish && (
-        <>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Hvem skal se det?" hint={AUDIENCES.find((a) => a.value === audience)!.hint}>
-              <select
-                className="field-input"
-                value={audience}
-                onChange={(e) => setAudience(e.target.value as PostAudience)}
-              >
-                {AUDIENCES.filter((a) => canBoard || a.value === 'all').map((a) => (
-                  <option key={a.value} value={a.value}>
-                    {a.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Viktighet" hint={IMPORTANCES.find((i) => i.value === importance)!.hint}>
-              <select
-                className="field-input"
-                value={importance}
-                onChange={(e) => setImportance(e.target.value as PostImportance)}
-              >
-                {IMPORTANCES.map((i) => (
-                  <option key={i.value} value={i.value}>
-                    {i.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-
-          <Field label="Avsender" hint="Velg hvem beskjeden kommer fra. Navnet ditt følger innlegget.">
-            <select className="field-input" value={fromArchive ? 'archive' : official ? 'board' : 'member'}
-              onChange={(e) => { setOfficial(e.target.value === 'board'); setFromArchive(e.target.value === 'archive') }}>
-              <option value="member">Fra meg</option>
-              {canBoard && <option value="board">Fra styret</option>}
-              <option value="archive">Fra notearkivar</option>
-            </select>
-          </Field>
-
-          <label className="sheet flex cursor-pointer items-start gap-3 px-4 py-3">
+        <Modal
+          open={confirm}
+          onClose={() => (busy === 'publish' ? undefined : setConfirm(false))}
+          title={isPublished ? 'Lagre og varsle?' : 'Publisere innlegget?'}
+          kicker="Veggen"
+        >
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+            <dt className="text-ink-faint">Synlig for</dt>
+            <dd className="text-ink">{audience === 'board' ? 'Bare styret' : 'Hele korpset'}</dd>
+            <dt className="text-ink-faint">Avsender</dt>
+            <dd className="text-ink">{senderLabel}</dd>
+            <dt className="text-ink-faint">Viktighet</dt>
+            <dd className="text-ink">{importance === 'important' ? 'Viktig' : 'Vanlig'}</dd>
+          </dl>
+          {/* Avslått som standard (#85, `DEFAULT_NOTIFY`): publisering og
+              masseutsending er to bevisste handlinger. */}
+          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-[11px] border border-line px-4 py-3">
             <input
               type="checkbox"
-              className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--brass)]"
+              className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--brass)]"
               checked={notify}
               onChange={(e) => setNotify(e.target.checked)}
+              aria-describedby={notifyHintId}
             />
             <span>
               <span className="block text-sm font-medium text-ink">{notifyLabel(audience)}</span>
-              <span className="mt-0.5 block text-xs leading-snug text-ink-soft">
+              <span id={notifyHintId} className="mt-0.5 block text-xs leading-snug text-ink-soft">
                 Sender e-post, og varsel til dem som har slått på varsler på en enhet. Uten avkryssing
-                publiseres innlegget uten varsel.{' '}
+                {isPublished ? ' lagres endringene' : ' publiseres innlegget'} uten varsel.{' '}
                 {audience === 'board'
                   ? 'Varselet går kun til dem som selv kan publisere beskjeder.'
                   : 'Varselet går til aktive medlemmer, etter varslingsvalget deres.'}{' '}
@@ -477,26 +649,16 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
               </span>
             </span>
           </label>
-        </>
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="ghost" onClick={() => setConfirm(false)} disabled={busy === 'publish'}>
+              Avbryt
+            </Button>
+            <Button type="button" variant="primary" loading={busy === 'publish'} disabled={blocked} onClick={() => void publish()}>
+              {isPublished ? (notify ? 'Lagre og varsle' : 'Lagre uten varsel') : notify ? 'Publiser og varsle' : 'Publiser uten varsel'}
+            </Button>
+          </div>
+        </Modal>
       )}
-
-      <div className="flex flex-col-reverse gap-2 border-t border-line pt-5 sm:flex-row sm:justify-end">
-        {canPublish && (
-          <Button type="submit" variant="secondary" loading={busy === 'draft'} disabled={busy !== null || removingAttachment !== null} className="w-full sm:w-auto">
-            {isPublished ? 'Lagre endringer' : 'Lagre utkast'}
-          </Button>
-        )}
-        <Button
-          type={canPublish ? 'button' : 'submit'}
-          variant="primary"
-          loading={busy === 'publish'}
-          disabled={busy !== null || removingAttachment !== null}
-          onClick={canPublish ? () => void publish() : undefined}
-          className="w-full sm:w-auto"
-        >
-          {isPublished ? (canPublish ? 'Lagre og varsle' : 'Lagre endringer') : 'Publiser'}
-        </Button>
-      </div>
     </form>
   )
 }
