@@ -1344,3 +1344,16 @@ select.field-input {
   position: sticky;
   top: calc(56px + 1.25rem);
 }
+/* Kompakt nedtrekksliste i en filterrad — samme høyde som `Segmented`. */
+.field-input.compact-select {
+  min-height: 2.25rem;
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
+  font-size: 0.85rem;
+}
+@media (pointer: coarse) {
+  .field-input.compact-select {
+    min-height: 2.75rem;
+    font-size: 16px;
+  }
+}
