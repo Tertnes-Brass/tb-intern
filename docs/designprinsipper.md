@@ -372,5 +372,16 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
    Hele teksten, utkastene og publiseringsflyten bor fortsatt i området —
    hub-en er ikke et kontrollpanel (§4).
 
+   **Oppsett, 4. november 2026 (iPhone/iPad):** rekkefølgen over står, men
+   «Neste» er nå ÉN modul — datoflis, tittel, tid, sted, oppmøte (én linje når
+   man regnes som kommer) og øvingsplanen — og den eneste hevede flaten på
+   siden. Datoflisen vises på alle skjermer, og datoen står ikke lenger to
+   ganger. «Mine noter» følger rett etter (installasjonstipset står under det,
+   ikke mellom), så begge er innenfor første skjerm på telefon. Beskjedene og
+   «Kommende» er rene, delte lister. Fra 768 px står det i to spalter:
+   «Neste» og «Kommende» til venstre, «Mine noter» og beskjedene til høyre
+   (`.hub-grid` i `src/styles.css`); DOM-rekkefølgen er fortsatt den over.
+   Områder er en kompakt lenkeliste, fortsatt bare på desktop.
+
    Hub-en skal aldri bli et kontrollpanel som gjengir hvert områdes oversikt i
    miniatyr (§4). Den viser *det neste* og *veien videre*.
