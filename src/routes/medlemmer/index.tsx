@@ -1,8 +1,10 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast, toastError } from '../../components/toast'
 import { ActionMenu } from '../../components/ActionMenu'
-import { Avatar, Button, Field, Modal, PageHeader, Stamp } from '../../components/ui'
+import { ConfirmDialog } from '../../components/admin/ConfirmDialog'
+import { Icon } from '../../components/Icons'
+import { Avatar, Button, Field, Modal, PageHeader } from '../../components/ui'
 import {
   type InviteDelivery,
   MAX_INVITE_PARTS,
@@ -26,6 +28,7 @@ import {
 
 type Data = Awaited<ReturnType<typeof listMembers>>
 type Member = Data['members'][number]
+type Invite = Data['invites'][number]
 
 export const Route = createFileRoute('/medlemmer/')({
   beforeLoad: ({ context }) => {
@@ -96,6 +99,14 @@ function MembersPage() {
     m.email.toLocaleLowerCase('nb').includes(q) ||
     m.parts.some((p) => p.name.toLocaleLowerCase('nb').includes(q))
   const visibleKeys = order.filter((key) => groups.get(key)?.some(matches))
+  const visibleInvites = data.invites.filter(
+    (inv) =>
+      !q ||
+      (inv.name ?? '').toLocaleLowerCase('nb').includes(q) ||
+      inv.email.toLocaleLowerCase('nb').includes(q) ||
+      inv.partNames.some((n) => n.toLocaleLowerCase('nb').includes(q)),
+  )
+  const [revokeFor, setRevokeFor] = useState<Invite | null>(null)
 
   return (
     <div className="space-y-7">
@@ -147,42 +158,10 @@ function MembersPage() {
         </p>
       </div>
 
-      {data.canManage && data.invites.length > 0 && !q && (
-        <section className="rise">
-          <h2 className="group-label">Venter på første innlogging · {data.invites.length}</h2>
-          <ul className="list-group">
-            {data.invites.map((inv) => (
-              <li key={inv.email} className="flex items-center gap-x-3 px-4 py-3 sm:px-5">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[0.92rem] font-semibold text-ink">{inv.name ?? inv.email}</span>
-                  {inv.name && <span className="block truncate text-xs text-ink-faint">{inv.email}</span>}
-                  <span className="block truncate text-xs text-ink-soft">
-                    {inv.roleName}
-                    {inv.partNames.length > 0 ? ` · ${inv.partNames.join(' · ')}` : ''}
-                  </span>
-                </span>
-                <button
-                  onClick={async () => {
-                    try {
-                      await revokeInvitation({ data: { email: inv.email } })
-                      toast('Invitasjon trukket tilbake')
-                      await router.invalidate()
-                    } catch (err) {
-                      toastError(err)
-                    }
-                  }}
-                  className="-mr-2 inline-flex min-h-10 shrink-0 cursor-pointer items-center rounded-lg px-3 text-[0.82rem] font-medium text-danger transition-colors hover:bg-danger/10 pointer-coarse:min-h-11"
-                >
-                  Trekk tilbake
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
       {visibleKeys.length === 0 && (
-        <p className="surface-group px-5 py-8 text-center text-sm text-ink-soft">Ingen medlemmer matcher «{query}».</p>
+        <p className="surface-group px-5 py-8 text-center text-sm text-ink-soft">
+          Ingen medlemmer matcher «{query}»{visibleInvites.length > 0 ? ' — men det finnes treff blant invitasjonene under.' : '.'}
+        </p>
       )}
 
       {visibleKeys.map((key, si) => {
@@ -210,9 +189,9 @@ function MembersPage() {
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-2">
                           <span className="truncate text-[0.95rem] font-semibold text-ink">{m.name}</span>
-                          {m.id === data.meId && <Stamp tone="brass">deg</Stamp>}
+                          {m.id === data.meId && <span className="shrink-0 text-[0.8rem] text-ink-soft">(deg)</span>}
                         </span>
-                        <span className="block truncate text-xs text-ink-faint">{m.email}</span>
+                        <span className="block truncate text-[0.8rem] text-ink-soft">{m.email}</span>
                         {leads.length > 0 && (
                           <span className="mt-0.5 block truncate text-xs font-medium text-brass-strong">
                             Leder {leads.join(' · ')}
@@ -272,9 +251,7 @@ function MembersPage() {
                           ))}
                         </select>
                       ) : (
-                        <span>
-                          <Stamp tone={m.roleId === 'member' ? 'neutral' : 'brass'}>{m.roleName}</Stamp>
-                        </span>
+                        <span className="shrink-0 text-[0.82rem] text-ink-soft md:truncate">{m.roleName}</span>
                       )}
                     </div>
                   </li>
@@ -284,6 +261,15 @@ function MembersPage() {
           </section>
         )
       })}
+
+      {data.canManage && visibleInvites.length > 0 && (
+        <Invitations
+          invites={visibleInvites}
+          total={data.invites.length}
+          searching={!!q}
+          onRevoke={setRevokeFor}
+        />
+      )}
 
       {data.canManage && (
         <InviteModal
@@ -308,6 +294,33 @@ function MembersPage() {
         />
       )}
 
+      {data.canManage && (
+        <ConfirmDialog
+          open={revokeFor !== null}
+          kicker="Invitasjon"
+          title="Trekk tilbake invitasjonen?"
+          confirmLabel="Trekk tilbake"
+          onClose={() => setRevokeFor(null)}
+          onConfirm={async () => {
+            if (!revokeFor) return
+            try {
+              await revokeInvitation({ data: { email: revokeFor.email } })
+            } catch (err) {
+              toastError(err)
+              throw err
+            }
+            toast('Invitasjonen er trukket tilbake')
+            await router.invalidate()
+          }}
+        >
+          <p>
+            <span className="font-semibold text-ink">{revokeFor?.name ?? revokeFor?.email}</span> kan da ikke lenger
+            logge inn med <span className="[overflow-wrap:anywhere]">{revokeFor?.email}</span>. En lenke som allerede er sendt, slutter å
+            virke. Du kan invitere på nytt senere.
+          </p>
+        </ConfirmDialog>
+      )}
+
       {data.canManage && editFor && (
         <AdminProfileModal
           key={editFor.id}
@@ -320,6 +333,123 @@ function MembersPage() {
         />
       )}
     </div>
+  )
+}
+
+const INVITES_OPEN_KEY = 'tb-medlemmer-invitasjoner-apen'
+
+/**
+ * Ventende invitasjoner — under besetningen, lukket som standard. De er
+ * administrasjon, ikke medlemslista: seks røde «Trekk tilbake» skjøv før de
+ * aktive medlemmene ut av første skjerm. Åpen/lukket huskes for økten. Et søk
+ * med treff blant invitasjonene åpner dem, så et treff aldri gjemmes.
+ */
+function Invitations({
+  invites,
+  total,
+  searching,
+  onRevoke,
+}: {
+  invites: Invite[]
+  total: number
+  searching: boolean
+  onRevoke: (invite: Invite) => void
+}) {
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(INVITES_OPEN_KEY) === '1') setOpen(true)
+    } catch {
+      // Privat modus o.l.: start lukket.
+    }
+  }, [])
+  const toggle = () => {
+    setOpen((v) => {
+      try {
+        sessionStorage.setItem(INVITES_OPEN_KEY, v ? '0' : '1')
+      } catch {
+        // ignorer
+      }
+      return !v
+    })
+  }
+  const expanded = open || searching
+
+  const copyEmail = async (email: string) => {
+    try {
+      await navigator.clipboard.writeText(email)
+      toast('E-postadressen er kopiert')
+    } catch {
+      toast('Kunne ikke kopiere – merk adressen og kopier den selv', 'error')
+    }
+  }
+
+  return (
+    <section className="rise" aria-label="Invitasjoner">
+      <div className="list-group">
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={searching}
+          aria-expanded={expanded}
+          aria-controls="medlemmer-invitasjoner"
+          className="list-row-link flex min-h-14 w-full cursor-pointer items-center gap-3 px-4 py-3 text-left disabled:cursor-default sm:px-5"
+        >
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-dashed border-line-strong text-ink-faint">
+            <Icon name="people" size={15} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.95rem] font-semibold text-ink">
+              Invitasjoner · {searching ? `${invites.length} av ${total}` : total}
+            </span>
+            <span className="block truncate text-[0.8rem] text-ink-soft">Venter på første innlogging</span>
+          </span>
+          {!searching && (
+            <Icon
+              name="chevronRight"
+              size={17}
+              className={`shrink-0 text-ink-faint transition-transform duration-150 ${expanded ? 'rotate-90' : ''}`}
+            />
+          )}
+        </button>
+        {expanded && (
+          <ul id="medlemmer-invitasjoner" className="admin-subrows">
+            {invites.map((inv) => (
+              <li key={inv.email} className="flex items-center gap-x-3 py-2.5 pl-4 pr-2 sm:pl-5 sm:pr-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[0.92rem] font-semibold text-ink">{inv.name ?? inv.email}</span>
+                  {inv.name && <span className="block truncate text-[0.8rem] text-ink-soft">{inv.email}</span>}
+                  <span className="block truncate text-[0.8rem] text-ink-soft">
+                    {inv.roleName}
+                    {inv.partNames.length > 0 ? ` · ${inv.partNames.join(' · ')}` : ' · ingen stemme'}
+                  </span>
+                </span>
+                <ActionMenu
+                  iconOnly
+                  label={`Mer for invitasjonen til ${inv.name ?? inv.email}`}
+                  title={inv.name ?? inv.email}
+                  items={[
+                    {
+                      label: 'Kopier e-postadressen',
+                      hint: inv.email,
+                      icon: 'share',
+                      onSelect: () => void copyEmail(inv.email),
+                    },
+                    {
+                      label: 'Trekk tilbake invitasjonen',
+                      hint: 'Du bekrefter i neste steg',
+                      icon: 'close',
+                      tone: 'danger',
+                      onSelect: () => onRevoke(inv),
+                    },
+                  ]}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -371,7 +501,7 @@ function AdminProfileModal({
     <Modal open onClose={onClose} title="Rediger medlem" kicker="Administrasjon">
       <form onSubmit={submit} className="space-y-4">
         <div className="rounded-xl border border-line bg-paper-sunken/50 px-4 py-3">
-          <p className="font-mono text-[0.62rem] uppercase tracking-[0.12em] text-ink-faint">Innloggingsadresse</p>
+          <p className="text-[0.78rem] font-medium text-ink-soft">Innloggingsadresse</p>
           <p className="mt-1 truncate text-sm font-semibold text-ink">{member.email}</p>
         </div>
         <Field label="Navn">
@@ -396,9 +526,7 @@ function AdminProfileModal({
             Send tilbakestillingslenke
           </Button>
         </div>
-        <p className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-faint">
-          Profilendringer og passordreset loggføres.
-        </p>
+        <p className="text-[0.78rem] text-ink-soft">Profilendringer og passordreset loggføres.</p>
         <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="ghost" onClick={onClose} className="w-full sm:w-auto">
             Avbryt
@@ -460,23 +588,23 @@ function LeaderModal({
         {leadable.map((p) => (
           <label
             key={p.id}
-            className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-paper-sunken"
+            className="flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-paper-sunken pointer-coarse:min-h-11"
           >
             <input
               type="checkbox"
               checked={selected.has(p.id)}
               onChange={() => toggle(p.id)}
-              className="h-4 w-4 cursor-pointer accent-[var(--brass)]"
+              className="h-4 w-4 cursor-pointer accent-[var(--brass)] pointer-coarse:h-5 pointer-coarse:w-5"
             />
             <span className="text-sm text-ink">{p.nameNo}</span>
           </label>
         ))}
       </div>
-      <div className="flex justify-end gap-2 pt-4">
-        <Button type="button" variant="ghost" onClick={onClose}>
+      <div className="flex flex-col-reverse gap-2 pt-4 sm:flex-row sm:justify-end">
+        <Button type="button" variant="ghost" onClick={onClose} className="w-full sm:w-auto">
           Avbryt
         </Button>
-        <Button type="button" variant="primary" loading={saving} onClick={submit}>
+        <Button type="button" variant="primary" loading={saving} onClick={submit} className="w-full sm:w-auto">
           Lagre
         </Button>
       </div>
@@ -598,9 +726,7 @@ function InviteModal({
               kind === 'error' ? 'border-danger/40 bg-danger/5' : 'border-line bg-paper-sunken/50'
             }`}
           >
-            <p className="font-mono text-[0.62rem] uppercase tracking-[0.12em] text-ink-faint">
-              Hva skjedde med e-posten
-            </p>
+            <p className="text-[0.78rem] font-medium text-ink-soft">Hva skjedde med e-posten</p>
             <p className="mt-1.5 text-sm leading-relaxed text-ink">{message}</p>
             {receipt.delivery === 'logged' && (
               <p className="mt-2 text-xs leading-relaxed text-ink-soft">
@@ -610,8 +736,8 @@ function InviteModal({
           </div>
           <div className="rounded-xl border border-line px-4 py-3">
             <p className="truncate text-sm font-semibold text-ink">{receipt.name ?? receipt.email}</p>
-            {receipt.name && <p className="truncate font-mono text-[0.64rem] text-ink-faint">{receipt.email}</p>}
-            <p className="mt-1.5 font-mono text-[0.64rem] uppercase tracking-[0.1em] text-ink-faint">
+            {receipt.name && <p className="truncate text-[0.8rem] text-ink-soft">{receipt.email}</p>}
+            <p className="mt-1 text-[0.8rem] text-ink-soft">
               {receipt.roleName}
               {receipt.partNames.length > 0 ? ` · ${receipt.partNames.join(' · ')}` : ' · ingen stemme'}
             </p>
@@ -680,8 +806,8 @@ function InviteModal({
         <div>
           <div className="mb-1.5 flex items-baseline justify-between gap-2">
             <span className="text-[0.8rem] font-medium text-ink-soft">Stemmer</span>
-            <span className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-faint">
-              {partIds.length}/{MAX_INVITE_PARTS}
+            <span className="text-[0.78rem] tabular-nums text-ink-soft">
+              {partIds.length} av {MAX_INVITE_PARTS}
             </span>
           </div>
           {chosen.length > 0 ? (
@@ -698,11 +824,11 @@ function InviteModal({
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm text-ink">{part.nameNo}</span>
-                      <span className="block font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-faint">
+                      <span className="block text-[0.78rem] text-ink-soft">
                         {sectionLabels[part.section] ?? 'Annen seksjon'}
                       </span>
                     </span>
-                    {i === 0 && <Stamp tone="brass">Hovedstemme</Stamp>}
+                    {i === 0 && <span className="shrink-0 text-[0.78rem] font-medium text-brass-strong">Hovedstemme</span>}
                   </label>
                   <button
                     type="button"
