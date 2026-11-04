@@ -249,17 +249,16 @@ function AgendaRow({
         data-selected={selected}
         className="agenda-row link-quiet -mx-2 flex items-center gap-3.5 px-2 py-2.5"
       >
+        {/* DateTile har med full dato for skjermlesere («onsdag 11. november, »). */}
         <DateTile iso={date} tone={isNext ? 'brass' : past ? 'muted' : 'plain'} />
         <span className={`min-w-0 flex-1 ${past ? 'opacity-60' : ''}`}>
-          <span className="flex items-baseline gap-2">
-            <span className="display-title min-w-0 truncate text-[1.02rem] font-semibold text-ink">{event.title}</span>
-            {isNext && <RowMark tone="brass">Neste</RowMark>}
-          </span>
-          <span className="mt-0.5 flex items-center gap-2 text-xs text-ink-soft">
-            <span className="min-w-0 truncate">
-              {eventTimeLabel(event)}
-              {event.location ? ` · ${event.location}` : ''}
+          {/* Merkene står på tittellinja, så tid og sted får hele bredden og
+              kan bryte i stedet for å kuttes. */}
+          <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="display-title min-w-0 break-words text-[1.02rem] font-semibold leading-snug text-ink">
+              {event.title}
             </span>
+            {isNext && <RowMark tone="brass">Neste</RowMark>}
             {hasPlan && (
               <RowMark tone="brass" title="Øvingsplan lagt inn">
                 <PlanGlyph />
@@ -272,8 +271,12 @@ function AgendaRow({
               </RowMark>
             )}
           </span>
+          <span className="mt-0.5 block break-words text-[0.8rem] leading-snug text-ink-soft">
+            {eventTimeLabel(event)}
+            {event.location ? ` · ${event.location}` : ''}
+          </span>
         </span>
-        <span className="hidden shrink-0 font-mono text-[0.6rem] uppercase tracking-[0.12em] text-ink-faint sm:inline md:hidden lg:inline">
+        <span className="hidden shrink-0 text-xs text-ink-faint sm:inline md:hidden lg:inline">
           {relativeDays(date)}
         </span>
       </Link>
@@ -324,7 +327,7 @@ function EventPane({ event, isNext, enabled }: { event: CalendarEvent; isNext: b
   return (
     <article className="next-card">
       <div className="flex gap-4 px-5 pb-4 pt-6">
-        <DateTile iso={date} size="lg" tone={isNext ? 'brass' : 'plain'} />
+        <DateTile iso={date} size="lg" tone={isNext ? 'brass' : 'plain'} srLabel={false} />
         <div className="min-w-0 flex-1 pt-0.5">
           <p className="kicker mb-1.5">
             {isNext ? 'Neste · ' : ''}
@@ -357,8 +360,8 @@ function EventPane({ event, isNext, enabled }: { event: CalendarEvent; isNext: b
         <p className="whitespace-pre-line px-5 pb-4 text-sm leading-relaxed text-ink-soft">{event.description}</p>
       )}
 
-      <div className="next-card-row px-5 py-4">
-        <p className="kicker mb-3">Ditt oppmøte</p>
+      <div className="next-card-row px-5 py-3.5">
+        <h3 className="sr-only">Ditt oppmøte</h3>
         {detail?.found ? (
           <RsvpControl
             occurrenceKey={event.occurrenceKey}
@@ -369,6 +372,7 @@ function EventPane({ event, isNext, enabled }: { event: CalendarEvent; isNext: b
               // Fraværsmerket i agendaen kommer fra kalenderens loader.
               await router.invalidate()
             }}
+            compact
           />
         ) : failed ? (
           <p className="text-sm text-ink-soft">Fikk ikke hentet oppmøtet. Åpne hendelsen for å svare.</p>
@@ -402,7 +406,7 @@ function EventPane({ event, isNext, enabled }: { event: CalendarEvent; isNext: b
                     {item.workId ? (item.workTitle ?? 'Ukjent verk') : (item.customTitle ?? 'Slettet fra arkivet')}
                   </span>
                   {(item.workComposer || item.note) && (
-                    <span className="mt-0.5 block text-xs text-ink-soft">
+                    <span className="mt-0.5 block text-[0.8rem] text-ink-soft">
                       {[item.workComposer, item.note].filter(Boolean).join(' · ')}
                     </span>
                   )}
@@ -415,9 +419,9 @@ function EventPane({ event, isNext, enabled }: { event: CalendarEvent; isNext: b
 
       {detail?.found && (
         <div className="next-card-row flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-5 py-3.5">
-          <p className="text-sm text-ink-soft">
-            <span className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-brass">Oppmøte</span>{' '}
-            <span className="ml-1 text-ink">{attendanceSummary(detail.counts)}</span>
+          <p className="text-sm">
+            <span className="font-semibold text-ink">Oppmøte</span>
+            <span className="text-ink-soft"> · {attendanceSummary(detail.counts)}</span>
           </p>
           {detail.canManageAttendance && (
             <Link to="/fravaer" className="link-brass hit text-sm">
