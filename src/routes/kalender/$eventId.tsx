@@ -196,7 +196,7 @@ function PlanSection({ data, occurrenceKey }: { data: Detail; occurrenceKey: str
         className="mb-1"
         action={
           canEdit && !editing ? (
-            <Button size="sm" onClick={() => setEditing(true)}>
+            <Button size="sm" className="pointer-coarse:min-h-11" onClick={() => setEditing(true)}>
               {empty ? 'Lag øvingsplan' : 'Rediger øvingsplan'}
             </Button>
           ) : undefined
@@ -207,13 +207,13 @@ function PlanSection({ data, occurrenceKey }: { data: Detail; occurrenceKey: str
         <div className="surface-group mt-3 flex flex-wrap items-center justify-between gap-2 border-brass/40 bg-[var(--brass-soft)] px-3 py-2.5">
           <p className="px-1 text-sm font-medium text-brass-strong">Redigerer øvingsplanen</p>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => setPickerOpen(true)}>
+            <Button size="sm" className="pointer-coarse:min-h-11" onClick={() => setPickerOpen(true)}>
               + Verk
             </Button>
-            <Button size="sm" onClick={() => setCustomOpen(true)}>
+            <Button size="sm" className="pointer-coarse:min-h-11" onClick={() => setCustomOpen(true)}>
               + Fritekst
             </Button>
-            <Button size="sm" variant="primary" onClick={() => setEditing(false)}>
+            <Button size="sm" className="pointer-coarse:min-h-11" variant="primary" onClick={() => setEditing(false)}>
               Ferdig
             </Button>
           </div>
