@@ -1169,9 +1169,7 @@ select.field-input {
     z-index: 30;
     margin: -1.5rem -1rem 0;
     padding: 0 1rem;
-    background: color-mix(in srgb, var(--paper) 92%, transparent);
-    -webkit-backdrop-filter: saturate(1.4) blur(14px);
-    backdrop-filter: saturate(1.4) blur(14px);
+    background: var(--paper);
     border-bottom: 1px solid var(--line);
   }
   @media (min-width: 640px) {
@@ -1612,9 +1610,7 @@ select.field-input {
       z-index: 20;
       margin: 1.25rem -1rem 0;
       padding: 0.55rem 1rem;
-      background: color-mix(in srgb, var(--paper) 94%, transparent);
-      -webkit-backdrop-filter: saturate(1.4) blur(14px);
-      backdrop-filter: saturate(1.4) blur(14px);
+      background: var(--paper);
       border-top: 1px solid var(--line);
     }
     body:has(.comment-dock textarea:focus) .comment-dock {
