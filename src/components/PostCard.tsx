@@ -131,11 +131,11 @@ export function PostCard({ post, draft }: { post: PostListItem; draft?: boolean 
 
       <Link to="/beskjeder/$postId" params={{ postId: post.id }} className="link-quiet mt-3 block">
         {post.title && (
-          <span className="display-title block text-[1.1rem] font-semibold leading-snug text-ink sm:text-[1.22rem]">
+          <span className="display-title block wrap-anywhere text-[1.1rem] font-semibold leading-snug text-ink sm:text-[1.22rem]">
             {post.title}
           </span>
         )}
-        <span className="mt-1 block text-sm leading-relaxed text-ink-soft">{post.excerpt}</span>
+        <span className="mt-1 block wrap-anywhere text-sm leading-relaxed text-ink-soft">{post.excerpt}</span>
       </Link>
 
       <PostImageGrid images={post.images} total={post.imageCount} />

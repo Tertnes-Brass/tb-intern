@@ -252,7 +252,7 @@ function HubPage() {
               <li key={post.id} className="hairline-row">
                 <Link to="/beskjeder/$postId" params={{ postId: post.id }} className="link-quiet block py-3">
                   <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                    <span className="display-title text-base font-semibold text-ink">{post.heading}</span>
+                    <span className="display-title min-w-0 wrap-anywhere text-base font-semibold text-ink">{post.heading}</span>
                     {(post.official || post.fromArchive) && <Stamp tone="brass">{post.fromArchive ? 'Fra notearkivar' : 'Fra styret'}</Stamp>}
                     {post.important && <Stamp tone="oxblood">Viktig</Stamp>}
                   </span>
@@ -263,7 +263,7 @@ function HubPage() {
                       ? ` · ${post.commentCount} ${post.commentCount === 1 ? 'kommentar' : 'kommentarer'}`
                       : ''}
                   </span>
-                  <span className="mt-1 block max-w-2xl text-sm leading-relaxed text-ink-soft">{post.excerpt}</span>
+                  <span className="mt-1 block max-w-2xl wrap-anywhere text-sm leading-relaxed text-ink-soft">{post.excerpt}</span>
                 </Link>
               </li>
             ))}
