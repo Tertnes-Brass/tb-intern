@@ -1692,3 +1692,42 @@ select.field-input {
   padding: 0.6rem 1rem;
   line-height: 1.4;
 }
+
+@layer components {
+  /* Trådlista i forumet: én liste, like rader, uleste til høyre. */
+  .forum-list {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper-raised);
+  }
+  .forum-list > li + li {
+    border-top: 1px solid var(--line);
+  }
+  .forum-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 64px;
+    padding: 0.8rem 0.9rem 0.8rem 1rem;
+    text-decoration: none;
+    transition: background-color 0.15s;
+  }
+  .forum-row:hover,
+  .forum-row:active {
+    background: var(--paper-sunken);
+  }
+  .forum-row-chevron svg {
+    width: 7px;
+    height: 12px;
+    color: var(--ink-faint);
+    transform: rotate(180deg);
+  }
+  @media (max-width: 639.98px) {
+    .forum-list {
+      margin-inline: -1rem;
+      border-inline: 0;
+      border-radius: 0;
+    }
+  }
+}

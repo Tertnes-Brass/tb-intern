@@ -5,7 +5,9 @@ import { useForumRefresh } from '../../components/useForumRefresh'
 import { useThreadMark } from '../../components/useThreadMark'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
-import { BackArrow, Button, Field, Stamp } from '../../components/ui'
+import { Avatar, BackArrow, Button, buttonClass, Field, Stamp } from '../../components/ui'
+import { Glyph } from '../../components/compose/Composer'
+import { shortWhen } from '../../components/compose/when'
 import { editForumText, getForumTopic, markForumRepliesRead, replyToForum, searchForumMentions, setForumFollow, setForumLock } from '../../server/forum'
 import { Icon } from '../../components/Icons'
 import { refreshShellCounts } from '../../lib/shell-events'
@@ -74,14 +76,15 @@ function ForumText({ id, kind, body, author, createdAt, updatedAt, canEdit, unre
     return () => { cancelled = true; observer.disconnect(); clearInterval(retry); document.removeEventListener('visibilitychange', mark) }
   }, [id, topicId, unread])
   const name = displayName(author)
-  return <article ref={article} id={domId} className={kind === 'reply' ? `thread-item -mx-2 space-y-1.5 px-2 py-3 ${marked ? 'thread-marked' : ''}` : 'space-y-2 border-b border-line pb-4'}>
-    <div className="flex flex-wrap items-center gap-x-2 text-xs text-ink-soft"><p><strong className="text-ink">{name}</strong> · {new Date(createdAt).toLocaleString('nb-NO', { timeZone: 'Europe/Oslo', dateStyle: 'short', timeStyle: 'short' })}{updatedAt > createdAt && ' · Redigert'}</p>
-      {unread && <span className="font-semibold text-brass-strong">Nytt</span>}
-      {!editing && (onReply || canEdit) && <span className="ml-auto flex items-center">
-        {onReply && <button type="button" aria-label={`Svar ${name}`} className="inline-flex cursor-pointer items-center gap-1 px-2 py-1 text-xs text-ink-faint hover:text-ink" onClick={onReply}><Icon name="reply" size={13} />Svar</button>}
-        {canEdit && <button type="button" className="cursor-pointer px-2 py-1 text-xs text-ink-faint hover:text-ink" onClick={() => { const initial = forumMentionDraft(body, mentions); setDraft(initial.text); setChosen(initial.chosen); setEditing(true) }}>Rediger</button>}
+  return <article ref={article} id={domId} className={kind === 'reply' ? `thread-item -mx-2 space-y-1.5 px-2 py-3 ${marked ? 'thread-marked' : ''}` : 'space-y-3'}>
+    {/* Trådstarten har navn og tid i sidehodet; her står bare «Rediger». */}
+    {(kind === 'reply' || (canEdit && !editing)) && <div className="flex flex-wrap items-center gap-x-2 text-[0.8rem] text-ink-faint">{kind === 'reply' && <><Avatar name={name} size="sm" /><p><strong className="font-semibold text-ink">{name}</strong> · <time title={new Date(createdAt).toLocaleString('nb-NO', { timeZone: 'Europe/Oslo', dateStyle: 'short', timeStyle: 'short' })}>{shortWhen(createdAt)}</time>{updatedAt > createdAt && ' · Redigert'}</p></>}
+      {unread && <span className="h-2 w-2 rounded-full bg-brass" title="Nytt"><span className="sr-only">Nytt</span></span>}
+      {!editing && (onReply || canEdit) && <span className="ml-auto flex items-center gap-1">
+        {onReply && <button type="button" aria-label={`Svar ${name}`} className="hit inline-flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-xs text-ink-faint hover:bg-paper-sunken hover:text-ink" onClick={onReply}><Icon name="reply" size={13} />Svar</button>}
+        {canEdit && <button type="button" className="hit cursor-pointer rounded-full px-2 py-1 text-xs text-ink-faint hover:bg-paper-sunken hover:text-ink" onClick={() => { const initial = forumMentionDraft(body, mentions); setDraft(initial.text); setChosen(initial.chosen); setEditing(true) }}>Rediger</button>}
       </span>}
-    </div>
+    </div>}
     {context}
     {editing ? <form className="space-y-3" onSubmit={async (e) => {
       e.preventDefault(); if (busy) return; setBusy(true); setError('')
@@ -90,9 +93,48 @@ function ForumText({ id, kind, body, author, createdAt, updatedAt, canEdit, unre
     }}>
       <Field label="Rediger tekst" hint="Skriv @ for å omtale noen."><MentionTextarea className="field-input min-h-40" required maxLength={20000} value={draft} onChange={setDraft} chosen={chosen} onChosenChange={setChosen} search={(query) => searchForumMentions({ data: { query } })} /></Field>
       <div className="flex gap-2"><Button type="submit" disabled={busy || !draft.trim()}>Lagre</Button><Button type="button" disabled={busy} onClick={() => setEditing(false)}>Avbryt</Button></div>
-    </form> : <p className="whitespace-pre-wrap break-words leading-relaxed" dangerouslySetInnerHTML={{ __html: forumMentionHtml(body, mentions) }} />}
+    </form> : <p className={`whitespace-pre-wrap break-words leading-relaxed ${kind === 'topic' ? 'text-[1.02rem] text-ink' : 'text-[0.95rem] text-ink-soft'}`} dangerouslySetInnerHTML={{ __html: forumMentionHtml(body, mentions) }} />}
     {error && <p role="alert" className="text-danger">{error}</p>}
   </article>
+}
+
+/** Feltet for et nytt svar på tråden: fast nederst på berøringsskjerm, som kommentarfeltet på veggen. */
+function ReplyDock({ draft, onDraft, busy, error, onSubmit }: {
+  draft: Draft; onDraft: (draft: Draft) => void; busy: boolean; error: string; onSubmit: () => void
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight + 2, 160)}px`
+  }, [draft.body])
+  return <form className="comment-dock" onSubmit={(e) => { e.preventDefault(); onSubmit() }}>
+    {error && <p role="alert" className="mb-2 text-sm text-danger">{error}</p>}
+    <div className="flex items-end gap-2">
+      <MentionTextarea
+        textareaRef={ref}
+        wrapperClassName="min-w-0 flex-1"
+        className="field-input comment-dock-input"
+        rows={1}
+        required
+        maxLength={20000}
+        aria-label="Svar på tråden"
+        aria-describedby="forum-reply-hint"
+        placeholder="Svar på tråden …"
+        value={draft.body}
+        onChange={(body) => onDraft({ ...draft, body })}
+        chosen={draft.chosen}
+        onChosenChange={(chosen) => onDraft({ ...draft, chosen })}
+        search={(query) => searchForumMentions({ data: { query } })}
+        onKeyDown={(e) => { if (isSubmitShortcut(e)) { e.preventDefault(); onSubmit() } }}
+      />
+      <Button type="submit" variant="primary" loading={busy} disabled={!draft.body.trim()} aria-label="Publiser svar" className="comment-dock-send">
+        {!busy && <Glyph name="send" size={18} />}
+      </Button>
+    </div>
+    <p id="forum-reply-hint" className="sr-only">Skriv @ for å velge et medlem eller Alle i korpset. Vil du svare noen bestemt, trykk «Svar» under svaret deres.</p>
+  </form>
 }
 
 /**
@@ -142,8 +184,7 @@ function TopicPage() {
   const page = data.page
   const navigate = Route.useNavigate()
   const router = useRouter()
-  const [body, setBody] = useState('')
-  const [chosen, setChosen] = useState<MentionUser[]>([])
+  const [topDraft, setTopDraft] = useState<Draft>(EMPTY_DRAFT)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [replying, setReplying] = useState<ReplyTarget | null>(null)
@@ -211,48 +252,57 @@ function TopicPage() {
   }
 
   const sendTopLevel = async () => {
-    const text = forumMarkers(body, chosen)
+    const text = forumMarkers(topDraft.body, topDraft.chosen)
     if (busy || !text.trim()) return
     setBusy(true); setError('')
     try {
       const result = await replyToForum({ data: { topicId: topic.id, body: text } })
-      setBody(''); setChosen([])
+      setTopDraft(EMPTY_DRAFT)
       await navigate({ search: { page: result.page, svar: result.id }, replace: true }).catch(() => undefined)
     }
     catch (e) { setError(e instanceof Error ? e.message : 'Kunne ikke sende svaret.') } finally { setBusy(false) }
   }
 
-  return <div className="mx-auto max-w-3xl space-y-5">
-    <Link to="/forum" search={{ page: 0 }} className="back-link"><BackArrow />Forum</Link>
-    <header className="space-y-3"><h1 className="display-title break-words text-3xl font-semibold sm:text-4xl">{topic.title}</h1>
-      {topic.locked && <Stamp>Låst for nye svar</Stamp>}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" disabled={busy} aria-pressed={data.following} title={data.following ? 'Du får varsel om nye svar i denne tråden' : undefined} onClick={async () => {
-          setBusy(true); setError(''); try { await setForumFollow({ data: { topicId: topic.id, following: !data.following } }); await router.invalidate() }
-          catch (e) { setError(e instanceof Error ? e.message : 'Kunne ikke endre varslene.') } finally { setBusy(false) }
-        }}><Icon name="bell" size={14} />{data.following ? 'Slå av varsler' : 'Følg tråden'}</Button>
-        {data.canModerate && <Button size="sm" disabled={busy} onClick={async () => {
+  return <div className="mx-auto max-w-2xl">
+    <Link to="/forum" search={{ page: 0 }} className="back-link mb-3"><BackArrow />Forum</Link>
+    <header className="rise">
+      {topic.locked && <Stamp className="mb-2">Låst for nye svar</Stamp>}
+      <h1 className="display-title break-words text-[clamp(1.75rem,5vw,2.5rem)] font-semibold leading-[1.1] text-ink">{topic.title}</h1>
+      <div className="mt-4 flex items-center gap-3 border-y border-line py-3">
+        <Avatar name={displayName(data.author)} />
+        <p className="min-w-0 flex-1 text-[0.8rem] leading-snug text-ink-faint">
+          <strong className="block truncate text-[0.9rem] font-semibold text-ink">{displayName(data.author)}</strong>
+          {shortWhen(topic.createdAt)}{topic.updatedAt > topic.createdAt && ' · Redigert'}
+        </p>
+        <Button size="sm" variant={data.following ? 'secondary' : 'ghost'} disabled={busy} aria-pressed={data.following}
+          title={data.following ? 'Du får varsel om nye svar i tråden. Trykk for å slå av.' : 'Få varsel om nye svar i tråden. Du får uansett varsel når noen nevner deg eller svarer deg.'}
+          onClick={async () => {
+            setBusy(true); setError(''); try { await setForumFollow({ data: { topicId: topic.id, following: !data.following } }); await router.invalidate() }
+            catch (e) { setError(e instanceof Error ? e.message : 'Kunne ikke endre varslene.') } finally { setBusy(false) }
+          }}><Icon name="bell" size={15} />{data.following ? 'Følger' : 'Følg'}</Button>
+        {data.canModerate && <Button size="sm" variant="ghost" disabled={busy} onClick={async () => {
           setBusy(true); setError(''); try { await setForumLock({ data: { id: topic.id, locked: !topic.locked } }); await router.invalidate() }
           catch (e) { setError(e instanceof Error ? e.message : 'Kunne ikke endre tråden.') } finally { setBusy(false) }
-        }}>{topic.locked ? 'Åpne tråden igjen' : 'Lås tråden'}</Button>}
+        }}>{topic.locked ? 'Åpne' : 'Lås'}<span className="sr-only"> tråden</span></Button>}
       </div>
-      <p className="text-xs text-ink-faint">{data.following
-        ? 'Du følger tråden og får varsel om nye svar på enheter der du har slått på varsler.'
-        : 'Du får fortsatt varsel når noen nevner deg eller svarer på noe du har skrevet.'}</p>
     </header>
-    <ForumText key={topic.id} {...topic} kind="topic" mentions={data.mentions} author={data.author} canEdit={data.canEdit} />
-    {error && <p role="alert" className="text-danger">{error}</p>}
-    {topic.locked ? <p className="text-ink-soft">Tråden er låst. Du kan fortsatt lese samtalen.</p> : <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); void sendTopLevel() }}>
-      <Field label="Svar på tråden" hint="Vil du svare noen bestemt, trykk «Svar» under svaret deres. Skriv @ for å velge et medlem eller Alle i korpset."><MentionTextarea className="field-input min-h-20" required maxLength={20000} value={body} onChange={setBody} chosen={chosen} onChosenChange={setChosen} search={(query) => searchForumMentions({ data: { query } })}
-        onKeyDown={(e) => { if (isSubmitShortcut(e)) { e.preventDefault(); void sendTopLevel() } }} /></Field>
-      <Button type="submit" variant="primary" disabled={busy || !body.trim()}>{busy ? 'Sender …' : 'Publiser svar'}</Button>
-    </form>}
-    <h2 className="display-title text-2xl">Svar</h2>
-    {!data.replies.length && <p className="text-ink-soft">{page ? 'Ingen flere svar.' : 'Ingen svar ennå.'}</p>}
-    <div className="divide-y divide-line">{data.replies.map(renderThread)}</div>
-    {(page > 0 || data.hasMore) && <nav aria-label="Sider med svar" className="flex justify-between">
-      {page > 0 ? <Link to="/forum/$topicId" params={{ topicId: topic.id }} search={{ page: page - 1 }}>← Nyere svar</Link> : <span />}
-      {data.hasMore && <Link to="/forum/$topicId" params={{ topicId: topic.id }} search={{ page: page + 1 }}>Eldre svar →</Link>}
-    </nav>}
+    <div className="rise mt-5" style={{ animationDelay: '60ms' }}>
+      <ForumText key={topic.id} {...topic} kind="topic" mentions={data.mentions} author={data.author} canEdit={data.canEdit} />
+    </div>
+    {/* Feil fra «Følg»/«Lås» og fra svaret vises i svarfeltet når det står der. */}
+    {error && (topic.locked || replying) && <p role="alert" className="mt-3 text-danger">{error}</p>}
+    <section className="rise mt-8" style={{ animationDelay: '120ms' }} aria-label="Svar">
+      <h2 className="kicker mb-1">Svar{page > 0 ? ` · side ${page + 1}` : ''}</h2>
+      {!data.replies.length && <p className="py-3 text-sm text-ink-soft">{page ? 'Ingen flere svar.' : topic.locked ? 'Ingen svar.' : 'Ingen svar ennå — skriv det første nedenfor.'}</p>}
+      <div className="divide-y divide-line">{data.replies.map(renderThread)}</div>
+      {(page > 0 || data.hasMore) && <nav aria-label="Sider med svar" className="mt-3 flex justify-between">
+        {page > 0 ? <Link to="/forum/$topicId" params={{ topicId: topic.id }} search={{ page: page - 1 }} className={buttonClass('ghost', 'sm')}>← Nyere svar</Link> : <span />}
+        {data.hasMore && <Link to="/forum/$topicId" params={{ topicId: topic.id }} search={{ page: page + 1 }} className={buttonClass('ghost', 'sm')}>Eldre svar →</Link>}
+      </nav>}
+    </section>
+    {topic.locked
+      ? <p className="mt-6 rounded-[12px] border border-dashed border-line-strong bg-paper-sunken px-4 py-3 text-sm text-ink-soft">Tråden er låst. Du kan fortsatt lese samtalen.</p>
+      // Skjult mens man svarer noen bestemt, så det ikke står to skrivefelt på skjermen.
+      : !replying && <ReplyDock draft={topDraft} onDraft={setTopDraft} busy={busy} error={error} onSubmit={() => void sendTopLevel()} />}
   </div>
 }
