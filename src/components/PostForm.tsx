@@ -499,7 +499,12 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
           aria-expanded={optionsOpen}
           aria-controls="composer-valg"
           active={optionsOpen}
-          onClick={() => setOptionsOpen(!optionsOpen)}
+          onClick={() => {
+            const opening = !optionsOpen
+            setOptionsOpen(opening)
+            // Valgene åpner seg under teksten — vis dem, i stedet for at de havner under bretten.
+            if (opening) requestAnimationFrame(() => document.getElementById('composer-valg')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))
+          }}
         >
           Valg
           <span className="min-w-0 truncate font-normal text-ink-faint max-[360px]:hidden">{optionsSummary}</span>
