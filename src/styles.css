@@ -1101,12 +1101,131 @@ select.field-input {
 }
 
 /* ---------- Notestativet (/noter/stativ/$projectId) ---------- */
+/* Stativet er alltid mørkt, uansett tema: noten skal være det lyseste i
+   rommet. Egne tokens, så Notestativ.tsx og arkene ikke har løse hex-verdier.
+   På :root fordi `useStandStatusBar` leser `--stand-bg` til meta-taggen. */
+:root {
+  --stand-bg: #15120f;
+  --stand-bar: rgb(21 18 15 / 0.88);
+  --stand-raised: #1f1b16;
+  --stand-raised-2: #2b251e;
+  --stand-sunken: #0f0d0b;
+  --stand-ink: #ede4cf;
+  --stand-ink-soft: #d8cdb4;
+  --stand-muted: #b5a98b;
+  --stand-accent: #e7c468;
+  --stand-accent-soft: rgb(231 196 104 / 0.13);
+  --stand-hover: rgb(255 255 255 / 0.06);
+  --stand-line: rgb(255 255 255 / 0.1);
+  --stand-line-strong: rgb(255 255 255 / 0.22);
+  /* Arket: hvitt papir, og varmt mørkt i nattlys. */
+  --stand-paper: #ffffff;
+  --stand-paper-night: #1c1915;
+  --stand-paper-ink: #8e8468;
+}
+.stand-bar {
+  background: var(--stand-bar);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.stand-paper {
+  background: var(--stand-paper);
+}
 /* Nattlys: arket inverteres til lys skrift på mørkt, litt varmt. */
 .stand-night canvas {
   filter: invert(0.9) sepia(0.25) brightness(0.95);
 }
-.stand-night > div > div {
-  background: #1c1915;
+.stand-night .stand-paper {
+  background: var(--stand-paper-night);
+}
+/* Hel side / To sider: noten fyller flaten innenfor de trygge kantene. Ingen
+   fast linje ligger over den; menyene kommer og går (Notestativ.tsx). */
+.stand-stage {
+  padding: calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 8px)
+    calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 8px);
+}
+.stand-stage > div {
+  height: 100%;
+}
+/* Pillen nederst i sidevisningene: forrige · side 1–2 av 4 · neste. */
+.stand-pill {
+  background: var(--stand-bar);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--stand-line);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.45);
+}
+
+/* Arkene (Program, Visning): sidepanel fra høyre på iPad og bredere, bunnark
+   på telefon stående. Mørke, som stativet. */
+dialog.stand-sheet {
+  position: fixed;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--stand-raised);
+  color: var(--stand-ink);
+  overflow: hidden;
+  overscroll-behavior: contain;
+  box-shadow: 0 0 60px rgb(0 0 0 / 0.55);
+}
+dialog.stand-sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+dialog.stand-sheet::backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
+dialog.stand-sheet:focus,
+dialog.stand-sheet:focus-visible {
+  outline: none;
+}
+.stand-sheet-grab > span {
+  display: block;
+  width: 38px;
+  height: 5px;
+  margin: 0 auto;
+  border-radius: 9999px;
+  background: var(--stand-line-strong);
+}
+@media (min-width: 700px) {
+  dialog.stand-sheet {
+    inset: 0 0 0 auto;
+    width: min(400px, 88vw);
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    border-left: 1px solid var(--stand-line);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0;
+  }
+  dialog.stand-sheet[open] {
+    animation: stand-panel-in 0.28s cubic-bezier(0.2, 0.75, 0.25, 1);
+  }
+  .stand-sheet-grab {
+    display: none;
+  }
+}
+@media (max-width: 699.98px) {
+  dialog.stand-sheet {
+    inset: auto 0 0 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: 86dvh;
+    border-top: 1px solid var(--stand-line);
+    border-radius: 20px 20px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  dialog.stand-sheet[open] {
+    animation: sheet-in 0.32s cubic-bezier(0.2, 0.75, 0.25, 1);
+  }
+}
+@keyframes stand-panel-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
 }
 /* Neste/forrige stykke glir inn fra den siden man sveipet mot. */
 @keyframes stand-in-next {
@@ -1137,7 +1256,8 @@ select.field-input {
 }
 @media (prefers-reduced-motion: reduce) {
   .stand-slide-next,
-  .stand-slide-prev {
+  .stand-slide-prev,
+  dialog.stand-sheet[open] {
     animation: none;
   }
 }

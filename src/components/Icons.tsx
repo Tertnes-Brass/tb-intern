@@ -139,6 +139,42 @@ const PATHS = {
       <path d="M19.5 4.5v4h-4" />
     </>
   ),
+  /** Nummerert liste — programmet på notestativet. */
+  list: (
+    <>
+      <path d="M9.5 6.5h11M9.5 12h11M9.5 17.5h11" />
+      <path d="M4 5.5l1.2-.7v3.7M3.8 11.2a1.1 1.1 0 0 1 2 .6c0 .9-2 1.6-2 2.7h2.1M3.9 16.3h1.9l-1 1.2a1 1 0 1 1-.9 1.5" />
+    </>
+  ),
+  /** Tre prikker — «mer». */
+  more: (
+    <>
+      <circle cx="5.5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="18.5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+    </>
+  ),
+  /** Notestativets visninger: tilpass bredde (rull), hel side, to sider. */
+  viewScroll: (
+    <>
+      <path d="M5.5 2.5v6.5a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V2.5" />
+      <path d="M5.5 21.5V15a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v6.5" />
+      <path d="M8.5 6h7M8.5 17.5h7" />
+    </>
+  ),
+  viewPage: (
+    <>
+      <rect x="6" y="3" width="12" height="18" rx="1" />
+      <path d="M8.8 7.5h6.4M8.8 11h6.4M8.8 14.5h6.4" />
+    </>
+  ),
+  viewSpread: (
+    <>
+      <rect x="2.5" y="5" width="9" height="14" rx="1" />
+      <rect x="12.5" y="5" width="9" height="14" rx="1" />
+      <path d="M4.8 9h4.4M4.8 12h4.4M4.8 15h4.4M14.8 9h4.4M14.8 12h4.4M14.8 15h4.4" />
+    </>
+  ),
 } as const
 
 export type IconName = keyof typeof PATHS
