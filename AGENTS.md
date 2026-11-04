@@ -155,6 +155,22 @@ Den skal ikke gjengi områdenes oversikter i miniatyr — se
   `src/server/board.ts`, så kallstedene i styreområdet er uendret. `api` og
   `onRead` bor i refs inne i `ChatThread`: begge er objektliteraler hos
   kalleren, og ville ellers restartet polling og lest-markering ved hver render.
+  **Arbeidsflaten (november 2026):** `ChatPanel` er en meldingsapp, ikke en
+  side — ingen sideoverskrift (h1 er `sr-only`), og flaten fyller plassen ned
+  til fanelinjen. Det ENESTE som ruller er historikken; skrivefeltet står fast
+  nederst. Høyden måles i JS (`useFillHeight` → CSS-variabelen `--chat-h`) mot
+  `visualViewport` og toppen av `.tab-bar`, så den krymper med tastaturet og
+  virker likt i vinduet og i `html.ios-app` (der `.app-shell` ellers ville
+  rullet). `body:has(.chat-workspace)` fjerner hovedfeltets bunnmarg og
+  bunnteksten, så siden selv ikke kan rulle. Fra 768 px: kanalliste til
+  venstre + samtalen; under det åpner kanalnavnet i topplinjen et bunnark med
+  kanalene (og et tall/«@» for uleste i ANDRE kanaler). Meldingshandlinger:
+  hover-ikoner med mus, synlig «…» (44 pt) og langt trykk på berøring, som
+  åpner et handlingsark (Svar · Kopier tekst · Slett med bekreftelse). Første
+  lasting har en egen feiltilstand med «Prøv igjen»; pollingen venter til
+  første lasting har lyktes. `ChatThread` har `layout="fill"` (arbeidsflaten)
+  og `layout="card"` (prosjekttråden på et styreprosjekt). Send-knappen
+  `preventDefault`-er `mousedown`, ellers lukkes tastaturet midt i trykket.
 - **Chat-format:** `src/lib/chat-format.ts` er en egen liten tokenizer for
   backticks (inline, doble backticks når koden selv har en backtick, og fenced
   blokker med valgfri språkmarkør) — IKKE en markdown-rendrer. Alt annet er ren

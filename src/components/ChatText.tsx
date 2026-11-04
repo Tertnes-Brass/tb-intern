@@ -73,7 +73,7 @@ function CodeBlock({ value, lang }: { value: string; lang: string | null }) {
         <button
           type="button"
           onClick={copy}
-          className="cursor-pointer font-mono text-[0.58rem] uppercase tracking-[0.12em] text-ink-faint transition-colors hover:text-brass"
+          className="hit cursor-pointer font-mono text-[0.58rem] uppercase tracking-[0.12em] text-ink-faint transition-colors hover:text-brass"
         >
           {copied ? 'Kopiert' : 'Kopier'}
         </button>
