@@ -29,12 +29,12 @@ const THEME_CHOICES: Array<{ mode: ThemeMode; label: string }> = [
 ]
 
 /**
- * «Meg og mer» — arket bak avataren på telefon. Her bor alt som ikke har plass
- * i fanelinjen: profilen, de rollestyrte områdene (samme `areasFor` som hub-en,
+ * «Meg og mer» — arket bak avataren på telefon og iPad i stående (under `lg`).
+ * Her bor alt som ikke har plass i fanelinjen: profilen, de rollestyrte områdene (samme `areasFor` som hub-en,
  * minus det fanelinjen allerede har), varsler, utseende og utlogging.
  *
- * Dette er launcher-flaten (b) fra docs/designprinsipper.md §6, men bare på
- * telefon: desktop beholder toppmenyen og brukermenyen.
+ * Dette er launcher-flaten (b) fra docs/designprinsipper.md §6, men bare under
+ * `lg`: iPad på tvers og desktop beholder toppmenyen og brukermenyen.
  */
 export function Launcher({
   me,

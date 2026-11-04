@@ -28,7 +28,7 @@ function ThemeToggle() {
     <button
       onClick={toggle}
       aria-label={resolved === 'dark' ? 'Bytt til lyst tema' : 'Bytt til mørkt tema'}
-      className="grid h-9 w-9 cursor-pointer place-items-center rounded-full text-ink-soft transition-colors hover:bg-paper-sunken hover:text-ink"
+      className="grid h-9 w-9 cursor-pointer place-items-center rounded-full text-ink-soft pointer-coarse:h-11 pointer-coarse:w-11 transition-colors hover:bg-paper-sunken hover:text-ink"
     >
       {resolved === 'dark' ? (
         <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
@@ -62,11 +62,14 @@ function UserMenu({ me }: { me: Me }) {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex cursor-pointer items-center gap-2.5 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-paper-sunken"
+        className="flex cursor-pointer items-center gap-2.5 rounded-full p-1 transition-colors hover:bg-paper-sunken xl:pr-3"
+        aria-label={`${me.name}, konto`}
         aria-expanded={open}
       >
         <Avatar name={me.name} size="sm" />
-        <span className="hidden text-left sm:block">
+        {/* Navnet tar ~150 px; mellom 1024 og 1280 (iPad på tvers, iPad Pro 13"
+            på høykant) trenger toppmenyen dem for en admin med alle områdene. */}
+        <span className="hidden text-left xl:block">
           <span className="block text-[0.8rem] font-semibold leading-tight text-ink">{me.name}</span>
           <span className="block font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint">
             {me.roleName}
@@ -75,7 +78,7 @@ function UserMenu({ me }: { me: Me }) {
       </button>
       {open && (
         <div className="sheet rise absolute right-0 top-[calc(100%+6px)] z-50 w-52 overflow-hidden !rounded-xl p-1.5">
-          <div className="border-b border-line px-3 py-2 sm:hidden">
+          <div className="border-b border-line px-3 py-2 xl:hidden">
             <p className="text-sm font-semibold">{me.name}</p>
             <p className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint">{me.roleName}</p>
           </div>
@@ -123,8 +126,11 @@ type NavItem = {
 // Forum er en fast oppføring etter Hjem, etter brukerens ønske (26. september).
 // Filtilganger nås fortsatt fra Innstillinger og områdesnarveien på Hjem.
 //
-// På telefon (< md) erstattes menyen av fanelinjen (`TabBar.tsx`: de fem første
-// oppføringene her) og «Meg og mer» bak avataren (`Launcher.tsx`: resten).
+// Under `lg` (1024 px) — telefon og iPad i stående — erstattes menyen av
+// fanelinjen (`TabBar.tsx`: de fem første oppføringene her) og «Meg og mer» bak
+// avataren (`Launcher.tsx`: resten). Grensen var `md` (768 px), men på en iPad
+// i stående (820–834 px) fikk ikke engang et vanlig medlems seks oppføringer
+// plass, og resten forsvant stille bak kanten.
 const BASE_NAV: NavItem[] = [
   { to: '/', label: 'Hjem', exact: true },
   { to: '/forum', label: 'Forum' },
@@ -209,7 +215,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
     <div className="app-shell flex min-h-dvh flex-col" data-scroll-restoration-id="app">
       {/* Tett bakgrunn, ingen backdrop-filter. */}
       <header className="print-hidden pt-safe sticky top-0 z-40 border-b border-line bg-paper">
-        <div className="px-safe mx-auto flex h-[56px] w-full max-w-6xl items-center justify-between gap-4 md:h-[60px]">
+        <div className="px-safe mx-auto flex h-[56px] w-full max-w-6xl items-center justify-between gap-4 lg:h-[60px]">
           <Link to="/" className="link-quiet group flex shrink-0 items-baseline gap-2.5">
             <span className="font-mono text-[0.66rem] font-semibold uppercase tracking-[0.24em] text-ink">
               Tertnes Brass
@@ -219,7 +225,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
             </span>
           </Link>
 
-          <nav className="hidden min-w-0 items-center gap-5 overflow-x-auto md:flex" aria-label="Hovedmeny">
+          <nav className="hidden min-w-0 items-center gap-5 overflow-x-auto lg:flex" aria-label="Hovedmeny">
             {NAV.map((item) => (
               <Link
                 key={item.to}
@@ -238,18 +244,18 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
             ))}
           </nav>
 
-          <div className="hidden shrink-0 items-center gap-1.5 md:flex">
+          <div className="hidden shrink-0 items-center gap-1.5 lg:flex">
             <ThemeToggle />
             <UserMenu me={me} />
           </div>
 
-          {/* Telefon: avataren åpner «Meg og mer». */}
+          {/* Telefon og iPad i stående: avataren åpner «Meg og mer». */}
           <button
             type="button"
             onClick={() => setLauncherOpen(true)}
             aria-label="Meg og mer"
             aria-haspopup="dialog"
-            className="relative -mr-1.5 grid h-11 w-11 cursor-pointer place-items-center rounded-full md:hidden"
+            className="relative -mr-1.5 grid h-11 w-11 cursor-pointer place-items-center rounded-full lg:hidden"
           >
             <Avatar name={me.name} />
             {launcherAttention && (
@@ -267,7 +273,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
           rullecontainer, så sticky inni virker fortsatt. */}
       <main className="main-with-tabs px-safe mx-auto w-full max-w-6xl flex-1 overflow-x-clip pt-6 sm:pt-10">{children}</main>
 
-      <footer className="print-hidden pb-safe hidden border-t border-line md:block">
+      <footer className="print-hidden pb-safe hidden border-t border-line lg:block">
         <div className="px-safe mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 py-6">
           <p className="font-mono text-[0.64rem] uppercase tracking-[0.18em] text-ink-faint">
             Tertnes Brass · Intern

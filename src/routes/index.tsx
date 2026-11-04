@@ -345,9 +345,9 @@ function HubPage() {
         )}
       </section>
 
-      {/* På telefon står områdene i «Meg og mer» (Launcher.tsx), så kortene
-          her ville bare gjentatt menyen. */}
-      <section className="rise hidden md:block" style={{ animationDelay: '280ms' }}>
+      {/* På telefon og iPad i stående står områdene i «Meg og mer»
+          (Launcher.tsx), så kortene her ville bare gjentatt menyen. */}
+      <section className="rise hidden lg:block" style={{ animationDelay: '280ms' }}>
         <SectionHeading kicker="Internsiden" title="Områder" className="mb-4" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data.areas.map((area) => (

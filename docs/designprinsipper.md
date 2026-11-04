@@ -305,6 +305,14 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 > rollestyrte, og de har nå et tydelig sted å bo i stedet for å gjemme seg bak
 > faden i stripen. Områdekortene på hub-en vises bare på desktop; på telefon
 > ville de gjentatt «Meg og mer».
+>
+> **Justert 4. november 2026 (mobil/iPad-gjennomgang):** grensen er flyttet
+> fra `md` (768 px) til `lg` (1024 px). På en iPad i stående (820–834 px) fikk
+> ikke engang et vanlig medlems seks oppføringer plass i toppmenyen, og resten
+> forsvant stille bak kanten — nøyaktig feilmodusen over. iPad i stående får nå
+> fanelinjen og «Meg og mer» som telefonen; iPad på tvers og desktop beholder
+> toppmenyen, der brukermenyen viser bare avataren under `xl` (1280 px), så
+> admin får plass ved 1024 px. Områdekortene på hub-en følger samme grense.
 
 ## 7. Hva som ikke er avgjort
 

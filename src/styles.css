@@ -516,7 +516,7 @@ html:has(dialog[open]) {
 }
 /* Når tastaturet er oppe, tar fanelinjen bare plass (Android flytter den opp
    over tastaturet). Skjules mens et tekstfelt har fokus. */
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   body:has(:is(textarea, select, [contenteditable='true'], input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit']):not([type='range'])):focus) .tab-bar {
     display: none;
   }
@@ -526,7 +526,7 @@ html:has(dialog[open]) {
 .main-with-tabs {
   padding-bottom: calc(58px + 2.5rem + env(safe-area-inset-bottom));
 }
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
   .main-with-tabs {
     padding-bottom: 5rem;
   }
@@ -536,7 +536,7 @@ html:has(dialog[open]) {
 .toast-stack {
   bottom: calc(1.25rem + env(safe-area-inset-bottom));
 }
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   body:has(.tab-bar) .toast-stack {
     bottom: calc(58px + 0.9rem + env(safe-area-inset-bottom));
   }
