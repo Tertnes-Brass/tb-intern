@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
 
 // ---------- Knapper ----------
 
@@ -86,6 +86,46 @@ export function Kicker({ children, className = '' }: { children: ReactNode; clas
   return <p className={`kicker ${className}`}>{children}</p>
 }
 
+/**
+ * Sidehodet på en arbeidsflate (Veggen, Forum, Noter, Styre …): én tittel, én
+ * valgfri linje forklaring og én primærhandling på linje med tittelen. Kompakt
+ * med vilje — innholdet skal begynne innenfor første skjerm på telefonen.
+ * Identitetssider (en hendelse, et prosjekt, et innlegg) har egne, større
+ * titler; dette er for oversiktene.
+ */
+export function PageHeader({
+  kicker,
+  title,
+  summary,
+  action,
+  children,
+  className = '',
+}: {
+  kicker?: ReactNode
+  title: ReactNode
+  /** Én kort linje. Lengre forklaringer hører hjemme i en tomtilstand eller et hjelpeark. */
+  summary?: ReactNode
+  /** Primærhandlingen, høyrestilt på linje med tittelen. */
+  action?: ReactNode
+  /** Filtre, faner o.l. under tittelen. */
+  children?: ReactNode
+  className?: string
+}) {
+  return (
+    <header className={`page-header ${className}`}>
+      <div className="flex items-end justify-between gap-4">
+        <div className="min-w-0">
+          {kicker && <Kicker className="mb-1.5">{kicker}</Kicker>}
+          <h1 className="display-title text-[2rem] font-semibold italic leading-[1.05] text-ink sm:text-[2.5rem]">{title}</h1>
+        </div>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
+      {summary && <p className="mt-1.5 max-w-xl text-sm leading-snug text-ink-soft">{summary}</p>}
+      {children && <div className="mt-4">{children}</div>}
+    </header>
+  )
+}
+
 export function SectionHeading({
   kicker,
   title,
@@ -150,6 +190,7 @@ export function Modal({
   mobileFull?: boolean
 }) {
   const ref = useRef<HTMLDialogElement>(null)
+  const titleId = useId()
   useDialogOpen(ref, open)
   // På telefon er dialogen et bunnark (styles.css), og overskriften er grepet.
   const drag = useSheetDrag(ref, onClose)
@@ -158,6 +199,7 @@ export function Modal({
     <dialog
       ref={ref}
       tabIndex={-1}
+      aria-labelledby={titleId}
       className={`sheet-dialog ${wide ? 'sheet-dialog-wide' : ''} ${mobileFull ? 'sheet-dialog-mobile-full' : ''}`}
       onClose={onClose}
       onClick={(e) => {
@@ -169,7 +211,7 @@ export function Modal({
         <span className="sheet-grab sheet-grab-phone" aria-hidden />
         {kicker && <Kicker className="mb-1">{kicker}</Kicker>}
         <div className="flex items-start justify-between gap-4">
-          <h2 className="display-title text-xl font-semibold">{title}</h2>
+          <h2 id={titleId} className="display-title text-xl font-semibold">{title}</h2>
           <button
             onClick={onClose}
             aria-label="Lukk"

@@ -309,10 +309,13 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 > **Justert 4. november 2026 (mobil/iPad-gjennomgang):** grensen er flyttet
 > fra `md` (768 px) til `lg` (1024 px). På en iPad i stående (820–834 px) fikk
 > ikke engang et vanlig medlems seks oppføringer plass i toppmenyen, og resten
-> forsvant stille bak kanten — nøyaktig feilmodusen over. iPad i stående får nå
-> fanelinjen og «Meg og mer» som telefonen; iPad på tvers og desktop beholder
-> toppmenyen, der brukermenyen viser bare avataren under `xl` (1280 px), så
-> admin får plass ved 1024 px. Områdekortene på hub-en følger samme grense.
+> forsvant stille bak kanten — nøyaktig feilmodusen over. Samme dag ble regelen
+> gjort om fra bredde til input: **berøringsskjerm (telefon og iPad, også på
+> tvers) og vinduer under 1024 px får fanelinjen og «Meg og mer»; mus fra
+> 1024 px får toppmenyen** (`appnav`/`desknav` i `styles.css`). Ellers byttet
+> iPad-en navigasjonsmodell bare fordi den ble snudd. På desktop viser
+> brukermenyen bare avataren under `xl` (1280 px), så admin får plass ved
+> 1024 px. Områdekortene på hub-en følger `desknav`.
 
 ## 7. Hva som ikke er avgjort
 

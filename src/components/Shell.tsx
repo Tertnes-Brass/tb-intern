@@ -126,9 +126,9 @@ type NavItem = {
 // Forum er en fast oppføring etter Hjem, etter brukerens ønske (26. september).
 // Filtilganger nås fortsatt fra Innstillinger og områdesnarveien på Hjem.
 //
-// Under `lg` (1024 px) — telefon og iPad i stående — erstattes menyen av
-// fanelinjen (`TabBar.tsx`: de fem første oppføringene her) og «Meg og mer» bak
-// avataren (`Launcher.tsx`: resten). Grensen var `md` (768 px), men på en iPad
+// På berøringsskjerm og under 1024 px (`appnav` i styles.css) erstattes menyen
+// av fanelinjen (`TabBar.tsx`: de fem første oppføringene her) og «Meg og mer»
+// bak avataren (`Launcher.tsx`: resten). Grensen var `md` (768 px), men på en iPad
 // i stående (820–834 px) fikk ikke engang et vanlig medlems seks oppføringer
 // plass, og resten forsvant stille bak kanten.
 const BASE_NAV: NavItem[] = [
@@ -215,7 +215,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
     <div className="app-shell flex min-h-dvh flex-col" data-scroll-restoration-id="app">
       {/* Tett bakgrunn, ingen backdrop-filter. */}
       <header className="print-hidden pt-safe sticky top-0 z-40 border-b border-line bg-paper">
-        <div className="px-safe mx-auto flex h-[56px] w-full max-w-6xl items-center justify-between gap-4 lg:h-[60px]">
+        <div className="px-safe mx-auto flex h-[56px] w-full max-w-6xl items-center justify-between gap-4 desknav:h-[60px]">
           <Link to="/" className="link-quiet group flex shrink-0 items-baseline gap-2.5">
             <span className="font-mono text-[0.66rem] font-semibold uppercase tracking-[0.24em] text-ink">
               Tertnes Brass
@@ -225,7 +225,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
             </span>
           </Link>
 
-          <nav className="hidden min-w-0 items-center gap-5 overflow-x-auto lg:flex" aria-label="Hovedmeny">
+          <nav className="hidden min-w-0 items-center gap-5 overflow-x-auto desknav:flex" aria-label="Hovedmeny">
             {NAV.map((item) => (
               <Link
                 key={item.to}
@@ -244,18 +244,18 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
             ))}
           </nav>
 
-          <div className="hidden shrink-0 items-center gap-1.5 lg:flex">
+          <div className="hidden shrink-0 items-center gap-1.5 desknav:flex">
             <ThemeToggle />
             <UserMenu me={me} />
           </div>
 
-          {/* Telefon og iPad i stående: avataren åpner «Meg og mer». */}
+          {/* Berøringsskjerm (og smalt vindu): avataren åpner «Meg og mer». */}
           <button
             type="button"
             onClick={() => setLauncherOpen(true)}
             aria-label="Meg og mer"
             aria-haspopup="dialog"
-            className="relative -mr-1.5 grid h-11 w-11 cursor-pointer place-items-center rounded-full lg:hidden"
+            className="relative -mr-1.5 grid h-11 w-11 cursor-pointer place-items-center rounded-full desknav:hidden"
           >
             <Avatar name={me.name} />
             {launcherAttention && (
@@ -273,7 +273,7 @@ export function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
           rullecontainer, så sticky inni virker fortsatt. */}
       <main className="main-with-tabs px-safe mx-auto w-full max-w-6xl flex-1 overflow-x-clip pt-6 sm:pt-10">{children}</main>
 
-      <footer className="print-hidden pb-safe hidden border-t border-line lg:block">
+      <footer className="print-hidden pb-safe hidden border-t border-line desknav:block">
         <div className="px-safe mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 py-6">
           <p className="font-mono text-[0.64rem] uppercase tracking-[0.18em] text-ink-faint">
             Tertnes Brass · Intern
