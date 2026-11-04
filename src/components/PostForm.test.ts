@@ -14,7 +14,7 @@ vi.mock('../lib/post-attachments', async (original) => ({ ...await original<type
 vi.mock('./toast', () => ({ toast: state.toast, toastError: state.toast }))
 vi.mock('./MentionTextarea', async () => {
   const { createElement } = await import('react')
-  return { MentionTextarea: ({ value, onChange }: { value: string; onChange: (value: string) => void }) => createElement('textarea', { value, onChange: (event: { target: { value: string } }) => onChange(event.target.value) }) }
+  return { MentionTextarea: ({ value, onChange, id, 'aria-describedby': describedBy }: { value: string; onChange: (value: string) => void; id?: string; 'aria-describedby'?: string }) => createElement('textarea', { value, id, 'aria-describedby': describedBy, onChange: (event: { target: { value: string } }) => onChange(event.target.value) }) }
 })
 import { PostForm } from './PostForm'
 
@@ -81,4 +81,31 @@ it('kan fjerne eksisterende og legge til nye vedlegg på en publisert beskjed', 
   expect(state.update).toHaveBeenCalledWith({ data: expect.objectContaining({ id: 'published-post' }) })
   expect(state.upload).toHaveBeenCalledWith('published-post', file)
   expect(state.publish).not.toHaveBeenCalled()
+})
+
+it('Publiser åpner et ark der varselet er avslått, og publiserer uten e-post', async () => {
+  // jsdom har ikke showModal; arket rendres uansett, vi trenger bare at kallet ikke kaster.
+  HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) { this.open = true }
+  HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) { this.open = false }
+  await act(() => root.render(createElement(PostForm, { canPublish: true })))
+  const textarea = container.querySelector('textarea')!
+  await act(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, 'Viktig beskjed')
+    textarea.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  const button = (label: string) => Array.from(container.querySelectorAll('button')).find((b) => b.textContent === label)!
+  await act(() => button('Publiser').click())
+  const notify = container.querySelector<HTMLInputElement>('input[type="checkbox"]')!
+  expect(notify.checked).toBe(false)
+  expect(state.publish).not.toHaveBeenCalled()
+  await act(() => button('Publiser uten varsel').click())
+  expect(state.publish).toHaveBeenCalledWith({ data: { id: 'new-draft', sendEmail: false } })
+})
+
+it('kobler tekstfeltets etikett og hjelpetekst til feltet', async () => {
+  await act(() => root.render(createElement(PostForm, { canPublish: false })))
+  const label = Array.from(container.querySelectorAll('label')).find((l) => l.textContent === 'Tekst')!
+  const field = container.querySelector('textarea')!
+  expect(label.htmlFor).toBe(field.id)
+  expect(document.getElementById(field.getAttribute('aria-describedby')!)?.textContent).toContain('Skriv @')
 })
