@@ -57,7 +57,7 @@ function HubPage() {
           <Stamp tone="oxblood">Viktig</Stamp>
           <span className="min-w-0 flex-1">
             <span className="block truncate font-semibold text-ink">{important.heading}</span>
-            <span className="mt-0.5 block truncate font-mono text-[0.6rem] uppercase tracking-[0.14em] text-ink-faint">
+            <span className="mt-0.5 block text-[0.8rem] leading-snug text-ink-soft">
               {important.authorName} · {formatDateTime(important.publishedAt)}
             </span>
           </span>
@@ -108,7 +108,7 @@ function HubPage() {
                 </span>
                 <span className="mt-0.5 block text-xs leading-snug text-ink-soft">{area.description}</span>
                 {area.note && (
-                  <span className="mt-1.5 block font-mono text-[0.62rem] uppercase tracking-[0.12em] text-brass">
+                  <span className="mt-1 block text-xs font-medium text-brass-strong">
                     {area.note}
                   </span>
                 )}
@@ -137,7 +137,7 @@ function NextEventCard({ event, details }: { event: HubEvent; details: HubData['
   return (
     <article className="next-card">
       <div className="flex gap-4 px-4 pb-4 pt-5 sm:px-5">
-        <DateTile iso={date} size="lg" tone="brass" />
+        <DateTile iso={date} size="lg" tone="brass" srLabel={false} />
         <div className="min-w-0 flex-1 pt-0.5">
           <p className="kicker mb-1.5">Neste · {relativeDays(date)}</p>
           {/* Til forekomsten, ikke til lista: derfra ser man hele øvingsplanen
@@ -178,7 +178,7 @@ function NextEventCard({ event, details }: { event: HubEvent; details: HubData['
       >
         {details && details.plan.length > 0 ? (
           <>
-            <span className="shrink-0 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-brass">Øves</span>
+            <span className="shrink-0 text-[0.8rem] font-semibold text-brass-strong">Øves</span>
             <span className="min-w-0 flex-1 truncate text-sm text-ink">
               {details.plan.join(' · ')}
               {details.planMore > 0 ? ` · +${details.planMore}` : ''}
@@ -200,7 +200,7 @@ function NextProjectCard({ project }: { project: HubProject }) {
   return (
     <article className="next-card">
       <div className="flex gap-4 px-4 pb-4 pt-5 sm:px-5">
-        <DateTile iso={project.eventDate} size="lg" tone="brass" />
+        <DateTile iso={project.eventDate} size="lg" tone="brass" srLabel={false} />
         <div className="min-w-0 flex-1 pt-0.5">
           <p className="kicker mb-1.5">Neste prosjekt · {relativeDays(project.eventDate)}</p>
           <Link to="/noter/prosjekter/$projectId" params={{ projectId: project.id }} className="link-quiet block">
@@ -243,25 +243,30 @@ function NotesShortcut({ data }: { data: HubData }) {
         <Icon name="notes" size={22} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block font-mono text-[0.6rem] uppercase tracking-[0.18em] text-brass">
-          Mine noter
-          {savedOffline && <span className="text-ok"> · Lagret offline</span>}
-        </span>
         {next ? (
           <>
+            <span className="block font-mono text-[0.6rem] uppercase tracking-[0.18em] text-brass">Mine noter</span>
             <span className="display-title mt-0.5 block truncate text-[1.08rem] font-semibold text-ink">{next.name}</span>
-            <span className="mt-0.5 block truncate text-xs text-ink-soft">
+            <span className="mt-0.5 block text-[0.8rem] leading-snug text-ink-soft">
               {formatDate(next.eventDate)} · {next.workCount === 1 ? '1 verk' : `${next.workCount} verk`}
               {data.me.parts.length > 0
                 ? ` · ${data.me.parts.map((p) => p.nameNo).join(', ')}`
                 : ' · ingen stemme registrert'}
             </span>
+            {savedOffline && (
+              <span className="mt-0.5 flex items-center gap-1 text-[0.8rem] font-medium text-ok">
+                <Icon name="check" size={13} strokeWidth={2.2} />
+                Lagret offline
+              </span>
+            )}
           </>
         ) : (
+          // Ingenting å spille ennå: ikke lov noe som er «klart». Samme
+          // beskjed som tomtilstanden på /noter.
           <>
-            <span className="display-title mt-0.5 block text-[1.05rem] font-semibold text-ink">Klart på notestativet</span>
-            <span className="mt-0.5 block text-xs leading-snug text-ink-soft">
-              Ingen kommende prosjekter ennå — notene dine finner du her.
+            <span className="display-title block text-[1.08rem] font-semibold text-ink">Mine noter</span>
+            <span className="mt-0.5 block text-[0.8rem] leading-snug text-ink-soft">
+              Ingen kommende prosjekter — se tidligere prosjekter.
             </span>
           </>
         )}
@@ -315,7 +320,7 @@ function PostsSection({ data }: { data: HubData }) {
                   )}
                 </span>
                 <span className="mt-0.5 line-clamp-2 text-sm leading-snug text-ink-soft">{post.excerpt}</span>
-                <span className="mt-1 block truncate font-mono text-[0.6rem] uppercase tracking-[0.14em] text-ink-faint">
+                <span className="mt-1 block text-[0.8rem] leading-snug text-ink-soft">
                   {post.fromArchive ? 'Notearkivar' : post.official ? 'Styret' : post.authorName} ·{' '}
                   {formatDateTime(post.publishedAt)}
                   {post.commentCount > 0 ? ` · ${post.commentCount} ${post.commentCount === 1 ? 'kommentar' : 'kommentarer'}` : ''}
@@ -406,10 +411,10 @@ function UpcomingRow({
           <span className="display-title block truncate text-[1rem] font-semibold text-ink transition-colors group-hover:text-brass-strong">
             {title}
           </span>
-          <span className="mt-0.5 block truncate text-xs text-ink-soft">{meta}</span>
+          <span className="mt-0.5 block break-words text-[0.8rem] leading-snug text-ink-soft">{meta}</span>
         </span>
         {/* Datoflisen sier allerede når; på smal skjerm får tittelen plassen. */}
-        <span className="hidden shrink-0 font-mono text-[0.6rem] uppercase tracking-[0.12em] text-ink-faint sm:inline">
+        <span className="hidden shrink-0 text-xs text-ink-faint sm:inline">
           {relativeDays(date)}
         </span>
       </Link>
