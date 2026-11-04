@@ -26,6 +26,7 @@ export function ActionMenu({
   items,
   className = '',
   buttonClassName,
+  iconOnly,
 }: {
   label?: string
   /** Overskriften i arket på telefon (f.eks. prosjektnavnet). */
@@ -33,6 +34,8 @@ export function ActionMenu({
   items: ActionMenuItem[]
   className?: string
   buttonClassName?: string
+  /** Bare «⋯» (med `label` som tilgjengelig navn) — for menyer per rad i en liste. */
+  iconOnly?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [sheet, setSheet] = useState(false)
@@ -87,13 +90,26 @@ export function ActionMenu({
         onClick={toggle}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={iconOnly ? label : undefined}
         className={
           buttonClassName ??
-          'inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full border border-line-strong bg-paper-raised px-3.5 text-[0.82rem] font-medium text-ink-soft transition-colors hover:border-brass hover:text-brass-strong pointer-coarse:min-h-11 pointer-coarse:px-4 aria-expanded:border-brass aria-expanded:text-brass-strong'
+          (iconOnly
+            ? 'grid h-9 w-9 cursor-pointer place-items-center rounded-full text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink pointer-coarse:h-11 pointer-coarse:w-11 aria-expanded:bg-paper-sunken aria-expanded:text-ink'
+            : 'inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full border border-line-strong bg-paper-raised px-3.5 text-[0.82rem] font-medium text-ink-soft transition-colors hover:border-brass hover:text-brass-strong pointer-coarse:min-h-11 pointer-coarse:px-4 aria-expanded:border-brass aria-expanded:text-brass-strong')
         }
       >
-        <Icon name="sliders" size={16} />
-        {label}
+        {iconOnly ? (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <circle cx="5.5" cy="12" r="1.7" />
+            <circle cx="12" cy="12" r="1.7" />
+            <circle cx="18.5" cy="12" r="1.7" />
+          </svg>
+        ) : (
+          <>
+            <Icon name="sliders" size={16} />
+            {label}
+          </>
+        )}
       </button>
       {sheet ? (
         <BottomSheet

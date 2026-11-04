@@ -1,7 +1,8 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { toast, toastError } from '../../components/toast'
-import { Avatar, Button, Field, Kicker, Modal, Stamp } from '../../components/ui'
+import { ActionMenu } from '../../components/ActionMenu'
+import { Avatar, Button, Field, Modal, PageHeader, Stamp } from '../../components/ui'
 import {
   type InviteDelivery,
   MAX_INVITE_PARTS,
@@ -87,48 +88,79 @@ function MembersPage() {
 
   const [inviteOpen, setInviteOpen] = useState(false)
 
-  return (
-    <div className="space-y-9">
-      <header className="rise flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <Kicker className="mb-2">Besetningen</Kicker>
-          <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Medlemmer</h1>
-          <p className="mt-2 text-sm text-ink-soft">
-            {data.members.length} musikere og stab.{' '}
-            {data.canManage
-              ? 'Du kan invitere, og endre stemmer og roller.'
-              : data.canManageSection
-                ? 'Du kan endre stemmer for medlemmer i din seksjon.'
-                : 'Stemmer settes av seksjonsleder eller administrator.'}
-          </p>
-        </div>
-        {data.canManage && (
-          <Button variant="primary" onClick={() => setInviteOpen(true)}>
-            Inviter medlem
-          </Button>
-        )}
-      </header>
+  const [query, setQuery] = useState('')
+  const q = query.trim().toLocaleLowerCase('nb')
+  const matches = (m: Member) =>
+    !q ||
+    m.name.toLocaleLowerCase('nb').includes(q) ||
+    m.email.toLocaleLowerCase('nb').includes(q) ||
+    m.parts.some((p) => p.name.toLocaleLowerCase('nb').includes(q))
+  const visibleKeys = order.filter((key) => groups.get(key)?.some(matches))
 
-      {data.canManage && data.invites.length > 0 && (
+  return (
+    <div className="space-y-7">
+      <PageHeader
+        className="rise"
+        title="Medlemmer"
+        summary={`${data.members.length} musikere og stab`}
+        action={
+          data.canManage && (
+            <Button variant="primary" onClick={() => setInviteOpen(true)}>
+              Inviter
+            </Button>
+          )
+        }
+      />
+
+      <div className="rise space-y-2" style={{ animationDelay: '40ms' }}>
+        <div className="relative max-w-md">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 14 14"
+            fill="none"
+            aria-hidden
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
+          >
+            <circle cx="6" cy="6" r="4.6" stroke="currentColor" strokeWidth="1.4" />
+            <path d="M9.5 9.5L13 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+          </svg>
+          <input
+            type="search"
+            className="field-input !pl-10"
+            placeholder="Søk på navn, e-post eller stemme"
+            aria-label="Søk blant medlemmene"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            enterKeyHint="search"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
+          />
+        </div>
+        <p className="px-1 text-xs text-ink-faint">
+          {data.canManage
+            ? 'Du kan invitere, og endre stemmer og roller.'
+            : data.canManageSection
+              ? 'Du kan endre stemmer for medlemmer i din seksjon.'
+              : 'Stemmer settes av seksjonsleder eller administrator.'}
+        </p>
+      </div>
+
+      {data.canManage && data.invites.length > 0 && !q && (
         <section className="rise">
-          <div className="mb-3 flex items-baseline gap-3">
-            <h2 className="kicker">Venter på første innlogging</h2>
-            <div className="staff-rule h-[10px] flex-1 opacity-30" aria-hidden />
-          </div>
-          <ul className="sheet divide-y divide-[var(--line)] overflow-hidden">
+          <h2 className="group-label">Venter på første innlogging · {data.invites.length}</h2>
+          <ul className="list-group">
             {data.invites.map((inv) => (
-              <li key={inv.email} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-3 sm:px-5">
+              <li key={inv.email} className="flex items-center gap-x-3 px-4 py-3 sm:px-5">
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[0.92rem] font-semibold text-ink">{inv.name ?? inv.email}</span>
-                  {inv.name && (
-                    <span className="block truncate font-mono text-[0.64rem] text-ink-faint">{inv.email}</span>
-                  )}
-                  <span className="block font-mono text-[0.64rem] uppercase tracking-[0.1em] text-ink-faint">
+                  {inv.name && <span className="block truncate text-xs text-ink-faint">{inv.email}</span>}
+                  <span className="block truncate text-xs text-ink-soft">
                     {inv.roleName}
                     {inv.partNames.length > 0 ? ` · ${inv.partNames.join(' · ')}` : ''}
                   </span>
                 </span>
-                <Stamp tone="oxblood">Invitert</Stamp>
                 <button
                   onClick={async () => {
                     try {
@@ -139,7 +171,7 @@ function MembersPage() {
                       toastError(err)
                     }
                   }}
-                  className="-mx-2 -my-1.5 inline-flex items-center px-3 py-2.5 font-mono text-[0.64rem] uppercase tracking-wide text-danger/80 transition-colors hover:text-danger"
+                  className="-mr-2 inline-flex min-h-10 shrink-0 cursor-pointer items-center rounded-lg px-3 text-[0.82rem] font-medium text-danger transition-colors hover:bg-danger/10 pointer-coarse:min-h-11"
                 >
                   Trekk tilbake
                 </button>
@@ -149,44 +181,65 @@ function MembersPage() {
         </section>
       )}
 
-      {order
-        .filter((key) => groups.has(key))
-        .map((key, si) => (
-          <section key={key} className="rise" style={{ animationDelay: `${80 + si * 50}ms` }}>
-            <div className="mb-3 flex items-baseline gap-3">
-              <h2 className="kicker">{labels[key]}</h2>
-              <div className="staff-rule h-[10px] flex-1 opacity-30" aria-hidden />
-            </div>
-            <ul className="sheet divide-y divide-[var(--line)] overflow-hidden">
-              {groups.get(key)!.map((m) => {
+      {visibleKeys.length === 0 && (
+        <p className="surface-group px-5 py-8 text-center text-sm text-ink-soft">Ingen medlemmer matcher «{query}».</p>
+      )}
+
+      {visibleKeys.map((key, si) => {
+        const members = groups.get(key)!.filter(matches)
+        return (
+          <section key={key} className="rise" style={{ animationDelay: `${60 + si * 40}ms` }}>
+            <h2 className="group-label">
+              {labels[key]} · {members.length}
+            </h2>
+            {/* Telefon: navn (og ⋯) øverst, stemme og rolle under. Fra md: én
+                tabellrad — navn · stemme · rolle · ⋯ — så iPad-en viser
+                besetningen tett i stedet for som en strukket telefonliste. */}
+            <ul className="list-group">
+              {members.map((m) => {
                 const leads = m.leaderPartIds
                   .map((id) => data.allParts.find((p) => p.id === id)?.nameNo)
                   .filter(Boolean)
                 return (
                   <li
                     key={m.id}
-                    className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2 sm:px-5"
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 px-4 py-3 sm:px-5 md:grid-cols-[minmax(0,1fr)_11.5rem_10.5rem_2.75rem] md:gap-x-4"
                   >
-                    <div className="flex min-w-0 items-center gap-3 sm:flex-1">
+                    <div className="flex min-w-0 items-center gap-3">
                       <Avatar name={m.name} size="sm" />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-2">
-                          <span className="truncate text-[0.92rem] font-semibold text-ink">{m.name}</span>
+                          <span className="truncate text-[0.95rem] font-semibold text-ink">{m.name}</span>
                           {m.id === data.meId && <Stamp tone="brass">deg</Stamp>}
                         </span>
-                        <span className="block truncate font-mono text-[0.64rem] text-ink-faint">{m.email}</span>
+                        <span className="block truncate text-xs text-ink-faint">{m.email}</span>
                         {leads.length > 0 && (
-                          <span className="mt-0.5 block font-mono text-[0.6rem] uppercase tracking-[0.1em] text-brass-strong">
-                            Leder: {leads.join(' · ')}
+                          <span className="mt-0.5 block truncate text-xs font-medium text-brass-strong">
+                            Leder {leads.join(' · ')}
                           </span>
                         )}
                       </span>
                     </div>
 
-                    <div className="flex w-full items-center gap-2 sm:contents">
+                    <div className="col-start-2 row-start-1 flex justify-end md:col-start-4">
+                      {data.canManage && (
+                        <ActionMenu
+                          iconOnly
+                          label={`Mer for ${m.name}`}
+                          title={m.name}
+                          items={[
+                            { label: 'Rediger profil', hint: 'Navn, telefon og passordlenke', icon: 'people', onSelect: () => setEditFor(m) },
+                            { label: 'Gruppeleder for …', hint: 'Stemmer medlemmet leder', icon: 'star', onSelect: () => setLeaderFor(m) },
+                          ]}
+                        />
+                      )}
+                    </div>
+
+                    <div className="col-span-2 flex min-w-0 items-center gap-2 md:col-span-2 md:col-start-2 md:row-start-1 md:grid md:grid-cols-[11.5rem_10.5rem] md:gap-4">
                       {m.canEditParts ? (
                         <select
-                          className="field-input min-w-0 flex-1 !py-2 !text-base sm:!w-auto sm:!flex-none sm:!py-1.5 sm:!text-xs"
+                          className="field-input compact-select min-w-0 flex-1 md:!w-full"
+                          aria-label={`Stemme for ${m.name}`}
                           value={m.parts[0]?.id ?? ''}
                           disabled={busyId === m.id}
                           onChange={(e) => setPart(m.id, e.target.value)}
@@ -199,14 +252,15 @@ function MembersPage() {
                           ))}
                         </select>
                       ) : (
-                        <span className="font-mono text-[0.68rem] uppercase tracking-[0.1em] text-ink-soft">
+                        <span className="min-w-0 flex-1 truncate text-sm text-ink-soft">
                           {m.parts.map((p) => p.name).join(' · ') || '—'}
                         </span>
                       )}
 
                       {data.canManage ? (
                         <select
-                          className="field-input min-w-0 flex-1 !py-2 !text-base sm:!w-auto sm:!flex-none sm:!py-1.5 sm:!text-xs"
+                          className="field-input compact-select min-w-0 flex-1 md:!w-full"
+                          aria-label={`Rolle for ${m.name}`}
                           value={m.roleId}
                           disabled={busyId === m.id}
                           onChange={(e) => setRole(m.id, e.target.value)}
@@ -218,24 +272,9 @@ function MembersPage() {
                           ))}
                         </select>
                       ) : (
-                        <Stamp tone={m.roleId === 'member' ? 'neutral' : 'brass'}>{m.roleName}</Stamp>
-                      )}
-
-                      {data.canManage && (
-                        <>
-                          <button
-                            onClick={() => setEditFor(m)}
-                            className="inline-flex min-h-[44px] shrink-0 cursor-pointer items-center rounded-lg px-2.5 py-1.5 font-mono text-[0.6rem] uppercase tracking-wide text-ink-faint transition-colors hover:bg-paper-sunken hover:text-brass-strong"
-                          >
-                            Rediger…
-                          </button>
-                          <button
-                            onClick={() => setLeaderFor(m)}
-                            className="inline-flex min-h-[44px] shrink-0 cursor-pointer items-center rounded-lg px-2.5 py-1.5 font-mono text-[0.6rem] uppercase tracking-wide text-ink-faint transition-colors hover:bg-paper-sunken hover:text-brass-strong"
-                          >
-                            Leder…
-                          </button>
-                        </>
+                        <span>
+                          <Stamp tone={m.roleId === 'member' ? 'neutral' : 'brass'}>{m.roleName}</Stamp>
+                        </span>
                       )}
                     </div>
                   </li>
@@ -243,7 +282,8 @@ function MembersPage() {
               })}
             </ul>
           </section>
-        ))}
+        )
+      })}
 
       {data.canManage && (
         <InviteModal
