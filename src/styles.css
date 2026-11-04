@@ -700,9 +700,11 @@ select.field-input {
 }
 
 /* ---------- Områdemenyer (Noter, Styre, Gruppeledere) ----------
-   designprinsipper §6 (a): hvert område eier sin egen meny. På telefon er det
-   en rad med «piller» som er store nok for tommelen og kan rulles vannrett;
-   fra 640 px er det de smale mono-fanene med messingstrek under (`.nav-link`). */
+   designprinsipper §6 (a): hvert område eier sin egen meny. På berøringsskjerm
+   er det en rad med «piller» som er store nok for tommelen og kan rulles
+   vannrett; med mus/styreflate fra 640 px er det de smale mono-fanene med
+   messingstrek under (`.nav-link`). Bredden alene avgjorde det før, og da fikk
+   iPad-en fanene: 11 px mono-tekst uten minstehøyde, under 20 pt å treffe. */
 .area-nav-wrap {
   margin: -0.25rem 0 1.75rem;
 }
@@ -740,7 +742,7 @@ select.field-input {
   background: var(--brass-soft);
   color: var(--brass-strong);
 }
-@media (min-width: 640px) {
+@media (min-width: 640px) and (pointer: fine) {
   .area-nav-wrap {
     margin: -0.5rem 0 2.25rem;
     border-bottom: 1px solid var(--line);
