@@ -4,6 +4,7 @@ import { PdfSplitterLauncher } from '../../../components/PdfSplitter'
 import { WorkEditions } from '../../../components/WorkEditions'
 import { WorkFormModal } from '../../../components/WorkForm'
 import { toast, toastError } from '../../../components/toast'
+import { ActionMenu } from '../../../components/ActionMenu'
 import { BackArrow, Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
 import { ZipDownloadButton } from '../../../components/ZipDownload'
 import { PdfDownloadButton } from '../../../components/PdfDownload'
@@ -70,13 +71,24 @@ function WorkPage() {
   return (
     <div className="space-y-10">
       <header className="rise">
-        <Link to="/noter/arkiv" className="back-link mb-4">
-          <BackArrow />
-          Arkivet
-        </Link>
+        <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
+          <Link to="/noter/arkiv" className="back-link">
+            <BackArrow />
+            Arkivet
+          </Link>
+          {data.canManage && (
+            <ActionMenu
+              title={w.title}
+              items={[
+                { label: 'Rediger verket', hint: 'Tittel, komponist, sjanger, grad og plassering', icon: 'sliders', onSelect: () => setEditing(true) },
+                { label: 'Slett verket', icon: 'close', tone: 'danger', onSelect: () => setConfirmDelete(true) },
+              ]}
+            />
+          )}
+        </div>
         <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h1 className="display-title text-4xl font-semibold italic leading-tight text-ink sm:text-5xl">
+            <h1 className="display-title text-[clamp(2.1rem,5.4vw,3.2rem)] font-semibold italic leading-[1.05] text-ink">
               {w.title}
             </h1>
             {w.subtitle && (
@@ -84,14 +96,6 @@ function WorkPage() {
             )}
             {composerLine && <p className="mt-2 text-[0.95rem] text-ink-soft">{composerLine}</p>}
           </div>
-          {data.canManage && (
-            <div className="flex shrink-0 gap-2">
-              <Button onClick={() => setEditing(true)}>Rediger</Button>
-              <Button variant="danger" onClick={() => setConfirmDelete(true)}>
-                Slett
-              </Button>
-            </div>
-          )}
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -404,7 +408,7 @@ function FilesSection({ data }: { data: WorkData }) {
 
   if (data.files.length === 0) {
     return (
-      <section className="sheet rise">
+      <section className="surface-group rise">
         <EmptyState title="Ingen filer ennå">
           {data.canManage
             ? 'Slipp PDF-ene i feltet over, så sorteres de på stemme automatisk.'
@@ -416,7 +420,7 @@ function FilesSection({ data }: { data: WorkData }) {
 
   return (
     <section className="rise space-y-6" style={{ animationDelay: '140ms' }}>
-      <div className="sheet space-y-3 p-4">
+      <div className="surface-group space-y-3 p-4">
         <Field label="Filtrer filer" hint="Søk i filnavn og stemmenavn i denne utgaven.">
           <input type="search" className="field-input" value={fileQuery} placeholder="For eksempel Conselho 3 …" disabled={deleting} onChange={(e) => {
             setFileQuery(e.target.value)
@@ -428,7 +432,7 @@ function FilesSection({ data }: { data: WorkData }) {
         {fileQuery && <Button size="sm" variant="ghost" disabled={deleting} onClick={() => { setFileQuery(''); setSelectedIds([]); setConfirmDelete(false) }}>Nullstill filter</Button>}
       </div>
       {data.canManage && (
-        <div className="sheet flex flex-wrap items-center gap-3 p-4">
+        <div className="surface-group flex flex-wrap items-center gap-3 p-4">
           <Button onClick={() => selecting ? closeSelection() : setSelecting(true)} disabled={deleting}>
             {selecting ? 'Avslutt valg' : 'Velg flere filer'}
           </Button>
@@ -466,7 +470,7 @@ function FilesSection({ data }: { data: WorkData }) {
           }}>Slett {selectedFiles.length} filer</Button>
         </div>
       </Modal>
-      {visibleFiles.length === 0 && <div className="sheet"><EmptyState title="Ingen filer matcher filteret">Prøv et annet filnavn eller stemmenavn.</EmptyState></div>}
+      {visibleFiles.length === 0 && <div className="surface-group"><EmptyState title="Ingen filer matcher filteret">Prøv et annet filnavn eller stemmenavn.</EmptyState></div>}
       {order
         .filter((key) => sections.has(key))
         .map((key) => (
@@ -500,7 +504,7 @@ function FilesSection({ data }: { data: WorkData }) {
                 </button>
               )}
             </div>
-            <ul className="sheet divide-y divide-[var(--line)] overflow-hidden">
+            <ul className="surface-group divide-y divide-[var(--line)] overflow-hidden">
               {sections.get(key)!.map((f) => (
                 <FileRow key={f.id} file={f} data={data} onChanged={() => router.invalidate()}
                   selecting={data.canManage && selecting} selected={selectedIds.includes(f.id)}

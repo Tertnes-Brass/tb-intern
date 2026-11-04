@@ -81,14 +81,14 @@ export function OfflineStandRow({
       aria-checked={!!saved}
       onClick={toggle}
       disabled={!!progress}
-      className="sheet flex w-full cursor-pointer items-center gap-3.5 px-4 py-3.5 text-left transition-colors active:bg-paper-sunken disabled:cursor-wait"
+      className="surface-group flex w-full cursor-pointer items-center gap-3.5 px-4 py-3 text-left transition-colors active:bg-paper-sunken disabled:cursor-wait"
     >
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--brass-soft)] text-brass-strong">
-        {progress ? <span className="spinner" aria-hidden /> : <Icon name="download" size={20} />}
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--brass-soft)] text-brass-strong">
+        {progress ? <span className="spinner" aria-hidden /> : <Icon name="download" size={18} />}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[0.95rem] font-semibold text-ink">Tilgjengelig offline</span>
-        <span className="block truncate text-xs text-ink-soft">{detail}</span>
+        <span className="block truncate text-[0.92rem] font-semibold text-ink">Tilgjengelig offline</span>
+        <span className="line-clamp-2 block text-xs leading-snug text-ink-soft">{detail}</span>
       </span>
       <span
         aria-hidden

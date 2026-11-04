@@ -1,5 +1,8 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { ActionMenu, type ActionMenuItem } from '../../../components/ActionMenu'
+import { Icon } from '../../../components/Icons'
+import { OfflineStandRow } from '../../../components/OfflineStand'
 import { PercussionNotesField, PercussionSetupField } from '../../../components/Percussion'
 import { ProjectFormModal } from '../../../components/ProjectForm'
 import { ProjectOrderEditor } from '../../../components/ProjectOrderEditor'
@@ -9,7 +12,8 @@ import { StageSetupsSection } from '../../../components/stage/StageSetups'
 import { toast, toastError } from '../../../components/toast'
 import { BackArrow, Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
 import { ZipDownloadButton } from '../../../components/ZipDownload'
-import { formatDate, formatDuration, formatWeekday, relativeDays } from '../../../lib/format'
+import { formatDate, formatDuration, formatWeekday, relativeDays, toRoman } from '../../../lib/format'
+import { standEntries } from '../../../lib/stand'
 import { zipEntryName } from '../../../lib/zip'
 import {
   addWorkToProject,
@@ -35,6 +39,7 @@ export const Route = createFileRoute('/noter/prosjekter/$projectId')({
 
 function ProjectPage() {
   const data = Route.useLoaderData()
+  const { me } = Route.useRouteContext()
   const router = useRouter()
   const p = data.project
   const [editing, setEditing] = useState(false)
@@ -42,11 +47,21 @@ function ProjectPage() {
   const [publishing, setPublishing] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [ordering, setOrdering] = useState(false)
+  // Utgave, slagverksoppsett og flytt/fjern per verk vises bare når programmet
+  // redigeres — i lesemodus er siden musikerens, også for dirigenten.
+  const [editingProgram, setEditingProgram] = useState(false)
 
   const totalDuration = data.repertoire.reduce((acc, r) => acc + (r.durationSec ?? 0), 0)
   // Slagverksseksjonen vises når det finnes noe å vise — eller når den som ser
   // siden er den som skal fylle den ut.
   const hasPercussion = !!p.percussionNotes || data.repertoire.some((r) => r.percussionSetup)
+
+  // Det som ligger på notestativet — samme regel som stativet selv (og «Mine
+  // noter»), så knappen bare vises når stativet faktisk har noe å vise.
+  const standFileIds = useMemo(
+    () => standEntries(data.repertoire, { hasParts: data.myParts.length > 0 }).map((e) => e.fileId),
+    [data.repertoire, data.myParts.length],
+  )
 
   // Egne stemmer for hele prosjektet, i programrekkefølge:
   // «01 - Where Eagles Sing - 2. kornett.pdf». Serveren har allerede filtrert
@@ -71,158 +86,242 @@ function ProjectPage() {
     }
   }
 
+  const kindLabel = p.kind === 'konsert' ? 'Konsert' : p.kind === 'konkurranse' ? 'Konkurranse' : p.kind
+  const minutes = totalDuration > 0 ? Math.round(totalDuration / 60) : 0
+  const programSummary = [
+    data.repertoire.length === 1 ? '1 verk' : `${data.repertoire.length} verk`,
+    minutes ? `ca. ${minutes} min` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  const manageItems: ActionMenuItem[] = data.canManage
+    ? [
+        {
+          label: editingProgram ? 'Avslutt redigering av programmet' : 'Rediger programmet',
+          hint: 'Utgave, slagverk, flytt og fjern per verk',
+          icon: 'notes',
+          onSelect: () => setEditingProgram((v) => !v),
+        },
+        { label: 'Legg til verk', hint: 'Hent fra arkivet', icon: 'search', onSelect: () => setPickerOpen(true) },
+        ...(data.repertoire.length > 1
+          ? [{ label: 'Endre rekkefølge', icon: 'sliders' as const, onSelect: () => setOrdering(true) }]
+          : []),
+        { label: 'Rediger detaljer', hint: 'Navn, dato, sted og beskrivelse', icon: 'calendar', onSelect: () => setEditing(true) },
+        {
+          label: p.isPublished ? 'Avpubliser' : 'Publiser',
+          hint: p.isPublished ? 'Skjul prosjektet for medlemmene' : 'Medlemmene ser programmet og notene',
+          icon: 'megaphone',
+          onSelect: () => void togglePublish(),
+          disabled: publishing,
+        },
+        { label: 'Slett prosjektet', icon: 'close', tone: 'danger', onSelect: () => setConfirmDelete(true) },
+      ]
+    : []
+
   return (
-    <div className="space-y-10">
-      <header className="rise">
-        <Link
-          to="/noter/prosjekter"
-          className="back-link mb-4"
-        >
+    <div>
+      <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
+        <Link to="/noter/prosjekter" className="back-link">
           <BackArrow />
           Prosjekter
         </Link>
+        {data.canManage && <ActionMenu label="Administrer" title={p.name} items={manageItems} />}
+      </div>
 
-        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Kicker>
-                {p.kind === 'konsert' ? 'Konsert' : p.kind === 'konkurranse' ? 'Konkurranse' : p.kind}
-                {p.eventDate ? ` · ${relativeDays(p.eventDate)}` : ''}
-              </Kicker>
-              {!p.isPublished && <Stamp tone="oxblood">Utkast — kun synlig for stab</Stamp>}
-            </div>
-            <h1 className="display-title mt-2 break-words [hyphens:auto] text-[clamp(2.4rem,6vw,4rem)] font-semibold italic leading-[1] text-ink">
-              {p.name}
-            </h1>
-            {p.description && (
-              <p className="mt-3 max-w-xl text-[0.95rem] leading-relaxed text-ink-soft">{p.description}</p>
-            )}
-            <p className="mt-3 font-mono text-[0.7rem] uppercase tracking-[0.14em] text-ink-soft">
-              {p.eventDate ? `${formatWeekday(p.eventDate)} ${formatDate(p.eventDate)}` : 'Dato ikke satt'}
-              {p.venue ? ` · ${p.venue}` : ''}
-              {totalDuration > 0 ? ` · ca. ${Math.round(totalDuration / 60)} min musikk` : ''}
+      {/* Tittel, notestativ, program: på telefon i den rekkefølgen; fra md står
+          notestativet i sidekolonnen til høyre, på linje med tittelen. */}
+      <div className="grid gap-x-12 gap-y-7 md:grid-cols-[minmax(0,1fr)_16.5rem] lg:grid-cols-[minmax(0,1fr)_19rem]">
+      <header className="rise min-w-0 md:col-start-1 md:row-start-1">
+        <Kicker>
+          {kindLabel}
+          {p.eventDate ? ` · ${relativeDays(p.eventDate)}` : ''}
+        </Kicker>
+        <h1 className="display-title mt-2 break-words [hyphens:auto] text-[clamp(2.2rem,5.4vw,3.6rem)] font-semibold italic leading-[1] text-ink">
+          {p.name}
+        </h1>
+        <p className="mt-3 text-[0.95rem] text-ink">
+          {p.eventDate ? `${formatWeekday(p.eventDate)} ${formatDate(p.eventDate)}` : 'Dato ikke satt'}
+          {p.venue ? <span className="text-ink-soft"> · {p.venue}</span> : null}
+        </p>
+        {p.description && (
+          <p className="mt-2 max-w-2xl text-[0.95rem] leading-relaxed text-ink-soft">{p.description}</p>
+        )}
+        {!p.isPublished && (
+          <div className="surface-group mt-5 flex flex-wrap items-center justify-between gap-3 border-oxblood/30 px-4 py-3">
+            <p className="flex min-w-0 items-center gap-2.5 text-sm text-ink-soft">
+              <Stamp tone="oxblood">Utkast</Stamp>
+              Kun synlig for stab
             </p>
+            {data.canManage && (
+              <Button variant="primary" size="sm" onClick={togglePublish} loading={publishing}>
+                Publiser
+              </Button>
+            )}
           </div>
-
-          {data.canManage && (
-            <div className="flex shrink-0 flex-wrap gap-2">
-              <Button variant={p.isPublished ? 'secondary' : 'primary'} onClick={togglePublish} loading={publishing}>
-                {p.isPublished ? 'Avpubliser' : 'Publiser'}
-              </Button>
-              <Button onClick={() => setEditing(true)}>Rediger</Button>
-              <Button variant="danger" onClick={() => setConfirmDelete(true)}>
-                Slett
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <div className="staff-rule mt-7 w-full opacity-50" aria-hidden />
+        )}
       </header>
 
-      <section className="rise" style={{ animationDelay: '100ms' }}>
-        <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="kicker">Program</h2>
-          <div className="flex flex-wrap items-start gap-2">
-            <ZipDownloadButton
-              label="Last ned mine stemmer (ZIP)"
-              zipName={`${p.name} — mine stemmer`}
-              files={myProjectFiles}
-            />
-            {data.canManage && (
+        <aside className="rise md:col-start-2 md:row-span-2 md:row-start-1 md:pt-1" style={{ animationDelay: '60ms' }}>
+          <div className="space-y-3 md:aside-sticky md:max-h-[calc(100dvh-9rem)] md:overflow-y-auto md:pb-4">
+            {standFileIds.length > 0 ? (
               <>
-                {data.repertoire.length > 1 && (
-                  <Button size="sm" onClick={() => setOrdering(true)}>Endre rekkefølge</Button>
-                )}
-                <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
-                  + Legg til verk
-                </Button>
+                <Link to="/noter/stativ/$projectId" params={{ projectId: p.id }} className="stand-cta">
+                  <Icon name="notes" size={22} />
+                  Åpne notestativet
+                </Link>
+                <OfflineStandRow project={{ id: p.id, name: p.name }} fileIds={standFileIds} ownerId={me.id} />
               </>
+            ) : (
+              data.repertoire.length > 0 && (
+                <p className="surface-group px-4 py-3.5 text-sm leading-snug text-ink-soft">
+                  Ingen noter til deg i dette programmet ennå.
+                </p>
+              )
+            )}
+            {myProjectFiles.length > 0 && (
+              <ZipDownloadButton
+                label="Last ned mine stemmer (ZIP)"
+                zipName={`${p.name} — mine stemmer`}
+                files={myProjectFiles}
+                variant="secondary"
+                className="w-full [&>button]:w-full"
+              />
+            )}
+
+            {data.repertoire.length > 1 && (
+              <nav aria-label="Programmet" className="hidden pt-4 md:block">
+                <p className="group-label">Programmet</p>
+                <ol className="space-y-0.5">
+                  {data.repertoire.map((r, i) => (
+                    <li key={r.workId}>
+                      <a
+                        href={`#verk-${r.workId}`}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          document.getElementById(`verk-${r.workId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                        }}
+                        className="link-quiet flex items-baseline gap-2.5 rounded-lg px-2 py-1.5 text-sm text-ink-soft transition-colors hover:bg-paper-sunken hover:text-ink pointer-coarse:py-2.5"
+                      >
+                        <span className="roman-no w-7 shrink-0 text-right text-[0.8rem] text-brass">{toRoman(i + 1)}.</span>
+                        <span className="min-w-0 truncate">{r.title}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ol>
+              </nav>
             )}
           </div>
-        </div>
+        </aside>
 
-        {data.repertoire.length === 0 ? (
-          <div className="sheet mt-3">
-            <EmptyState
-              title="Programmet er tomt"
-              action={
-                data.canManage ? (
-                  <Button variant="primary" onClick={() => setPickerOpen(true)}>
-                    Legg til første verk
+        <div className="min-w-0 space-y-12 md:col-start-1 md:row-start-2">
+          <section className="rise" style={{ animationDelay: '100ms' }}>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line pb-2.5">
+              <h2 className="display-title text-xl font-semibold text-ink">Program</h2>
+              {data.repertoire.length > 0 && <p className="text-sm text-ink-faint">{programSummary}</p>}
+            </div>
+
+            {editingProgram && !ordering && (
+              <div className="surface-group mt-3 flex flex-wrap items-center justify-between gap-2 border-brass/40 bg-[var(--brass-soft)] px-3 py-2.5">
+                <p className="px-1 text-sm font-medium text-brass-strong">Redigerer programmet</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => setPickerOpen(true)}>
+                    + Legg til verk
                   </Button>
-                ) : undefined
-              }
-            >
-              {data.canManage
-                ? 'Hent verk fra arkivet og sett dem i rekkefølge.'
-                : 'Repertoaret er ikke satt opp ennå.'}
-            </EmptyState>
-          </div>
-        ) : ordering ? (
-          <ProjectOrderEditor projectId={p.id} items={data.repertoire} onClose={() => setOrdering(false)} />
-        ) : (
-          <RepertoireList
-            items={data.repertoire}
-            standProjectId={p.id}
-            edition={data.canManage ? (item) => <ProjectWorkEdition projectId={p.id} item={item} /> : undefined}
-            percussion={
-              data.canManage
-                ? (item) => (
-                    <PercussionSetupField
-                      projectId={p.id}
-                      workId={item.workId}
-                      value={item.percussionSetup}
-                      canEdit
-                    />
-                  )
-                : undefined
-            }
-            manage={
-              data.canManage
-                ? (item, i) => (
-                    <ManageRowButtons
-                      projectId={p.id}
-                      workId={item.workId}
-                      isFirst={i === 0}
-                      isLast={i === data.repertoire.length - 1}
-                    />
-                  )
-                : undefined
-            }
-          />
-        )}
-      </section>
-
-      {(hasPercussion || data.canManage) && (
-        <section className="rise" style={{ animationDelay: '130ms' }}>
-          <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="kicker">Slagverksnotater</h2>
-            <Link
-              to="/noter/prosjekter/$projectId/slagverk"
-              params={{ projectId: p.id }}
-              className="link-brass font-mono text-[0.66rem] uppercase tracking-[0.14em]"
-            >
-              Hele oppsettet →
-            </Link>
-          </div>
-          <div className="sheet px-5 py-4">
-            <PercussionNotesField projectId={p.id} value={p.percussionNotes} canEdit={data.canManage} />
-            {!p.percussionNotes && !data.canManage && (
-              <p className="text-sm text-ink-faint">Ingen notater ennå.</p>
+                  <Button size="sm" variant="primary" onClick={() => setEditingProgram(false)}>
+                    Ferdig
+                  </Button>
+                </div>
+              </div>
             )}
-            {data.canManage && (
-              <p className="mt-3 text-[0.78rem] leading-snug text-ink-faint">
-                Transport, hva som må lånes og oppriggingsrekkefølge — det som før sto nederst i regnearket.
-              </p>
+
+            {data.repertoire.length === 0 ? (
+              <EmptyState
+                title="Programmet er tomt"
+                action={
+                  data.canManage ? (
+                    <Button variant="primary" onClick={() => setPickerOpen(true)}>
+                      Legg til første verk
+                    </Button>
+                  ) : undefined
+                }
+              >
+                {data.canManage
+                  ? 'Hent verk fra arkivet og sett dem i rekkefølge.'
+                  : 'Repertoaret er ikke satt opp ennå.'}
+              </EmptyState>
+            ) : ordering ? (
+              <div className="mt-3">
+                <ProjectOrderEditor projectId={p.id} items={data.repertoire} onClose={() => setOrdering(false)} />
+              </div>
+            ) : (
+              <RepertoireList
+                items={data.repertoire}
+                standProjectId={p.id}
+                edition={
+                  data.canManage && editingProgram
+                    ? (item) => <ProjectWorkEdition projectId={p.id} item={item} />
+                    : undefined
+                }
+                percussion={
+                  data.canManage && editingProgram
+                    ? (item) => (
+                        <PercussionSetupField
+                          projectId={p.id}
+                          workId={item.workId}
+                          value={item.percussionSetup}
+                          canEdit
+                        />
+                      )
+                    : undefined
+                }
+                manage={
+                  data.canManage && editingProgram
+                    ? (item, i) => (
+                        <ManageRowButtons
+                          projectId={p.id}
+                          workId={item.workId}
+                          isFirst={i === 0}
+                          isLast={i === data.repertoire.length - 1}
+                        />
+                      )
+                    : undefined
+                }
+              />
             )}
-          </div>
-        </section>
-      )}
+          </section>
 
-      <StageSetupsSection projectId={p.id} setups={data.stageSetups} canEdit={data.canEditStage} />
+          {(hasPercussion || data.canManage) && (
+            <section className="rise" style={{ animationDelay: '130ms' }}>
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
+                <h2 className="display-title text-xl font-semibold text-ink">Slagverk</h2>
+                <Link
+                  to="/noter/prosjekter/$projectId/slagverk"
+                  params={{ projectId: p.id }}
+                  className="link-brass hit text-sm"
+                >
+                  Hele oppsettet →
+                </Link>
+              </div>
+              <div className="surface-group px-5 py-4">
+                <PercussionNotesField projectId={p.id} value={p.percussionNotes} canEdit={data.canManage} />
+                {!p.percussionNotes && !data.canManage && (
+                  <p className="text-sm text-ink-faint">Ingen notater ennå.</p>
+                )}
+                {data.canManage && (
+                  <p className="mt-3 text-[0.78rem] leading-snug text-ink-faint">
+                    Transport, hva som må lånes og oppriggingsrekkefølge — det som før sto nederst i regnearket.
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
 
-      {data.canShare && <SharesSection projectId={p.id} myParts={data.myParts} repertoire={data.repertoire} />}
+          <StageSetupsSection projectId={p.id} setups={data.stageSetups} canEdit={data.canEditStage} />
+
+          {data.canShare && <SharesSection projectId={p.id} myParts={data.myParts} repertoire={data.repertoire} />}
+        </div>
+      </div>
 
       <ProjectFormModal
         open={editing}
@@ -465,8 +564,8 @@ function SharesSection({
 
   return (
     <section className="rise" style={{ animationDelay: '160ms' }}>
-      <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="kicker">Vikarlenker</h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="display-title text-xl font-semibold text-ink">Vikarlenker</h2>
         <Button size="sm" variant="secondary" onClick={() => setCreateOpen(true)} disabled={sortedPartOptions.length === 0}>
           + Del med vikar
         </Button>
@@ -480,7 +579,7 @@ function SharesSection({
           uten innlogging, og den slutter å virke automatisk.
         </p>
       ) : (
-        <ul className="sheet divide-y divide-[var(--line)] overflow-hidden">
+        <ul className="list-group">
           {shares.map((s) => {
             const dead = !!s.revokedAt || s.expiresAt < now
             return (

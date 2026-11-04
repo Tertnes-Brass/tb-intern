@@ -1,5 +1,5 @@
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
-import { Button, EmptyState, Field, Kicker, Stamp } from '../../components/ui'
+import { Button, EmptyState, Field, PageHeader, Stamp } from '../../components/ui'
 import { formatDateTime } from '../../lib/format'
 import { listDownloads } from '../../server/downloads'
 
@@ -70,11 +70,11 @@ function DownloadsPage() {
 
   return (
     <div className="space-y-7">
-      <header className="rise">
-        <Kicker className="mb-2">Administrasjon</Kicker>
-        <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Filtilganger</h1>
-        <p className="mt-2 text-sm text-ink-soft">Hvem som har vist eller lastet ned filer fra arkivet.</p>
-      </header>
+      <PageHeader
+        className="rise"
+        title="Filtilganger"
+        summary="Hvem som har vist eller lastet ned filer fra arkivet."
+      />
 
       <div className="rise grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" style={{ animationDelay: '80ms' }}>
         <Field label="Prosjekt">
@@ -153,7 +153,7 @@ function DownloadsPage() {
       </div>
 
       {data.rows.length === 0 ? (
-        <div className="sheet rise" style={{ animationDelay: '140ms' }}>
+        <div className="surface-group rise" style={{ animationDelay: '140ms' }}>
           <EmptyState title={hasFilter ? 'Ingen treff på filteret' : 'Ingen filtilganger ennå'}>
             {hasFilter
               ? 'Prøv å fjerne eller justere ett av filtrene.'
@@ -162,7 +162,7 @@ function DownloadsPage() {
         </div>
       ) : (
         <div
-          className="rise sheet relative overflow-x-auto overscroll-x-contain after:pointer-events-none after:absolute after:inset-y-px after:right-px after:w-8 after:rounded-r-[13px] after:bg-gradient-to-l after:from-[var(--paper-raised)] after:to-transparent md:after:hidden"
+          className="rise surface-group relative overflow-x-auto overscroll-x-contain after:pointer-events-none after:absolute after:inset-y-px after:right-px after:w-8 after:rounded-r-[13px] after:bg-gradient-to-l after:from-[var(--paper-raised)] after:to-transparent md:after:hidden"
           style={{ animationDelay: '140ms' }}
         >
           <table className="w-full min-w-[640px] border-collapse text-sm">

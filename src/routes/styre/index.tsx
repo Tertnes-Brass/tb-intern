@@ -2,7 +2,9 @@ import { Link, createFileRoute, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { BoardTaskRowItem, QuickAddTask } from '../../components/BoardTasks'
 import { toast, toastError } from '../../components/toast'
-import { EmptyState, Field, Kicker, Stamp } from '../../components/ui'
+import { Icon } from '../../components/Icons'
+import { Segmented } from '../../components/Segmented'
+import { EmptyState, PageHeader } from '../../components/ui'
 import type { BoardTaskStatus } from '../../lib/board'
 import { createTask, listTasks, setTaskStatus } from '../../server/board'
 
@@ -58,25 +60,50 @@ function BoardTasksPage() {
   const active = data.open.length + data.inProgress.length
   const setSearch = (patch: TaskSearch) => navigate({ search: { ...search, ...patch }, replace: true })
 
-  return (
-    <div className="space-y-7">
-      <header className="rise">
-        <Kicker className="mb-2">Styrearbeidet</Kicker>
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">
-            {mine ? 'Mine oppgaver' : 'Oppgaver'}
-          </h1>
-          {data.overdueCount > 0 && (
-            <Stamp tone="oxblood">
-              {data.overdueCount === 1 ? '1 forfalt' : `${data.overdueCount} forfalte`}
-            </Stamp>
-          )}
-        </div>
+  const summary = (
+    <>
+      {active === 1 ? '1 åpen' : `${active} åpne`}
+      {data.overdueCount > 0 && (
+        <span className="font-medium text-danger">
+          {' · '}
+          {data.overdueCount === 1 ? '1 forfalt' : `${data.overdueCount} forfalte`}
+        </span>
+      )}
+    </>
+  )
 
+  const list = (tasks: typeof data.open) => (
+    <ul className="surface-group overflow-hidden">
+      {tasks.map((task) => (
+        <BoardTaskRowItem key={task.id} task={task} today={data.today} onToggle={(status) => setStatus(task.id, status)} />
+      ))}
+    </ul>
+  )
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        className="rise"
+        title={mine ? 'Mine oppgaver' : 'Oppgaver'}
+        summary={data.count > 0 ? summary : undefined}
+        // To visninger, ikke et filter blant flere: «alt styret skal gjøre» og
+        // «det som står på meg» er to forskjellige spørsmål.
+        action={
+          <Segmented
+            label="Visning"
+            value={mine ? 'mine' : 'alle'}
+            options={[
+              { value: 'alle', label: 'Alle' },
+              { value: 'mine', label: 'Mine' },
+            ]}
+            onChange={(v) => setSearch({ mine: v === 'mine' ? true : undefined })}
+          />
+        }
+      >
         {mine && (
           // Én linje, ikke et varselkort: påminnelsen er en opplysning om
           // hvordan området oppfører seg, ikke noe man skal gjøre noe med.
-          <p className="mt-3 text-xs leading-relaxed text-ink-faint">
+          <p className="-mt-2 text-xs leading-relaxed text-ink-faint">
             Er noe av dette forfalt, får du én e-post om dagen med påminnelse.{' '}
             <Link to="/min-profil" className="underline decoration-line underline-offset-2 hover:text-ink-soft">
               Skru av under Min profil
@@ -84,60 +111,31 @@ function BoardTasksPage() {
             .
           </p>
         )}
+      </PageHeader>
 
-        {/* To visninger, ikke et filter blant flere: «alt styret skal gjøre» og
-            «det som står på meg» er to forskjellige spørsmål. */}
-        <div className="mt-5 inline-flex rounded-[10px] border border-line bg-paper-raised p-0.5" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={!mine}
-            onClick={() => navigate({ search: { ...search, mine: undefined }, replace: true })}
-            className={`cursor-pointer rounded-[8px] px-3.5 py-1.5 text-[0.82rem] font-medium transition-colors ${
-              !mine ? 'bg-[var(--brass-soft)] text-brass-strong' : 'text-ink-soft hover:text-ink'
-            }`}
-          >
-            Alle
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mine}
-            onClick={() => setSearch({ mine: true })}
-            className={`cursor-pointer rounded-[8px] px-3.5 py-1.5 text-[0.82rem] font-medium transition-colors ${
-              mine ? 'bg-[var(--brass-soft)] text-brass-strong' : 'text-ink-soft hover:text-ink'
-            }`}
-          >
-            Mine
-          </button>
+      <div className="rise flex flex-col gap-2.5 md:flex-row md:items-center" style={{ animationDelay: '60ms' }}>
+        <div className="min-w-0 flex-1">
+          <QuickAddTask onCreate={create} />
         </div>
-      </header>
-
-      <div className="rise" style={{ animationDelay: '60ms' }}>
-        <QuickAddTask onCreate={create} />
+        {data.projectOptions.length > 0 && (
+          <select
+            className="field-input compact-select !w-auto md:max-w-[16rem]"
+            aria-label="Prosjekt"
+            value={search.prosjekt ?? ''}
+            onChange={(e) => navigate({ search: { ...search, prosjekt: e.target.value || undefined }, replace: true })}
+          >
+            <option value="">Alle prosjekter</option>
+            {data.projectOptions.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
-      {data.projectOptions.length > 0 && (
-        <div className="rise max-w-xs" style={{ animationDelay: '80ms' }}>
-          <Field label="Prosjekt">
-            <select
-              className="field-input"
-              value={search.prosjekt ?? ''}
-              onChange={(e) => navigate({ search: { ...search, prosjekt: e.target.value || undefined }, replace: true })}
-            >
-              <option value="">Alle prosjekter</option>
-              {data.projectOptions.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
-      )}
-
       {data.count === 0 ? (
-        <div className="sheet rise" style={{ animationDelay: '120ms' }}>
+        <div className="surface-group rise" style={{ animationDelay: '120ms' }}>
           <EmptyState title={mine ? 'Ingen oppgaver på deg' : 'Ingen oppgaver ennå'}>
             {mine
               ? 'Ingen av styrets oppgaver står på deg akkurat nå.'
@@ -147,45 +145,29 @@ function BoardTasksPage() {
       ) : (
         <div className="space-y-8">
           {active === 0 ? (
-            <div className="sheet rise" style={{ animationDelay: '120ms' }}>
-              <EmptyState title="Alt er gjort">
-                Ingen åpne oppgaver igjen. De ferdige ligger nederst.
-              </EmptyState>
+            <div className="surface-group rise" style={{ animationDelay: '120ms' }}>
+              <EmptyState title="Alt er gjort">Ingen åpne oppgaver igjen. De ferdige ligger nederst.</EmptyState>
             </div>
           ) : (
-            <>
+            // Fra lg (iPad på tvers) står Åpne og Pågår side om side.
+            <div
+              className={`grid items-start gap-x-6 gap-y-8 ${
+                data.open.length > 0 && data.inProgress.length > 0 ? 'lg:grid-cols-2' : ''
+              }`}
+            >
               {data.open.length > 0 && (
                 <section className="rise" style={{ animationDelay: '120ms' }}>
-                  <h2 className="kicker mb-2">Åpne</h2>
-                  <ul className="sheet overflow-hidden">
-                    {data.open.map((task) => (
-                      <BoardTaskRowItem
-                        key={task.id}
-                        task={task}
-                        today={data.today}
-                        onToggle={(status) => setStatus(task.id, status)}
-                      />
-                    ))}
-                  </ul>
+                  <h2 className="group-label">Åpne · {data.open.length}</h2>
+                  {list(data.open)}
                 </section>
               )}
-
               {data.inProgress.length > 0 && (
                 <section className="rise" style={{ animationDelay: '180ms' }}>
-                  <h2 className="kicker mb-2">Pågår</h2>
-                  <ul className="sheet overflow-hidden">
-                    {data.inProgress.map((task) => (
-                      <BoardTaskRowItem
-                        key={task.id}
-                        task={task}
-                        today={data.today}
-                        onToggle={(status) => setStatus(task.id, status)}
-                      />
-                    ))}
-                  </ul>
+                  <h2 className="group-label">Pågår · {data.inProgress.length}</h2>
+                  {list(data.inProgress)}
                 </section>
               )}
-            </>
+            </div>
           )}
 
           {data.done.length > 0 && (
@@ -193,24 +175,13 @@ function BoardTasksPage() {
               <button
                 type="button"
                 onClick={() => setShowDone((v) => !v)}
-                className="kicker mb-2 flex cursor-pointer items-center gap-2 transition-colors hover:text-brass-strong"
+                className="group-label hit flex cursor-pointer items-center gap-1.5 transition-colors hover:text-ink"
                 aria-expanded={showDone}
               >
-                Ferdig ({data.done.length})
-                <span aria-hidden>{showDone ? '−' : '+'}</span>
+                Ferdig · {data.done.length}
+                <Icon name="chevronRight" size={14} className={`transition-transform ${showDone ? 'rotate-90' : ''}`} />
               </button>
-              {showDone && (
-                <ul className="sheet overflow-hidden">
-                  {data.done.map((task) => (
-                    <BoardTaskRowItem
-                      key={task.id}
-                      task={task}
-                      today={data.today}
-                      onToggle={(status) => setStatus(task.id, status)}
-                    />
-                  ))}
-                </ul>
-              )}
+              {showDone && list(data.done)}
             </section>
           )}
         </div>
