@@ -33,6 +33,13 @@ import {
  * Rekkefølgen (4. november 2026): hendelsen, så «Ditt oppmøte» — det de fleste
  * åpner siden for — så øvingsplanen og til sist navnelistene. Fra 768 px står
  * oppmøtet i en egen spalte til høyre for planen (`.event-layout`).
+ *
+ * Første skjerm på telefon (5. november 2026): oppmøtet er ÉN linje («Vi regner
+ * med deg · Kan ikke komme»), tallene og hvem som ser navnene ligger bak en
+ * sammenleggbar «Oppmøte · 3 kommer · 1 kan ikke», og første punkt i
+ * øvingsplanen står innenfor første skjerm. Planen vises ren for alle;
+ * vedlikeholdet (legg til, flytt, fjern, merknad, prosjektkobling) kommer først
+ * etter «Rediger øvingsplan», som «Rediger programmet» på prosjektsiden.
  */
 
 export const Route = createFileRoute('/kalender/$eventId')({
@@ -72,7 +79,7 @@ function EventDetailPage() {
       <header className="event-head rise">
         <BackLink />
         <div className="flex gap-4">
-          <DateTile iso={date} size="lg" tone="brass" />
+          <DateTile iso={date} size="lg" tone="brass" srLabel={false} />
           <div className="min-w-0 flex-1 pt-0.5">
             <Kicker className="mb-1.5">{relativeDays(date)}</Kicker>
             <h1 className="display-title break-words text-[clamp(1.9rem,5.5vw,3rem)] font-semibold italic leading-[1.02] text-ink [hyphens:auto]">
@@ -99,7 +106,7 @@ function EventDetailPage() {
           </div>
         </div>
         {event.description && (
-          <p className="mt-4 max-w-xl whitespace-pre-line text-sm leading-relaxed text-ink-soft">{event.description}</p>
+          <p className="mt-3 max-w-xl whitespace-pre-line text-sm leading-relaxed text-ink-soft md:mt-4">{event.description}</p>
         )}
       </header>
 
@@ -162,6 +169,12 @@ function PlanSection({ data, occurrenceKey }: { data: Detail; occurrenceKey: str
   const [pickerOpen, setPickerOpen] = useState(false)
   const [customOpen, setCustomOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  // Lesemodus er standard også for dirigenten: planen er det alle åpner siden
+  // for å se, og pilene/krysset skal ikke ligge i veien for den.
+  const [editing, setEditing] = useState(false)
+  const canEdit = data.canManagePlan
+  const editMode = canEdit && editing
+  const empty = data.setlist.length === 0
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true)
@@ -179,31 +192,41 @@ function PlanSection({ data, occurrenceKey }: { data: Detail; occurrenceKey: str
     <section className="event-plan rise" style={{ animationDelay: '80ms' }}>
       <ListHeader
         title="Øvingsplan"
-        meta={
-          data.setlist.length > 0
-            ? `${data.setlist.length} ${data.setlist.length === 1 ? 'punkt' : 'punkter'}`
-            : undefined
-        }
+        meta={empty ? undefined : `${data.setlist.length} ${data.setlist.length === 1 ? 'punkt' : 'punkter'}`}
         className="mb-1"
         action={
-          data.canManagePlan ? (
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="primary" onClick={() => setPickerOpen(true)}>
-                Legg til verk
-              </Button>
-              <Button size="sm" onClick={() => setCustomOpen(true)}>
-                Fritekst
-              </Button>
-            </div>
+          canEdit && !editing ? (
+            <Button size="sm" onClick={() => setEditing(true)}>
+              {empty ? 'Lag øvingsplan' : 'Rediger øvingsplan'}
+            </Button>
           ) : undefined
         }
       />
 
-      {data.setlist.length === 0 ? (
+      {editMode && (
+        <div className="surface-group mt-3 flex flex-wrap items-center justify-between gap-2 border-brass/40 bg-[var(--brass-soft)] px-3 py-2.5">
+          <p className="px-1 text-sm font-medium text-brass-strong">Redigerer øvingsplanen</p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => setPickerOpen(true)}>
+              + Verk
+            </Button>
+            <Button size="sm" onClick={() => setCustomOpen(true)}>
+              + Fritekst
+            </Button>
+            <Button size="sm" variant="primary" onClick={() => setEditing(false)}>
+              Ferdig
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {empty ? (
         <p className="py-3 text-sm text-ink-soft">
-          {data.canManagePlan
-            ? 'Ingen plan ennå. Legg inn verkene i den rekkefølgen de skal øves, så vet alle hva de skal ha framme.'
-            : 'Dirigenten har ikke lagt inn hva som skal øves på denne gangen.'}
+          {editMode
+            ? 'Legg inn verkene i den rekkefølgen de skal øves, så vet alle hva de skal ha framme.'
+            : canEdit
+              ? 'Ingen plan ennå.'
+              : 'Dirigenten har ikke lagt inn hva som skal øves på denne gangen.'}
         </p>
       ) : (
         <ol>
@@ -230,13 +253,13 @@ function PlanSection({ data, occurrenceKey }: { data: Detail; occurrenceKey: str
                     </span>
                   )}
                 </p>
-                {item.workComposer && <p className="mt-0.5 text-xs text-ink-soft">{item.workComposer}</p>}
+                {item.workComposer && <p className="mt-0.5 text-[0.8rem] text-ink-soft">{item.workComposer}</p>}
                 {item.note && <p className="mt-1 text-sm leading-snug text-ink-soft">{item.note}</p>}
-                {data.canManagePlan && (
+                {editMode && (
                   <NoteEditor occurrenceKey={occurrenceKey} item={item} disabled={busy} onDone={() => router.invalidate()} />
                 )}
               </div>
-              {data.canManagePlan && (
+              {editMode && (
                 <div className="flex shrink-0 items-center gap-0.5">
                   <IconButton
                     label="Flytt opp"
@@ -269,28 +292,24 @@ function PlanSection({ data, occurrenceKey }: { data: Detail; occurrenceKey: str
         </ol>
       )}
 
-      {data.canManagePlan && (
-        <div className="mt-4">
-          <label className="flex flex-wrap items-center gap-2 text-[0.8rem] text-ink-soft">
-            <span className="font-mono text-[0.66rem] uppercase tracking-[0.14em] text-ink-faint">Hører til</span>
-            <select
-              className="field-input !w-auto !text-base sm:!text-xs"
-              value={data.linkedProject?.id ?? ''}
-              disabled={busy}
-              onChange={(e) =>
-                act(() => setLinkedProject({ data: { occurrenceKey, projectId: e.target.value || null } }))
-              }
-            >
-              <option value="">Ingen prosjektkobling</option>
-              {data.projectOptions.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                  {p.eventDate ? ` · ${formatDate(p.eventDate)}` : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+      {editMode && (
+        <label className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <span className="text-[0.85rem] font-medium text-ink-soft">Hører til prosjekt</span>
+          <select
+            className="field-input !w-auto max-w-full !text-base sm:!text-sm pointer-coarse:min-h-11"
+            value={data.linkedProject?.id ?? ''}
+            disabled={busy}
+            onChange={(e) => act(() => setLinkedProject({ data: { occurrenceKey, projectId: e.target.value || null } }))}
+          >
+            <option value="">Ingen prosjektkobling</option>
+            {data.projectOptions.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+                {p.eventDate ? ` · ${formatDate(p.eventDate)}` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
       )}
 
       <WorkPicker occurrenceKey={occurrenceKey} open={pickerOpen} onClose={() => setPickerOpen(false)} />
@@ -323,7 +342,7 @@ function NoteEditor({
           setValue(item.note ?? '')
           setOpen(true)
         }}
-        className="mt-1 inline-flex cursor-pointer items-center font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint transition-colors hover:text-brass-strong pointer-coarse:-mb-2 pointer-coarse:min-h-11"
+        className="mt-1 inline-flex cursor-pointer items-center text-[0.8rem] font-medium text-brass-strong transition-colors hover:text-ink pointer-coarse:-mb-2 pointer-coarse:min-h-11"
       >
         {item.note ? 'Endre merknad' : 'Legg til merknad'}
       </button>
@@ -563,8 +582,10 @@ function CustomItemDialog({
 // ---------- Oppmøte ----------
 
 /**
- * «Ditt oppmøte» og tallene for hele korpset — én flate, rett under hendelsen
- * (på iPad i høyre spalte). Navnelistene står i `RosterSection`, nederst.
+ * Oppmøtet — én flate, rett under hendelsen (på iPad i høyre spalte). Ditt
+ * eget svar er én linje; tallene for hele korpset og hvem som ser navnene
+ * ligger bak «Oppmøte · …», så fraværsflyten ikke tar første skjerm fra
+ * øvingsplanen. Navnelistene står i `RosterSection`, nederst.
  */
 function AttendanceCard({ data, occurrenceKey }: { data: Detail; occurrenceKey: string }) {
   const router = useRouter()
@@ -575,36 +596,62 @@ function AttendanceCard({ data, occurrenceKey }: { data: Detail; occurrenceKey: 
         {/* En hendelse som er borte fra kalenderen (`OrphanPage`) har ingen tid
             å svare på — da vises bare tallene. */}
         {event && (
-          <div className="px-4 pb-4 pt-5 sm:px-5">
-            <p className="kicker mb-3">Ditt oppmøte</p>
+          <div className="px-4 pb-3 pt-3.5 sm:px-5">
+            <h2 className="sr-only">Ditt oppmøte</h2>
             {/* Samme kontroll som på Hjem: ett trykk på «Kan ikke komme», og et
-                ark med grunn og kommentar. */}
+                ark med grunn og kommentar. Har man meldt fravær, vises hele
+                kontrollen (endre / jeg kommer likevel). */}
             <RsvpControl
               occurrenceKey={occurrenceKey}
               eventLabel={rsvpEventLabel(event)}
               current={data.myAttendance}
               onSaved={() => router.invalidate()}
+              compact
             />
           </div>
         )}
-        <div className={`px-4 py-3.5 sm:px-5 ${event ? 'next-card-row' : 'pt-5'}`}>
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <p className="text-sm">
-              <span className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-brass">Oppmøte</span>
-              <span className="ml-2 text-ink">{attendanceSummary(data.counts)}</span>
+        <details className={`group ${event ? 'next-card-row' : ''}`}>
+          <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 px-4 py-2 text-sm transition-colors sm:px-5 can-hover:hover:bg-paper-sunken/60 [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0 flex-1">
+              <span className="font-semibold text-ink">Oppmøte</span>
+              <span className="text-ink-soft"> · {attendanceSummary(data.counts)}</span>
+            </span>
+            <Icon name="chevronRight" size={16} className="shrink-0 text-ink-faint transition-transform group-open:rotate-90" />
+          </summary>
+          <div className="space-y-2.5 px-4 pb-4 text-[0.85rem] leading-relaxed text-ink-soft sm:px-5">
+            <p>Alle regnes som kommer til de selv melder fravær.</p>
+            <p>
+              {data.groups
+                ? data.canManageAttendance
+                  ? 'Navnelisten står nederst på siden. Der kan du også registrere fravær for noen som har gitt beskjed på annen måte.'
+                  : 'Navnelisten for din stemmegruppe står nederst på siden. Der kan du også registrere fravær for noen som har gitt beskjed på annen måte.'
+                : 'Hvem som har meldt fravær, ser bare dirigent, fraværsansvarlig og gruppelederne for sin egen stemmegruppe.'}
             </p>
-            {data.canManageAttendance && (
-              <Link to="/fravaer" className="link-brass hit text-sm">
-                Fraværsoversikt
-              </Link>
+            {(data.groups || data.canManageAttendance) && (
+              <p className="flex flex-wrap gap-x-5 gap-y-1">
+                {data.groups && (
+                  <a
+                    href="#hvem-kommer"
+                    className="link-brass hit"
+                    onClick={(e) => {
+                      // Ikke la ruteren tolke ankeret; rull dit i det som faktisk
+                      // ruller (vinduet, eller skallet i installert iOS-app).
+                      e.preventDefault()
+                      document.getElementById('hvem-kommer')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }}
+                  >
+                    Til navnelisten
+                  </a>
+                )}
+                {data.canManageAttendance && (
+                  <Link to="/fravaer" className="link-brass hit">
+                    Fraværsoversikt
+                  </Link>
+                )}
+              </p>
             )}
           </div>
-          <p className="mt-1.5 text-xs leading-relaxed text-ink-faint">
-            {data.groups
-              ? 'Alle regnes som kommer til de selv melder fravær. Du kan registrere fravær for noen som har gitt beskjed på annen måte — se navnelisten.'
-              : 'Hvem som har meldt fravær, ser bare dirigent, fraværsansvarlig og gruppelederne for sin egen stemmegruppe.'}
-          </p>
-        </div>
+        </details>
       </div>
     </section>
   )
@@ -614,11 +661,11 @@ function AttendanceCard({ data, occurrenceKey }: { data: Detail; occurrenceKey: 
 function RosterSection({ data, occurrenceKey }: { data: Detail; occurrenceKey: string }) {
   if (!data.groups) return null
   return (
-    <section className="event-people rise space-y-6" style={{ animationDelay: '120ms' }}>
+    <section id="hvem-kommer" className="event-people rise scroll-mt-24 space-y-6" style={{ animationDelay: '120ms' }}>
       <ListHeader title="Hvem kommer" meta={attendanceSummary(data.counts)} />
       {data.groups.map((group) => (
         <div key={group.section}>
-          <h3 className="kicker mb-1">{group.label}</h3>
+          <h3 className="group-label !ml-0 !mb-1">{group.label}</h3>
           <ul>
             {group.members.map((member) => (
               <MemberRow key={member.userId} member={member} occurrenceKey={occurrenceKey} />
@@ -667,7 +714,7 @@ function MemberRow({
         <p className={`truncate text-sm font-medium ${status === 'attending' ? 'text-ink' : 'text-oxblood'}`}>
           {member.name}
         </p>
-        <p className="truncate text-xs text-ink-faint">
+        <p className="truncate text-[0.8rem] text-ink-soft">
           {member.partName ?? 'Uten stemme'}
           {status !== 'attending' && member.source === 'admin' && member.registeredByName
             ? ` · registrert av ${member.registeredByName}`
@@ -679,7 +726,7 @@ function MemberRow({
       </div>
       {member.canEdit ? (
         <select
-          className="field-input !w-auto shrink-0 !text-base sm:!text-xs"
+          className="field-input !w-auto shrink-0 !text-base sm:!text-sm pointer-coarse:min-h-11"
           value={status === 'attending' ? '' : status}
           disabled={busy}
           onChange={(e) => setStatus(e.target.value)}
@@ -691,9 +738,7 @@ function MemberRow({
           {status === 'unsure' && <option value="unsure">{ATTENDANCE_LABELS.unsure}</option>}
         </select>
       ) : status === 'attending' ? (
-        <span className="shrink-0 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint">
-          {ATTENDANCE_LABELS.attending}
-        </span>
+        <span className="shrink-0 text-[0.8rem] text-ink-faint">{ATTENDANCE_LABELS.attending}</span>
       ) : (
         <Stamp tone={status === 'not_attending' ? 'oxblood' : 'neutral'}>{ATTENDANCE_LABELS[status]}</Stamp>
       )}

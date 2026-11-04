@@ -2045,13 +2045,18 @@ dialog.stand-sheet:focus-visible {
 }
 
 /* Hendelsen (/kalender/$eventId): én spalte på telefon i rekkefølgen
-   hendelse → ditt oppmøte → plan → navneliste. Fra 768 px står oppmøtet i en
-   egen spalte til høyre, på linje med tittelen, og planen og navnelistene til
-   venstre. Reglene gjelder bare inne i `.event-layout`. */
+   hendelse → ditt oppmøte (én linje + sammenleggbare tall) → plan →
+   navneliste, tett nok til at første punkt i planen står på første skjerm på
+   en iPhone. Fra 768 px står oppmøtet i en egen spalte til høyre, på linje med
+   tittelen, og planen og navnelistene til venstre. Reglene gjelder bare inne
+   i `.event-layout`. */
 .event-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  row-gap: 1.75rem;
+  row-gap: 1.25rem;
+}
+.event-layout .back-link {
+  margin-bottom: 0.75rem;
 }
 @media (min-width: 768px) {
   .event-layout {
