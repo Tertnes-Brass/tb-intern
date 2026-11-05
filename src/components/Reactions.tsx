@@ -91,6 +91,13 @@ export function ReactionBar({
   )
 }
 
+/**
+ * Knappene i hurtigvalget. På datamaskin faste 40 px (panelet måler raden); på
+ * telefon deler de bredden på arket likt (maks 48 px), så alle åtte får plass
+ * også på den smaleste skjermen.
+ */
+const QUICK_BUTTON = 'grid h-10 min-w-0 max-w-12 flex-1 cursor-pointer place-items-center rounded-[8px] sm:w-10 sm:flex-none'
+
 /** Smilefjes-pluss: hurtigvalgene, og «Flere» for hele emoji-velgeren. */
 function AddReaction({ onPick, hasAny }: { onPick: (emoji: string) => void; hasAny: boolean }) {
   const button = useRef<HTMLButtonElement>(null)
@@ -120,17 +127,18 @@ function AddReaction({ onPick, hasAny }: { onPick: (emoji: string) => void; hasA
         <Icon name="smilePlus" size={17} />
         {!hasAny && <span className="text-[0.72rem] font-medium">Reager</span>}
       </button>
-      <Popover anchor={button} open={open} onClose={() => setOpen(false)} label="Legg til reaksjon" width={all ? 340 : 320} height={all ? 380 : 64}>
+      <Popover anchor={button} open={open} onClose={() => setOpen(false)} label="Legg til reaksjon" width={all ? 340 : 'fit'} height={all ? 380 : 'fit'}>
         {all ? (
           <EmojiPicker onPick={pick} className="min-h-0 flex-1" />
         ) : (
-          <div className="flex flex-1 items-center gap-0.5 px-2">
+          // Så bred som knappene på datamaskin (panelet måler den), hele arket på telefon.
+          <div className="flex items-center gap-0.5 px-2 py-2">
             {QUICK_REACTIONS.map((emoji) => (
               <button
                 key={emoji}
                 type="button"
                 onClick={() => pick(emoji)}
-                className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-[8px] text-[1.35rem] transition-transform hover:scale-110 hover:bg-paper-sunken"
+                className={`${QUICK_BUTTON} text-[1.35rem] transition-transform hover:scale-110 hover:bg-paper-sunken`}
               >
                 {emoji}
               </button>
@@ -140,7 +148,7 @@ function AddReaction({ onPick, hasAny }: { onPick: (emoji: string) => void; hasA
               onClick={() => setAll(true)}
               title="Flere emojier"
               aria-label="Flere emojier"
-              className="ml-auto grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-[8px] text-ink-soft hover:bg-paper-sunken hover:text-ink"
+              className={`${QUICK_BUTTON} text-ink-soft hover:bg-paper-sunken hover:text-ink sm:ml-1`}
             >
               <Icon name="smilePlus" size={18} />
             </button>

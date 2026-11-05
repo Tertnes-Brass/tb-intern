@@ -12,6 +12,9 @@ import { createPortal } from 'react-dom'
  *
  * Lukkes med Escape, med et trykk utenfor (ikke på knappen — den veksler selv)
  * og når knappen forsvinner. Fokus går tilbake til knappen.
+ *
+ * `'fit'` gjør panelet akkurat så stort som innholdet (målt i nettleseren), så
+ * en rad med knapper aldri klippes — heller ikke med større skrift eller zoom.
  */
 export function Popover({
   anchor,
@@ -27,9 +30,9 @@ export function Popover({
   onClose: () => void
   /** Skjermleserens navn på panelet. */
   label: string
-  width?: number
-  /** Høyden på datamaskin; på telefon tar arket det det trenger, opptil 75 % av skjermen. */
-  height?: number
+  width?: number | 'fit'
+  /** Høyden på datamaskin (og på telefon, pluss grepet); `'fit'` = innholdets. Maks 75 % av skjermen på telefon. */
+  height?: number | 'fit'
   children: ReactNode
 }) {
   const panel = useRef<HTMLDivElement>(null)
@@ -46,11 +49,13 @@ export function Popover({
       const rect = anchor.current?.getBoundingClientRect()
       if (phone || !rect) return setPos(null)
       const margin = 8
-      const w = Math.min(width, window.innerWidth - margin * 2)
+      // «fit»: panelet er allerede tegnet (usynlig) i sin naturlige størrelse.
+      const w = Math.min(width === 'fit' ? (panel.current?.offsetWidth ?? 0) : width, window.innerWidth - margin * 2)
+      const h = height === 'fit' ? (panel.current?.offsetHeight ?? 0) : height
       const left = Math.min(Math.max(margin, rect.left), window.innerWidth - w - margin)
-      const above = rect.top - height - 6
+      const above = rect.top - h - 6
       const below = rect.bottom + 6
-      const top = above >= margin ? above : Math.min(below, window.innerHeight - height - margin)
+      const top = above >= margin ? above : Math.min(below, window.innerHeight - h - margin)
       setPos({ left, top: Math.max(margin, top) })
     }
     place()
@@ -108,7 +113,18 @@ export function Popover({
             ? 'pb-safe fixed inset-x-0 bottom-0 z-[81] flex max-h-[75dvh] flex-col overflow-hidden rounded-t-[16px] border-t border-line bg-paper-raised shadow-[var(--shadow-lift)]'
             : 'fixed z-[81] flex flex-col overflow-hidden rounded-[12px] border border-line bg-paper-raised shadow-[var(--shadow-lift)]'
         }
-        style={sheet ? { height: Math.min(height + 40, 640) } : pos ? { left: pos.left, top: pos.top, width: Math.min(width, window.innerWidth - 16), height } : { visibility: 'hidden' }}
+        style={
+          sheet
+            ? height === 'fit'
+              ? undefined
+              : { height: Math.min(height + 40, 640) }
+            : {
+                width: width === 'fit' ? 'max-content' : Math.min(width, window.innerWidth - 16),
+                maxWidth: window.innerWidth - 16,
+                height: height === 'fit' ? undefined : height,
+                ...(pos ? { left: pos.left, top: pos.top } : { visibility: 'hidden' as const }),
+              }
+        }
       >
         {sheet && <span className="sheet-grab mx-auto mt-2 mb-1 block shrink-0" aria-hidden />}
         {children}
