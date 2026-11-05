@@ -1254,9 +1254,44 @@ dialog.stand-sheet:focus-visible {
 .stand-slide-prev {
   animation: stand-in-prev 0.26s cubic-bezier(0.2, 0.7, 0.25, 1);
 }
+/* Hjelpen for bladingen (StandHelp.tsx): noten skimtes gjennom, trykkfeltene
+   skilles med stiplede linjer der de faktisk går. */
+.stand-help {
+  background: color-mix(in srgb, var(--stand-sunken) 84%, transparent);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  animation: stand-fade-in 0.22s ease-out;
+}
+.stand-help-divider {
+  border-left: 1px dashed var(--stand-line-strong);
+}
+/* «Fortsatt fra …» glir rolig ned under topplinjen. */
+.stand-notice {
+  animation: stand-notice-in 0.3s cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+@keyframes stand-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes stand-notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .stand-slide-next,
   .stand-slide-prev,
+  .stand-help,
+  .stand-notice,
   dialog.stand-sheet[open] {
     animation: none;
   }

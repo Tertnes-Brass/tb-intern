@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  HINT_SEEN,
   LAST_PAGE,
+  gestureHint,
+  gestureModeOf,
+  hintStorageKey,
+  shouldShowHint,
   canSpread,
   clampViewStart,
   defaultView,
@@ -144,5 +149,34 @@ describe('tapZone og pageLabel', () => {
     expect(pageLabel(3, 4, 2)).toBe('side 3–4 av 4')
     expect(pageLabel(5, 5, 2)).toBe('side 5 av 5')
     expect(pageLabel(1, 0, 1)).toBe('')
+  })
+})
+
+describe('hjelp for bladingen', () => {
+  it('de to sidevisningene deler hjelpen; rullevisningen har sin egen', () => {
+    expect(gestureModeOf('scroll')).toBe('scroll')
+    expect(gestureModeOf('page')).toBe('paged')
+    expect(gestureModeOf('spread')).toBe('paged')
+    expect(hintStorageKey('scroll')).not.toBe(hintStorageKey('paged'))
+  })
+
+  it('vises til den er sett', () => {
+    expect(shouldShowHint(null)).toBe(true)
+    expect(shouldShowHint(undefined)).toBe(true)
+    expect(shouldShowHint('0')).toBe(true)
+    expect(shouldShowHint(HINT_SEEN)).toBe(false)
+  })
+
+  it('sidevisningene: tre trykkfelt, og sveip blar en side', () => {
+    const hint = gestureHint('paged')
+    expect(hint.zones.map((z) => z.zone)).toEqual(['prev', 'center', 'next'])
+    expect(hint.zones.map((z) => z.label)).toEqual(['Forrige side', 'Vis menyene', 'Neste side'])
+    expect(hint.swipe).toMatch(/side/)
+  })
+
+  it('rullevisningen: trykk viser menyene, og sveip bytter stykke', () => {
+    const hint = gestureHint('scroll')
+    expect(hint.zones.map((z) => z.zone)).toEqual(['center'])
+    expect(hint.swipe).toMatch(/stykke/)
   })
 })

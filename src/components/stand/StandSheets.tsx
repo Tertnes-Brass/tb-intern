@@ -1,7 +1,7 @@
 /**
- * Arkene i notestativet: «Program» (hopp til et stykke) og «Visning» (visning,
- * nattlys, lytt, offline, del, fullskjerm). Stativet er alltid mørkt, så arkene
- * har sin egen mørke drakt (`--stand-*` i styles.css) i stedet for appens
+ * Arkene i notestativet: «Program» (hopp til et stykke, eller «Fra starten») og
+ * «Visning» (visning, nattlys, lytt, offline, del, hjelp for bladingen,
+ * fullskjerm). Stativet er alltid mørkt, så arkene har sin egen mørke drakt (`--stand-*` i styles.css) i stedet for appens
  * papir — et lyst ark midt i en mørk sal blender.
  *
  * Sidepanel fra høyre på iPad og bredere (noten blir synlig ved siden av), og
@@ -57,7 +57,9 @@ function StandSheet({
       <div className="stand-sheet-grab shrink-0 touch-none select-none pt-2.5" {...drag}>
         <span aria-hidden />
       </div>
-      <div className="flex shrink-0 items-start justify-between gap-3 px-5 pb-3 pt-3">
+      {/* Samme topp i begge arkene: tittel til venstre, «Ferdig» til høyre —
+          en synlig vei ut også der man ikke vet at man kan dra arket ned. */}
+      <div className="flex shrink-0 items-center justify-between gap-3 px-5 pb-3 pt-3">
         <div className="min-w-0">
           <h2 id={titleId} className="display-title text-xl font-semibold text-(--stand-ink)">
             {title}
@@ -71,10 +73,9 @@ function StandSheet({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Lukk"
-          className="-mr-2 -mt-1 grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-full text-(--stand-muted) transition-colors hover:text-(--stand-ink) active:scale-95"
+          className="-mr-2.5 inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-full px-3 text-[0.95rem] font-semibold text-(--stand-accent) transition-colors hover:bg-(--stand-hover) active:scale-95"
         >
-          <Icon name="close" size={18} />
+          Ferdig
         </button>
       </div>
       <div className="min-h-0 flex-auto overflow-y-auto overscroll-contain px-3 pb-5">{children}</div>
@@ -91,6 +92,7 @@ export function ProgramSheet({
   entries,
   index,
   onPick,
+  onRestart,
 }: {
   open: boolean
   onClose: () => void
@@ -98,6 +100,8 @@ export function ProgramSheet({
   entries: StandEntry[]
   index: number
   onPick: (index: number) => void
+  /** «Fra starten»: første side i første stykke. `null` når man allerede står der. */
+  onRestart: (() => void) | null
 }) {
   const list = useRef<HTMLOListElement>(null)
 
@@ -111,6 +115,23 @@ export function ProgramSheet({
 
   return (
     <StandSheet open={open} onClose={onClose} title="Program" subtitle={projectName}>
+      {onRestart && (
+        <button
+          type="button"
+          onClick={onRestart}
+          className="mb-2 flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-xl border border-(--stand-line) px-3 text-left text-[0.95rem] font-semibold text-(--stand-accent) transition-colors hover:bg-(--stand-hover) active:bg-(--stand-hover)"
+        >
+          <span className="grid w-9 shrink-0 place-items-center">
+            <Icon name="toStart" size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            Fra starten
+            <span className="block truncate text-xs font-normal text-(--stand-muted)">
+              Første side i {entries[0] ? `${entries[0].number} ${entries[0].title}` : 'første stykke'}
+            </span>
+          </span>
+        </button>
+      )}
       <ol ref={list} className="space-y-0.5">
         {entries.map((e, i) => {
           const current = i === index
@@ -175,6 +196,7 @@ export function ViewSheet({
   offline,
   onShare,
   fullscreen,
+  onHelp,
 }: {
   open: boolean
   onClose: () => void
@@ -196,6 +218,8 @@ export function ViewSheet({
   } | null
   onShare: (() => void) | null
   fullscreen: { active: boolean; onToggle: () => void } | null
+  /** Vis hjelpen for bladingen i visningen man står i. */
+  onHelp: () => void
 }) {
   return (
     <StandSheet open={open} onClose={onClose} title="Visning">
@@ -265,6 +289,14 @@ export function ViewSheet({
             <SheetRow icon="share" title="Del eller åpne PDF-en" detail="Lagre i Filer, skriv ut eller send" onClick={onShare} />
           </li>
         )}
+        <li>
+          <SheetRow
+            icon="help"
+            title="Vis hjelp for bladingen"
+            detail={view === 'scroll' ? 'Rull, sveip og trykk i «Tilpass bredde»' : 'Trykkfeltene og sveip i sidevisningen'}
+            onClick={onHelp}
+          />
+        </li>
         {fullscreen && (
           <li>
             <SheetRow

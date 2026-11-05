@@ -175,6 +175,29 @@ const PATHS = {
       <path d="M4.8 9h4.4M4.8 12h4.4M4.8 15h4.4M14.8 9h4.4M14.8 12h4.4M14.8 15h4.4" />
     </>
   ),
+  /** Spørsmålstegn i ring — hjelp (bladingen på notestativet). */
+  help: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M9.6 9.6a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.7" />
+      <circle cx="12" cy="16.9" r="0.9" fill="currentColor" stroke="none" />
+    </>
+  ),
+  /** Til starten — strek og pil mot venstre (notestativet: «Fra starten»). */
+  toStart: (
+    <>
+      <path d="M6 5.5v13" />
+      <path d="M18 6.5 10.5 12l7.5 5.5z" />
+    </>
+  ),
+  /** Et trykk — prikk med ring rundt (hjelpen for bladingen). */
+  tap: (
+    <>
+      <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="6.5" opacity="0.55" />
+      <circle cx="12" cy="12" r="10" opacity="0.25" />
+    </>
+  ),
 } as const
 
 export type IconName = keyof typeof PATHS

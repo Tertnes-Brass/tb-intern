@@ -1,13 +1,26 @@
 import { useCanGoBack, useRouter } from '@tanstack/react-router'
 import type { PDFDocumentProxy } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { type StandEntry, standEntries, startIndex } from '../lib/stand'
 import {
+  type StandEntry,
+  parseStandPosition,
+  resolveStart,
+  resumeLabel,
+  serializeStandPosition,
+  standEntries,
+  standPositionKey,
+  startIndex,
+} from '../lib/stand'
+import {
+  type GestureMode,
+  HINT_SEEN,
   LAST_PAGE,
   type Orientation,
   type StandView,
   canSpread,
   clampViewStart,
+  gestureModeOf,
+  hintStorageKey,
   lastViewStart,
   nextTurn,
   orientationOf,
@@ -15,6 +28,7 @@ import {
   pagesPerView,
   prevTurn,
   resolveView,
+  shouldShowHint,
   tapZone,
   viewStartFor,
   viewStorageKey,
@@ -25,11 +39,16 @@ import { Icon } from './Icons'
 import { useOfflineStand } from './OfflineStand'
 import { ListenModal } from './Repertoire'
 import { type PdfErrorKind, PagedPages, ScrollPages, Spinner, usePdfDocument } from './stand/StandPdf'
+import { GestureHelp, ResumeNotice } from './stand/StandHelp'
 import { ProgramSheet, ViewSheet } from './stand/StandSheets'
 
 const NIGHT_KEY = 'tb-stand-night'
 /** Hvor lenge menyene står fremme i en sidevisning før de trekker seg unna noten. */
 const CHROME_HIDE_MS = 4000
+/** Lastes et stykke lenger enn dette, kommer menyene frem — man skal aldri stå uten vei ut. */
+const SLOW_LOAD_MS = 3000
+/** Hvor lenge «Fortsatt fra …» står før den forsvinner av seg selv. */
+const RESUME_NOTICE_MS = 7000
 
 type Sheet = 'program' | 'view' | 'listen'
 
@@ -48,8 +67,16 @@ type Sheet = 'program' | 'view' | 'listen'
  *   videre til neste stykke, og bakover lander man på forrige stykkes siste side.
  * - Trykk midt på noten for å vise eller skjule menyene. I sidevisningene
  *   trekker de seg unna av seg selv, så ingenting ligger over noten.
+ * - Menyene står fremme så lenge noten lastes, ikke kan åpnes eller stativet er
+ *   tomt — de trekker seg bare unna når noten faktisk vises.
  * - «Program» hopper rett til et stykke; «Visning» har visningsvalget, Nattlys,
- *   Lytt, Offline, Del og Fullskjerm (bare der nettleseren støtter det).
+ *   Lytt, Offline, Del, hjelpen for bladingen og Fullskjerm (bare der
+ *   nettleseren støtter det).
+ * - Stativet husker hvor man var (stykke og side, per bruker og prosjekt, i
+ *   localStorage) og fortsetter der, med «Fra starten» i en liten beskjed og i
+ *   Program. `?fil=` vinner over den lagrede posisjonen.
+ * - Første gang man bruker en visning, viser en hjelp trykkfeltene og hva et
+ *   sveip gjør (`gestureHint` i `src/lib/stand-view.ts`).
  * - Skjermen holdes våken (Screen Wake Lock) så lenge stativet er åpent.
  *
  * Adressen endres aldri mens man blar (se ruta): hver endring ville vært en
@@ -74,6 +101,10 @@ export function Notestativ({
   // skal bli liggende mens man blar.
   const [entries] = useState(() => standEntries(repertoire, { hasParts, focusFileId: initialFileId }))
   const [index, setIndex] = useState(() => startIndex(entries, initialFileId))
+  /** Den lagrede posisjonen er lest (etter hydrering — serveren har ingen localStorage). */
+  const [ready, setReady] = useState(false)
+  /** «Fortsatt fra II. Benedictus, side 3» — til den forsvinner eller man blar. */
+  const [resume, setResume] = useState<string | null>(null)
   const [slide, setSlide] = useState<'next' | 'prev' | null>(null)
   const [chrome, setChrome] = useState(true)
   const [night, setNight] = useState(false)
@@ -94,7 +125,9 @@ export function Notestativ({
 
   const entry: StandEntry | undefined = entries[index]
   const work = entry ? repertoire.find((w) => w.workId === entry.workId) : undefined
-  const pdf = usePdfDocument(entry?.fileId ?? null)
+  // Vent med å hente til den lagrede posisjonen er lest, så vi ikke henter
+  // første stykke bare for å kaste det.
+  const pdf = usePdfDocument(ready ? (entry?.fileId ?? null) : null)
   const total = pdf.doc?.numPages ?? 0
 
   // ---------- Visning ----------
@@ -152,6 +185,40 @@ export function Notestativ({
     lastPage.current = currentPage
   }, [currentPage])
 
+  // ---------- Hvor man var ----------
+
+  const positionKey = standPositionKey(ownerId, project.id)
+  useEffect(() => {
+    let saved = null
+    try {
+      saved = parseStandPosition(window.localStorage.getItem(positionKey))
+    } catch {}
+    const at = resolveStart(entries, { requestedFileId: initialFileId, saved, now: Date.now() })
+    setIndex(at.index)
+    if (at.page > 1) {
+      setViewStart(at.page)
+      setScrollTarget(at.page)
+      setScrollPage({ current: at.page, total: 0 })
+    }
+    const resumedEntry = entries[at.index]
+    if (at.resumed && resumedEntry) setResume(resumeLabel(resumedEntry, at.page))
+    setReady(true)
+    // Bare ved åpning: posisjonen leses én gang.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /** Noten vises — ikke lastes, ikke feilet, ikke tomt. */
+  const settled = !!entry && !!pdf.doc && !!view
+  useEffect(() => {
+    if (!ready || !settled || !entry) return
+    try {
+      window.localStorage.setItem(
+        positionKey,
+        serializeStandPosition({ fileId: entry.fileId, page: currentPage, savedAt: Date.now() }),
+      )
+    } catch {}
+  }, [ready, settled, entry, currentPage, positionKey])
+
   useWakeLock()
   useStandStatusBar()
 
@@ -170,6 +237,7 @@ export function Notestativ({
   const go = useCallback(
     (next: number, opts: { atEnd?: boolean } = {}) => {
       if (next < 0 || next >= entries.length || next === index) return
+      setResume(null)
       setSlide(next > index ? 'next' : 'prev')
       setIndex(next)
       setScrollPage({ current: 1, total: 0 })
@@ -195,12 +263,56 @@ export function Notestativ({
       // Man spiller: menyene skal ikke ligge over noten. (Pillens egne knapper
       // lar dem stå, så man kan trykke flere ganger.)
       if (!opts.keepChrome) setChrome(false)
+      setResume(null)
       if (t.kind === 'page') setViewStart(t.start)
       else if (direction === 'next') go(index + 1)
       else go(index - 1, { atEnd: true })
     },
     [pdf.doc, pdf.error, start, total, perView, go, index],
   )
+
+  /** «Fra starten»: første side i første stykke. */
+  const atStart = index === 0 && currentPage <= 1
+  const restart = useCallback(() => {
+    setResume(null)
+    setSheet(null)
+    if (index !== 0) {
+      go(0)
+      return
+    }
+    setViewStart(1)
+    setScrollTarget(undefined)
+    setScrollPage((prev) => ({ current: 1, total: prev.total }))
+    scroller.current?.scrollTo({ top: 0 })
+  }, [index, go])
+
+  // ---------- Hjelp for bladingen ----------
+
+  const gestureMode: GestureMode | null = view ? gestureModeOf(view) : null
+  /** Sett før? Antar «ja» til localStorage er lest, så hjelpen aldri blinker forbi. */
+  const [hintSeen, setHintSeen] = useState<Record<GestureMode, boolean>>({ scroll: true, paged: true })
+  /** Åpnet fra «Visning». */
+  const [hintRequested, setHintRequested] = useState(false)
+  useEffect(() => {
+    const seen = (mode: GestureMode) => {
+      try {
+        return !shouldShowHint(window.localStorage.getItem(hintStorageKey(mode)))
+      } catch {
+        return false
+      }
+    }
+    setHintSeen({ scroll: seen('scroll'), paged: seen('paged') })
+  }, [])
+  // Av seg selv bare når noten faktisk vises: hjelpen forklarer noten, ikke en feilmelding.
+  const hintOpen = !!gestureMode && !sheet && (hintRequested || (settled && !hintSeen[gestureMode]))
+  const dismissHint = useCallback(() => {
+    setHintRequested(false)
+    if (!gestureMode) return
+    setHintSeen((prev) => ({ ...prev, [gestureMode]: true }))
+    try {
+      window.localStorage.setItem(hintStorageKey(gestureMode), HINT_SEEN)
+    } catch {}
+  }, [gestureMode])
 
   // Bladvendere (Bluetooth-pedaler sender piltaster eller Page Up/Down) og tastatur.
   useEffect(() => {
@@ -210,6 +322,8 @@ export function Notestativ({
       const backward = ['ArrowUp', 'ArrowLeft', 'PageUp'].includes(e.key)
       if (!forward && !backward) return
       e.preventDefault()
+      // En pedal mens hjelpen står fremme: den som bruker pedal, vet hvordan man blar.
+      if (hintOpen) dismissHint()
       if (paged) {
         turn(forward ? 'next' : 'prev')
         return
@@ -229,7 +343,7 @@ export function Notestativ({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [go, turn, index, sheet, view, paged])
+  }, [go, turn, index, sheet, view, paged, hintOpen, dismissHint])
 
   // Sveip og trykk. I rullevisningen gjør `touch-action: pan-y pinch-zoom` at
   // sidelengs bevegelse kommer hit i stedet for å bli en rulling; i
@@ -271,12 +385,35 @@ export function Notestativ({
     }
   }
 
-  // I sidevisningene ligger menyene over noten: de trekker seg unna av seg selv.
+  // I sidevisningene ligger menyene over noten: de trekker seg unna av seg selv —
+  // men bare når noten faktisk vises. Mens den lastes, ikke kan åpnes eller
+  // stativet er tomt, er menyene den eneste veien videre.
   useEffect(() => {
-    if (!paged || !chrome || sheet) return
+    if (!paged || !chrome || sheet || !settled || hintOpen) return
     const timer = window.setTimeout(() => setChrome(false), CHROME_HIDE_MS)
     return () => window.clearTimeout(timer)
-  }, [paged, chrome, sheet, index, start])
+  }, [paged, chrome, sheet, settled, hintOpen, index, start])
+
+  // En feil henter menyene frem (de står også fremme så lenge feilen vises), og
+  // det gjør en lasting som drar ut — et trykk midt på er ikke opplagt da.
+  const loading = !!entry && ready && !pdf.doc && !pdf.error
+  useEffect(() => {
+    if (pdf.error) setChrome(true)
+  }, [pdf.error])
+  useEffect(() => {
+    if (!loading) return
+    const timer = window.setTimeout(() => setChrome(true), SLOW_LOAD_MS)
+    return () => window.clearTimeout(timer)
+  }, [loading, entry?.fileId])
+  const showChrome = chrome || !entry || !!pdf.error
+
+  // «Fortsatt fra …» står en stund når noten vises, og forsvinner ved første bla.
+  const resumeVisible = !!resume && settled && !hintOpen && !sheet
+  useEffect(() => {
+    if (!resumeVisible) return
+    const timer = window.setTimeout(() => setResume(null), RESUME_NOTICE_MS)
+    return () => window.clearTimeout(timer)
+  }, [resumeVisible])
 
   // ---------- Verktøy ----------
 
@@ -338,7 +475,7 @@ export function Notestativ({
   ) : pdf.error ? (
     <StandError kind={pdf.error} fileId={entry.fileId} savedOffline={!!offline.saved} onRetry={pdf.retry} />
   ) : !pdf.doc || !view ? (
-    <Spinner />
+    <Spinner onRetry={ready ? pdf.retry : undefined} />
   ) : view === 'scroll' ? (
     <ScrollPages doc={pdf.doc} scrollRoot={scroller} onPage={onScrollPage} initialPage={scrollTarget} />
   ) : (
@@ -359,7 +496,7 @@ export function Notestativ({
       {/* Topplinje */}
       <header
         className={`stand-bar pt-safe absolute inset-x-0 top-0 z-20 transition-[opacity,transform] duration-200 ${
-          chrome ? '' : 'pointer-events-none -translate-y-full opacity-0'
+          showChrome ? '' : 'pointer-events-none -translate-y-full opacity-0'
         }`}
       >
         <div className="px-safe flex h-14 items-center gap-1">
@@ -439,7 +576,7 @@ export function Notestativ({
       {view === 'scroll' && entries.length > 1 && (
         <footer
           className={`stand-bar pb-safe absolute inset-x-0 bottom-0 z-20 transition-[opacity,transform] duration-200 ${
-            chrome ? '' : 'pointer-events-none translate-y-full opacity-0'
+            showChrome ? '' : 'pointer-events-none translate-y-full opacity-0'
           }`}
         >
           <div className="px-safe flex items-center gap-2 py-1">
@@ -451,11 +588,11 @@ export function Notestativ({
       {paged && entry && (
         <div
           className={`pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] transition-[opacity,transform] duration-200 ${
-            chrome ? '' : 'translate-y-4 opacity-0'
+            showChrome ? '' : 'translate-y-4 opacity-0'
           }`}
         >
           <div
-            className={`stand-pill flex max-w-full items-center gap-1 rounded-full p-1 ${chrome ? 'pointer-events-auto' : ''}`}
+            className={`stand-pill flex max-w-full items-center gap-1 rounded-full p-1 ${showChrome ? 'pointer-events-auto' : ''}`}
           >
             <button
               type="button"
@@ -496,6 +633,7 @@ export function Notestativ({
           setSheet(null)
           go(i)
         }}
+        onRestart={atStart ? null : restart}
       />
       <ViewSheet
         open={sheet === 'view'}
@@ -514,8 +652,14 @@ export function Notestativ({
         }
         onShare={entry ? share : null}
         fullscreen={fullscreen}
+        onHelp={() => {
+          setSheet(null)
+          setHintRequested(true)
+        }}
       />
       {work && <ListenModal item={work} open={sheet === 'listen'} onClose={closeSheet('listen')} />}
+      {resumeVisible && resume && <ResumeNotice label={resume} onRestart={restart} onDismiss={() => setResume(null)} />}
+      {hintOpen && gestureMode && <GestureHelp mode={gestureMode} onClose={dismissHint} />}
     </div>
   )
 }
