@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { PostForm } from '../../../components/PostForm'
+import { draftKey } from '../../../lib/drafts'
 import { EmptyState } from '../../../components/ui'
 import { getPost } from '../../../server/posts'
 
@@ -19,11 +20,19 @@ export const Route = createFileRoute('/beskjeder/$postId/rediger')({
 
 function EditPostPage() {
   const { post, canPublish, canArchive, attachments } = Route.useLoaderData()
+  const me = Route.useRouteContext().me
 
   if (!post.canEdit) {
     return <EmptyState title="Du kan bare endre dine egne innlegg">Gå tilbake til veggen for å lese det.</EmptyState>
   }
 
   // Samme skriveflate som et nytt innlegg; «Avbryt» går tilbake til innlegget.
-  return <PostForm post={{ ...post, attachments }} canPublish={canPublish} canArchive={canArchive} />
+  return (
+    <PostForm
+      post={{ ...post, attachments }}
+      canPublish={canPublish}
+      canArchive={canArchive}
+      draftKey={me ? draftKey(me.id, { kind: 'edit-post', postId: post.id }) : undefined}
+    />
+  )
 }

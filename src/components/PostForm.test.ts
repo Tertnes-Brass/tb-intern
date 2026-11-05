@@ -7,6 +7,7 @@ const state = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn(), upload: vi.f
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => state.navigate, useRouter: () => ({ invalidate: vi.fn() }),
   Link: ({ children }: { children: unknown }) => children,
+  useBlocker: () => ({ status: 'idle' }),
 }))
 vi.mock('../server/posts', () => ({ createPost: state.create, updatePost: state.update, publishPost: state.publish, deletePostImage: vi.fn(), searchMentionableForAudience: vi.fn() }))
 vi.mock('../server/post-attachments', () => ({ deletePostAttachment: state.remove }))
@@ -18,10 +19,31 @@ vi.mock('./MentionTextarea', async () => {
 })
 import { PostForm } from './PostForm'
 
+// Node 22+ har en egen `localStorage` som er tom uten `--localstorage-file`, og
+// den skygger for jsdom sin. Et lite minnelager holder for testene.
+if (!window.localStorage) {
+  const data = new Map<string, string>()
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, String(v)),
+      removeItem: (k: string) => void data.delete(k),
+      clear: () => data.clear(),
+      key: (i: number) => [...data.keys()][i] ?? null,
+      get length() { return data.size },
+    },
+  })
+}
+
 let root: Root
 let container: HTMLDivElement
 beforeEach(() => {
   vi.resetAllMocks()
+  window.localStorage.clear()
+  // jsdom har ikke showModal; arkene rendres uansett, vi trenger bare at kallet ikke kaster.
+  HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) { this.open = true }
+  HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) { this.open = false }
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -69,6 +91,9 @@ it('kan fjerne eksisterende og legge til nye vedlegg på en publisert beskjed', 
   } })))
   expect(container.querySelector('a')?.getAttribute('href')).toBe('/api/post-attachments/old')
   await act(() => container.querySelector<HTMLButtonElement>('[aria-label="Fjern original.pdf"]')!.click())
+  // Sletting av et lagret vedlegg spør først — det skjer på serveren med en gang.
+  expect(state.remove).not.toHaveBeenCalled()
+  await act(() => Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Fjern vedlegget')!.click())
   expect(state.remove).toHaveBeenCalledWith({ data: { id: 'old' } })
   expect(container.textContent).not.toContain('original.pdf')
   const picker = container.querySelectorAll<HTMLInputElement>('input[type="file"]')[1]!
@@ -84,9 +109,6 @@ it('kan fjerne eksisterende og legge til nye vedlegg på en publisert beskjed', 
 })
 
 it('Publiser åpner et ark der varselet er avslått, og publiserer uten e-post', async () => {
-  // jsdom har ikke showModal; arket rendres uansett, vi trenger bare at kallet ikke kaster.
-  HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) { this.open = true }
-  HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) { this.open = false }
   await act(() => root.render(createElement(PostForm, { canPublish: true })))
   const textarea = container.querySelector('textarea')!
   await act(() => {
@@ -108,4 +130,56 @@ it('kobler tekstfeltets etikett og hjelpetekst til feltet', async () => {
   const field = container.querySelector('textarea')!
   expect(label.htmlFor).toBe(field.id)
   expect(document.getElementById(field.getAttribute('aria-describedby')!)?.textContent).toContain('Skriv @')
+})
+
+const type = async (text: string) => {
+  const textarea = container.querySelector('textarea')!
+  await act(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, text)
+    textarea.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+}
+
+it('lagrer teksten på enheten og gjenoppretter den neste gang', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  try {
+    await act(() => root.render(createElement(PostForm, { canPublish: false, draftKey: 'tb-draft:u1:new-post' })))
+    await type('Halvferdig innlegg')
+    await act(() => vi.advanceTimersByTime(1000))
+    expect(JSON.parse(window.localStorage.getItem('tb-draft:u1:new-post')!).data.body).toBe('Halvferdig innlegg')
+    expect(container.textContent).toContain('Lagret på enheten')
+
+    await act(() => root.unmount())
+    root = createRoot(container)
+    await act(() => root.render(createElement(PostForm, { canPublish: false, draftKey: 'tb-draft:u1:new-post' })))
+    expect(container.querySelector('textarea')!.value).toBe('Halvferdig innlegg')
+    expect(container.textContent).toContain('Gjenopprettet utkast fra kl.')
+
+    // En annen bruker på samme enhet får ikke utkastet.
+    await act(() => root.unmount())
+    root = createRoot(container)
+    await act(() => root.render(createElement(PostForm, { canPublish: false, draftKey: 'tb-draft:u2:new-post' })))
+    expect(container.querySelector('textarea')!.value).toBe('')
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('«Forkast» tømmer feltet og sletter utkastet, og publisering rydder det bort', async () => {
+  window.localStorage.setItem('tb-draft:u1:new-post', JSON.stringify({ v: 1, savedAt: Date.now(), data: {
+    title: '', body: 'Gammel tekst', chosen: [], format: 'plain_text', audience: 'all', importance: 'normal', official: false, fromArchive: false,
+  } }))
+  await act(() => root.render(createElement(PostForm, { canPublish: false, draftKey: 'tb-draft:u1:new-post' })))
+  expect(container.querySelector('textarea')!.value).toBe('Gammel tekst')
+  expect(container.querySelector('.draft-notice')?.textContent).toContain('Gjenopprettet utkast fra kl.')
+  await act(() => container.querySelector<HTMLButtonElement>('.draft-notice-action')!.click())
+  expect(container.querySelector('textarea')!.value).toBe('')
+  expect(window.localStorage.getItem('tb-draft:u1:new-post')).toBeNull()
+
+  await type('Ny tekst')
+  await act(() => container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+  expect(state.publish).toHaveBeenCalled()
+  await act(() => root.unmount())
+  root = createRoot(container)
+  expect(window.localStorage.getItem('tb-draft:u1:new-post')).toBeNull()
 })

@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { type TextDraft, isTextDraft } from '../lib/drafts'
 import { type MentionUser, toMarkers } from '../lib/mentions'
 import { searchMentionableMembers } from '../server/posts'
 import { MentionTextarea } from './MentionTextarea'
 import { Glyph } from './compose/Composer'
+import { DraftNotice } from './compose/LeaveGuard'
+import { useLocalDraft } from './compose/useLocalDraft'
 import { Button } from './ui'
 
 /**
@@ -23,6 +26,10 @@ import { Button } from './ui'
  * `variant="dock"` er feltet i linjen nederst på detaljsiden (`.comment-dock`):
  * én linje som vokser med teksten (opp til ~6 linjer) og en rund sendeknapp,
  * som i en meldingsapp.
+ *
+ * `draftKey` (fra `draftKey(me.id, { kind: 'comment', … })`) lagrer teksten på
+ * enheten mens man skriver, så den er der igjen etter en navigasjon eller en
+ * omlasting — «Gjenopprettet utkast fra kl. … · Forkast» over feltet.
  */
 export function CommentComposer({
   postId,
@@ -30,6 +37,7 @@ export function CommentComposer({
   replyTo,
   onCancel,
   variant = 'inline',
+  draftKey,
 }: {
   postId: string
   /** Kalles med den ferdige teksten (markører, ikke navn). Kaster den, beholdes teksten. */
@@ -41,12 +49,29 @@ export function CommentComposer({
   replyTo?: { name: string }
   onCancel?: () => void
   variant?: 'inline' | 'dock'
+  draftKey?: string
 }) {
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
   /** Medlemmene som FAKTISK er valgt fra lista — grunnlaget for `toMarkers`. */
   const [chosen, setChosen] = useState<MentionUser[]>([])
   const dockRef = useRef<HTMLTextAreaElement>(null)
+  const local = useLocalDraft<TextDraft>({
+    storageKey: draftKey,
+    value: { body, chosen },
+    initial: EMPTY_DRAFT,
+    validate: isTextDraft,
+    onRestore: (draft) => {
+      setBody(draft.body)
+      setChosen(draft.chosen)
+    },
+  })
+  const discard = () => {
+    local.discard()
+    setBody('')
+    setChosen([])
+  }
+  const notice = <DraftNotice restored={local.restored} onDiscard={discard} />
 
   // Dokk-feltet vokser med teksten, så man ser hva man skriver.
   useEffect(() => {
@@ -62,6 +87,7 @@ export function CommentComposer({
     setBusy(true)
     try {
       await onSubmit(text)
+      local.clear()
       setBody('')
       setChosen([])
     } catch {
@@ -74,6 +100,8 @@ export function CommentComposer({
 
   if (variant === 'dock') {
     return (
+      <>
+      {notice}
       <div className="flex items-end gap-2">
         <MentionTextarea
           textareaRef={dockRef}
@@ -101,6 +129,7 @@ export function CommentComposer({
           {!busy && <Glyph name="send" size={18} />}
         </Button>
       </div>
+      </>
     )
   }
 
@@ -137,7 +166,7 @@ export function CommentComposer({
       </Button>
     </div>
   )
-  if (!replyTo) return field
+  if (!replyTo) return <>{local.restored && <DraftNotice restored={local.restored} onDiscard={discard} className="mt-4" />}{field}</>
   return (
     <div className="space-y-2 rounded-[9px] border border-line bg-paper-sunken/40 p-3">
       <div className="flex items-center gap-2 text-xs text-ink-soft">
@@ -151,7 +180,10 @@ export function CommentComposer({
           </button>
         )}
       </div>
+      {notice}
       {field}
     </div>
   )
 }
+
+const EMPTY_DRAFT: TextDraft = { body: '', chosen: [] }
