@@ -1,5 +1,6 @@
 import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { useId, useMemo, useRef, useState } from 'react'
+import { type PostDraft, isPostDraft } from '../lib/drafts'
 import { attachmentRejectionReason, MAX_POST_ATTACHMENTS, postAttachmentUrl, uploadPostAttachment, type PostAttachment } from '../lib/post-attachments'
 import { deletePostAttachment } from '../server/post-attachments'
 import { markdownToHtml } from '../lib/markdown'
@@ -20,6 +21,8 @@ import { createPost, deletePostImage, publishPost, searchMentionableForAudience,
 import { MentionTextarea } from './MentionTextarea'
 import { toast, toastError } from './toast'
 import { ComposerBar, ComposerLayout, ComposerTitle, Glyph, Segmented, ToolButton } from './compose/Composer'
+import { DraftNotice, LeaveGuard } from './compose/LeaveGuard'
+import { useLocalDraft } from './compose/useLocalDraft'
 import { Button, Modal } from './ui'
 
 /**
@@ -49,6 +52,13 @@ import { Button, Modal } from './ui'
  * samme medlemmene som «valgt», slik at `toMarkers` kan legge markørene tilbake
  * ved lagring. Forslagslista spør om målgruppen, ikke om innlegget: et nytt
  * innlegg har ingen id å slå opp ennå.
+ *
+ * Det man skriver er beskyttet (`draftKey`): teksten og valgene lagres på
+ * enheten mens man skriver (`useLocalDraft`, nøkkelen har brukerens id), og
+ * kommer tilbake med «Gjenopprettet utkast fra kl. …» hvis man forlot siden
+ * eller appen ble lastet på nytt. Forlater man en endret skriveflate, spør
+ * `LeaveGuard` «Forkast endringene?» først. Bilder og vedlegg som ikke er
+ * lastet opp ennå, er filer og kan ikke lagres slik.
  */
 
 export type PostFormImage = { id: string; fileName: string }
@@ -67,6 +77,8 @@ export type PostFormValues = {
   attachments?: PostAttachment[]
   /** Dagens navn på de omtalte i `body`, slik at feltet kan vise `@Navn`. */
   mentions: MentionUser[]
+  /** Serverens versjon — et lokalt utkast fra før en senere endring merkes. */
+  updatedAt?: number
 }
 
 const AUDIENCES: Array<{ value: PostAudience; label: string; hint: string }> = [
@@ -92,7 +104,18 @@ const IMPORTANCES: Array<{ value: PostImportance; label: string; hint: string }>
   { value: 'important', label: 'Viktig', hint: 'Merkes «Viktig», og når også dem som bare vil ha viktige e-poster.' },
 ]
 
-export function PostForm({ post, canPublish: canBoard, canArchive = false }: { post?: PostFormValues; canPublish: boolean; canArchive?: boolean }) {
+export function PostForm({
+  post,
+  canPublish: canBoard,
+  canArchive = false,
+  draftKey,
+}: {
+  post?: PostFormValues
+  canPublish: boolean
+  canArchive?: boolean
+  /** `draftKey(me.id, …)` fra `src/lib/drafts.ts`. Uten nøkkel lagres ingen utkast. */
+  draftKey?: string
+}) {
   const canPublish = canBoard || (canArchive && !post?.official && (!post || post.audience === 'all'))
   const navigate = useNavigate()
   const router = useRouter()
@@ -130,6 +153,51 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
   const attachmentBudget = MAX_POST_ATTACHMENTS - existingAttachments.length - attachmentFiles.length
   const [busy, setBusy] = useState<'draft' | 'publish' | null>(null)
   const isPublished = post?.publishedAt != null
+  /** Bekreftelse før et lagret bilde eller vedlegg slettes fra innlegget. */
+  const [confirmRemove, setConfirmRemove] = useState<{ kind: 'image'; item: PostFormImage } | { kind: 'attachment'; item: PostAttachment } | null>(null)
+
+  // ---- Utkast på enheten ----
+  const [initialDraft] = useState<PostDraft>(() => ({
+    title: post?.title ?? '',
+    body: draft.text,
+    chosen: draft.chosen,
+    format: post?.format ?? DEFAULT_POST_FORMAT,
+    audience: post?.audience ?? 'all',
+    importance: post?.importance ?? 'normal',
+    official: post?.official ?? false,
+    fromArchive: post?.fromArchive ?? false,
+  }))
+  const currentDraft: PostDraft = { title, body, chosen, format, audience, importance, official, fromArchive }
+  const applyDraft = (d: PostDraft, trusted = false) => {
+    setTitle(d.title)
+    setBody(d.body)
+    setChosen(d.chosen)
+    setFormat(d.format)
+    if (d.format !== 'markdown') setPreview(false)
+    // Privilegerte valg følger bare med for den som fortsatt kan gjøre dem —
+    // serveren håndhever det uansett (`sanitizePostInput`).
+    setAudience(trusted || canBoard ? d.audience : 'all')
+    setImportance(trusted || canPublish ? d.importance : 'normal')
+    setOfficial(trusted ? d.official : canBoard && d.official)
+    setFromArchive(trusted ? d.fromArchive : canPublish && d.fromArchive)
+  }
+  const local = useLocalDraft<PostDraft>({
+    storageKey: draftKey,
+    value: currentDraft,
+    initial: initialDraft,
+    validate: isPostDraft,
+    onRestore: (d) => applyDraft(d),
+    base: post?.updatedAt ?? null,
+  })
+  /** Slås av i samme øyeblikk som en vellykket lagring navigerer videre. */
+  const leaving = useRef(false)
+  const dirty = JSON.stringify(currentDraft) !== JSON.stringify(initialDraft) || files.length > 0 || attachmentFiles.length > 0
+  const dirtyRef = useRef(dirty)
+  dirtyRef.current = dirty
+  const discardDraft = () => {
+    local.discard()
+    applyDraft(initialDraft, true)
+  }
   const imageBudget = MAX_POST_IMAGES - existingImages.length - files.length
   // Samme rendrer som serveren og detaljsiden — forhåndsvisningen kan ikke
   // vise noe annet enn det som faktisk blir publisert.
@@ -165,6 +233,19 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
       await router.invalidate()
     } catch (err) {
       toastError(err)
+    }
+  }
+
+  const removeExistingAttachment = async (file: PostAttachment) => {
+    setRemovingAttachment(file.id)
+    try {
+      await deletePostAttachment({ data: { id: file.id } })
+      setExistingAttachments((current) => current.filter((f) => f.id !== file.id))
+      await router.invalidate()
+    } catch (error) {
+      toastError(error)
+    } finally {
+      setRemovingAttachment(null)
     }
   }
 
@@ -214,6 +295,8 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
     setBusy('draft')
     try {
       const id = await save()
+      local.clear()
+      leaving.current = true
       toast(isPublished ? 'Endringene er lagret' : 'Lagret som utkast')
       await navigate({ to: '/beskjeder/$postId', params: { postId: id } })
     } catch (err) {
@@ -228,6 +311,8 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
     try {
       const id = await save()
       const result = await publishPost({ data: { id, sendEmail: canPublish && notify } })
+      local.clear()
+      leaving.current = true
       if (canPublish) {
         const { message, kind } = notifyResultMessage(result)
         toast(message, kind)
@@ -343,7 +428,7 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
                 />
                 <button
                   type="button"
-                  onClick={() => void removeExisting(image)}
+                  onClick={() => setConfirmRemove({ kind: 'image', item: image })}
                   disabled={busy !== null}
                   aria-label={`Fjern ${image.fileName}`}
                   className="hit absolute right-1 top-1 grid h-7 w-7 cursor-pointer place-items-center rounded-full bg-paper/90 text-ink-soft transition-colors hover:text-danger"
@@ -354,7 +439,7 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
             ))}
             {files.map((file, i) => (
               <li key={`${file.name}-${i}`} className="relative">
-                <span className="flex aspect-square w-full items-center justify-center rounded-[9px] border border-dashed border-line bg-paper-sunken/60 px-2 text-center text-[0.6rem] leading-tight text-ink-faint">
+                <span className="flex aspect-square w-full items-center justify-center rounded-[9px] border border-dashed border-line bg-paper-sunken/60 px-2 text-center text-[0.7rem] leading-tight text-ink-faint">
                   {file.name}
                 </span>
                 <button
@@ -386,18 +471,7 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
                   variant="ghost"
                   size="sm"
                   disabled={blocked}
-                  onClick={async () => {
-                    setRemovingAttachment(file.id)
-                    try {
-                      await deletePostAttachment({ data: { id: file.id } })
-                      setExistingAttachments((current) => current.filter((f) => f.id !== file.id))
-                      await router.invalidate()
-                    } catch (error) {
-                      toastError(error)
-                    } finally {
-                      setRemovingAttachment(null)
-                    }
-                  }}
+                  onClick={() => setConfirmRemove({ kind: 'attachment', item: file })}
                   aria-label={`Fjern ${file.fileName}`}
                 >
                   Fjern
@@ -428,7 +502,10 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
 
       {/* Verktøylinjen. Filvelgerne er skjult og åpnes fra knappene; bildene
           står først, så vedleggene (rekkefølgen testene leser dem i). */}
-      <div className="composer-toolbar">
+      {/* Kompakt når verktøylinjen har mange knapper (vedlegg, forhåndsvisning):
+          da faller sammendraget på «Valg» bort på smal skjerm, i stedet for å
+          klippes. Ellers brytes linjen heller enn å skjule noe. */}
+      <div className={`composer-toolbar ${canBoard || format === 'markdown' ? 'is-compact' : ''}`}>
         <input
           ref={fileInput}
           type="file"
@@ -448,7 +525,7 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
         >
           Bilder
           {existingImages.length + files.length > 0 && (
-            <span className="tabular font-mono text-[0.7rem] text-ink-faint">{existingImages.length + files.length}</span>
+            <span className="tabular text-xs text-ink-faint">{existingImages.length + files.length}</span>
           )}
         </ToolButton>
         {canBoard && (
@@ -481,7 +558,7 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
             >
               Vedlegg
               {existingAttachments.length + attachmentFiles.length > 0 && (
-                <span className="tabular font-mono text-[0.7rem] text-ink-faint">
+                <span className="tabular text-xs text-ink-faint">
                   {existingAttachments.length + attachmentFiles.length}
                 </span>
               )}
@@ -489,7 +566,7 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
           </>
         )}
         {format === 'markdown' && (
-          <ToolButton active={preview} aria-pressed={preview} onClick={() => setPreview(!preview)}>
+          <ToolButton icon={<Glyph name={preview ? 'pencil' : 'eye'} />} active={preview} aria-pressed={preview} onClick={() => setPreview(!preview)}>
             {preview ? 'Skriv' : 'Forhåndsvis'}
           </ToolButton>
         )}
@@ -507,7 +584,7 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
           }}
         >
           Valg
-          <span className="min-w-0 truncate font-normal text-ink-faint max-[360px]:hidden">{optionsSummary}</span>
+          <span className="tool-summary">{optionsSummary}</span>
         </ToolButton>
       </div>
     </div>
@@ -582,7 +659,10 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
     </div>
   )
 
+  // Dialogene står UTENFOR skjemaet: en knapp uten `type` i et ark (som
+  // lukkekrysset i `Modal`) ville ellers sendt skjemaet — «Lagre utkast».
   return (
+    <>
     <form onSubmit={canPublish ? saveDraft : (e) => { e.preventDefault(); void publish() }} className="composer">
       <ComposerBar
         cancel={
@@ -598,7 +678,10 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
         }
         title={!post ? 'Nytt innlegg' : isPublished ? 'Rediger innlegg' : 'Rediger utkast'}
         actions={barActions}
+        status={local.savedAt && dirty ? 'Lagret på enheten' : null}
       />
+
+      <DraftNotice restored={local.restored} onDiscard={discardDraft} className="composer-notice" />
 
       {!post && savedPostId && (
         <p className="composer-notice">
@@ -611,6 +694,9 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
       )}
 
       <ComposerLayout main={main} side={side} sideOpen={optionsOpen} sideLabel="Valg for innlegget" />
+    </form>
+
+      {draftKey && <LeaveGuard shouldBlock={() => dirtyRef.current && !leaving.current} onDiscard={() => local.discard()} />}
 
       {canPublish && (
         <Modal
@@ -659,6 +745,34 @@ export function PostForm({ post, canPublish: canBoard, canArchive = false }: { p
           </div>
         </Modal>
       )}
-    </form>
+
+      <Modal
+        open={confirmRemove !== null}
+        onClose={() => setConfirmRemove(null)}
+        title={confirmRemove?.kind === 'attachment' ? 'Fjerne vedlegget?' : 'Fjerne bildet?'}
+      >
+        <p className="text-sm leading-relaxed text-ink-soft">
+          {confirmRemove?.kind === 'attachment' ? `«${confirmRemove.item.fileName}»` : 'Bildet'} slettes fra innlegget med en
+          gang, også om du ikke lagrer endringene.
+        </p>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="ghost" onClick={() => setConfirmRemove(null)}>
+            Avbryt
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            onClick={() => {
+              const target = confirmRemove
+              setConfirmRemove(null)
+              if (target?.kind === 'image') void removeExisting(target.item)
+              else if (target?.kind === 'attachment') void removeExistingAttachment(target.item)
+            }}
+          >
+            {confirmRemove?.kind === 'attachment' ? 'Fjern vedlegget' : 'Fjern bildet'}
+          </Button>
+        </div>
+      </Modal>
+    </>
   )
 }

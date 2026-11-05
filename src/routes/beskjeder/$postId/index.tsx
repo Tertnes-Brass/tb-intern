@@ -2,7 +2,10 @@ import { formatBytes } from '../../../lib/format'
 import { postAttachmentUrl } from '../../../lib/post-attachments'
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
+import { ActionMenu, type ActionMenuItem } from '../../../components/ActionMenu'
 import { CommentComposer } from '../../../components/CommentComposer'
+import { Dock } from '../../../components/compose/Dock'
+import { draftKey } from '../../../lib/drafts'
 import { Icon } from '../../../components/Icons'
 import { useThreadMark } from '../../../components/useThreadMark'
 import { buildThreads, foldChildren, replyContext } from '../../../lib/threads'
@@ -11,7 +14,7 @@ import { Glyph } from '../../../components/compose/Composer'
 import { shortWhen } from '../../../components/compose/when'
 import { rememberPostRead } from '../../../lib/read-posts-client'
 import { toast, toastError } from '../../../components/toast'
-import { Avatar, BackArrow, BottomSheet, Button, buttonClass, EmptyState, Modal, Stamp } from '../../../components/ui'
+import { Avatar, BackArrow, Button, buttonClass, EmptyState, Modal, Stamp } from '../../../components/ui'
 import { formatDateTime } from '../../../lib/format'
 import { markdownToHtml } from '../../../lib/markdown'
 import { type MentionUser, UNKNOWN_MENTION, postLineTokens, renderCommentHtml } from '../../../lib/mentions'
@@ -40,10 +43,14 @@ import {
  * Hele innlegget med bilder, reaksjoner og kommentartråd.
  *
  * Leseflaten først: tittel, avsenderlinje og tekst. Det forfatteren og styret
- * kan gjøre med innlegget (send på nytt, rediger, avpubliser, slett) bor i ett
- * ark bak «Administrer», ikke som fire knapper under tråden; et utkast har i
- * tillegg «Rediger · Publiser» rett over teksten. Kommentarfeltet ligger fast
- * nederst på berøringsskjerm (`.comment-dock`).
+ * kan gjøre med innlegget (rediger, publiser/send e-post, avpubliser, slett)
+ * bor i den felles `ActionMenu` bak «Administrer» — samme meny som på
+ * prosjekter og i styret — med Rediger først og Slett nederst. E-post sendes
+ * aldri rett fra menyen: «Send e-post» / «Send til de N som mangler» åpner en
+ * bekreftelse med antall mottakere, for en utsending kan ikke angres. Et
+ * utkast har i tillegg «Rediger · Publiser» rett over teksten. Kommentarfeltet
+ * ligger fast nederst på berøringsskjerm (`Dock`), og en kommentar slettes
+ * først etter en bekreftelse.
  *
  * Ren tekst (`plain_text`, alt som fantes før #79) rendres som React-noder:
  * avsnittene bevares som skrevet og URL-er blir klikkbare, men ingenting blir
@@ -135,13 +142,18 @@ function CommentThread({
   postId,
   comments,
   canComment,
+  userId,
 }: {
   postId: string
   comments: Comment[]
   canComment: boolean
+  /** Utkastene på enheten har brukerens id i nøkkelen. */
+  userId: string | null
 }) {
   const router = useRouter()
   const [deleting, setDeleting] = useState<string | null>(null)
+  /** Kommentaren som venter på «Slette kommentaren?». */
+  const [confirmDelete, setConfirmDelete] = useState<Comment | null>(null)
   const [replying, setReplying] = useState<CommentReplyTarget | null>(null)
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const [focusId, setFocusId] = useState<string | null>(null)
@@ -179,8 +191,10 @@ function CommentThread({
     setDeleting(id)
     try {
       await deleteComment({ data: { id } })
+      setConfirmDelete(null)
       if (replying?.id === id) setReplying(null)
       await router.invalidate()
+      toast('Kommentaren er slettet')
     } catch (err) {
       toastError(err)
     } finally {
@@ -205,17 +219,17 @@ function CommentThread({
         <Avatar name={comment.author.name} size="sm" />
         <div className="sheet min-w-0 flex-1 px-3.5 py-2.5">
           <div className="flex items-baseline justify-between gap-3">
-            <p className="min-w-0 truncate text-[0.82rem] font-semibold text-ink">{comment.author.name}</p>
+            <p className="min-w-0 truncate text-[0.85rem] font-semibold text-ink">{comment.author.name}</p>
             <div className="flex shrink-0 items-center gap-2">
-              <time className="text-[0.72rem] text-ink-faint" title={formatDateTime(comment.createdAt)}>
+              <time className="text-xs text-ink-faint" title={formatDateTime(comment.createdAt)}>
                 {shortWhen(comment.createdAt)}
               </time>
               {comment.canDelete && (
                 <button
                   type="button"
-                  onClick={() => void remove(comment.id)}
+                  onClick={() => setConfirmDelete(comment)}
                   disabled={deleting === comment.id}
-                  className="hit cursor-pointer text-[0.72rem] text-ink-faint transition-colors hover:text-danger disabled:opacity-50"
+                  className="hit cursor-pointer text-xs text-ink-faint transition-colors hover:text-danger disabled:opacity-50"
                 >
                   Slett
                 </button>
@@ -227,7 +241,7 @@ function CommentThread({
               type="button"
               title="Vis kommentaren"
               onClick={() => markElement(commentDomId(ctx.target.id))}
-              className="mt-0.5 inline-flex max-w-full cursor-pointer items-center gap-1 text-[0.72rem] text-ink-faint transition-colors hover:text-ink"
+              className="mt-0.5 inline-flex max-w-full cursor-pointer items-center gap-1 text-xs text-ink-faint transition-colors hover:text-ink"
             >
               <Icon name="reply" size={12} />
               <span className="truncate">
@@ -241,7 +255,7 @@ function CommentThread({
               </span>
             </button>
           )}
-          {ctx?.kind === 'gone' && <p className="mt-0.5 text-[0.72rem] italic text-ink-faint">Svar på en slettet kommentar</p>}
+          {ctx?.kind === 'gone' && <p className="mt-0.5 text-xs italic text-ink-faint">Svar på en slettet kommentar</p>}
           {/* Omtaler blir chips og nettadresser blir lenker; brukerinnhold escapes av `renderCommentHtml`
               (allowlist ved konstruksjon, som i markdown.ts). Linjeskift
               beholdes av `whitespace-pre-wrap`, akkurat som før. */}
@@ -254,7 +268,7 @@ function CommentThread({
               type="button"
               aria-label={`Svar ${comment.author.name}`}
               onClick={() => setReplying({ id: comment.id, rootId, name: comment.author.name })}
-              className="hit mt-1.5 inline-flex cursor-pointer items-center gap-1 text-[0.75rem] font-medium text-ink-faint transition-colors hover:text-ink"
+              className="hit mt-1.5 inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-ink-soft transition-colors hover:text-ink"
             >
               <Icon name="reply" size={13} />
               Svar
@@ -268,7 +282,7 @@ function CommentThread({
   return (
     <>
     <section className="rise" style={{ animationDelay: '160ms' }} aria-label="Kommentarer">
-      <h2 className="kicker mb-3">{commentCountLabel(count)}</h2>
+      <h2 className="mb-3 text-[0.95rem] font-semibold text-ink">{commentCountLabel(count)}</h2>
 
       <ul className="space-y-3">
         {threads.map((root) => {
@@ -298,6 +312,7 @@ function CommentThread({
                       // Ny nøkkel per mål: et påbegynt svar til én person skal ikke stå igjen hos en annen.
                       key={replying.id}
                       postId={postId}
+                      draftKey={userId ? draftKey(userId, { kind: 'comment', postId, replyToId: replying.id }) : undefined}
                       replyTo={{ name: replying.name }}
                       onCancel={() => setReplying(null)}
                       onSubmit={(body) => submit(body, replying)}
@@ -312,25 +327,46 @@ function CommentThread({
 
     </section>
     {/* Nytt kommentarfelt: på berøringsskjerm ligger det fast nederst, over
-        fanelinjen (`.comment-dock` i styles.css) — det er alltid innen
+        fanelinjen (`Dock`, `.comment-dock` i styles.css) — det er alltid innen
         rekkevidde, uansett hvor langt ned i innlegget man er. Skjules mens man
         svarer i en tråd, så det ikke står to skrivefelt på skjermen. */}
     {canComment && !replying && (
-      <div className="comment-dock">
-        <CommentComposer variant="dock" postId={postId} onSubmit={(body) => submit(body, null)} />
-      </div>
+      <Dock>
+        <CommentComposer
+          variant="dock"
+          postId={postId}
+          draftKey={userId ? draftKey(userId, { kind: 'comment', postId }) : undefined}
+          onSubmit={(body) => submit(body, null)}
+        />
+      </Dock>
     )}
+    <Modal open={confirmDelete !== null} onClose={() => (deleting ? undefined : setConfirmDelete(null))} title="Slette kommentaren?">
+      <p className="text-sm leading-relaxed text-ink-soft">
+        Kommentaren fjernes for alle. Har noen svart på den, står det «Kommentaren er slettet» der den var, så svarene
+        beholder sammenhengen.
+      </p>
+      <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button variant="ghost" onClick={() => setConfirmDelete(null)} disabled={deleting !== null}>
+          Avbryt
+        </Button>
+        <Button variant="danger" loading={deleting !== null} onClick={() => confirmDelete && void remove(confirmDelete.id)}>
+          Slett kommentaren
+        </Button>
+      </div>
+    </Modal>
     </>
   )
 }
 
 function PostPage() {
   const data = Route.useLoaderData()
+  const me = Route.useRouteContext().me
   const router = useRouter()
   const post = data.post
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmPublish, setConfirmPublish] = useState(false)
-  const [manageOpen, setManageOpen] = useState(false)
+  /** «Sende e-post til N?» — utsending går aldri rett fra menyen. */
+  const [confirmSend, setConfirmSend] = useState(false)
   // Avslått som standard (#85): publisering og masseutsending er to handlinger.
   const [notify, setNotify] = useState(DEFAULT_NOTIFY)
   const [busy, setBusy] = useState<'resend' | 'publish' | 'unpublish' | 'delete' | null>(null)
@@ -359,6 +395,7 @@ function PostPage() {
   const resend = () =>
     act('resend', async () => {
       const result = await resendPostNotifications({ data: { id: post.id } })
+      setConfirmSend(false)
       const { message, kind } = notifyResultMessage(result)
       toast(message.replace(/^Publisert\. /, ''), kind)
       await router.invalidate()
@@ -389,24 +426,56 @@ function PostPage() {
     })
 
   const canPublishDraft = isDraft && post.canEdit
-  const deliveryLine = data.delivery
+  const delivery = data.delivery
+  // «Send e-post» før noe er sendt; «Send til de N som mangler» etterpå.
+  const anyDelivered = !!delivery && delivery.sent + delivery.logged + delivery.failed > 0
+  const pending = delivery?.pending ?? 0
+  const sendLabel = !anyDelivered ? 'Send e-post' : pending > 0 ? `Send til de ${pending} som mangler` : 'E-post er sendt til alle'
+  const deliveryHint = delivery
+    ? !anyDelivered
+      ? pending === 1
+        ? 'Ikke sendt ennå · 1 mottaker'
+        : `Ikke sendt ennå · ${pending} mottakere`
+      : [
+          `${delivery.sent} sendt`,
+          delivery.logged > 0 ? `${delivery.logged} loggført lokalt` : null,
+          delivery.failed > 0 ? `${delivery.failed} feilet` : null,
+          pending === 0 ? 'ingen får den to ganger' : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+    : undefined
+
+  const manageItems: ActionMenuItem[] = post.canEdit
     ? [
-        `E-post: ${data.delivery.sent} sendt`,
-        data.delivery.logged > 0 ? `${data.delivery.logged} loggført lokalt` : null,
-        data.delivery.failed > 0 ? `${data.delivery.failed} feilet` : null,
-        data.delivery.pending > 0 ? `${data.delivery.pending} mangler` : 'alle mottakere har fått den',
+        {
+          label: 'Rediger',
+          hint: `Tekst, bilder${data.canPublish ? ', vedlegg' : ''} og valg`,
+          icon: 'notes',
+          onSelect: () => void router.navigate({ to: '/beskjeder/$postId/rediger', params: { postId: post.id } }),
+        },
+        ...(isDraft
+          ? [{ label: 'Publiser', hint: 'Gjør innlegget synlig, med valg om varsel', icon: 'megaphone' as const, onSelect: () => setConfirmPublish(true) }]
+          : delivery
+            ? [{ label: sendLabel, hint: deliveryHint, icon: 'bell' as const, disabled: pending === 0 || busy === 'resend', onSelect: () => setConfirmSend(true) }]
+            : []),
+        ...(!isDraft && data.canPublish
+          ? [{ label: 'Avpubliser', hint: 'Tar innlegget av veggen og gjør det til et utkast', icon: 'refresh' as const, disabled: busy === 'unpublish', onSelect: () => void unpublish() }]
+          : []),
+        { label: 'Slett innlegget', hint: 'Med kommentarer, bilder og vedlegg', icon: 'close', tone: 'danger', onSelect: () => setConfirmDelete(true) },
       ]
-        .filter(Boolean)
-        .join(' · ')
-    : null
+    : []
 
   return (
     <div className="mx-auto max-w-2xl">
       <header className="rise">
-        <Link to="/beskjeder" className="back-link mb-3">
-          <BackArrow />
-          Veggen
-        </Link>
+        <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
+          <Link to="/beskjeder" className="back-link">
+            <BackArrow />
+            Veggen
+          </Link>
+          {post.canEdit && <ActionMenu label="Administrer" title={post.heading} items={manageItems} />}
+        </div>
 
         {(post.importance === 'important' || post.audience === 'board' || isDraft) && (
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -429,16 +498,10 @@ function PostPage() {
               {postSender(post)}
               {(post.official || post.fromArchive) && <span className="font-normal text-ink-soft"> · {post.author.name}</span>}
             </p>
-            <p className="mt-0.5 text-[0.78rem] text-ink-faint">
+            <p className="mt-0.5 text-[0.8rem] text-ink-faint">
               {isDraft ? `Sist endret ${formatDateTime(post.updatedAt)}` : formatDateTime(post.publishedAt!)}
             </p>
           </div>
-          {post.canEdit && (
-            <Button size="sm" variant="ghost" onClick={() => setManageOpen(true)} aria-haspopup="dialog" className="shrink-0">
-              <Glyph name="more" size={18} />
-              Administrer
-            </Button>
-          )}
         </div>
       </header>
 
@@ -506,62 +569,8 @@ function PostPage() {
 
       {!isDraft && (
         <div className="mt-8">
-          <CommentThread postId={post.id} comments={data.comments} canComment />
+          <CommentThread postId={post.id} comments={data.comments} canComment userId={me?.id ?? null} />
         </div>
-      )}
-
-      {post.canEdit && (
-        <BottomSheet
-          open={manageOpen}
-          onClose={() => setManageOpen(false)}
-          label="Administrer innlegget"
-          header={
-            <div className="pb-1 pt-2">
-              <p className="display-title text-lg font-semibold text-ink">Administrer innlegget</p>
-              <p className="mt-0.5 text-xs leading-snug text-ink-faint">
-                {isDraft
-                  ? data.canPublish
-                    ? 'Utkastet er kun synlig for dem som kan publisere beskjeder.'
-                    : 'Innlegget er ikke publisert ennå.'
-                  : (deliveryLine ?? 'Du kan redigere eller slette innlegget ditt.')}
-              </p>
-            </div>
-          }
-        >
-          <div className="manage-list">
-            {isDraft ? (
-              <button type="button" onClick={() => { setManageOpen(false); setConfirmPublish(true) }}>
-                <span>Publiser</span>
-                <small>Gjør innlegget synlig, med valg om varsel.</small>
-              </button>
-            ) : (
-              data.delivery && (
-                <button type="button" onClick={() => void resend()} disabled={busy === 'resend' || data.delivery.pending === 0}>
-                  <span>{busy === 'resend' ? 'Sender …' : 'Send e-post på nytt'}</span>
-                  <small>
-                    {data.delivery.pending === 0
-                      ? 'Alle mottakere har fått den. Ingen får den samme beskjeden to ganger.'
-                      : 'Går bare til dem som mangler varselet.'}
-                  </small>
-                </button>
-              )
-            )}
-            <Link to="/beskjeder/$postId/rediger" params={{ postId: post.id }}>
-              <span>Rediger</span>
-              <small>Tekst, bilder{data.canPublish ? ', vedlegg' : ''} og valg.</small>
-            </Link>
-            {!isDraft && data.canPublish && (
-              <button type="button" onClick={() => void unpublish().then(() => setManageOpen(false))} disabled={busy === 'unpublish'}>
-                <span>{busy === 'unpublish' ? 'Avpubliserer …' : 'Avpubliser'}</span>
-                <small>Tar innlegget av veggen og gjør det til et utkast igjen.</small>
-              </button>
-            )}
-            <button type="button" className="is-danger" onClick={() => { setManageOpen(false); setConfirmDelete(true) }}>
-              <span>Slett</span>
-              <small>Sletter innlegget, kommentarene, bildene og vedleggene.</small>
-            </button>
-          </div>
-        </BottomSheet>
       )}
 
       <Modal open={confirmPublish} onClose={() => setConfirmPublish(false)} title="Publisere innlegget?" kicker="Veggen">
@@ -592,6 +601,27 @@ function PostPage() {
           </Button>
           <Button variant="primary" onClick={() => void publish()} loading={busy === 'publish'}>
             Publiser nå
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={confirmSend}
+        onClose={() => (busy === 'resend' ? undefined : setConfirmSend(false))}
+        title={pending === 1 ? 'Sende e-post til 1 medlem?' : `Sende e-post til ${pending} medlemmer?`}
+        kicker="Veggen"
+      >
+        <p className="text-sm leading-relaxed text-ink-soft">
+          «{post.heading}» går på e-post til {pending === 1 ? 'det ene medlemmet' : `de ${pending} medlemmene`} som ikke har fått
+          den{anyDelivered ? ' ennå' : ''}, og som varsel til dem som har slått på varsler på en enhet. En e-post kan ikke trekkes
+          tilbake. Ingen får den samme beskjeden to ganger.
+        </p>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="ghost" onClick={() => setConfirmSend(false)} disabled={busy === 'resend'}>
+            Avbryt
+          </Button>
+          <Button variant="primary" onClick={() => void resend()} loading={busy === 'resend'} disabled={pending === 0}>
+            {pending === 1 ? 'Send til 1' : `Send til ${pending}`}
           </Button>
         </div>
       </Modal>

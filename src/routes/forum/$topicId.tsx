@@ -7,6 +7,10 @@ import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-rout
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Avatar, BackArrow, Button, buttonClass, Field, Stamp } from '../../components/ui'
 import { Glyph } from '../../components/compose/Composer'
+import { Dock } from '../../components/compose/Dock'
+import { DraftNotice } from '../../components/compose/LeaveGuard'
+import { useLocalDraft } from '../../components/compose/useLocalDraft'
+import { draftKey, isTextDraft } from '../../lib/drafts'
 import { shortWhen } from '../../components/compose/when'
 import { editForumText, getForumTopic, markForumRepliesRead, replyToForum, searchForumMentions, setForumFollow, setForumLock } from '../../server/forum'
 import { Icon } from '../../components/Icons'
@@ -98,9 +102,12 @@ function ForumText({ id, kind, body, author, createdAt, updatedAt, canEdit, unre
   </article>
 }
 
-/** Feltet for et nytt svar på tråden: fast nederst på berøringsskjerm, som kommentarfeltet på veggen. */
-function ReplyDock({ draft, onDraft, busy, error, onSubmit }: {
+type Restored = { savedAt: number; stale: boolean } | null
+
+/** Feltet for et nytt svar på tråden: fast nederst på berøringsskjerm (`Dock`), som kommentarfeltet på veggen. */
+function ReplyDock({ draft, onDraft, busy, error, onSubmit, restored, onDiscard }: {
   draft: Draft; onDraft: (draft: Draft) => void; busy: boolean; error: string; onSubmit: () => void
+  restored: Restored; onDiscard: () => void
 }) {
   const ref = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
@@ -109,8 +116,9 @@ function ReplyDock({ draft, onDraft, busy, error, onSubmit }: {
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight + 2, 160)}px`
   }, [draft.body])
-  return <form className="comment-dock" onSubmit={(e) => { e.preventDefault(); onSubmit() }}>
+  return <Dock><form onSubmit={(e) => { e.preventDefault(); onSubmit() }}>
     {error && <p role="alert" className="mb-2 text-sm text-danger">{error}</p>}
+    <DraftNotice restored={restored} onDiscard={onDiscard} />
     <div className="flex items-end gap-2">
       <MentionTextarea
         textareaRef={ref}
@@ -134,7 +142,7 @@ function ReplyDock({ draft, onDraft, busy, error, onSubmit }: {
       </Button>
     </div>
     <p id="forum-reply-hint" className="sr-only">Skriv @ for å velge et medlem eller Alle i korpset. Vil du svare noen bestemt, trykk «Svar» under svaret deres.</p>
-  </form>
+  </form></Dock>
 }
 
 /**
@@ -142,9 +150,9 @@ function ReplyDock({ draft, onDraft, busy, error, onSubmit }: {
  * havner. Teksten bor hos siden, ikke her: bytter man hvem man svarer, følger
  * det man har skrevet med i stedet for å forsvinne.
  */
-function InlineReply({ target, draft, onDraft, busy, error, onSubmit, onCancel }: {
+function InlineReply({ target, draft, onDraft, busy, error, onSubmit, onCancel, restored, onDiscard }: {
   target: ReplyTarget; draft: Draft; onDraft: (draft: Draft) => void; busy: boolean; error: string
-  onSubmit: () => void; onCancel: () => void
+  onSubmit: () => void; onCancel: () => void; restored: Restored; onDiscard: () => void
 }) {
   return <form className="mt-1 space-y-2 rounded-[9px] border border-line bg-paper-sunken/40 p-3" onSubmit={(e) => { e.preventDefault(); onSubmit() }}>
     <div className="flex items-center gap-2 text-xs text-ink-soft">
@@ -152,6 +160,7 @@ function InlineReply({ target, draft, onDraft, busy, error, onSubmit, onCancel }
       <span className="min-w-0 flex-1 truncate">Svarer <strong className="text-ink">{target.name}</strong></span>
       <button type="button" className="shrink-0 cursor-pointer px-1 py-0.5 text-ink-faint hover:text-ink" onClick={onCancel}>Avbryt</button>
     </div>
+    <DraftNotice restored={restored} onDiscard={onDiscard} />
     <MentionTextarea
       // Fokus i samme trykk som åpnet feltet, så tastaturet kommer opp på iPhone.
       autoFocus
@@ -195,6 +204,24 @@ function TopicPage() {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const { markedId, markElement } = useThreadMark()
 
+  // Svarene lagres på enheten mens man skriver (src/lib/drafts.ts): ett utkast
+  // for svaret på tråden, og ett per svar man svarer på.
+  const me = Route.useRouteContext().me
+  const topLocal = useLocalDraft<Draft>({
+    storageKey: me ? draftKey(me.id, { kind: 'forum-reply', topicId: topic.id }) : null,
+    value: topDraft,
+    initial: EMPTY_DRAFT,
+    validate: isTextDraft,
+    onRestore: setTopDraft,
+  })
+  const replyLocal = useLocalDraft<Draft>({
+    storageKey: me && replying ? draftKey(me.id, { kind: 'forum-reply', topicId: topic.id, replyToId: replying.id }) : null,
+    value: replyDraft,
+    initial: EMPTY_DRAFT,
+    validate: isTextDraft,
+    onRestore: setReplyDraft,
+  })
+
   // Fra et varsel eller etter eget svar: rull til svaret én gang per lenke —
   // ikke på nytt hver gang tråden oppdateres i bakgrunnen.
   const focused = useRef<string | null>(null)
@@ -216,6 +243,7 @@ function TopicPage() {
     try {
       const result = await replyToForum({ data: { topicId: topic.id, body: text, replyToId: replying.id } })
       // Svaret er lagret. Navigasjonen henter tråden på nytt og ruller til det.
+      replyLocal.clear()
       await navigate({ search: { page: result.page, svar: result.id }, replace: true }).catch(() => undefined)
       cancelReply()
     } catch (e) { setReplyError(e instanceof Error ? e.message : 'Kunne ikke sende svaret.') } finally { setReplyBusy(false) }
@@ -246,7 +274,8 @@ function TopicPage() {
               : ctx.kind === 'gone' ? <p className="text-xs italic text-ink-faint">Svar på et svar som ikke finnes lenger</p> : null}
             onReply={canReply ? () => startReply({ id: child.reply.id, rootId: root.reply.id, name: displayName(child.author) }) : undefined} />
         })}
-        {composerHere && replying && <InlineReply target={replying} draft={replyDraft} onDraft={setReplyDraft} busy={replyBusy} error={replyError} onSubmit={() => void sendReply()} onCancel={cancelReply} />}
+        {composerHere && replying && <InlineReply target={replying} draft={replyDraft} onDraft={setReplyDraft} busy={replyBusy} error={replyError} onSubmit={() => void sendReply()} onCancel={cancelReply}
+          restored={replyLocal.restored} onDiscard={() => { replyLocal.discard(); setReplyDraft(EMPTY_DRAFT) }} />}
       </div>}
     </div>
   }
@@ -257,6 +286,7 @@ function TopicPage() {
     setBusy(true); setError('')
     try {
       const result = await replyToForum({ data: { topicId: topic.id, body: text } })
+      topLocal.clear()
       setTopDraft(EMPTY_DRAFT)
       await navigate({ search: { page: result.page, svar: result.id }, replace: true }).catch(() => undefined)
     }
@@ -292,7 +322,7 @@ function TopicPage() {
     {/* Feil fra «Følg»/«Lås» og fra svaret vises i svarfeltet når det står der. */}
     {error && (topic.locked || replying) && <p role="alert" className="mt-3 text-danger">{error}</p>}
     <section className="rise mt-8" style={{ animationDelay: '120ms' }} aria-label="Svar">
-      <h2 className="kicker mb-1">Svar{page > 0 ? ` · side ${page + 1}` : ''}</h2>
+      <h2 className="mb-1 text-[0.95rem] font-semibold text-ink">Svar{page > 0 ? <span className="font-normal text-ink-soft"> · side {page + 1}</span> : ''}</h2>
       {!data.replies.length && <p className="py-3 text-sm text-ink-soft">{page ? 'Ingen flere svar.' : topic.locked ? 'Ingen svar.' : 'Ingen svar ennå — skriv det første nedenfor.'}</p>}
       <div className="divide-y divide-line">{data.replies.map(renderThread)}</div>
       {(page > 0 || data.hasMore) && <nav aria-label="Sider med svar" className="mt-3 flex justify-between">
@@ -303,6 +333,7 @@ function TopicPage() {
     {topic.locked
       ? <p className="mt-6 rounded-[12px] border border-dashed border-line-strong bg-paper-sunken px-4 py-3 text-sm text-ink-soft">Tråden er låst. Du kan fortsatt lese samtalen.</p>
       // Skjult mens man svarer noen bestemt, så det ikke står to skrivefelt på skjermen.
-      : !replying && <ReplyDock draft={topDraft} onDraft={setTopDraft} busy={busy} error={error} onSubmit={() => void sendTopLevel()} />}
+      : !replying && <ReplyDock draft={topDraft} onDraft={setTopDraft} busy={busy} error={error} onSubmit={() => void sendTopLevel()}
+          restored={topLocal.restored} onDiscard={() => { topLocal.discard(); setTopDraft(EMPTY_DRAFT) }} />}
   </div>
 }

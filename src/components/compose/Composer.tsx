@@ -21,18 +21,27 @@ export function ComposerBar({
   cancel,
   title,
   actions,
+  status,
 }: {
   /** «Avbryt» — en lenke tilbake dit man kom fra. */
   cancel: ReactNode
   title: ReactNode
   /** Lagre/Publiser. Primærknappen står sist, ytterst til høyre. */
   actions: ReactNode
+  /** En liten linje under tittelen, f.eks. «Lagret på enheten». */
+  status?: ReactNode
 }) {
   return (
     <div className="composer-bar">
       <div className="composer-bar-inner">
         <div className="flex shrink-0 justify-start">{cancel}</div>
-        <h1 className="min-w-0 flex-1 truncate text-center text-[0.95rem] font-semibold text-ink">{title}</h1>
+        <div className="relative min-w-0 flex-1 text-center">
+          <h1 className="truncate text-[0.95rem] font-semibold leading-tight text-ink">{title}</h1>
+          {/* Hengt under tittelen (absolutt), så tittelen ikke flytter seg når statusen dukker opp. */}
+          <p className="composer-status" aria-live="polite">
+            {status}
+          </p>
+        </div>
         <div className="flex shrink-0 items-center justify-end gap-1">{actions}</div>
       </div>
     </div>
@@ -150,7 +159,7 @@ export function Segmented<T extends string>({
 }
 
 /** Små tegn for skriveflaten og veggen (Icons.tsx har dem ikke). */
-export function Glyph({ name, size = 18 }: { name: 'image' | 'clip' | 'options' | 'chevron' | 'send' | 'more' | 'comment'; size?: number }) {
+export function Glyph({ name, size = 18 }: { name: 'image' | 'clip' | 'options' | 'chevron' | 'send' | 'more' | 'comment' | 'eye' | 'pencil'; size?: number }) {
   const paths: Record<typeof name, ReactNode> = {
     image: (
       <>
@@ -171,6 +180,13 @@ export function Glyph({ name, size = 18 }: { name: 'image' | 'clip' | 'options' 
       </>
     ),
     comment: <path d="M20 12a7.5 7.5 0 0 1-11 6.6L4 20l1.4-4.6A7.5 7.5 0 1 1 20 12z" />,
+    eye: (
+      <>
+        <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+        <circle cx="12" cy="12" r="2.8" />
+      </>
+    ),
+    pencil: <path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3zM14 8l3 3" />,
   }
   return (
     <svg

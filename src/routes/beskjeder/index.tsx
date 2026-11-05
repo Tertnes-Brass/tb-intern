@@ -189,7 +189,7 @@ function PostsPage() {
           </nav>
           {data.drafts.length > 0 && vis !== 'utkast' && (
             <section className="mt-7">
-              <h2 className="kicker mb-2">Utkast · {data.drafts.length}</h2>
+              <h2 className="mb-2 text-[0.85rem] font-semibold text-ink-soft">Utkast <span className="tabular font-normal text-ink-faint">· {data.drafts.length}</span></h2>
               <DraftList drafts={data.drafts} />
             </section>
           )}

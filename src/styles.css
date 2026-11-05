@@ -1480,13 +1480,43 @@ dialog.stand-sheet:focus-visible {
       padding: 0 1.25rem 0.85rem;
     }
   }
+  /* Bryter heller enn å klippe: blir det for trangt, går «Valg» til en egen
+     linje. `.is-compact` (vedlegg eller Markdown) tar bort sammendraget på
+     «Valg» på smal skjerm og strammer inn knappene, så de vanligvis får plass
+     på én linje fra 375 px. */
   .composer-toolbar {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.25rem;
     padding: 0.4rem 0.5rem;
     border-top: 1px solid var(--line);
+  }
+  .tool-summary {
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 400;
+    color: var(--ink-faint);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  @media (max-width: 380px) {
+    .tool-summary {
+      display: none;
+    }
+  }
+  @media (max-width: 559.98px) {
+    .composer-toolbar.is-compact {
+      gap: 0.1rem;
+      padding-inline: 0.35rem;
+    }
+    .composer-toolbar.is-compact .tool-button {
+      gap: 0.3rem;
+      padding-inline: 0.55rem;
+    }
+    .composer-toolbar.is-compact .tool-summary {
+      display: none;
+    }
   }
   .tool-button {
     display: inline-flex;
@@ -1653,9 +1683,9 @@ dialog.stand-sheet:focus-visible {
     padding: 0 0.35rem;
     border-radius: 9999px;
     background: var(--brass-soft);
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
     color: var(--brass-strong);
   }
   .wall-chip.is-on .wall-count {
@@ -1773,31 +1803,47 @@ dialog.stand-sheet:focus-visible {
 }
 
 @layer components {
-  /* Kommentarfeltet nederst på et innlegg. På berøringsskjerm klistrer det
-     seg over fanelinjen (58 px + hjem-indikatoren); mens feltet har fokus er
-     fanelinjen skjult (regelen øverst i fila), og da står det helt nede. Med
-     mus fra 1024 px står det bare under kommentarene. */
+  /* Kommentarfeltet nederst på et innlegg og svarfeltet i en forumtråd
+     (`Dock` i src/components/compose/Dock.tsx). På berøringsskjerm ligger det
+     FAST mot skjermen rett over fanelinjen (58 px + hjem-indikatoren) — ikke
+     sticky, som fulgte sin egen beholder og havnet bak fanelinjen. Mens et
+     tekstfelt har fokus er fanelinjen skjult (regelen under «Fanelinjen»), og
+     da står feltet nederst, over tastaturet (`--dock-kb`, målt med
+     visualViewport). Tomrommet `.comment-dock-spacer` har feltets høyde, så det
+     siste svaret aldri ligger bak det. Med mus fra 1024 px står feltet bare
+     under tråden. */
   .comment-dock {
     margin-top: 1.25rem;
   }
+  .comment-dock-spacer {
+    display: none;
+  }
   @media (max-width: 1023.98px), (pointer: coarse) {
     .comment-dock {
-      position: sticky;
-      bottom: calc(58px + env(safe-area-inset-bottom));
-      z-index: 20;
-      margin: 1.25rem -1rem 0;
-      padding: 0.55rem 1rem;
+      position: fixed;
+      inset-inline: 0;
+      /* Fanelinjen er 58 px + 1 px kantlinje over. */
+      bottom: calc(59px + env(safe-area-inset-bottom));
+      z-index: 35;
+      margin: 0;
+      padding: 0.55rem max(1rem, env(safe-area-inset-right)) 0.55rem max(1rem, env(safe-area-inset-left));
       background: var(--paper);
       border-top: 1px solid var(--line);
     }
-    body:has(.comment-dock textarea:focus) .comment-dock {
-      bottom: env(safe-area-inset-bottom);
+    body:has(:is(textarea, select, [contenteditable='true'], input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit']):not([type='range'])):focus) .comment-dock {
+      bottom: var(--dock-kb, 0px);
+      padding-bottom: calc(0.55rem + env(safe-area-inset-bottom));
     }
-  }
-  @media ((max-width: 1023.98px) or (pointer: coarse)) and (min-width: 640px) {
-    .comment-dock {
-      margin-inline: -1.5rem;
-      padding-inline: 1.5rem;
+    body:has(:is(textarea, select, [contenteditable='true'], input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit']):not([type='range'])):focus) .comment-dock[data-keyboard='open'] {
+      padding-bottom: 0.55rem;
+    }
+    .comment-dock-inner {
+      max-width: 42rem;
+      margin-inline: auto;
+    }
+    .comment-dock-spacer {
+      display: block;
+      height: calc(var(--comment-dock-h, 4.5rem) + 0.5rem);
     }
   }
   .comment-dock-send {
@@ -1864,6 +1910,55 @@ dialog.stand-sheet:focus-visible {
   border-radius: 22px;
   padding: 0.6rem 1rem;
   line-height: 1.4;
+}
+/* Toastene legger seg over skrivefeltet, ikke bak det. Ulaget, som regelen
+   for fanelinjen den overstyrer. */
+@media (max-width: 1023.98px), (pointer: coarse) {
+  body:has(.tab-bar):has(.comment-dock) .toast-stack {
+    bottom: calc(59px + var(--comment-dock-h, 4.5rem) + 0.9rem + env(safe-area-inset-bottom));
+  }
+}
+
+@layer components {
+  /* «Lagret på enheten» under tittelen i skriveflatens topplinje. Hengt
+     absolutt under tittelen, så tittelen står stille. */
+  .composer-status {
+    position: absolute;
+    inset-inline: 0;
+    top: 100%;
+    overflow: hidden;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    color: var(--ink-faint);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .composer-status:empty {
+    display: none;
+  }
+  /* «Gjenopprettet utkast fra kl. 14:32 · Forkast». */
+  .draft-notice {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.6rem;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: var(--ink-soft);
+  }
+  .draft-notice-action {
+    font-weight: 600;
+    color: var(--brass-strong);
+    cursor: pointer;
+  }
+  .draft-notice-action:hover {
+    text-decoration: underline;
+  }
+  /* Over kommentarfeltet i linjen nederst. */
+  .comment-dock .draft-notice {
+    margin: 0 0.25rem 0.4rem;
+    font-size: 0.75rem;
+  }
 }
 
 @layer components {

@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { PostForm } from '../../components/PostForm'
+import { draftKey } from '../../lib/drafts'
 
 /**
  * Skriveflaten for et nytt innlegg. Alle innloggede kan skrive på veggen;
@@ -20,5 +21,6 @@ function NewPostPage() {
 
   // Skriveflaten eier hele siden: «Avbryt · Nytt innlegg · Publiser» øverst,
   // teksten rett under (src/components/compose/Composer.tsx).
-  return <PostForm canPublish={canPublish} canArchive={canArchive} />
+  // Utkastet på enheten har brukerens id i nøkkelen (src/lib/drafts.ts).
+  return <PostForm canPublish={canPublish} canArchive={canArchive} draftKey={me ? draftKey(me.id, { kind: 'new-post' }) : undefined} />
 }
