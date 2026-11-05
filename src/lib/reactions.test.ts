@@ -32,6 +32,11 @@ describe('isReactionEmoji', () => {
 const VS16 = String.fromCodePoint(0xfe0f)
 
 describe('normalizeReactionEmoji', () => {
+  it('rører ikke et tegn kjøretiden ikke kjenner (nyere Unicode enn tabellene)', () => {
+    // U+1FAEB er Unicode 18; Node 24 og eldre vet ikke hva det er.
+    expect(normalizeReactionEmoji(String.fromCodePoint(0x1faeb))).toBe(String.fromCodePoint(0x1faeb))
+  })
+
   it('gjør samme emoji til samme chip', () => {
     expect(normalizeReactionEmoji('👍' + VS16)).toBe('👍')
     expect(normalizeReactionEmoji('❤')).toBe('❤' + VS16)
@@ -102,9 +107,11 @@ describe('reactionTitle', () => {
 describe('emoji-velgeren og serveren er enige', () => {
   it('hver emoji velgeren viser, godtas som reaksjon', async () => {
     const { readFileSync } = await import('node:fs')
-    const { normalizeEmoji } = await import('./emoji-data')
+    const { emojiVersionIndex, normalizeEmoji } = await import('./emoji-data')
     const raw = JSON.parse(readFileSync('node_modules/emojibase-data/nb/compact.json', 'utf8'))
-    const shown = normalizeEmoji(raw)
+    const versions = emojiVersionIndex(JSON.parse(readFileSync('node_modules/emojibase-data/versions/emoji.json', 'utf8')))
+    // Det velgeren faktisk viser: med versjonstaket (Unicode 15.1), som i EmojiPicker.
+    const shown = normalizeEmoji(raw, { versions })
     expect(shown.length).toBeGreaterThan(1500)
     const rejected = shown.filter((e) => !isReactionEmoji(e.emoji)).map((e) => e.emoji)
     expect(rejected).toEqual([])

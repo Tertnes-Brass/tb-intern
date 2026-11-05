@@ -31,6 +31,10 @@ export const MAX_REACTION_NAMES = 10
 const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\u200D|\uFE0F|\u20E3|[\u{E0020}-\u{E007F}])+$/u
 const PICTOGRAPHIC = /\p{Extended_Pictographic}/u
 const PRESENTATION = /^\p{Emoji_Presentation}$/u
+// `Emoji`, ikke `Extended_Pictographic`: den siste dekker også kodepunkter som
+// ennå ikke er tildelt, og en kjøretid med eldre Unicode-tabeller (Node 24,
+// Workers) kjenner ikke de nyeste emojiene — dem skal vi la være i fred.
+const EMOJI_CHAR = /^\p{Emoji}$/u
 const PICTOGRAPHIC_CHAR = /^\p{Extended_Pictographic}$/u
 const SKIN_TONE = /^[\u{1F3FB}-\u{1F3FF}]$/u
 const REGIONAL_PAIR = /[\u{1F1E6}-\u{1F1FF}]{2}/u
@@ -68,6 +72,7 @@ export function isReactionEmoji(value: unknown): value is string {
  * fjernes («👍» + FE0F → «👍»), og et som mangler etter et tegn som ellers kan
  * vises som tekst, legges til («❤» → «❤️») — slik emoji-velgeren og Unicodes
  * emoji-test.txt skriver dem. Hudfarge etter tegnet erstatter variantvalget.
+ * Et tegn kjøretiden ikke kjenner (nyere Unicode enn tabellene), røres ikke.
  */
 export function normalizeReactionEmoji(value: string): string {
   const chars = [...value]
@@ -82,7 +87,7 @@ export function normalizeReactionEmoji(value: string): string {
     }
     out.push(c)
     const next = chars[i + 1]
-    if (PICTOGRAPHIC_CHAR.test(c) && !PRESENTATION.test(c) && next !== VS16 && !(next && SKIN_TONE.test(next))) out.push(VS16)
+    if (PICTOGRAPHIC_CHAR.test(c) && EMOJI_CHAR.test(c) && !PRESENTATION.test(c) && next !== VS16 && !(next && SKIN_TONE.test(next))) out.push(VS16)
   }
   return out.join('')
 }
