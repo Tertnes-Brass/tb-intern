@@ -1,5 +1,6 @@
 import { chatPlainText } from './chat-format'
 import { type MentionUser, mentionPlainText } from './mentions'
+import { type MessageMediaItem, textOrMediaLabel } from './message-media'
 
 /**
  * Ren hjelpelogikk for styreområdet (`/styre`): rekkefølgen på oppgavelista,
@@ -358,7 +359,8 @@ export type ChatReply =
  *
  * Utdraget lages av teksten uten backticks og med navn i stedet for
  * omtale-markører: referansen skal leses, ikke vise syntaks — og ingen skal
- * møte `@[u:kd9…]` i en svarreferanse.
+ * møte `@[u:kd9…]` i en svarreferanse. Var originalen bare en GIF eller et
+ * bilde, står det «GIF»/«Bilde» (`replyMedia`).
  */
 export function replyReference(
   row: {
@@ -368,13 +370,14 @@ export function replyReference(
     replyAuthorName: string | null
   },
   mentions: Iterable<MentionUser> = [],
+  replyMedia: ReadonlyArray<{ contentType: string }> = [],
 ): ChatReply | null {
   if (row.replyId) {
     return {
       deleted: false,
       id: row.replyId,
       authorName: row.replyAuthorName,
-      excerpt: replyExcerpt(mentionPlainText(chatPlainText(row.replyBody ?? ''), mentions)),
+      excerpt: replyExcerpt(textOrMediaLabel(mentionPlainText(chatPlainText(row.replyBody ?? ''), mentions), replyMedia)),
     }
   }
   return row.replyToDeleted ? { deleted: true } : null
@@ -389,6 +392,8 @@ export type ChatMessage = {
   createdAt: number
   /** Meldingen dette er et svar på, eller null når det ikke er et svar. */
   replyTo?: ChatReply | null
+  /** Bildene og GIF-ene i meldingen. Teksten kan være tom når det finnes et bilde. */
+  media?: MessageMediaItem[]
 }
 
 export type ChatDay<T> = {

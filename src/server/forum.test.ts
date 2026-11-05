@@ -3,12 +3,14 @@ import { readFileSync } from 'node:fs'
 import { drizzle } from 'drizzle-orm/d1'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({ me: null as null | { id: string; name?: string; permissions: string[] }, db: null as any, pushes: [] as Array<{ to: string[]; title: string; url: string }> }))
+const state = vi.hoisted(() => ({ me: null as null | { id: string; name?: string; permissions: string[] }, db: null as any, pushes: [] as Array<{ to: string[]; title: string; url: string }>, bodies: [] as string[] }))
 vi.mock('@tanstack/react-start', () => ({ createServerFn: () => ({ validator(schema: any) { return { handler: (fn: any) => async (arg: any) => fn({ data: schema.parse(arg.data) }) } } }) }))
 vi.mock('../db', () => ({ db: () => state.db }))
+vi.mock('cloudflare:workers', () => ({ env: { FILES: { delete: async () => {} } } }))
 vi.mock('./push-send', () => ({
-  sendPushToUsers: async (to: string[], message: { title: string; url: string }) => {
+  sendPushToUsers: async (to: string[], message: { title: string; url: string; body: string }) => {
     state.pushes.push({ to: [...to].sort(), title: message.title, url: message.url })
+    state.bodies.push(message.body)
     return { sent: to.length, failed: 0, removed: 0 }
   },
 }))
@@ -40,6 +42,10 @@ beforeEach(() => {
   // 0029 legger også til kolonner i veggens kommentarer; tabellen må bare finnes.
   sqlite.exec('CREATE TABLE post_comments (id text primary key, post_id text, author_id text, body text, created_at integer, updated_at integer)')
   sqlite.exec(readFileSync(new URL('../../migrations/0029_svar-pa-svar.sql', import.meta.url), 'utf8'))
+  sqlite.exec(readFileSync(new URL('../../migrations/0030_bilder-i-samtaler.sql', import.meta.url), 'utf8'))
+  // 0031 kopierer veggens gamle likes; tabellen må bare finnes.
+  sqlite.exec('CREATE TABLE post_reactions (post_id text, user_id text, created_at integer)')
+  sqlite.exec(readFileSync(new URL('../../migrations/0031_reaksjoner.sql', import.meta.url), 'utf8'))
   // Exercise real Drizzle D1 queries against SQLite, including conditional writes.
   const prepare = (query: string) => {
     let values: any[] = []
@@ -54,6 +60,7 @@ beforeEach(() => {
   state.db = drizzle({ prepare } as any)
   state.me = { id: 'one', name: 'Ingrid', permissions: [] }
   state.pushes = []
+  state.bodies = []
 })
 const topic = () => createForumTopic({ data: { title: 'Hvem blir med på fest?', body: 'På lørdag?' } })
 
@@ -405,5 +412,68 @@ describe('replies to replies', () => {
     expect(state.pushes).toEqual([])
     await editForumText({ data: { id: answer.id, kind: 'reply', body: 'Svar, rettet @[u:three]' } })
     expect(state.pushes).toEqual([{ to: ['three'], title: 'Ingrid nevnte deg i forumet', url: `/forum/${id}?svar=${answer.id}` }])
+  })
+})
+
+describe('images and GIFs', () => {
+  const as = (id: 'one' | 'two' | 'three') => { state.me = { id, name: { one: 'Ingrid', two: 'Jonas', three: 'Karim' }[id], permissions: [] } }
+  /** Et opplastet, ikke sendt bilde — det `/api/message-media/upload` lager. */
+  const upload = (owner: string, type = 'image/gif') => {
+    const mediaId = `m${Math.random().toString(36).slice(2)}`
+    sqlite.prepare(`INSERT INTO message_media (id, owner_id, r2_key, content_type, size, width, height, created_at)
+      VALUES (?, ?, ?, ?, 10, 480, 270, ?)`).run(mediaId, owner, `message-media/${mediaId}`, type, Date.now())
+    return mediaId
+  }
+  const target = (mediaId: string) => sqlite.prepare('SELECT target_kind AS kind, target_id AS id FROM message_media WHERE id = ?').get(mediaId) as { kind: string | null; id: string | null }
+
+  it('lets a thread and a reply be nothing but a GIF, and shows it on the page', async () => {
+    const gif = upload('one')
+    const { id } = await createForumTopic({ data: { title: 'Fredagsstemning', body: '', mediaIds: [gif] } })
+    expect(target(gif)).toEqual({ kind: 'forum_topic', id })
+    as('two')
+    const meme = upload('two', 'image/png')
+    const reply = await replyToForum({ data: { topicId: id, body: '  ', mediaIds: [meme] } })
+    const detail = await getForumTopic({ data: { id, page: 0 } })
+    expect(detail.media[id]).toMatchObject([{ id: gif, contentType: 'image/gif', width: 480, height: 270, externalUrl: null }])
+    expect(detail.media[reply.id]).toMatchObject([{ id: meme, contentType: 'image/png', width: 480, height: 270 }])
+    // Varselet til den som startet tråden sier hva som kom, ikke ingenting.
+    expect(state.bodies.at(-1)).toBe('Bilde')
+  })
+
+  it('rejects a post with neither text nor image', async () => {
+    await expect(createForumTopic({ data: { title: 'Tom', body: ' ', mediaIds: [] } })).rejects.toThrow('Skriv noe eller legg til et bilde')
+    const { id } = await topic()
+    await expect(replyToForum({ data: { topicId: id, body: '' } })).rejects.toThrow('Skriv noe eller legg til et bilde')
+  })
+
+  it('never attaches someone else’s upload, and never the same upload twice', async () => {
+    const { id } = await topic()
+    const theirs = upload('two')
+    await expect(replyToForum({ data: { topicId: id, body: 'Se her', mediaIds: [theirs] } })).rejects.toThrow('allerede sendt')
+    expect(target(theirs)).toEqual({ kind: null, id: null })
+    const mine = upload('one')
+    await replyToForum({ data: { topicId: id, body: 'Første', mediaIds: [mine] } })
+    // Dobbelttrykk / nytt forsøk med det samme utkastet: ingen ny melding.
+    await expect(replyToForum({ data: { topicId: id, body: 'Første', mediaIds: [mine] } })).rejects.toThrow('allerede sendt')
+    expect((await getForumTopic({ data: { id, page: 0 } })).replies).toHaveLength(1)
+  })
+
+  it('gives the images back as drafts when the thread is locked', async () => {
+    const { id } = await topic()
+    state.me = { id: 'one', name: 'Ingrid', permissions: ['forum.moderate'] }
+    await setForumLock({ data: { id, locked: true } })
+    state.me = { id: 'two', name: 'Jonas', permissions: [] }
+    const gif = upload('two')
+    await expect(replyToForum({ data: { topicId: id, body: '', mediaIds: [gif] } })).rejects.toThrow('låst')
+    expect(target(gif)).toEqual({ kind: null, id: null })
+  })
+
+  it('lets the text be edited away only while an image remains', async () => {
+    const gif = upload('one')
+    const { id } = await createForumTopic({ data: { title: 'GIF', body: 'Haha', mediaIds: [gif] } })
+    await editForumText({ data: { id, kind: 'topic', body: '' } })
+    expect((await getForumTopic({ data: { id, page: 0 } })).topic.body).toBe('')
+    const reply = await replyToForum({ data: { topicId: id, body: 'Bare tekst' } })
+    await expect(editForumText({ data: { id: reply.id, kind: 'reply', body: '' } })).rejects.toThrow('Skriv en tekst.')
   })
 })

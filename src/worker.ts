@@ -1,6 +1,8 @@
 import startEntry from '@tanstack/react-start/server-entry'
 import { runOverdueReminders } from './server/board-notify'
 import { runRsvpReminders } from './server/push-reminders'
+import { sweepMessageMedia } from './server/message-media'
+import { sweepReactions } from './server/reaction-store'
 
 /**
  * Worker-entry. Denne fila finnes av én grunn: Start sin egen entry
@@ -28,5 +30,11 @@ export default {
     // «Kommer du i morgen?» som push (src/server/push-reminders.ts), med egen
     // dagsvakt i `settings`. Gjør ingenting uten VAPID-nøkler.
     ctx.waitUntil(runRsvpReminders())
+    // Bilder og GIF-er som ble lastet opp, men aldri sendt, og bilder i
+    // meldinger/kommentarer som er slettet (src/server/message-media.ts).
+    // Idempotent: å kjøre to ganger sletter bare det samme én gang.
+    ctx.waitUntil(sweepMessageMedia())
+    // Reaksjoner på innlegg/kommentarer som er slettet (cascade går ikke innom koden).
+    ctx.waitUntil(sweepReactions())
   },
 }

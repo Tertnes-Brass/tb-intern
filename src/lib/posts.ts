@@ -347,24 +347,6 @@ export function commentCountLabel(n: number): string {
   return n === 1 ? '1 kommentar' : `${n} kommentarer`
 }
 
-// ---------- Reaksjoner ----------
-
-export type ReactionState = { count: number; mine: boolean }
-
-/** Optimistisk toggle: samme regel på klienten og i testene som i databasen. */
-export function toggleReaction(state: ReactionState): ReactionState {
-  return state.mine ? { count: Math.max(0, state.count - 1), mine: false } : { count: state.count + 1, mine: true }
-}
-
-/** «Liker», «Du liker dette», «Du og 3 andre liker dette», «4 liker dette». */
-export function reactionLabel(state: ReactionState): string {
-  if (state.count === 0) return 'Ingen har likt dette ennå'
-  if (!state.mine) return state.count === 1 ? '1 liker dette' : `${state.count} liker dette`
-  if (state.count === 1) return 'Du liker dette'
-  const others = state.count - 1
-  return others === 1 ? 'Du og 1 annen liker dette' : `Du og ${others} andre liker dette`
-}
-
 // ---------- E-postkopi ----------
 
 /** Emnefeltet. «Viktig:» foran gjør at det synes i innboksen uten å åpne. */

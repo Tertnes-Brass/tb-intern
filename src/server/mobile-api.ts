@@ -6,6 +6,7 @@ import { eventAttendance } from '../db/schema'
 import { ATTENDANCE_STATUSES } from '../lib/attendance'
 import { postPlainText } from '../lib/markdown'
 import { mentionPlainText } from '../lib/mentions'
+import { messageMediaUrl, textOrMediaLabel } from '../lib/message-media'
 import { isOccurrenceKey } from '../lib/occurrence'
 import { checkMobileRequest, MobileError, mobileBody, mobileFailure, mobileJSON } from '../lib/mobile-http'
 import { currentUser } from './access'
@@ -29,6 +30,8 @@ function mobilePost(post: PostListItem) {
     heading: post.heading, body: post.excerpt,
     date: post.publishedAt ?? post.createdAt,
     likes: post.likeCount, liked: post.likedByMe, commentCount: post.commentCount,
+    // Tillegg 4. november 2026: alle emoji-reaksjonene. `likes`/`liked` er fortsatt 👍.
+    reactions: post.reactions.map(({ emoji, count, mine }) => ({ emoji, count, mine })),
     imagePaths: post.images.map((image) => `/api/post-images/${encodeURIComponent(image.id)}`),
   }
 }
@@ -121,8 +124,15 @@ export async function handleMobileAPI(request: Request, path: string): Promise<R
           // tillegg; et «slettet»-merke er ingen kommentar og utelates, så `parentId` kan
           // peke på en id som ikke står i lista.
           comments: result.comments.filter((comment) => !comment.deleted).map((comment) => ({
-            id: comment.id, author: comment.author.name, body: mentionPlainText(comment.body, comment.mentions), date: comment.createdAt,
+            // En kommentar som bare er en GIF får «GIF» som tekst, så eldre appversjoner
+            // ikke viser en tom kommentar; `imagePaths` (tillegg) er bildene.
+            id: comment.id, author: comment.author.name, body: textOrMediaLabel(mentionPlainText(comment.body, comment.mentions), comment.media), date: comment.createdAt,
             parentId: comment.parentId, replyToId: comment.replyToId,
+            // Bare opplastede bilder: appen følger ikke omdirigeringen til KLIPY.
+            // GIF-velgerens valg står som merkelapp i `body` og som adresser her.
+            imagePaths: comment.media.filter((m) => !m.externalUrl).map((m) => messageMediaUrl(m.id)),
+            externalImages: comment.media.flatMap((m) => (m.externalUrl ? [{ url: m.externalUrl, width: m.width, height: m.height, kind: m.externalKind }] : [])),
+            reactions: comment.reactions.map(({ emoji, count, mine }) => ({ emoji, count, mine })),
           })),
         })
       }

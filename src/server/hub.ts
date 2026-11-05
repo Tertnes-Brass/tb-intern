@@ -1,12 +1,13 @@
 import { createServerFn } from '@tanstack/react-start'
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import { db } from '../db'
+import { type ReactionSummary, reactionsText } from '../lib/reactions'
+import { reactionsFor } from './reaction-store'
 import {
   eventAttendance,
   eventSetlist,
   postComments,
   postMentions,
-  postReactions,
   posts,
   projectWorks,
   projects,
@@ -142,11 +143,7 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
           .from(postComments)
           .where(and(inArray(postComments.postId, postIds), isNull(postComments.deletedAt)))
           .groupBy(postComments.postId),
-        d
-          .select({ postId: postReactions.postId, n: sql<number>`count(*)` })
-          .from(postReactions)
-          .where(inArray(postReactions.postId, postIds))
-          .groupBy(postReactions.postId),
+        reactionsFor('post', postIds, me.id),
         // Navnene på de omtalte: utdraget skal vise «@Ola», aldri «@[u:kd9…]».
         d
           .select({ postId: postMentions.postId, id: user.id, name: user.name })
@@ -154,9 +151,8 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
           .innerJoin(user, eq(postMentions.userId, user.id))
           .where(inArray(postMentions.postId, postIds)),
       ])
-    : [[], [], []]
+    : [[], new Map<string, ReactionSummary[]>(), []]
   const commentCounts = new Map(commentRows.map((r) => [r.postId, r.n]))
-  const likeCounts = new Map(reactionRows.map((r) => [r.postId, r.n]))
   const mentionsByPost = new Map<string, MentionUser[]>()
   for (const r of mentionRows) {
     mentionsByPost.set(r.postId, [...(mentionsByPost.get(r.postId) ?? []), { id: r.id, name: r.name }])
@@ -206,7 +202,8 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
         fromArchive: p.fromArchive,
         authorName: p.authorName ?? (p.fromArchive ? 'Notearkivar' : p.official ? 'Styret' : 'Ukjent'),
         commentCount: commentCounts.get(p.id) ?? 0,
-        likeCount: likeCounts.get(p.id) ?? 0,
+        /** «👍 3 · 😂 1», tom uten reaksjoner. */
+        reactionText: reactionsText(reactionRows.get(p.id) ?? []),
       }
     }),
     importantUnread,

@@ -22,10 +22,8 @@ import {
   postEmailImageNote,
   postEmailSubject,
   postHeading,
-  reactionLabel,
   recipientsFor,
   sanitizePostInput,
-  toggleReaction,
   tokenize,
 } from './posts'
 
@@ -358,26 +356,6 @@ describe('bilder', () => {
     expect(imageExtension('image/heic')).toBe('heic')
     expect(imageExtension('image/jpeg')).toBe('jpg')
     expect(imageExtension('noe/rart')).toBe('jpg')
-  })
-})
-
-describe('reaksjoner', () => {
-  it('slår på og av', () => {
-    expect(toggleReaction({ count: 3, mine: false })).toEqual({ count: 4, mine: true })
-    expect(toggleReaction({ count: 4, mine: true })).toEqual({ count: 3, mine: false })
-  })
-
-  it('går aldri under null', () => {
-    expect(toggleReaction({ count: 0, mine: true })).toEqual({ count: 0, mine: false })
-  })
-
-  it('formulerer seg riktig', () => {
-    expect(reactionLabel({ count: 0, mine: false })).toBe('Ingen har likt dette ennå')
-    expect(reactionLabel({ count: 1, mine: false })).toBe('1 liker dette')
-    expect(reactionLabel({ count: 3, mine: false })).toBe('3 liker dette')
-    expect(reactionLabel({ count: 1, mine: true })).toBe('Du liker dette')
-    expect(reactionLabel({ count: 2, mine: true })).toBe('Du og 1 annen liker dette')
-    expect(reactionLabel({ count: 4, mine: true })).toBe('Du og 3 andre liker dette')
   })
 })
 

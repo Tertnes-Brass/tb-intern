@@ -69,7 +69,36 @@ the new fields keep showing the same flat list as before. Replying to a deleted
 comment is rejected with the usual JSON error. The person replied to gets a push
 notification under the same «mentions» preference as a mention.
 
-Returned file/image paths use `/api/files/{id}` and `/api/post-images/{id}`.
+### Images and GIFs in comments and chats (added 4 November 2026, additive)
+
+Comments on the wall, forum posts and chat messages can carry up to four
+images/GIFs (`docs/bilder-i-samtaler.md`). In `GET posts/{id}` each comment has
+`imagePaths` (`/api/message-media/{id}`, possibly empty). A comment that is only
+an image has `body` = «GIF», «Bilde» or «N bilder», so installed versions that
+ignore `imagePaths` never show an empty comment. Server-driven chat and comment
+rows set `imagePath` to the first image and say «+N bilder til» in `body` when
+there are more. The app cannot upload images yet; `POST posts/{id}/comments`
+and the chat actions still require text.
+
+A picked GIF/sticker/meme from the web's GIF picker (KLIPY) is NOT in
+`imagePaths`/`imagePath`: its `/api/message-media/{id}` answers `302` to KLIPY's
+CDN after the access check, and the app's session refuses redirects on purpose
+(the bearer token must never leave our host). Installed versions show the label
+(«GIF», «Sticker», «Meme», or «(+ GIF)» after text) instead. Comments also get an
+additive `externalImages: [{url, width, height, kind}]` with KLIPY's public CDN
+URLs, which a future app version can load with a separate, credential-free
+session.
+
+### Emoji reactions (added 4 November 2026, additive)
+
+Posts and comments can have emoji reactions on the web. `likes`/`liked` in the
+snapshot and `GET posts/{id}` keep their v1 meaning: the 👍 reaction (existing
+likes were copied to 👍). `POST posts/{id}/like` still toggles 👍 and returns
+`{mine, count}` for 👍. New, additive: `reactions: [{emoji, count, mine}]` on
+posts and on each comment, in the order each emoji was first used.
+
+Returned file/image paths use `/api/files/{id}`, `/api/post-images/{id}` and
+`/api/message-media/{id}`.
 These existing routes repeat authorization before streaming private R2 content.
 The app never gets an R2 bucket URL or Cloudflare credentials. Native archive and project screens also expose authorized audio, documents and
 reference links.

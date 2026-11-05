@@ -19,7 +19,7 @@ import {
   postCommentMentions,
   postComments,
   postMentions,
-  postReactions,
+  reactions,
   posts,
   projectWorks,
   projects,
@@ -422,12 +422,14 @@ export async function seedWallDemo(): Promise<void> {
     }
   }
 
-  for (const sr of SEED_POST_REACTIONS) {
+  // Litt variasjon i demoreaksjonene, så reaksjonslinja har noe å vise.
+  const demoEmoji = ['👍', '❤️', '😂', '🎺', '👍', '🎉']
+  for (const [i, sr] of SEED_POST_REACTIONS.entries()) {
     const userId = userIdByEmail.get(sr.authorEmail)
     if (!userId) continue
     await d
-      .insert(postReactions)
-      .values({ postId: sr.postId, userId, kind: 'like', createdAt: ts })
+      .insert(reactions)
+      .values({ targetKind: 'post', targetId: sr.postId, userId, emoji: demoEmoji[i % demoEmoji.length]!, createdAt: ts })
       .onConflictDoNothing()
   }
 }

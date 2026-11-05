@@ -14,8 +14,12 @@ import {
 import { chatPlainText } from '../lib/chat-format'
 import { formatDate, formatTime, formatWeekday, toOsloDate } from '../lib/format'
 import { type MentionUser, mentionPlainText, toMarkers } from '../lib/mentions'
+import { type MessageMediaItem, textOrMediaLabel } from '../lib/message-media'
+import { discardMessageMedia } from '../lib/message-media-client'
 import { ChatText } from './ChatText'
 import { MentionTextarea } from './MentionTextarea'
+import { ComposerTools } from './MediaPicker'
+import { MediaDraftStrip, MessageMediaGallery, canSendWith, dropMedia, insertAtCursor, pasteMedia, useMediaDraft } from './MessageMedia'
 import { toast, toastError } from './toast'
 import { Button, EmptyState, Field, Modal } from './ui'
 
@@ -55,7 +59,9 @@ export type ChatApi = {
      */
     mentionNames: Record<string, string>
   }>
-  postMessage: (opts: { data: { channel: string; body: string; replyToId?: string | null } }) => Promise<unknown>
+  postMessage: (opts: {
+    data: { channel: string; body: string; replyToId?: string | null; mediaIds?: string[] }
+  }) => Promise<unknown>
   deleteMessage: (opts: { data: { id: string } }) => Promise<unknown>
   markChannelRead: (opts: { data: { channel: string; at?: number } }) => Promise<unknown>
   /** Forslagslista bak `@`. Gated på området funksjonen kom fra. */
@@ -109,6 +115,12 @@ export function ChatThread({
   const [body, setBody] = useState('')
   /** Medlemmene som er valgt fra `@`-lista — grunnlaget for `toMarkers`. */
   const [chosen, setChosen] = useState<MentionUser[]>([])
+  /** Bilder og GIF-er som sendes med neste melding. */
+  const media = useMediaDraft()
+  // På telefon er feltet smalt ved GIF- og bildeknappen; hintene om @ og Enter
+  // får ikke plass, og der står uansett emoji og retur på tastaturet.
+  const [touch, setTouch] = useState(false)
+  useEffect(() => setTouch(window.matchMedia('(pointer: coarse)').matches), [])
   /**
    * Navnene på alle omtalte vi har sett i denne kanalen. De akkumuleres fordi
    * pollingen bare henter NYE meldinger: navnene fra første lasting må stå igjen
@@ -235,6 +247,27 @@ export function ChatThread({
     if (box) box.scrollTop = box.scrollHeight
   }, [messages.length])
 
+  // En GIF eller et bilde lastes etter at meldingen er tegnet, og skyver bunnen
+  // ned. Sto man nederst, blir man stående der; har man rullet opp for å lese,
+  // får man være i fred. (`load` bobler ikke, derfor fanges den på vei ned.)
+  useEffect(() => {
+    const box = scrollRef.current
+    if (!box) return
+    let pinned = true
+    const onScroll = () => {
+      pinned = box.scrollHeight - box.scrollTop - box.clientHeight < 48
+    }
+    const onLoad = (e: Event) => {
+      if (pinned && e.target instanceof HTMLImageElement) box.scrollTop = box.scrollHeight
+    }
+    box.addEventListener('scroll', onScroll, { passive: true })
+    box.addEventListener('load', onLoad, true)
+    return () => {
+      box.removeEventListener('scroll', onScroll)
+      box.removeEventListener('load', onLoad, true)
+    }
+  }, [])
+
   useEffect(() => {
     if (!highlightId) return
     const timer = setTimeout(() => setHighlightId(null), HIGHLIGHT_MS)
@@ -258,21 +291,47 @@ export function ChatThread({
   const send = async () => {
     // `@Navn` → markører helt til slutt; serveren validerer hver av dem.
     const text = toMarkers(body.trim(), chosen)
-    if (!text.trim() || sending) return
+    if (!canSendWith(text, media) || sending) return
     setSending(true)
+    const mediaIds = media.ids
     try {
-      await api.postMessage({ data: { channel, body: text, replyToId: replyTo?.id ?? null } })
+      await api.postMessage({ data: { channel, body: text, replyToId: replyTo?.id ?? null, mediaIds } })
+      media.clear(mediaIds)
       setBody('')
       setChosen([])
       setReplyTo(null)
-      const res = await api.listMessages({ data: { channel, after: latestRef.current } })
-      setMessages((prev) => {
-        const known = new Set(prev.map((m) => m.id))
-        return [...prev, ...res.messages.filter((m) => !known.has(m.id))]
-      })
-      setMentionNames((prev) => ({ ...prev, ...res.mentionNames }))
-      latestRef.current = res.messages[res.messages.length - 1]?.createdAt ?? latestRef.current
+      await pullNew()
     } catch (err) {
+      toastError(err)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  /** Det som har kommet siden sist (vår egen melding medregnet), uten å vente på pollingen. */
+  const pullNew = async () => {
+    const res = await api.listMessages({ data: { channel, after: latestRef.current } })
+    setMessages((prev) => {
+      const known = new Set(prev.map((m) => m.id))
+      return [...prev, ...res.messages.filter((m) => !known.has(m.id))]
+    })
+    setMentionNames((prev) => ({ ...prev, ...res.mentionNames }))
+    latestRef.current = res.messages[res.messages.length - 1]?.createdAt ?? latestRef.current
+  }
+
+  /**
+   * En GIF, sticker eller meme fra velgeren sendes med en gang, som egen melding
+   * (som i Discord) — som svar hvis man holdt på å svare. Teksten i feltet blir
+   * stående til man sender den selv.
+   */
+  const sendPicked = async (item: MessageMediaItem) => {
+    setSending(true)
+    try {
+      await api.postMessage({ data: { channel, body: '', replyToId: replyTo?.id ?? null, mediaIds: [item.id] } })
+      setReplyTo(null)
+      await pullNew()
+    } catch (err) {
+      discardMessageMedia(item.id)
       toastError(err)
     } finally {
       setSending(false)
@@ -284,7 +343,7 @@ export function ChatThread({
       id: message.id,
       authorName: message.authorName,
       // Utdraget viser «@Navn», aldri markøren — som svarreferansen serveren lager.
-      excerpt: replyExcerpt(mentionPlainText(chatPlainText(message.body), mentionUsers)),
+      excerpt: replyExcerpt(textOrMediaLabel(mentionPlainText(chatPlainText(message.body), mentionUsers), message.media ?? [])),
     })
     inputRef.current?.focus()
   }
@@ -375,7 +434,7 @@ export function ChatThread({
       </div>
 
       {writable ? (
-        <div className="shrink-0 border-t border-line bg-paper-sunken/40 px-3 py-3 sm:px-4">
+        <div className="shrink-0 border-t border-line bg-paper-sunken/40 px-3 py-3 sm:px-4" {...dropMedia(media)}>
           {replyTo && (
             <div className="mb-2 flex items-start gap-2 rounded-[9px] border border-line bg-paper-raised px-3 py-2">
               <span className="mt-[3px] h-4 w-[3px] shrink-0 rounded-full bg-brass" aria-hidden />
@@ -392,7 +451,15 @@ export function ChatThread({
               </button>
             </div>
           )}
-          <div className="flex items-end gap-2">
+          <MediaDraftStrip draft={media} className="mb-2" />
+          <div className="flex items-end gap-1.5 sm:gap-2">
+            <ComposerTools
+              media={media}
+              disabled={sending}
+              compact
+              onGif={sendPicked}
+              onEmoji={(emoji) => insertAtCursor(inputRef.current, body, setBody, emoji)}
+            />
             <MentionTextarea
               textareaRef={inputRef}
               wrapperClassName="flex-1"
@@ -408,15 +475,16 @@ export function ChatThread({
               // Enter sender, Shift+Enter gir linjeskift — som i chatten dette
               // erstatter. Er forslagslista åpen, tar den Enter først.
               onEnter={() => void send()}
+              onPaste={pasteMedia(media)}
               onKeyDown={(e) => {
                 // Escape lukker først lista (i MentionTextarea), så svaret.
                 if (e.key === 'Escape' && replyTo) setReplyTo(null)
               }}
-              placeholder="Skriv en melding… @ nevner noen, Enter sender"
+              placeholder={touch ? 'Skriv en melding …' : 'Skriv en melding… @ nevner noen, Enter sender'}
               aria-label={replyTo ? `Svar til ${replyTo.authorName ?? 'Ukjent'}` : 'Ny melding'}
               maxLength={4000}
             />
-            <Button variant="primary" onClick={send} loading={sending} disabled={!body.trim()}>
+            <Button variant="primary" onClick={send} loading={sending} disabled={!canSendWith(body, media)}>
               Send
             </Button>
           </div>
@@ -491,9 +559,12 @@ function Bubble({
           }${mine ? 'bg-[var(--brass-soft)] text-ink ring-1 ring-brass/30' : 'bg-paper-sunken text-ink ring-1 ring-line'}`}
         >
           {message.replyTo && <ReplyReference reply={message.replyTo} onJump={onJump} />}
-          <div className="whitespace-pre-wrap break-words">
-            <ChatText text={message.body} mentions={mentions} />
-          </div>
+          {message.body && (
+            <div className="whitespace-pre-wrap break-words">
+              <ChatText text={message.body} mentions={mentions} />
+            </div>
+          )}
+          {message.media && <MessageMediaGallery items={message.media} className={message.body ? 'mt-1.5 mb-1' : 'my-1'} />}
         </div>
       </div>
     </div>

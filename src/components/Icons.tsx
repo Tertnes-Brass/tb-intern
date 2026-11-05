@@ -139,6 +139,31 @@ const PATHS = {
       <path d="M19.5 4.5v4h-4" />
     </>
   ),
+  /** Ramme med en sol og et fjell — «Legg til bilde eller GIF». */
+  image: (
+    <>
+      <rect x="3.5" y="5" width="17" height="14" rx="2" />
+      <circle cx="9" cy="10" r="1.6" />
+      <path d="M4 17.5l5-4.5 3.5 3 2.5-2 4.5 4" />
+    </>
+  ),
+  /** Smilefjes med pluss — «Legg til reaksjon». */
+  smilePlus: (
+    <>
+      <path d="M20.5 12.5a8.5 8.5 0 1 1-7-8.9" />
+      <path d="M8.5 14.5a4.2 4.2 0 0 0 6.5 0" />
+      <path d="M9 9.8h.01M14.5 9.8h.01" strokeWidth="2.4" />
+      <path d="M19 2.5v5M16.5 5h5" />
+    </>
+  ),
+  /** Smilefjes — emoji i skrivefeltet. */
+  smile: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M8.5 14a4.2 4.2 0 0 0 7 0" />
+      <path d="M9 9.8h.01M15 9.8h.01" strokeWidth="2.4" />
+    </>
+  ),
 } as const
 
 export type IconName = keyof typeof PATHS

@@ -22,6 +22,11 @@ interface __BaseEnv_Env {
 	// knappen for å slå på varsler vises ikke.
 	VAPID_PUBLIC_KEY?: string;
 	VAPID_PRIVATE_KEY?: string;
+	// GIF-velgeren (KLIPY), lagt til for hånd som over. Settes som secret
+	// (`wrangler secret put KLIPY_API_KEY`, nøkkelen lages i KLIPYs partnerpanel).
+	// Mangler den, er GIF-søket av (opplasting virker fortsatt); i `pnpm dev` brukes
+	// da den lokale etterligningen i src/routes/api/dev-klipy/$.ts.
+	KLIPY_API_KEY?: string;
 	BETTER_AUTH_SECRET: string;
 	BETTER_AUTH_URL: string;
 	ADMIN_EMAIL: string;

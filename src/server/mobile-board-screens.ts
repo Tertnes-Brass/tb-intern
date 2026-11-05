@@ -5,6 +5,7 @@ import * as projects from './projects';
 import { hasPermission, type Me } from './access';
 import { isGroupLeader } from '../lib/gruppeledere';
 import { mentionPlainText } from '../lib/mentions';
+import { mobileMediaRow } from '../lib/message-media';
 import { MobileError } from '../lib/mobile-http';
 import { filterAction, action, field, file, link, options, remove, row, section, select, text, dateLabel, taskStatuses, projectStatuses, type Screen, type Field } from './mobile-ui';
 const tasksToRows = (tasks: board.BoardTaskRow[]) => tasks.map(t => link('board/tasks/' + t.id, t.title, [taskStatuses.find(s => s.value === t.status)?.label, t.assigneeName, t.dueDate].filter(Boolean).join(' · ')));
@@ -45,7 +46,7 @@ export async function boardScreen(path: string[], me: Me, query: URLSearchParams
             const channelID = channel.slice(channel.indexOf(':') + 1);
             actions.push(action(namespace + '.renameChannel', 'Endre kanalnavn', { id: channelID, name: selected.title }, [field('name', 'Navn', 'text', { required: true })]), action(namespace + '.setChannelArchived', selected.archived ? 'Gjenåpne kanal' : 'Arkiver kanal', { id: channelID, archived: !selected.archived }));
         }
-        return { title: selected.title, readAction: { operation: namespace + '.markChannelRead', values: { channel, at: d.serverTime } }, subtitle: selected.archived ? 'Arkivert kanal' : undefined, refreshSeconds: 15, sections: [section('messages', 'Samtalen', d.messages.map(m => row(m.id, m.authorName ?? 'Ukjent', dateLabel(m.createdAt), { body: (m.replyTo ? (m.replyTo.deleted ? 'Svar på slettet melding' : `Svar til ${m.replyTo.authorName ?? 'Ukjent'}: ${m.replyTo.excerpt}`) + '\n\n' : '') + mentionPlainText(m.body, names), actions: [...(!selected.archived ? [action(namespace + '.postMessage', 'Svar', { channel, replyToId: m.id }, fields)] : []), ...(m.authorId === me.id ? [remove(namespace + '.deleteMessage', 'Slett melding', { id: m.id })] : [])] })))], actions };
+        return { title: selected.title, readAction: { operation: namespace + '.markChannelRead', values: { channel, at: d.serverTime } }, subtitle: selected.archived ? 'Arkivert kanal' : undefined, refreshSeconds: 15, sections: [section('messages', 'Samtalen', d.messages.map(m => row(m.id, m.authorName ?? 'Ukjent', dateLabel(m.createdAt), { ...((media) => ({ ...media, body: (m.replyTo ? (m.replyTo.deleted ? 'Svar på slettet melding' : `Svar til ${m.replyTo.authorName ?? 'Ukjent'}: ${m.replyTo.excerpt}`) + '\n\n' : '') + media.body }))(mobileMediaRow(mentionPlainText(m.body, names), m.media ?? [])), actions: [...(!selected.archived ? [action(namespace + '.postMessage', 'Svar', { channel, replyToId: m.id }, fields)] : []), ...(m.authorId === me.id ? [remove(namespace + '.deleteMessage', 'Slett melding', { id: m.id })] : [])] })))], actions };
     }
     if (kind === 'tasks') {
         if (!id) {

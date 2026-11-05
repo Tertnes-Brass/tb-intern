@@ -211,6 +211,20 @@
       "when": 1793699301698,
       "tag": "0029_svar-pa-svar",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1793830679395,
+      "tag": "0030_bilder-i-samtaler",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1793830694095,
+      "tag": "0031_reaksjoner",
+      "breakpoints": true
     }
   ]
 }

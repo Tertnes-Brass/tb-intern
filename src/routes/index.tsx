@@ -258,7 +258,7 @@ function HubPage() {
                   </span>
                   <span className="mt-0.5 block font-mono text-[0.6rem] uppercase tracking-[0.14em] text-ink-faint">
                     {post.fromArchive ? 'Notearkivar' : post.official ? 'Styret' : post.authorName} · {formatDateTime(post.publishedAt)}
-                    {post.likeCount > 0 ? ` · ${post.likeCount} liker` : ''}
+                    {post.reactionText ? ` · ${post.reactionText}` : ''}
                     {post.commentCount > 0
                       ? ` · ${post.commentCount} ${post.commentCount === 1 ? 'kommentar' : 'kommentarer'}`
                       : ''}

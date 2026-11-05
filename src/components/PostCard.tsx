@@ -1,12 +1,10 @@
-import { Link, useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { formatDateTime } from '../lib/format'
 import { postImageUrl } from '../lib/post-images-client'
 import { seenThisSession } from '../lib/read-posts-client'
-import { commentCountLabel, reactionLabel, toggleReaction as nextReactionState } from '../lib/posts'
+import { commentCountLabel } from '../lib/posts'
 import type { PostImage, PostListItem } from '../server/posts'
-import { toggleReaction } from '../server/posts'
-import { toastError } from './toast'
+import { ReactionBar } from './Reactions'
 import { Avatar, Stamp } from './ui'
 
 /**
@@ -41,58 +39,6 @@ export function PostImageGrid({ images, total }: { images: PostImage[]; total: n
         </li>
       ))}
     </ul>
-  )
-}
-
-export function LikeButton({
-  postId,
-  count,
-  mine,
-  className = '',
-}: {
-  postId: string
-  count: number
-  mine: boolean
-  className?: string
-}) {
-  const router = useRouter()
-  // Optimistisk: samme regel som serveren (`toggleReaction` i lib/posts.ts).
-  const [state, setState] = useState({ count, mine })
-  const [busy, setBusy] = useState(false)
-
-  const click = async () => {
-    const optimistic = nextReactionState(state)
-    setState(optimistic)
-    setBusy(true)
-    try {
-      const result = await toggleReaction({ data: { postId } })
-      setState({ count: result.count, mine: result.mine })
-      await router.invalidate()
-    } catch (err) {
-      setState({ count, mine })
-      toastError(err)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => void click()}
-      disabled={busy}
-      aria-pressed={state.mine}
-      title={reactionLabel(state)}
-      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors disabled:opacity-60 ${
-        state.mine
-          ? 'border-brass bg-[var(--brass-soft)] text-brass-strong'
-          : 'border-line text-ink-soft hover:border-brass hover:text-brass-strong'
-      } ${className}`}
-    >
-      <span aria-hidden>👍</span>
-      <span>Liker</span>
-      {state.count > 0 && <span className="tabular font-mono text-[0.68rem]">{state.count}</span>}
-    </button>
   )
 }
 
@@ -141,7 +87,8 @@ export function PostCard({ post, draft }: { post: PostListItem; draft?: boolean 
       <PostImageGrid images={post.images} total={post.imageCount} />
 
       <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-line pt-3">
-        <LikeButton postId={post.id} count={post.likeCount} mine={post.likedByMe} />
+        {/* Et utkast har ingen reaksjoner — de kommer når det er publisert. */}
+        {!draft && <ReactionBar kind="post" targetId={post.id} reactions={post.reactions} />}
         <Link
           to="/beskjeder/$postId"
           params={{ postId: post.id }}

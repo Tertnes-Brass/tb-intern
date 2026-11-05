@@ -9,12 +9,21 @@ import { db } from '../db'
 import { forumFollows as follows, forumTopics as topics, forumReplies as replies, forumReplyReads as reads, user } from '../db/schema'
 import { canEditForumText, canModerateForum, followsForumTopic } from '../lib/forum'
 import { replyPlacement } from '../lib/threads'
+import { EMPTY_MESSAGE, MAX_MEDIA_PER_ITEM, hasMessageContent, mediaLabel } from '../lib/message-media'
 import { requireMe, requirePermission } from './access'
+import { claimMessageMedia, hasMedia, mediaFor, releaseMessageMedia } from './message-media'
+import { reactionsFor } from './reaction-store'
 
 const id = z.string().min(1).max(100)
-const body = z.string().trim().min(1, 'Skriv en tekst.').max(20000)
+// Teksten kan være tom når innlegget har et bilde eller en GIF (`hasMessageContent`).
+const body = z.string().trim().max(20000)
+/** Bildene som er lastet opp til innlegget, i rekkefølge. Serveren kobler dem (`claimMessageMedia`). */
+const mediaIds = z.array(id).max(MAX_MEDIA_PER_ITEM).default([])
 const page = z.number().int().min(0).max(100000).default(0)
-const topicInput = z.object({ title: z.string().trim().min(1).max(180), body })
+/** Tekst eller bilde — en valideringsfeil (400), ikke en serverfeil. */
+const withContent = <T extends { body: string; mediaIds: string[] }>(data: T) => hasMessageContent(data.body, data.mediaIds)
+const contentError = { message: EMPTY_MESSAGE, path: ['body'] }
+const topicInput = z.object({ title: z.string().trim().min(1).max(180), body, mediaIds }).refine(withContent, contentError)
 const PAGE_SIZE = 30
 
 export const listForum = createServerFn().validator(z.object({ page })).handler(async ({ data }) => {
@@ -41,7 +50,15 @@ export const createForumTopic = createServerFn({ method: 'POST' }).validator(top
   await checkForumMentions(data.body)
   const topicId = crypto.randomUUID()
   const now = Date.now()
-  await d.insert(topics).values({ ...data, id: topicId, authorId: me.id, createdAt: now, updatedAt: now, activityAt: now })
+  // Bildene kobles FØR raden skrives: koblingen er en compare-and-set, så to
+  // innsendinger av samme utkast aldri gir to tråder med de samme bildene.
+  await claimMessageMedia({ ids: data.mediaIds, ownerId: me.id, kind: 'forum_topic', targetId: topicId })
+  try {
+    await d.insert(topics).values({ title: data.title, body: data.body, id: topicId, authorId: me.id, createdAt: now, updatedAt: now, activityAt: now })
+  } catch (err) {
+    await releaseMessageMedia(topicId)
+    throw err
+  }
   await notifyForum({ topicId, topicTitle: data.title, replyId: null, authorId: me.id, authorName: me.name, body: data.body })
   return { id: topicId }
 })
@@ -92,6 +109,13 @@ export const getForumTopic = createServerFn().validator(z.object({ id, page, sva
     .where(and(eq(replies.topicId, data.id), inArray(replies.parentId, roots.map((r) => r.reply.id))))
     .orderBy(asc(replies.createdAt), asc(replies.id)) : []
   const mentions = await forumMentionNames([topic.topic.body, ...roots.map((r) => r.reply.body), ...childRows.map((r) => r.reply.body)])
+  const replyIds = [...roots, ...childRows].map((r) => r.reply.id)
+  const [topicMedia, replyMedia, topicReactions, replyReactions] = await Promise.all([
+    mediaFor('forum_topic', [topic.topic.id]),
+    mediaFor('forum_reply', replyIds),
+    reactionsFor('forum_topic', [topic.topic.id], me.id),
+    reactionsFor('forum_reply', replyIds, me.id),
+  ])
   const [follow, participated] = await Promise.all([
     d.select({ following: follows.following }).from(follows).where(and(eq(follows.topicId, data.id), eq(follows.userId, me.id))).get(),
     topic.topic.authorId === me.id ? true
@@ -101,7 +125,11 @@ export const getForumTopic = createServerFn().validator(z.object({ id, page, sva
   const view = (r: (typeof rows)[number]) => ({ ...r, canEdit: canEditForumText(me, r.reply.authorId, topic.topic.locked) })
   const children = new Map<string, ReturnType<typeof view>[]>()
   for (const r of childRows) children.set(r.reply.parentId!, [...(children.get(r.reply.parentId!) ?? []), view(r)])
-  return { ...topic, mentions, following, canEdit: canEditForumText(me, topic.topic.authorId, topic.topic.locked), canModerate: canModerateForum(me.permissions),
+  return { ...topic, mentions, following,
+    /** Bildene i tråden og i svarene på siden, `id → bilder` (tråd-id og svar-id-er er UUID-er og kolliderer ikke). */
+    media: Object.fromEntries([...topicMedia, ...replyMedia]),
+    /** Emoji-reaksjonene, `id → oppsummering` (samme nøkler som `media`). */
+    reactions: Object.fromEntries([...topicReactions, ...replyReactions]), canEdit: canEditForumText(me, topic.topic.authorId, topic.topic.locked), canModerate: canModerateForum(me.permissions),
     page: pageNo, focus: located ? data.svar! : null,
     replies: roots.map((r) => ({ ...view(r), children: children.get(r.reply.id) ?? [] })), hasMore: rows.length > PAGE_SIZE }
 })
@@ -114,7 +142,7 @@ export const getForumTopic = createServerFn().validator(z.object({ id, page, sva
  * Svaret er `{ id, page }`: siden det nye svaret står på.
  */
 export const replyToForum = createServerFn({ method: 'POST' })
-  .validator(z.object({ topicId: id, body, replyToId: id.nullish() }))
+  .validator(z.object({ topicId: id, body, replyToId: id.nullish(), mediaIds }).refine(withContent, contentError))
   .handler(async ({ data }) => {
     const me = await requireMe()
     const d = db()
@@ -127,21 +155,31 @@ export const replyToForum = createServerFn({ method: 'POST' })
     const placement = target ? replyPlacement(target) : { parentId: null, replyToId: null }
     const replyId = crypto.randomUUID()
     const now = Date.now()
+    const media = await claimMessageMedia({ ids: data.mediaIds, ownerId: me.id, kind: 'forum_reply', targetId: replyId })
     // The INSERT itself checks the lock, so a concurrent moderator lock cannot be bypassed.
     const result = await d.run(sql`insert into forum_replies (id, topic_id, author_id, body, parent_id, reply_to_id, created_at, updated_at)
       select ${replyId}, id, ${me.id}, ${data.body}, ${placement.parentId}, ${placement.replyToId}, ${now}, ${now}
-      from forum_topics where id = ${data.topicId} and locked = 0`)
-    if (!result.meta.changes) throw new Error('Emnet er låst eller finnes ikke.')
+      from forum_topics where id = ${data.topicId} and locked = 0`).catch(async (err: unknown) => {
+      await releaseMessageMedia(replyId)
+      throw err
+    })
+    if (!result.meta.changes) {
+      // Bildene blir utkast igjen, så de kan sendes et annet sted (eller ryddes).
+      await releaseMessageMedia(replyId)
+      throw new Error('Emnet er låst eller finnes ikke.')
+    }
     const [topic] = await d.update(topics).set({ activityAt: sql`max(${topics.activityAt}, ${now})` }).where(eq(topics.id, data.topicId))
       .returning({ title: topics.title })
     await notifyForum({ topicId: data.topicId, topicTitle: topic?.title ?? '', replyId, repliedTo: target?.authorId ?? null,
-      authorId: me.id, authorName: me.name, body: data.body })
+      authorId: me.id, authorName: me.name, body: data.body, mediaLabel: mediaLabel(media) })
     return { id: replyId, page: (await locateReply(data.topicId, replyId))?.page ?? 0 }
   })
 
 export const editForumText = createServerFn({ method: 'POST' }).validator(z.object({ id, kind: z.enum(['topic', 'reply']), body })).handler(async ({ data }) => {
   const me = await requireMe()
   const d = db()
+  // Bildene redigeres ikke her; teksten kan bare bli tom når det står et bilde igjen.
+  if (!data.body && !(await hasMedia(data.kind === 'topic' ? 'forum_topic' : 'forum_reply', data.id))) throw new Error('Skriv en tekst.')
   await checkForumMentions(data.body)
   const moderator = canModerateForum(me.permissions)
   // Teksten før redigeringen: bare omtaler som er NYE skal varsles.
