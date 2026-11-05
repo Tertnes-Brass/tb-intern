@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
+import { useEffect, useId, useRef, type ButtonHTMLAttributes, type ReactNode, type RefObject } from 'react'
 
 // ---------- Knapper ----------
 
@@ -22,10 +22,11 @@ const btnVariants: Record<NonNullable<ButtonProps['variant']>, string> = {
   danger: 'border border-danger/40 text-danger bg-transparent hover:bg-danger/10',
 }
 
-// Med finger (pointer: coarse) får knappene minst 40/44 px høyde — Apples og
-// Googles minstemål for et trykkmål. Med mus beholdes den kompakte høyden.
+// Med finger (pointer: coarse) får ALLE knapper minst 44 px høyde — Apples og
+// Googles minstemål for et trykkmål, også `sm` (den var 40 px, og på iPad er
+// det ikke færre fingre enn på telefon). Med mus beholdes den kompakte høyden.
 const btnSizes: Record<NonNullable<ButtonProps['size']>, string> = {
-  sm: 'text-xs px-2.5 py-1.5 pointer-coarse:min-h-10 pointer-coarse:px-3.5 pointer-coarse:text-[0.8rem]',
+  sm: 'text-xs px-2.5 py-1.5 pointer-coarse:min-h-11 pointer-coarse:px-3.5 pointer-coarse:text-[0.8rem]',
   md: 'text-sm px-4 py-2 pointer-coarse:min-h-11',
 }
 
@@ -170,6 +171,121 @@ export function Field({
   )
 }
 
+// ---------- Ark og dialoger: ett mønster ----------
+//
+// Alle ark (BottomSheet, Modal på telefon, ActionMenu på berøring) har samme
+// anatomi, så man aldri må lete etter hvordan man kommer seg ut:
+//
+//   grep (dra ned)            — bunnark, og Modal der den er et bunnark
+//   SheetHeader               — tittel til venstre (+ valgfri kicker/undertekst),
+//                               lukkeknapp til høyre: 44 pt «×», eller en
+//                               tekstknapp («Ferdig») der arkets valg gjelder
+//                               med en gang (filtre, «Meg og mer»)
+//   kropp                     — det eneste som ruller
+//   footer                    — valgfri, festet nederst over hjem-indikatoren:
+//                               arkets primærhandling («Vis 10 verk»)
+//
+// Handlingsrader (`SheetActions`/`SheetAction`/`SheetActionSeparator`) er de
+// samme i ActionMenu, chatten og «Meg og mer»: ikon + etikett (+ én linje
+// forklaring), 52 pt høye i et ark, ødeleggende valg i `--danger` nederst etter
+// en skillelinje.
+
+type SheetHeaderProps = {
+  /** id til overskriften, så dialogen kan peke på den (`aria-labelledby`). */
+  titleId?: string
+  title: ReactNode
+  kicker?: ReactNode
+  /** Én linje under tittelen (hvilket innlegg, hvilken hendelse …). */
+  subtitle?: ReactNode
+  onClose: () => void
+  /**
+   * Tekst på lukkeknappen («Ferdig»). Uten den er det en rund «×» med
+   * «Lukk» som tilgjengelig navn.
+   */
+  closeLabel?: string
+}
+
+export function SheetHeader({ titleId, title, kicker, subtitle, onClose, closeLabel }: SheetHeaderProps) {
+  return (
+    <div className="sheet-head-row">
+      <div className="min-w-0 flex-1">
+        {kicker && <Kicker className="mb-1">{kicker}</Kicker>}
+        <h2 id={titleId} className="sheet-title">
+          {title}
+        </h2>
+        {subtitle && <p className="sheet-subtitle">{subtitle}</p>}
+      </div>
+      {closeLabel ? (
+        <button type="button" onClick={onClose} className="sheet-close-text">
+          {closeLabel}
+        </button>
+      ) : (
+        <button type="button" onClick={onClose} aria-label="Lukk" className="sheet-close">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+            <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** En gruppe handlingsrader (se `SheetAction`). */
+export function SheetActions({
+  children,
+  role,
+  className = '',
+}: {
+  children: ReactNode
+  /** `menu` når radene er en meny (ActionMenu). */
+  role?: string
+  className?: string
+}) {
+  return (
+    <div role={role} className={`sheet-actions ${className}`}>
+      {children}
+    </div>
+  )
+}
+
+/** Skillet før de ødeleggende radene. */
+export function SheetActionSeparator() {
+  return <div role="separator" className="sheet-actions-sep" />
+}
+
+/**
+ * Én handlingsrad: ikon + etikett, valgfri forklaringslinje og noe til høyre
+ * (en verdi, en chevron). 52 pt høy i et ark; `tone="danger"` for det som ikke
+ * kan angres. For en lenke-rad: gi `<Link>` klassen `sheet-action`.
+ */
+export function SheetAction({
+  icon,
+  label,
+  hint,
+  tone,
+  trailing,
+  className = '',
+  type = 'button',
+  ...rest
+}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & {
+  icon?: ReactNode
+  label: ReactNode
+  hint?: ReactNode
+  tone?: 'danger'
+  trailing?: ReactNode
+}) {
+  return (
+    <button type={type} className={`sheet-action ${tone === 'danger' ? 'sheet-action-danger' : ''} ${className}`} {...rest}>
+      {icon && <span className="sheet-action-icon">{icon}</span>}
+      <span className="min-w-0 flex-1">
+        <span className="block">{label}</span>
+        {hint && <span className="sheet-action-hint">{hint}</span>}
+      </span>
+      {trailing}
+    </button>
+  )
+}
+
 // ---------- Dialog ----------
 
 export function Modal({
@@ -177,6 +293,9 @@ export function Modal({
   onClose,
   title,
   kicker,
+  subtitle,
+  footer,
+  closeLabel,
   children,
   wide,
   mobileFull,
@@ -185,6 +304,11 @@ export function Modal({
   onClose: () => void
   title: ReactNode
   kicker?: string
+  subtitle?: ReactNode
+  /** Festet nederst, under den rullende kroppen (primærhandlingen). */
+  footer?: ReactNode
+  /** Se `SheetHeader`. */
+  closeLabel?: string
   children: ReactNode
   wide?: boolean
   mobileFull?: boolean
@@ -200,33 +324,22 @@ export function Modal({
       ref={ref}
       tabIndex={-1}
       aria-labelledby={titleId}
-      className={`sheet-dialog ${wide ? 'sheet-dialog-wide' : ''} ${mobileFull ? 'sheet-dialog-mobile-full' : ''}`}
+      className={`sheet-dialog ${wide ? 'sheet-dialog-wide' : ''} ${mobileFull ? 'sheet-dialog-mobile-full' : ''} ${footer ? 'has-footer' : ''}`}
       onClose={onClose}
       onClick={(e) => {
         // klikk på backdrop lukker
         if (e.target === ref.current) onClose()
       }}
     >
-      <div className="shrink-0 px-6 pt-5 max-sm:touch-none max-sm:pt-2.5 sm:px-7" {...drag}>
+      <div className="sheet-head sheet-head-modal" {...drag}>
         <span className="sheet-grab sheet-grab-phone" aria-hidden />
-        {kicker && <Kicker className="mb-1">{kicker}</Kicker>}
-        <div className="flex items-start justify-between gap-4">
-          <h2 id={titleId} className="display-title text-xl font-semibold">{title}</h2>
-          <button
-            onClick={onClose}
-            aria-label="Lukk"
-            className="-mr-2 -mt-1 grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-ink-faint transition-colors hover:bg-paper-sunken hover:text-ink active:scale-95 pointer-coarse:h-11 pointer-coarse:w-11"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
-              <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
+        <SheetHeader titleId={titleId} title={title} kicker={kicker} subtitle={subtitle} onClose={onClose} closeLabel={closeLabel} />
       </div>
       {/* flex-auto (ikke flex-1): flex-basis 0 % blir 0 px i WebKit på iPhone/
           iPad, som regner dialogens høyde som bestemt. Med overflow-y: auto er
           minimumshøyden også 0, så kroppen kollapset til bare padding. */}
-      <div className="min-h-0 flex-auto overflow-y-auto overscroll-contain px-6 pb-6 pt-4 sm:px-7">{children}</div>
+      <div className="sheet-body sheet-body-modal">{children}</div>
+      {footer && <div className="sheet-footer">{footer}</div>}
     </dialog>
   )
 }
@@ -301,22 +414,40 @@ export function useSheetDrag(ref: RefObject<HTMLDialogElement | null>, onClose: 
  * Ark som glir opp fra bunnen — innenfor tommelens rekkevidde. Brukes der en
  * handling hører til telefonen (f.eks. «Meg og mer» og «Kan ikke komme»). På
  * bredere skjermer står det sentrert nederst, med samme oppførsel.
+ *
+ * Gi `title` (og eventuelt `kicker`/`subtitle`/`closeLabel`) for den felles
+ * overskriften med synlig lukkeknapp — det er normalen. `header` er den gamle
+ * frie overskriften og brukes bare når `title` mangler.
  */
 export function BottomSheet({
   open,
   onClose,
   label,
+  title,
+  kicker,
+  subtitle,
+  closeLabel,
   header,
+  footer,
   children,
 }: {
   open: boolean
   onClose: () => void
-  /** Tilgjengelig navn når overskriften ikke er en vanlig tittel. */
-  label: string
+  /** Tilgjengelig navn. Valgfritt med `title` (da peker dialogen på tittelen). */
+  label?: string
+  title?: ReactNode
+  kicker?: ReactNode
+  subtitle?: ReactNode
+  /** Se `SheetHeader`: «Ferdig» der valgene i arket gjelder med en gang. */
+  closeLabel?: string
+  /** Fri overskrift (eldre bruk) — ignoreres når `title` er gitt. */
   header?: ReactNode
+  /** Festet nederst, over hjem-indikatoren; kroppen ruller over den. */
+  footer?: ReactNode
   children: ReactNode
 }) {
   const ref = useRef<HTMLDialogElement>(null)
+  const titleId = useId()
   useDialogOpen(ref, open)
   const drag = useSheetDrag(ref, onClose)
 
@@ -324,18 +455,31 @@ export function BottomSheet({
     <dialog
       ref={ref}
       tabIndex={-1}
-      aria-label={label}
-      className="sheet-dialog sheet-dialog-bottom"
+      aria-label={title ? undefined : label}
+      aria-labelledby={title ? titleId : undefined}
+      className={`sheet-dialog sheet-dialog-bottom ${footer ? 'has-footer' : ''}`}
       onClose={onClose}
       onClick={(e) => {
         if (e.target === ref.current) onClose()
       }}
     >
-      <div className="shrink-0 touch-none select-none px-5 pt-2.5" {...drag}>
+      <div className="sheet-head sheet-head-bottom" {...drag}>
         <span className="sheet-grab" aria-hidden />
-        {header}
+        {title ? (
+          <SheetHeader
+            titleId={titleId}
+            title={title}
+            kicker={kicker}
+            subtitle={subtitle}
+            onClose={onClose}
+            closeLabel={closeLabel}
+          />
+        ) : (
+          header
+        )}
       </div>
-      <div className="min-h-0 flex-auto overflow-y-auto overscroll-contain px-5 pb-5 pt-3">{children}</div>
+      <div className="sheet-body">{children}</div>
+      {footer && <div className="sheet-footer">{footer}</div>}
     </dialog>
   )
 }

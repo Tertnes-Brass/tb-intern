@@ -1,4 +1,5 @@
 import { Link, Outlet, createFileRoute, redirect } from '@tanstack/react-router'
+import { AreaNav } from '../../components/AreaNav'
 import { isGroupLeader } from '../../lib/gruppeledere'
 import { getChatUnread } from '../../server/gruppeledere'
 
@@ -42,31 +43,26 @@ function GruppeledereLayout() {
 
   return (
     <div>
-      <div className="area-nav-wrap print-hidden">
-        <nav
-          className="area-nav"
-          aria-label="Gruppeledere"
-        >
-          {ITEMS.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              activeOptions={{ exact: item.exact ?? false }}
-              className="area-link"
-            >
-              {item.label}
-              {item.to === '/gruppeledere/chat' && unread > 0 && (
-                <span
-                  className="grid h-[17px] min-w-[17px] place-items-center rounded-full bg-brass px-1 font-mono text-[0.58rem] font-semibold tabular-nums text-paper-raised dark:text-paper"
-                  aria-label={unread === 1 ? '1 ulest melding' : `${unread} uleste meldinger`}
-                >
-                  {unread > 9 ? '9+' : unread}
-                </span>
-              )}
-            </Link>
-          ))}
-        </nav>
-      </div>
+      <AreaNav label="Gruppeledere">
+        {ITEMS.map((item) => (
+          <Link
+            key={item.to}
+            to={item.to}
+            activeOptions={{ exact: item.exact ?? false }}
+            className="area-link"
+          >
+            {item.label}
+            {item.to === '/gruppeledere/chat' && unread > 0 && (
+              <span
+                className="grid h-[17px] min-w-[17px] place-items-center rounded-full bg-brass px-1 font-mono text-[0.58rem] font-semibold tabular-nums text-paper-raised dark:text-paper"
+                aria-label={unread === 1 ? '1 ulest melding' : `${unread} uleste meldinger`}
+              >
+                {unread > 9 ? '9+' : unread}
+              </span>
+            )}
+          </Link>
+        ))}
+      </AreaNav>
       <Outlet />
     </div>
   )

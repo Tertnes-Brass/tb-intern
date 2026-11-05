@@ -302,16 +302,27 @@ function ArchivePage() {
         </div>
       </div>
 
+      {/* Valgene gjelder med en gang (URL-en), så lukkeknappen er «Ferdig»; bunnlinjen
+          med antallet står fast, så man ser hva filtrene gir uten å rulle. */}
       <BottomSheet
         open={filtersOpen}
         onClose={() => setFiltersOpen(false)}
-        label="Filtrer og sorter"
-        header={<p className="display-title mt-2 text-center text-[1.05rem] font-semibold text-ink">Filtrer og sorter</p>}
+        title="Filtrer og sorter"
+        closeLabel="Ferdig"
+        footer={
+          <>
+            {activeCount > 0 && (
+              <Button variant="ghost" onClick={reset}>
+                Nullstill
+              </Button>
+            )}
+            <Button variant="primary" className="flex-1" onClick={() => setFiltersOpen(false)}>
+              Vis {data.works.length === 1 ? '1 verk' : `${data.works.length} verk`}
+            </Button>
+          </>
+        }
       >
-        <FilterPanel data={data} filter={filter} update={update} reset={activeCount > 0 ? reset : undefined} />
-        <Button variant="primary" className="mt-6 w-full" onClick={() => setFiltersOpen(false)}>
-          Vis {data.works.length === 1 ? '1 verk' : `${data.works.length} verk`}
-        </Button>
+        <FilterPanel data={data} filter={filter} update={update} />
       </BottomSheet>
 
       <WorkFormModal
