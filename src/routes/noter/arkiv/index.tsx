@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { WorkFormModal } from '../../../components/WorkForm'
 import { Icon } from '../../../components/Icons'
 import { Segmented } from '../../../components/Segmented'
-import { BottomSheet, Button, EmptyState, Field, PageHeader, Stamp } from '../../../components/ui'
+import { BottomSheet, Button, EmptyState, Field, FieldGroup, PageHeader, Stamp } from '../../../components/ui'
 import { formatDuration } from '../../../lib/format'
 import {
   MISSING_KEYS,
@@ -391,7 +391,7 @@ function FilterPanel({
             />
           </div>
         </Field>
-        <Field label="Status" className="col-span-2 lg:col-span-1">
+        <FieldGroup label="Status" className="col-span-2 lg:col-span-1">
           <Segmented
             label="Status"
             stretch
@@ -403,7 +403,7 @@ function FilterPanel({
             ]}
             onChange={(status) => update({ status })}
           />
-        </Field>
+        </FieldGroup>
         <Field label="Komponist">
           <select
             className="field-input"

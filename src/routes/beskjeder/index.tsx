@@ -1,4 +1,6 @@
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
+import { useRef } from 'react'
+import { useScrollRow } from '../../components/AreaNav'
 import { z } from 'zod'
 import { PostCard, postSender } from '../../components/PostCard'
 import { shortWhen } from '../../components/compose/when'
@@ -78,6 +80,10 @@ function DraftList({ drafts }: { drafts: Drafts }) {
 function PostsPage() {
   const data = Route.useLoaderData()
   const { vis } = Route.useSearch()
+  // Det valgte filteret rulles inn i bildet (på en iPhone står «Viktig» ellers
+  // utenfor kanten, og det filtrerte feedet har ingen synlig valgt tilstand).
+  const chipsRef = useRef<HTMLElement>(null)
+  useScrollRow(chipsRef, vis, '[aria-current="page"]')
 
   // Samme regel som merket på kortet: et innlegg du har åpnet i denne økten er
   // lest, selv om lista ennå ikke er hentet på nytt.
@@ -131,7 +137,7 @@ function PostsPage() {
         <div className="min-w-0">
           {/* Telefon og iPad på høykant: filtrene — og utkastene, for dem som
               har noen — som én rad som kan dras sidelengs. */}
-          <nav className="wall-chips lg:hidden" aria-label="Filtrer veggen">
+          <nav ref={chipsRef} className="wall-chips lg:hidden" aria-label="Filtrer veggen">
             {filterLinks('row')}
           </nav>
 

@@ -1,5 +1,52 @@
 import { useRouterState } from '@tanstack/react-router'
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
+
+/**
+ * En vannrett rullende rad med valg (områdemenyen, veggens filtre): det aktive
+ * valget (`activeSelector`) rulles inn i bildet hver gang `key` endres, og
+ * `data-overflow` (`start`/`end`/`both`) settes på raden så CSS kan tone ut
+ * kanten man kan rulle mot. Ikke `scrollIntoView`: den ruller også siden (eller
+ * `.app-shell` i iOS-appen) loddrett.
+ */
+export function useScrollRow(
+  ref: RefObject<HTMLElement | null>,
+  key: unknown,
+  activeSelector = '[data-status="active"]',
+) {
+  useEffect(() => {
+    const row = ref.current
+    const active = row?.querySelector<HTMLElement>(activeSelector)
+    if (!row || !active) return
+    const left = active.offsetLeft - row.offsetLeft
+    const right = left + active.offsetWidth
+    const pad = 24
+    if (left - pad < row.scrollLeft) row.scrollLeft = Math.max(0, left - pad)
+    else if (right + pad > row.scrollLeft + row.clientWidth) row.scrollLeft = right + pad - row.clientWidth
+  }, [ref, key, activeSelector])
+
+  useEffect(() => {
+    const row = ref.current
+    if (!row) return
+    const update = () => {
+      const max = row.scrollWidth - row.clientWidth
+      const start = row.scrollLeft > 2
+      const end = row.scrollLeft < max - 2
+      const value = start && end ? 'both' : start ? 'start' : end ? 'end' : null
+      if (value) row.dataset.overflow = value
+      else delete row.dataset.overflow
+    }
+    update()
+    row.addEventListener('scroll', update, { passive: true })
+    // Raden selv (rotasjon, vindu) og hvert valg (tellere kommer og går).
+    const ro = new ResizeObserver(update)
+    ro.observe(row)
+    for (const child of Array.from(row.children)) ro.observe(child)
+    return () => {
+      row.removeEventListener('scroll', update)
+      ro.disconnect()
+    }
+  }, [ref])
+}
 
 /**
  * Områdemenyen (Noter, Styre, Gruppeledere — designprinsipper §6 (a)). Selve
@@ -15,41 +62,7 @@ export function AreaNav({ label, children }: { label: string; children: ReactNod
   const ref = useRef<HTMLElement>(null)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
 
-  // Aktiv pille inn i bildet. Ikke `scrollIntoView`: den ruller også siden
-  // (eller `.app-shell` i iOS-appen) loddrett.
-  useEffect(() => {
-    const nav = ref.current
-    const active = nav?.querySelector<HTMLElement>('[data-status="active"]')
-    if (!nav || !active) return
-    const left = active.offsetLeft - nav.offsetLeft
-    const right = left + active.offsetWidth
-    const pad = 24
-    if (left - pad < nav.scrollLeft) nav.scrollLeft = Math.max(0, left - pad)
-    else if (right + pad > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = right + pad - nav.clientWidth
-  }, [pathname])
-
-  useEffect(() => {
-    const nav = ref.current
-    if (!nav) return
-    const update = () => {
-      const max = nav.scrollWidth - nav.clientWidth
-      const start = nav.scrollLeft > 2
-      const end = nav.scrollLeft < max - 2
-      const value = start && end ? 'both' : start ? 'start' : end ? 'end' : null
-      if (value) nav.dataset.overflow = value
-      else delete nav.dataset.overflow
-    }
-    update()
-    nav.addEventListener('scroll', update, { passive: true })
-    // Raden selv (rotasjon, vindu) og hver pille (ulest-merket på Chat kommer og går).
-    const ro = new ResizeObserver(update)
-    ro.observe(nav)
-    for (const child of Array.from(nav.children)) ro.observe(child)
-    return () => {
-      nav.removeEventListener('scroll', update)
-      ro.disconnect()
-    }
-  }, [])
+  useScrollRow(ref, pathname)
 
   return (
     <div className="area-nav-wrap print-hidden">

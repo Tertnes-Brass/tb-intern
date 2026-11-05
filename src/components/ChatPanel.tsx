@@ -1373,7 +1373,7 @@ function ChannelHeading({ channel }: { channel: ChannelSummary | undefined }) {
       <span className="block truncate font-display text-[1.08rem] font-semibold leading-tight text-ink">
         {channel.title}
       </span>
-      <span className="block truncate font-mono text-[0.58rem] uppercase tracking-[0.14em] text-ink-faint">
+      <span className="block truncate text-[0.78rem] text-ink-soft">
         {KIND_LABEL[channel.kind]}
         {channel.archived && ' · Arkivert'}
       </span>
@@ -1415,7 +1415,7 @@ function ChannelList({
             type="button"
             onClick={() => setShowArchived((v) => !v)}
             aria-expanded={showArchived}
-            className="mt-3 flex min-h-9 w-full cursor-pointer items-center gap-1.5 rounded-[9px] px-3 text-left font-mono text-[0.62rem] uppercase tracking-[0.14em] text-ink-faint transition-colors hover:text-ink pointer-coarse:min-h-11"
+            className="mt-3 flex min-h-9 w-full cursor-pointer items-center gap-1.5 rounded-[9px] px-3 text-left text-[0.82rem] font-medium text-ink-soft transition-colors hover:text-ink pointer-coarse:min-h-11"
           >
             Arkiverte
             <span className="tabular-nums">({archived.length})</span>
@@ -1467,9 +1467,9 @@ function ChannelRow({
     >
       <span className="min-w-0 flex-1">
         <span className="chat-channel-title block truncate">{channel.title}</span>
-        <span className="block truncate font-mono text-[0.58rem] uppercase tracking-[0.12em] text-ink-faint">
+        <span className="block truncate text-[0.78rem] text-ink-soft">
           {KIND_LABEL[channel.kind]}
-          {when && <span className="normal-case tracking-normal"> · {when}</span>}
+          {when && <span> · {when}</span>}
         </span>
       </span>
       {badge && (

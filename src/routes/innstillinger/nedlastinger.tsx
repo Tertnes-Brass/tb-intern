@@ -280,21 +280,23 @@ function DownloadsPage() {
       <BottomSheet
         open={filtersOpen}
         onClose={() => setFiltersOpen(false)}
-        label="Filtrer filtilganger"
-        header={<p className="display-title mt-2 text-center text-[1.05rem] font-semibold text-ink">Filtrer</p>}
+        title="Filtrer filtilganger"
+        closeLabel="Ferdig"
+        footer={
+          <>
+            {hasFilter && (
+              <Button variant="ghost" onClick={reset}>
+                Nullstill
+              </Button>
+            )}
+            <Button variant="primary" className="flex-1" onClick={() => setFiltersOpen(false)}>
+              {data.total === 0 ? 'Ingen treff' : `Vis ${data.total === 1 ? '1 filtilgang' : `${data.total} filtilganger`}`}
+            </Button>
+          </>
+        }
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FilterFields data={data} search={search} setFilter={setFilter} projectName={projectName} />
-        </div>
-        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row">
-          {hasFilter && (
-            <Button variant="ghost" onClick={reset} className="w-full sm:flex-1">
-              Nullstill
-            </Button>
-          )}
-          <Button variant="primary" className="w-full sm:flex-1" onClick={() => setFiltersOpen(false)}>
-            {data.total === 0 ? 'Ingen treff' : `Vis ${data.total === 1 ? '1 filtilgang' : `${data.total} filtilganger`}`}
-          </Button>
         </div>
       </BottomSheet>
     </div>

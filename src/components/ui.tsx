@@ -535,3 +535,32 @@ export function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md'
 export function buttonClass(variant: NonNullable<ButtonProps['variant']> = 'secondary', size: NonNullable<ButtonProps['size']> = 'md') {
   return `${btnBase} ${btnVariants[variant]} ${btnSizes[size]} no-underline`
 }
+
+/**
+ * Som `Field`, men for en gruppe kontroller som har sitt eget tilgjengelige
+ * navn (`Segmented`, en rad med knapper): et `<div>` med synlig overskrift i
+ * stedet for `<label>`. En `<label>` rundt en knappegruppe gir den FØRSTE
+ * knappen etikettens navn — skjermleseren hørte «Status Status» i stedet for
+ * «Aktive».
+ */
+export function FieldGroup({
+  label,
+  hint,
+  children,
+  className = '',
+}: {
+  label: string
+  hint?: string
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <div className={`block ${className}`}>
+      <span className="mb-1.5 block text-[0.8rem] font-medium text-ink-soft" aria-hidden>
+        {label}
+      </span>
+      {children}
+      {hint && <span className="mt-1 block text-xs text-ink-faint">{hint}</span>}
+    </div>
+  )
+}

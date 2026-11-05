@@ -581,11 +581,13 @@ function RolesSection({ data }: { data: Data }) {
       </ul>
 
       {/* iPad og desktop: matrisen, med rettighetene som rader og rollene som
-          kolonner — 16 rettigheter får plass i høyden, rollene i bredden. */}
-      <div className="surface-group relative hidden overflow-x-auto overscroll-x-contain md:block">
+          kolonner. Den er sin egen avgrensede rulleflate, så rollenavnene står
+          fast øverst og rettighetene fast til venstre mens man ruller — ellers
+          endrer man tilganger (som lagres med en gang) i navnløse kolonner. */}
+      <div className="admin-matrix-scroll surface-group relative hidden overflow-auto overscroll-contain md:block">
         <table className="admin-matrix w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-line">
+            <tr className="admin-matrix-head border-b border-line">
               <th scope="col" className="admin-matrix-sticky px-4 py-3 text-left align-bottom text-[0.8rem] font-medium text-ink-soft lg:px-5">
                 Rettighet
               </th>
