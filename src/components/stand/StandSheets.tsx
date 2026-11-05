@@ -65,7 +65,7 @@ function StandSheet({
             {title}
           </h2>
           {subtitle && (
-            <p className="mt-0.5 truncate font-mono text-[0.62rem] uppercase tracking-[0.14em] text-(--stand-muted)">
+            <p className="mt-0.5 truncate text-[0.82rem] text-(--stand-muted)">
               {subtitle}
             </p>
           )}
@@ -160,13 +160,13 @@ export function ProgramSheet({
                   >
                     {e.title}
                   </span>
-                  <span className="block truncate font-mono text-[0.62rem] uppercase tracking-[0.14em] text-(--stand-muted)">
+                  <span className="block truncate text-[0.82rem] text-(--stand-muted)">
                     {e.label}
                     {e.pageCount ? ` · ${e.pageCount} ${e.pageCount === 1 ? 'side' : 'sider'}` : ''}
                   </span>
                 </span>
                 {current && (
-                  <span className="shrink-0 rounded-full border border-(--stand-accent)/50 px-2 py-0.5 font-mono text-[0.58rem] uppercase tracking-[0.14em] text-(--stand-accent)">
+                  <span className="shrink-0 rounded-full border border-(--stand-accent)/50 px-2 py-0.5 text-[0.75rem] font-semibold text-(--stand-accent)">
                     Nå
                   </span>
                 )}

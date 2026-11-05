@@ -405,7 +405,9 @@ export function Notestativ({
     const timer = window.setTimeout(() => setChrome(true), SLOW_LOAD_MS)
     return () => window.clearTimeout(timer)
   }, [loading, entry?.fileId])
-  const showChrome = chrome || !entry || !!pdf.error
+  // Mens et stykke lastes (også når man blar til neste), står menyene fremme
+  // med en gang: en skjerm med bare et hjul har ingen annen vei videre.
+  const showChrome = chrome || !entry || !!pdf.error || loading
 
   // «Fortsatt fra …» står en stund når noten vises, og forsvinner ved første bla.
   const resumeVisible = !!resume && settled && !hintOpen && !sheet
@@ -473,7 +475,13 @@ export function Notestativ({
       </div>
     </div>
   ) : pdf.error ? (
-    <StandError kind={pdf.error} fileId={entry.fileId} savedOffline={!!offline.saved} onRetry={pdf.retry} />
+    <StandError
+      kind={pdf.error}
+      fileId={entry.fileId}
+      savedOffline={!!offline.saved}
+      onRetry={pdf.retry}
+      onProgram={entries.length > 1 ? () => setSheet('program') : undefined}
+    />
   ) : !pdf.doc || !view ? (
     <Spinner onRetry={ready ? pdf.retry : undefined} />
   ) : view === 'scroll' ? (
@@ -511,7 +519,7 @@ export function Notestativ({
           </button>
           <div className="min-w-0 flex-1 px-1 text-center">
             <p className="truncate text-[0.95rem] font-semibold">{entry ? entry.title : project.name}</p>
-            <p className="truncate font-mono text-[0.62rem] uppercase tracking-[0.14em] text-(--stand-muted)">
+            <p className="truncate text-[0.8rem] text-(--stand-muted)">
               {entry ? `${entry.label}${position ? ` · ${position}` : ''}` : project.name}
             </p>
           </div>
@@ -605,7 +613,7 @@ export function Notestativ({
               {atFirstView && prev && <span className="max-w-[28vw] truncate pr-1">{prev.title}</span>}
             </button>
             {position && (
-              <span className="shrink-0 px-2 font-mono text-[0.68rem] uppercase tabular-nums tracking-[0.12em] text-(--stand-muted)">
+              <span className="shrink-0 px-2 text-[0.82rem] tabular-nums text-(--stand-muted)">
                 {position}
               </span>
             )}
@@ -701,7 +709,7 @@ function errorCopy(kind: PdfErrorKind, savedOffline: boolean): { title: string; 
     case 'missing':
       return {
         title: 'Fant ikke noten',
-        detail: 'Fila kan ha blitt byttet ut med en ny versjon. Gå tilbake og åpne stativet på nytt.',
+        detail: 'Fila kan ha blitt byttet ut med en ny versjon. Last stativet på nytt for å hente den.',
       }
     case 'offline':
       return savedOffline
@@ -723,13 +731,61 @@ function StandError({
   fileId,
   savedOffline,
   onRetry,
+  onProgram,
 }: {
   kind: PdfErrorKind
   fileId: string
   savedOffline: boolean
   onRetry: () => void
+  /** Åpner programmet — finnes når det er andre stykker å gå til. */
+  onProgram?: () => void
 }) {
   const copy = errorCopy(kind, savedOffline)
+  const primary =
+    'inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full bg-(--stand-accent) px-5 text-sm font-semibold text-(--stand-bg) transition-transform active:scale-[0.97]'
+  const secondary = 'inline-flex min-h-11 cursor-pointer items-center gap-2 px-3 text-sm text-(--stand-accent) underline underline-offset-4'
+  // Handlingene følger diagnosen. Mangler tilgangen eller fila, hjelper det
+  // ikke å prøve den samme fila igjen eller åpne den direkte (samme gate) —
+  // da er veien videre et annet stykke, eller å laste stativet på nytt.
+  const actions =
+    kind === 'forbidden' ? (
+      onProgram ? (
+        <button type="button" onClick={onProgram} className={primary}>
+          <Icon name="list" size={18} />
+          Velg et annet stykke
+        </button>
+      ) : null
+    ) : kind === 'missing' ? (
+      <>
+        <button type="button" onClick={() => window.location.reload()} className={primary}>
+          <Icon name="refresh" size={18} />
+          Last stativet på nytt
+        </button>
+        {onProgram && (
+          <button type="button" onClick={onProgram} className={secondary}>
+            Velg et annet stykke
+          </button>
+        )}
+      </>
+    ) : (
+      <>
+        <button type="button" onClick={onRetry} className={primary}>
+          <Icon name="refresh" size={18} />
+          Prøv igjen
+        </button>
+        {/* Uten nett hjelper ikke en direkte lenke heller. */}
+        {kind === 'failed' && (
+          <a href={`/api/files/${fileId}`} target="_blank" rel="noreferrer" className={secondary}>
+            Åpne PDF-en direkte
+          </a>
+        )}
+        {kind === 'offline' && onProgram && (
+          <button type="button" onClick={onProgram} className={secondary}>
+            Velg et annet stykke
+          </button>
+        )}
+      </>
+    )
   return (
     <div className="grid min-h-[60dvh] h-full place-items-center px-6 text-center">
       <div className="max-w-sm">
@@ -738,27 +794,7 @@ function StandError({
         </span>
         <p className="display-title text-xl font-semibold">{copy.title}</p>
         <p className="mt-2 text-sm text-(--stand-muted)">{copy.detail}</p>
-        <div className="mt-6 flex flex-col items-center gap-1">
-          <button
-            type="button"
-            onClick={onRetry}
-            className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full bg-(--stand-accent) px-5 text-sm font-semibold text-(--stand-bg) transition-transform active:scale-[0.97]"
-          >
-            <Icon name="refresh" size={18} />
-            Prøv igjen
-          </button>
-          {/* Uten nett hjelper ikke en direkte lenke heller. */}
-          {kind !== 'offline' && (
-            <a
-              href={`/api/files/${fileId}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex min-h-11 items-center text-sm text-(--stand-accent) underline underline-offset-4"
-            >
-              Åpne PDF-en direkte
-            </a>
-          )}
-        </div>
+        {actions && <div className="mt-6 flex flex-col items-center gap-1">{actions}</div>}
       </div>
     </div>
   )
