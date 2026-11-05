@@ -1,9 +1,10 @@
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
+import { DateTile, dayLabel } from '../../components/calendar/parts'
 import { Icon } from '../../components/Icons'
 import { AbsenceReasonPicker } from '../../components/Rsvp'
 import { toast, toastError } from '../../components/toast'
-import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../components/ui'
+import { Button, EmptyState, Field, Modal, PageHeader, Stamp } from '../../components/ui'
 import {
   ATTENDANCE_COMMENT_MAX,
   ATTENDANCE_LABELS,
@@ -84,22 +85,20 @@ function AbsencePage() {
   const withAbsence = data.events.filter((e) => e.absences.length > 0).length
 
   return (
-    <div className="space-y-10">
-      <header className="rise flex flex-wrap items-end justify-between gap-4">
-        <div className="max-w-2xl">
-          <Kicker className="mb-2">Oppmøte</Kicker>
-          <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Fravær</h1>
-          <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-            Alle regnes som kommer til de selv melder fravær. Her ser du unntakene for øvelser og konserter fremover —
-            og kan registrere fravær for noen som har gitt beskjed på telefon eller e-post.
-          </p>
-        </div>
-        {ready && data.events.length > 0 && (
-          <Button variant="primary" onClick={() => setDialog({ open: true, occurrenceKey: null })}>
-            Registrer fravær
-          </Button>
-        )}
-      </header>
+    <div className="space-y-8">
+      <PageHeader
+        className="rise"
+        kicker="Oppmøte"
+        title="Fravær"
+        summary="Alle regnes som kommer til de selv melder fravær — her er unntakene fremover."
+        action={
+          ready && data.events.length > 0 ? (
+            <Button variant="primary" onClick={() => setDialog({ open: true, occurrenceKey: null })}>
+              Registrer fravær
+            </Button>
+          ) : undefined
+        }
+      />
 
       {!data.configured ? (
         <EmptyState title="Kalenderen er ikke koblet til ennå">
@@ -116,7 +115,7 @@ function AbsencePage() {
         </EmptyState>
       ) : (
         <section className="rise space-y-8" style={{ animationDelay: '80ms' }}>
-          <p className="kicker">
+          <p className="text-sm text-ink-soft">
             {CALENDAR_WINDOW_LABEL} ·{' '}
             {withAbsence === 0
               ? 'ingen har meldt fravær'
@@ -124,8 +123,8 @@ function AbsencePage() {
           </p>
           {groupByMonth(data.events).map((group) => (
             <div key={group.key}>
-              <h2 className="kicker mb-1.5">{group.label}</h2>
-              <ul className="sheet overflow-hidden">
+              <h2 className="group-label">{group.label}</h2>
+              <ul className="list-group">
                 {group.events.map((event) => (
                   <EventItem
                     key={event.occurrenceKey}
@@ -149,60 +148,56 @@ function AbsencePage() {
   )
 }
 
-function DateBlock({ start }: { start: string }) {
-  const date = toOsloDate(start)
-  return (
-    <div className="flex w-12 shrink-0 flex-col items-center justify-center rounded-[9px] border border-line bg-paper-sunken/60 px-1.5 py-1.5 sm:w-14">
-      <span className="font-mono text-[0.55rem] uppercase tracking-[0.18em] text-ink-faint">
-        {formatWeekday(date).slice(0, 3)}
-      </span>
-      <span className="display-title tabular text-xl font-semibold leading-none text-ink">
-        {Number(date.slice(8, 10))}
-      </span>
-    </div>
-  )
-}
-
+/**
+ * Én hendelse: tittel og tid/sted på hver sin linje (de skal kunne leses, ikke
+ * kuttes), tallene på en tredje linje bare når noen faktisk har meldt fravær —
+ * «Alle kommer» trenger ikke sies 18 ganger — og «+» for å registrere, 44 pt.
+ */
 function EventItem({ event, onRegister }: { event: AbsenceOverviewEvent; onRegister: () => void }) {
   const { counts } = event
+  const date = toOsloDate(event.start)
   const time = event.allDay ? 'Hele dagen' : formatTimeRange(event.start, event.end)
+  const hasExceptions = counts.notAttending > 0 || counts.unsure > 0
   return (
-    <li className="hairline-row">
-      <div className="flex items-center gap-3 px-3 py-3 sm:gap-4 sm:px-5">
-        <DateBlock start={event.start} />
-        <div className="min-w-0 flex-1">
+    <li>
+      <div className="flex items-start gap-3 py-3 pl-3 pr-1.5 sm:gap-4 sm:pl-5 sm:pr-3">
+        <DateTile iso={date} srLabel={false} />
+        <div className="min-w-0 flex-1 pt-0.5">
           <Link
             to="/kalender/$eventId"
             params={{ eventId: event.occurrenceKey }}
-            className="display-title link-quiet block truncate text-base font-semibold text-ink transition-colors hover:text-brass-strong"
+            className="display-title link-quiet block break-words text-base font-semibold leading-snug text-ink transition-colors hover:text-brass-strong"
           >
+            <span className="sr-only">{dayLabel(date)}, </span>
             {event.title}
           </Link>
-          <p className="mt-0.5 truncate text-xs text-ink-soft">
+          <p className="mt-0.5 break-words text-[0.82rem] leading-snug text-ink-soft">
             {time}
             {event.location ? ` · ${event.location}` : ''}
-            <span className="hidden sm:inline"> · {relativeDays(toOsloDate(event.start))}</span>
+            <span className="max-sm:hidden"> · {relativeDays(date)}</span>
           </p>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          {counts.notAttending > 0 ? (
-            <Stamp tone="oxblood">{counts.notAttending} kan ikke</Stamp>
-          ) : counts.unsure === 0 ? (
-            <span className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-ink-faint">Alle kommer</span>
-          ) : null}
-          {counts.unsure > 0 && <Stamp>{counts.unsure} usikker{counts.unsure === 1 ? '' : 'e'}</Stamp>}
-          <span className="tabular font-mono text-[0.6rem] text-ink-faint">
-            {counts.attending} av {counts.total} kommer
-          </span>
+          {hasExceptions && (
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.8rem] text-ink-soft">
+              {counts.notAttending > 0 && <Stamp tone="oxblood">{counts.notAttending} kan ikke</Stamp>}
+              {counts.unsure > 0 && (
+                <Stamp>
+                  {counts.unsure} usikker{counts.unsure === 1 ? '' : 'e'}
+                </Stamp>
+              )}
+              <span className="tabular">
+                {counts.attending} av {counts.total} kommer
+              </span>
+            </p>
+          )}
         </div>
         <button
           type="button"
           onClick={onRegister}
-          aria-label={`Registrer fravær på ${event.title}`}
+          aria-label={`Registrer fravær på ${event.title}, ${dayLabel(date)}`}
           title="Registrer fravær"
-          className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-[9px] text-ink-faint transition-colors hover:bg-paper-sunken hover:text-brass-strong"
+          className="grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-[10px] text-ink-faint transition-colors hover:bg-paper-sunken hover:text-brass-strong active:bg-paper-sunken"
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+          <svg width="16" height="16" viewBox="0 0 14 14" fill="none" aria-hidden>
             <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
           </svg>
         </button>
@@ -242,7 +237,7 @@ function AbsenceItem({
   }
 
   return (
-    <li className="flex items-start gap-3 py-2.5 pr-3 pl-[4.25rem] sm:pr-5 sm:pl-[5.75rem]">
+    <li className="flex items-start gap-3 py-2 pr-1.5 pl-[4.5rem] sm:pr-3 sm:pl-[5.25rem]">
       <div className="min-w-0 flex-1">
         <p className="text-sm text-ink">
           <span className={`font-medium ${absence.status === 'not_attending' ? 'text-oxblood' : ''}`}>
@@ -267,7 +262,7 @@ function AbsenceItem({
         loading={busy}
         onClick={remove}
         aria-label={`Fjern fraværet til ${absence.name}`}
-        className="shrink-0"
+        className="shrink-0 pointer-coarse:min-h-11 pointer-coarse:min-w-11"
       >
         <Icon name="close" size={14} />
         <span className="hidden sm:inline">Fjern</span>
@@ -330,7 +325,7 @@ function RegisterDialog({
       <div className="space-y-4">
         <Field label="Hendelse">
           <select
-            className="field-input !text-base sm:!text-sm"
+            className="field-input !text-base sm:!text-sm pointer-coarse:min-h-11"
             value={occurrenceKey}
             onChange={(e) => setOccurrenceKey(e.target.value)}
           >
@@ -343,7 +338,7 @@ function RegisterDialog({
         </Field>
         <Field label="Medlem">
           <select
-            className="field-input !text-base sm:!text-sm"
+            className="field-input !text-base sm:!text-sm pointer-coarse:min-h-11"
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
           >

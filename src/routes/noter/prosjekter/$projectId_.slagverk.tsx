@@ -1,5 +1,5 @@
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
-import { Button, EmptyState, Kicker } from '../../../components/ui'
+import { BackArrow, Button, EmptyState, Kicker } from '../../../components/ui'
 import { formatDate, formatWeekday, toRoman } from '../../../lib/format'
 import { percussionLines } from '../../../lib/percussion'
 import { getProject } from '../../../server/projects'
@@ -37,9 +37,10 @@ function PercussionSheetPage() {
         <Link
           to="/noter/prosjekter/$projectId"
           params={{ projectId: p.id }}
-          className="link-quiet inline-flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-brass-strong"
+          className="back-link"
         >
-          ← {p.name}
+          <BackArrow />
+          {p.name}
         </Link>
         <Button size="sm" variant="secondary" onClick={() => window.print()}>
           Skriv ut

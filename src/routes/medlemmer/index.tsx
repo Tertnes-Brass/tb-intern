@@ -1,7 +1,10 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast, toastError } from '../../components/toast'
-import { Avatar, Button, Field, Kicker, Modal, Stamp } from '../../components/ui'
+import { ActionMenu } from '../../components/ActionMenu'
+import { ConfirmDialog } from '../../components/admin/ConfirmDialog'
+import { Icon } from '../../components/Icons'
+import { Avatar, Button, Field, Modal, PageHeader } from '../../components/ui'
 import {
   type InviteDelivery,
   MAX_INVITE_PARTS,
@@ -25,6 +28,7 @@ import {
 
 type Data = Awaited<ReturnType<typeof listMembers>>
 type Member = Data['members'][number]
+type Invite = Data['invites'][number]
 
 export const Route = createFileRoute('/medlemmer/')({
   beforeLoad: ({ context }) => {
@@ -87,106 +91,134 @@ function MembersPage() {
 
   const [inviteOpen, setInviteOpen] = useState(false)
 
-  return (
-    <div className="space-y-9">
-      <header className="rise flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <Kicker className="mb-2">Besetningen</Kicker>
-          <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Medlemmer</h1>
-          <p className="mt-2 text-sm text-ink-soft">
-            {data.members.length} musikere og stab.{' '}
-            {data.canManage
-              ? 'Du kan invitere, og endre stemmer og roller.'
-              : data.canManageSection
-                ? 'Du kan endre stemmer for medlemmer i din seksjon.'
-                : 'Stemmer settes av seksjonsleder eller administrator.'}
-          </p>
-        </div>
-        {data.canManage && (
-          <Button variant="primary" onClick={() => setInviteOpen(true)}>
-            Inviter medlem
-          </Button>
-        )}
-      </header>
+  const [query, setQuery] = useState('')
+  const q = query.trim().toLocaleLowerCase('nb')
+  const matches = (m: Member) =>
+    !q ||
+    m.name.toLocaleLowerCase('nb').includes(q) ||
+    m.email.toLocaleLowerCase('nb').includes(q) ||
+    m.parts.some((p) => p.name.toLocaleLowerCase('nb').includes(q))
+  const visibleKeys = order.filter((key) => groups.get(key)?.some(matches))
+  const visibleInvites = data.invites.filter(
+    (inv) =>
+      !q ||
+      (inv.name ?? '').toLocaleLowerCase('nb').includes(q) ||
+      inv.email.toLocaleLowerCase('nb').includes(q) ||
+      inv.partNames.some((n) => n.toLocaleLowerCase('nb').includes(q)),
+  )
+  const [revokeFor, setRevokeFor] = useState<Invite | null>(null)
 
-      {data.canManage && data.invites.length > 0 && (
-        <section className="rise">
-          <div className="mb-3 flex items-baseline gap-3">
-            <h2 className="kicker">Venter på første innlogging</h2>
-            <div className="staff-rule h-[10px] flex-1 opacity-30" aria-hidden />
-          </div>
-          <ul className="sheet divide-y divide-[var(--line)] overflow-hidden">
-            {data.invites.map((inv) => (
-              <li key={inv.email} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-3 sm:px-5">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[0.92rem] font-semibold text-ink">{inv.name ?? inv.email}</span>
-                  {inv.name && (
-                    <span className="block truncate font-mono text-[0.64rem] text-ink-faint">{inv.email}</span>
-                  )}
-                  <span className="block font-mono text-[0.64rem] uppercase tracking-[0.1em] text-ink-faint">
-                    {inv.roleName}
-                    {inv.partNames.length > 0 ? ` · ${inv.partNames.join(' · ')}` : ''}
-                  </span>
-                </span>
-                <Stamp tone="oxblood">Invitert</Stamp>
-                <button
-                  onClick={async () => {
-                    try {
-                      await revokeInvitation({ data: { email: inv.email } })
-                      toast('Invitasjon trukket tilbake')
-                      await router.invalidate()
-                    } catch (err) {
-                      toastError(err)
-                    }
-                  }}
-                  className="-mx-2 -my-1.5 inline-flex items-center px-3 py-2.5 font-mono text-[0.64rem] uppercase tracking-wide text-danger/80 transition-colors hover:text-danger"
-                >
-                  Trekk tilbake
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
+  return (
+    <div className="space-y-7">
+      <PageHeader
+        className="rise"
+        title="Medlemmer"
+        summary={`${data.members.length} musikere og stab`}
+        action={
+          data.canManage && (
+            <Button variant="primary" onClick={() => setInviteOpen(true)}>
+              Inviter
+            </Button>
+          )
+        }
+      />
+
+      <div className="rise space-y-2" style={{ animationDelay: '40ms' }}>
+        <div className="relative max-w-md">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 14 14"
+            fill="none"
+            aria-hidden
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
+          >
+            <circle cx="6" cy="6" r="4.6" stroke="currentColor" strokeWidth="1.4" />
+            <path d="M9.5 9.5L13 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+          </svg>
+          <input
+            type="search"
+            className="field-input !pl-10"
+            placeholder="Søk på navn, e-post eller stemme"
+            aria-label="Søk blant medlemmene"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            enterKeyHint="search"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
+          />
+        </div>
+        <p className="px-1 text-xs text-ink-faint">
+          {data.canManage
+            ? 'Du kan invitere, og endre stemmer og roller.'
+            : data.canManageSection
+              ? 'Du kan endre stemmer for medlemmer i din seksjon.'
+              : 'Stemmer settes av seksjonsleder eller administrator.'}
+        </p>
+      </div>
+
+      {visibleKeys.length === 0 && (
+        <p className="surface-group px-5 py-8 text-center text-sm text-ink-soft">
+          Ingen medlemmer matcher «{query}»{visibleInvites.length > 0 ? ' — men det finnes treff blant invitasjonene under.' : '.'}
+        </p>
       )}
 
-      {order
-        .filter((key) => groups.has(key))
-        .map((key, si) => (
-          <section key={key} className="rise" style={{ animationDelay: `${80 + si * 50}ms` }}>
-            <div className="mb-3 flex items-baseline gap-3">
-              <h2 className="kicker">{labels[key]}</h2>
-              <div className="staff-rule h-[10px] flex-1 opacity-30" aria-hidden />
-            </div>
-            <ul className="sheet divide-y divide-[var(--line)] overflow-hidden">
-              {groups.get(key)!.map((m) => {
+      {visibleKeys.map((key, si) => {
+        const members = groups.get(key)!.filter(matches)
+        return (
+          <section key={key} className="rise" style={{ animationDelay: `${60 + si * 40}ms` }}>
+            <h2 className="group-label">
+              {labels[key]} · {members.length}
+            </h2>
+            {/* Telefon: navn (og ⋯) øverst, stemme og rolle under. Fra md: én
+                tabellrad — navn · stemme · rolle · ⋯ — så iPad-en viser
+                besetningen tett i stedet for som en strukket telefonliste. */}
+            <ul className="list-group">
+              {members.map((m) => {
                 const leads = m.leaderPartIds
                   .map((id) => data.allParts.find((p) => p.id === id)?.nameNo)
                   .filter(Boolean)
                 return (
                   <li
                     key={m.id}
-                    className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2 sm:px-5"
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 px-4 py-3 sm:px-5 md:grid-cols-[minmax(0,1fr)_11.5rem_10.5rem_2.75rem] md:gap-x-4"
                   >
-                    <div className="flex min-w-0 items-center gap-3 sm:flex-1">
+                    <div className="flex min-w-0 items-center gap-3">
                       <Avatar name={m.name} size="sm" />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-2">
-                          <span className="truncate text-[0.92rem] font-semibold text-ink">{m.name}</span>
-                          {m.id === data.meId && <Stamp tone="brass">deg</Stamp>}
+                          <span className="truncate text-[0.95rem] font-semibold text-ink">{m.name}</span>
+                          {m.id === data.meId && <span className="shrink-0 text-[0.8rem] text-ink-soft">(deg)</span>}
                         </span>
-                        <span className="block truncate font-mono text-[0.64rem] text-ink-faint">{m.email}</span>
+                        <span className="block truncate text-[0.8rem] text-ink-soft">{m.email}</span>
                         {leads.length > 0 && (
-                          <span className="mt-0.5 block font-mono text-[0.6rem] uppercase tracking-[0.1em] text-brass-strong">
-                            Leder: {leads.join(' · ')}
+                          <span className="mt-0.5 block truncate text-xs font-medium text-brass-strong">
+                            Leder {leads.join(' · ')}
                           </span>
                         )}
                       </span>
                     </div>
 
-                    <div className="flex w-full items-center gap-2 sm:contents">
+                    <div className="col-start-2 row-start-1 flex justify-end md:col-start-4">
+                      {data.canManage && (
+                        <ActionMenu
+                          iconOnly
+                          label={`Mer for ${m.name}`}
+                          title={m.name}
+                          items={[
+                            { label: 'Rediger profil', hint: 'Navn, telefon og passordlenke', icon: 'people', onSelect: () => setEditFor(m) },
+                            { label: 'Gruppeleder for …', hint: 'Stemmer medlemmet leder', icon: 'star', onSelect: () => setLeaderFor(m) },
+                          ]}
+                        />
+                      )}
+                    </div>
+
+                    <div className="col-span-2 flex min-w-0 items-center gap-2 md:col-span-2 md:col-start-2 md:row-start-1 md:grid md:grid-cols-[11.5rem_10.5rem] md:gap-4">
                       {m.canEditParts ? (
                         <select
-                          className="field-input min-w-0 flex-1 !py-2 !text-base sm:!w-auto sm:!flex-none sm:!py-1.5 sm:!text-xs"
+                          className="field-input compact-select min-w-0 flex-1 md:!w-full"
+                          aria-label={`Stemme for ${m.name}`}
                           value={m.parts[0]?.id ?? ''}
                           disabled={busyId === m.id}
                           onChange={(e) => setPart(m.id, e.target.value)}
@@ -199,14 +231,15 @@ function MembersPage() {
                           ))}
                         </select>
                       ) : (
-                        <span className="font-mono text-[0.68rem] uppercase tracking-[0.1em] text-ink-soft">
+                        <span className="min-w-0 flex-1 truncate text-sm text-ink-soft">
                           {m.parts.map((p) => p.name).join(' · ') || '—'}
                         </span>
                       )}
 
                       {data.canManage ? (
                         <select
-                          className="field-input min-w-0 flex-1 !py-2 !text-base sm:!w-auto sm:!flex-none sm:!py-1.5 sm:!text-xs"
+                          className="field-input compact-select min-w-0 flex-1 md:!w-full"
+                          aria-label={`Rolle for ${m.name}`}
                           value={m.roleId}
                           disabled={busyId === m.id}
                           onChange={(e) => setRole(m.id, e.target.value)}
@@ -218,24 +251,7 @@ function MembersPage() {
                           ))}
                         </select>
                       ) : (
-                        <Stamp tone={m.roleId === 'member' ? 'neutral' : 'brass'}>{m.roleName}</Stamp>
-                      )}
-
-                      {data.canManage && (
-                        <>
-                          <button
-                            onClick={() => setEditFor(m)}
-                            className="inline-flex min-h-[44px] shrink-0 cursor-pointer items-center rounded-lg px-2.5 py-1.5 font-mono text-[0.6rem] uppercase tracking-wide text-ink-faint transition-colors hover:bg-paper-sunken hover:text-brass-strong"
-                          >
-                            Rediger…
-                          </button>
-                          <button
-                            onClick={() => setLeaderFor(m)}
-                            className="inline-flex min-h-[44px] shrink-0 cursor-pointer items-center rounded-lg px-2.5 py-1.5 font-mono text-[0.6rem] uppercase tracking-wide text-ink-faint transition-colors hover:bg-paper-sunken hover:text-brass-strong"
-                          >
-                            Leder…
-                          </button>
-                        </>
+                        <span className="shrink-0 text-[0.82rem] text-ink-soft md:truncate">{m.roleName}</span>
                       )}
                     </div>
                   </li>
@@ -243,7 +259,17 @@ function MembersPage() {
               })}
             </ul>
           </section>
-        ))}
+        )
+      })}
+
+      {data.canManage && visibleInvites.length > 0 && (
+        <Invitations
+          invites={visibleInvites}
+          total={data.invites.length}
+          searching={!!q}
+          onRevoke={setRevokeFor}
+        />
+      )}
 
       {data.canManage && (
         <InviteModal
@@ -268,6 +294,33 @@ function MembersPage() {
         />
       )}
 
+      {data.canManage && (
+        <ConfirmDialog
+          open={revokeFor !== null}
+          kicker="Invitasjon"
+          title="Trekk tilbake invitasjonen?"
+          confirmLabel="Trekk tilbake"
+          onClose={() => setRevokeFor(null)}
+          onConfirm={async () => {
+            if (!revokeFor) return
+            try {
+              await revokeInvitation({ data: { email: revokeFor.email } })
+            } catch (err) {
+              toastError(err)
+              throw err
+            }
+            toast('Invitasjonen er trukket tilbake')
+            await router.invalidate()
+          }}
+        >
+          <p>
+            <span className="font-semibold text-ink">{revokeFor?.name ?? revokeFor?.email}</span> kan da ikke lenger
+            logge inn med <span className="[overflow-wrap:anywhere]">{revokeFor?.email}</span>. En lenke som allerede er sendt, slutter å
+            virke. Du kan invitere på nytt senere.
+          </p>
+        </ConfirmDialog>
+      )}
+
       {data.canManage && editFor && (
         <AdminProfileModal
           key={editFor.id}
@@ -280,6 +333,123 @@ function MembersPage() {
         />
       )}
     </div>
+  )
+}
+
+const INVITES_OPEN_KEY = 'tb-medlemmer-invitasjoner-apen'
+
+/**
+ * Ventende invitasjoner — under besetningen, lukket som standard. De er
+ * administrasjon, ikke medlemslista: seks røde «Trekk tilbake» skjøv før de
+ * aktive medlemmene ut av første skjerm. Åpen/lukket huskes for økten. Et søk
+ * med treff blant invitasjonene åpner dem, så et treff aldri gjemmes.
+ */
+function Invitations({
+  invites,
+  total,
+  searching,
+  onRevoke,
+}: {
+  invites: Invite[]
+  total: number
+  searching: boolean
+  onRevoke: (invite: Invite) => void
+}) {
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(INVITES_OPEN_KEY) === '1') setOpen(true)
+    } catch {
+      // Privat modus o.l.: start lukket.
+    }
+  }, [])
+  const toggle = () => {
+    setOpen((v) => {
+      try {
+        sessionStorage.setItem(INVITES_OPEN_KEY, v ? '0' : '1')
+      } catch {
+        // ignorer
+      }
+      return !v
+    })
+  }
+  const expanded = open || searching
+
+  const copyEmail = async (email: string) => {
+    try {
+      await navigator.clipboard.writeText(email)
+      toast('E-postadressen er kopiert')
+    } catch {
+      toast('Kunne ikke kopiere – merk adressen og kopier den selv', 'error')
+    }
+  }
+
+  return (
+    <section className="rise" aria-label="Invitasjoner">
+      <div className="list-group">
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={searching}
+          aria-expanded={expanded}
+          aria-controls="medlemmer-invitasjoner"
+          className="list-row-link flex min-h-14 w-full cursor-pointer items-center gap-3 px-4 py-3 text-left disabled:cursor-default sm:px-5"
+        >
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-dashed border-line-strong text-ink-faint">
+            <Icon name="people" size={15} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.95rem] font-semibold text-ink">
+              Invitasjoner · {searching ? `${invites.length} av ${total}` : total}
+            </span>
+            <span className="block truncate text-[0.8rem] text-ink-soft">Venter på første innlogging</span>
+          </span>
+          {!searching && (
+            <Icon
+              name="chevronRight"
+              size={17}
+              className={`shrink-0 text-ink-faint transition-transform duration-150 ${expanded ? 'rotate-90' : ''}`}
+            />
+          )}
+        </button>
+        {expanded && (
+          <ul id="medlemmer-invitasjoner" className="admin-subrows">
+            {invites.map((inv) => (
+              <li key={inv.email} className="flex items-center gap-x-3 py-2.5 pl-4 pr-2 sm:pl-5 sm:pr-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[0.92rem] font-semibold text-ink">{inv.name ?? inv.email}</span>
+                  {inv.name && <span className="block truncate text-[0.8rem] text-ink-soft">{inv.email}</span>}
+                  <span className="block truncate text-[0.8rem] text-ink-soft">
+                    {inv.roleName}
+                    {inv.partNames.length > 0 ? ` · ${inv.partNames.join(' · ')}` : ' · ingen stemme'}
+                  </span>
+                </span>
+                <ActionMenu
+                  iconOnly
+                  label={`Mer for invitasjonen til ${inv.name ?? inv.email}`}
+                  title={inv.name ?? inv.email}
+                  items={[
+                    {
+                      label: 'Kopier e-postadressen',
+                      hint: inv.email,
+                      icon: 'share',
+                      onSelect: () => void copyEmail(inv.email),
+                    },
+                    {
+                      label: 'Trekk tilbake invitasjonen',
+                      hint: 'Du bekrefter i neste steg',
+                      icon: 'close',
+                      tone: 'danger',
+                      onSelect: () => onRevoke(inv),
+                    },
+                  ]}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -331,7 +501,7 @@ function AdminProfileModal({
     <Modal open onClose={onClose} title="Rediger medlem" kicker="Administrasjon">
       <form onSubmit={submit} className="space-y-4">
         <div className="rounded-xl border border-line bg-paper-sunken/50 px-4 py-3">
-          <p className="font-mono text-[0.62rem] uppercase tracking-[0.12em] text-ink-faint">Innloggingsadresse</p>
+          <p className="text-[0.78rem] font-medium text-ink-soft">Innloggingsadresse</p>
           <p className="mt-1 truncate text-sm font-semibold text-ink">{member.email}</p>
         </div>
         <Field label="Navn">
@@ -356,9 +526,7 @@ function AdminProfileModal({
             Send tilbakestillingslenke
           </Button>
         </div>
-        <p className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-faint">
-          Profilendringer og passordreset loggføres.
-        </p>
+        <p className="text-[0.78rem] text-ink-soft">Profilendringer og passordreset loggføres.</p>
         <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="ghost" onClick={onClose} className="w-full sm:w-auto">
             Avbryt
@@ -420,23 +588,23 @@ function LeaderModal({
         {leadable.map((p) => (
           <label
             key={p.id}
-            className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-paper-sunken"
+            className="flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-paper-sunken pointer-coarse:min-h-11"
           >
             <input
               type="checkbox"
               checked={selected.has(p.id)}
               onChange={() => toggle(p.id)}
-              className="h-4 w-4 cursor-pointer accent-[var(--brass)]"
+              className="h-4 w-4 cursor-pointer accent-[var(--brass)] pointer-coarse:h-5 pointer-coarse:w-5"
             />
             <span className="text-sm text-ink">{p.nameNo}</span>
           </label>
         ))}
       </div>
-      <div className="flex justify-end gap-2 pt-4">
-        <Button type="button" variant="ghost" onClick={onClose}>
+      <div className="flex flex-col-reverse gap-2 pt-4 sm:flex-row sm:justify-end">
+        <Button type="button" variant="ghost" onClick={onClose} className="w-full sm:w-auto">
           Avbryt
         </Button>
-        <Button type="button" variant="primary" loading={saving} onClick={submit}>
+        <Button type="button" variant="primary" loading={saving} onClick={submit} className="w-full sm:w-auto">
           Lagre
         </Button>
       </div>
@@ -558,9 +726,7 @@ function InviteModal({
               kind === 'error' ? 'border-danger/40 bg-danger/5' : 'border-line bg-paper-sunken/50'
             }`}
           >
-            <p className="font-mono text-[0.62rem] uppercase tracking-[0.12em] text-ink-faint">
-              Hva skjedde med e-posten
-            </p>
+            <p className="text-[0.78rem] font-medium text-ink-soft">Hva skjedde med e-posten</p>
             <p className="mt-1.5 text-sm leading-relaxed text-ink">{message}</p>
             {receipt.delivery === 'logged' && (
               <p className="mt-2 text-xs leading-relaxed text-ink-soft">
@@ -570,8 +736,8 @@ function InviteModal({
           </div>
           <div className="rounded-xl border border-line px-4 py-3">
             <p className="truncate text-sm font-semibold text-ink">{receipt.name ?? receipt.email}</p>
-            {receipt.name && <p className="truncate font-mono text-[0.64rem] text-ink-faint">{receipt.email}</p>}
-            <p className="mt-1.5 font-mono text-[0.64rem] uppercase tracking-[0.1em] text-ink-faint">
+            {receipt.name && <p className="truncate text-[0.8rem] text-ink-soft">{receipt.email}</p>}
+            <p className="mt-1 text-[0.8rem] text-ink-soft">
               {receipt.roleName}
               {receipt.partNames.length > 0 ? ` · ${receipt.partNames.join(' · ')}` : ' · ingen stemme'}
             </p>
@@ -640,8 +806,8 @@ function InviteModal({
         <div>
           <div className="mb-1.5 flex items-baseline justify-between gap-2">
             <span className="text-[0.8rem] font-medium text-ink-soft">Stemmer</span>
-            <span className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-faint">
-              {partIds.length}/{MAX_INVITE_PARTS}
+            <span className="text-[0.78rem] tabular-nums text-ink-soft">
+              {partIds.length} av {MAX_INVITE_PARTS}
             </span>
           </div>
           {chosen.length > 0 ? (
@@ -658,11 +824,11 @@ function InviteModal({
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm text-ink">{part.nameNo}</span>
-                      <span className="block font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-faint">
+                      <span className="block text-[0.78rem] text-ink-soft">
                         {sectionLabels[part.section] ?? 'Annen seksjon'}
                       </span>
                     </span>
-                    {i === 0 && <Stamp tone="brass">Hovedstemme</Stamp>}
+                    {i === 0 && <span className="shrink-0 text-[0.78rem] font-medium text-brass-strong">Hovedstemme</span>}
                   </label>
                   <button
                     type="button"

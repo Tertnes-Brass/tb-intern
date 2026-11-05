@@ -305,6 +305,17 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 > rollestyrte, og de har nå et tydelig sted å bo i stedet for å gjemme seg bak
 > faden i stripen. Områdekortene på hub-en vises bare på desktop; på telefon
 > ville de gjentatt «Meg og mer».
+>
+> **Justert 4. november 2026 (mobil/iPad-gjennomgang):** grensen er flyttet
+> fra `md` (768 px) til `lg` (1024 px). På en iPad i stående (820–834 px) fikk
+> ikke engang et vanlig medlems seks oppføringer plass i toppmenyen, og resten
+> forsvant stille bak kanten — nøyaktig feilmodusen over. Samme dag ble regelen
+> gjort om fra bredde til input: **berøringsskjerm (telefon og iPad, også på
+> tvers) og vinduer under 1024 px får fanelinjen og «Meg og mer»; mus fra
+> 1024 px får toppmenyen** (`appnav`/`desknav` i `styles.css`). Ellers byttet
+> iPad-en navigasjonsmodell bare fordi den ble snudd. På desktop viser
+> brukermenyen bare avataren under `xl` (1280 px), så admin får plass ved
+> 1024 px. Områdekortene på hub-en følger `desknav`.
 
 ## 7. Hva som ikke er avgjort
 
@@ -360,6 +371,17 @@ uansett. Terskelen for å ta opp spørsmålet igjen bør være målbar:
 
    Hele teksten, utkastene og publiseringsflyten bor fortsatt i området —
    hub-en er ikke et kontrollpanel (§4).
+
+   **Oppsett, 4. november 2026 (iPhone/iPad):** rekkefølgen over står, men
+   «Neste» er nå ÉN modul — datoflis, tittel, tid, sted, oppmøte (én linje når
+   man regnes som kommer) og øvingsplanen — og den eneste hevede flaten på
+   siden. Datoflisen vises på alle skjermer, og datoen står ikke lenger to
+   ganger. «Mine noter» følger rett etter (installasjonstipset står under det,
+   ikke mellom), så begge er innenfor første skjerm på telefon. Beskjedene og
+   «Kommende» er rene, delte lister. Fra 768 px står det i to spalter:
+   «Neste» og «Kommende» til venstre, «Mine noter» og beskjedene til høyre
+   (`.hub-grid` i `src/styles.css`); DOM-rekkefølgen er fortsatt den over.
+   Områder er en kompakt lenkeliste, fortsatt bare på desktop.
 
    Hub-en skal aldri bli et kontrollpanel som gjengir hvert områdes oversikt i
    miniatyr (§4). Den viser *det neste* og *veien videre*.

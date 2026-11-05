@@ -1,7 +1,8 @@
 import { Link, createFileRoute, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { toast, toastError } from '../../components/toast'
-import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../components/ui'
+import { Segmented } from '../../components/Segmented'
+import { BackArrow, Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../components/ui'
 import { BOARD_TASK_STATUSES, BOARD_TASK_STATUS_LABEL, type BoardTaskStatus, dueLabel, isOverdue } from '../../lib/board'
 import { formatDate, formatDateTime } from '../../lib/format'
 import {
@@ -106,9 +107,10 @@ function BoardTaskPage() {
       <header className="rise">
         <Link
           to="/styre"
-          className="link-quiet mb-4 inline-flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-brass-strong"
+          className="back-link mb-4"
         >
-          ← Oppgaver
+          <BackArrow />
+          Oppgaver
         </Link>
         <div className="flex flex-wrap items-center gap-2">
           <Kicker>Oppgave</Kicker>
@@ -126,26 +128,20 @@ function BoardTaskPage() {
             <Stamp>Ferdig {formatDateTime(task.completedAt)}</Stamp>
           )}
         </div>
-        <h1 className="display-title mt-2 break-words text-[clamp(2rem,5.5vw,3.2rem)] font-semibold italic leading-[1.05] text-ink">
+        <h1 className="display-title mt-2 break-words text-[clamp(1.75rem,5vw,2.8rem)] font-semibold italic leading-[1.05] text-ink">
           {task.title}
         </h1>
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          {BOARD_TASK_STATUSES.map((status) => (
-            <Button
-              key={status}
-              size="sm"
-              variant={task.status === status ? 'primary' : 'secondary'}
-              onClick={() => changeStatus(status)}
-            >
-              {BOARD_TASK_STATUS_LABEL[status]}
-            </Button>
-          ))}
-        </div>
-        <div className="staff-rule mt-7 w-full opacity-50" aria-hidden />
+        <Segmented
+          label="Status"
+          className="mt-5 max-sm:w-full max-sm:[&>*]:flex-1"
+          value={task.status}
+          options={BOARD_TASK_STATUSES.map((status) => ({ value: status, label: BOARD_TASK_STATUS_LABEL[status] }))}
+          onChange={(status) => changeStatus(status)}
+        />
       </header>
 
-      <section className="rise sheet space-y-4 p-5 sm:p-6" style={{ animationDelay: '80ms' }}>
+      <section className="rise surface-group space-y-4 p-5 sm:p-6" style={{ animationDelay: '80ms' }}>
         <h2 className="kicker">Detaljer</h2>
         <Field label="Tittel">
           <input className="field-input" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
@@ -233,13 +229,13 @@ function BoardTaskPage() {
       <section className="rise" style={{ animationDelay: '140ms' }}>
         <h2 className="kicker mb-3">Kommentarer</h2>
         {data.comments.length === 0 ? (
-          <div className="sheet">
+          <div className="surface-group">
             <EmptyState title="Ingen kommentarer">
               Skriv den første — tråden er stedet styret diskuterer denne oppgaven.
             </EmptyState>
           </div>
         ) : (
-          <ul className="sheet mb-3 overflow-hidden">
+          <ul className="surface-group mb-3 overflow-hidden">
             {data.comments.map((c) => (
               <li key={c.id} className="hairline-row px-4 py-3 sm:px-5">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -270,7 +266,7 @@ function BoardTaskPage() {
           </ul>
         )}
 
-        <div className="sheet mt-3 space-y-3 p-4 sm:p-5">
+        <div className="surface-group mt-3 space-y-3 p-4 sm:p-5">
           <textarea
             className="field-input min-h-20"
             value={comment}

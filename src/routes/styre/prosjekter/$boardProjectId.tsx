@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 import { BoardChat } from '../../../components/BoardChat'
 import { BoardTaskRowItem, QuickAddTask } from '../../../components/BoardTasks'
 import { toast, toastError } from '../../../components/toast'
-import { Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
+import { ActionMenu } from '../../../components/ActionMenu'
+import { BackArrow, Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
 import {
   BOARD_PROJECT_STATUSES,
   BOARD_PROJECT_STATUS_LABEL,
@@ -61,12 +62,19 @@ function BoardProjectPage() {
   return (
     <div className="space-y-9">
       <header className="rise">
-        <Link
-          to="/styre/prosjekter"
-          className="link-quiet mb-4 inline-flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-brass-strong"
-        >
-          ← Prosjekter
-        </Link>
+        <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
+          <Link to="/styre/prosjekter" className="back-link">
+            <BackArrow />
+            Prosjekter
+          </Link>
+          <ActionMenu
+            title={p.title}
+            items={[
+              { label: 'Rediger prosjektet', hint: 'Tittel, mål, ansvarlig, frist og konsert', icon: 'sliders', onSelect: () => setEditing(true) },
+              { label: 'Slett prosjektet', icon: 'close', tone: 'danger', onSelect: () => setConfirmDelete(true) },
+            ]}
+          />
+        </div>
 
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0">
@@ -97,12 +105,6 @@ function BoardProjectPage() {
             )}
           </div>
 
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <Button onClick={() => setEditing(true)}>Rediger</Button>
-            <Button variant="danger" onClick={() => setConfirmDelete(true)}>
-              Slett
-            </Button>
-          </div>
         </div>
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -127,7 +129,6 @@ function BoardProjectPage() {
           ))}
         </div>
 
-        <div className="staff-rule mt-7 w-full opacity-50" aria-hidden />
       </header>
 
       <section className="rise" style={{ animationDelay: '80ms' }}>
@@ -148,7 +149,7 @@ function BoardProjectPage() {
         </div>
 
         {data.open.length + data.inProgress.length + data.done.length === 0 ? (
-          <div className="sheet">
+          <div className="surface-group">
             <EmptyState title="Ingen oppgaver i prosjektet">
               Del opp arbeidet i det som faktisk må gjøres — så ser dere fremdriften.
             </EmptyState>
@@ -158,7 +159,7 @@ function BoardProjectPage() {
             {data.open.length > 0 && (
               <div>
                 <h3 className="kicker mb-2">Åpne</h3>
-                <ul className="sheet overflow-hidden">
+                <ul className="surface-group overflow-hidden">
                   {data.open.map((task) => (
                     <BoardTaskRowItem
                       key={task.id}
@@ -174,7 +175,7 @@ function BoardProjectPage() {
             {data.inProgress.length > 0 && (
               <div>
                 <h3 className="kicker mb-2">Pågår</h3>
-                <ul className="sheet overflow-hidden">
+                <ul className="surface-group overflow-hidden">
                   {data.inProgress.map((task) => (
                     <BoardTaskRowItem
                       key={task.id}
@@ -199,7 +200,7 @@ function BoardProjectPage() {
                   <span aria-hidden>{showDone ? '−' : '+'}</span>
                 </button>
                 {showDone && (
-                  <ul className="sheet overflow-hidden">
+                  <ul className="surface-group overflow-hidden">
                     {data.done.map((task) => (
                       <BoardTaskRowItem
                         key={task.id}

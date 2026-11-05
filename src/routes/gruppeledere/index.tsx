@@ -1,5 +1,6 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { Avatar, EmptyState, Kicker, Stamp } from '../../components/ui'
+import { Icon } from '../../components/Icons'
+import { Avatar, EmptyState, PageHeader, Stamp } from '../../components/ui'
 import { getLeaderOverview } from '../../server/gruppeledere'
 
 /**
@@ -18,24 +19,31 @@ function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      <header className="rise">
-        <Kicker className="mb-2">Stemmegruppene</Kicker>
-        <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Gruppeledere</h1>
-        <p className="mt-3 max-w-2xl text-sm text-ink-soft">
-          Her ser du hvem som leder hvilke stemmer. Bruk chatten til å koordinere på tvers av seksjonene.
-        </p>
-      </header>
+      <PageHeader
+        className="rise"
+        title="Gruppeledere"
+        summary="Hvem som leder hvilke stemmer. Bruk chatten til å koordinere på tvers av seksjonene."
+        action={
+          <Link
+            to="/gruppeledere/chat"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-[9px] bg-brass px-4 text-sm font-medium text-paper-raised transition-colors hover:bg-brass-strong pointer-coarse:min-h-11 dark:text-paper"
+          >
+            <Icon name="forum" size={17} />
+            Chat
+          </Link>
+        }
+      />
 
       {leaders.length === 0 ? (
-        <div className="sheet rise" style={{ animationDelay: '60ms' }}>
+        <div className="surface-group rise" style={{ animationDelay: '60ms' }}>
           <EmptyState title="Ingen gruppeledere er registrert">
             Leiarbindingene settes under Medlemmer. Uten en binding finnes ikke dette området for noen.
           </EmptyState>
         </div>
       ) : (
-        <ul className="rise grid gap-3 sm:grid-cols-2" style={{ animationDelay: '60ms' }}>
+        <ul className="rise list-group md:grid md:grid-cols-2 md:[&>li:nth-child(2)]:border-t-0 md:[&>li:nth-child(even)]:border-l md:[&>li:nth-child(even)]:border-line" style={{ animationDelay: '60ms' }}>
           {leaders.map((leader) => (
-            <li key={leader.userId} className="sheet flex items-start gap-3 p-4">
+            <li key={leader.userId} className="flex items-start gap-3 px-4 py-4 sm:px-5">
               <Avatar name={leader.name} />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-2">
