@@ -3004,3 +3004,38 @@ button.chat-reply-ref:hover {
     height: 1.2rem;
   }
 }
+
+/* ---------- Administrasjon: medlemmer, innstillinger og filtilganger (R3-E) ----------
+   /medlemmer, /innstillinger og /innstillinger/nedlastinger. Disse flatene
+   bruker ellers `.list-group`/`.surface-group`, ActionMenu og BottomSheet;
+   her står bare det som er særegent for dem. */
+@layer components {
+  /* Underrader i en utvidet rad (invitasjonene under «Invitasjoner · N»). */
+  .admin-subrows {
+    border-top: 1px solid var(--line);
+    background: color-mix(in srgb, var(--paper-sunken) 35%, transparent);
+  }
+  .admin-subrows > li + li {
+    border-top: 1px solid var(--line);
+  }
+}
+@layer components {
+  /* Seksjonene på /innstillinger: hopp lander under toppmenyen. */
+  .admin-anchor {
+    scroll-margin-top: calc(var(--shell-top) + 1rem);
+  }
+  /* Rollematrisen (md+): rettighetskolonnen står fast når rollene ruller
+     sidelengs (mange egendefinerte roller). */
+  .admin-matrix-sticky {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 13rem;
+    max-width: 18rem;
+    background: var(--paper-raised);
+  }
+  .admin-matrix th:not(.admin-matrix-sticky),
+  .admin-matrix td {
+    min-width: 4.75rem;
+  }
+}
