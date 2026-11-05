@@ -141,3 +141,53 @@ export function pageLabel(start: number, total: number, perView: 1 | 2): string 
   const pages = viewPages(Math.min(start, total), total, perView)
   return pages.length === 2 ? `side ${pages[0]}–${pages[1]} av ${total}` : `side ${pages[0]} av ${total}`
 }
+
+// ---------- Hjelp for bladingen ----------
+
+/**
+ * To måter å bla på: rullevisningen (sveip = neste stykke) og sidevisningene
+ * «Hel side» og «To sider» (trykk/sveip = neste side). Hjelpen vises én gang
+ * per måte — de to sidevisningene blar likt og deler den.
+ */
+export type GestureMode = 'scroll' | 'paged'
+
+export function gestureModeOf(view: StandView): GestureMode {
+  return view === 'scroll' ? 'scroll' : 'paged'
+}
+
+export function hintStorageKey(mode: GestureMode): string {
+  return `tb-stand-hint-${mode}`
+}
+
+/** Verdien som lagres når hjelpen er sett. */
+export const HINT_SEEN = '1'
+
+/** Skal hjelpen vises av seg selv? Bare om den aldri er sett (eller lagringen er tom). */
+export function shouldShowHint(stored: string | null | undefined): boolean {
+  return stored !== HINT_SEEN
+}
+
+export type GestureHint = {
+  /** Trykkfeltene fra venstre mot høyre; rullevisningen har bare ett. */
+  zones: Array<{ zone: 'prev' | 'center' | 'next'; label: string }>
+  swipe: string
+  more: string
+}
+
+export function gestureHint(mode: GestureMode): GestureHint {
+  return mode === 'paged'
+    ? {
+        zones: [
+          { zone: 'prev', label: 'Forrige side' },
+          { zone: 'center', label: 'Vis menyene' },
+          { zone: 'next', label: 'Neste side' },
+        ],
+        swipe: 'Sveip sidelengs for å bla en side.',
+        more: 'Fra siste side går du videre til neste stykke. Menyene trekker seg unna etter noen sekunder.',
+      }
+    : {
+        zones: [{ zone: 'center', label: 'Trykk for å vise eller skjule menyene' }],
+        swipe: 'Sveip sidelengs for neste eller forrige stykke.',
+        more: 'Rull opp og ned for å lese. Bladvendere ruller en skjerm om gangen.',
+      }
+}

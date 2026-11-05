@@ -82,3 +82,75 @@ export function startIndex(entries: StandEntry[], fileId: string | null | undefi
   const index = entries.findIndex((e) => e.fileId === fileId)
   return index === -1 ? 0 : index
 }
+
+// ---------- Hvor man var ----------
+
+/**
+ * Leseposisjonen på stativet: hvilket stykke (fila) og hvilken side man stod
+ * på, husket per bruker og prosjekt i localStorage (virker uten nett). Et
+ * avbrudd på øvelsen — en telefon, en pause, en iPad som ble lagt bort — skal
+ * ikke bety å lete frem stedet igjen. Adressen endres aldri (se ruta).
+ */
+export type StandPosition = { fileId: string; page: number; savedAt: number }
+
+/** Eldre enn dette er en posisjon fra et annet prosjektløp; da starter man forfra. */
+export const POSITION_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000
+
+export function standPositionKey(userId: string, projectId: string): string {
+  return `tb-stand-pos:${userId}:${projectId}`
+}
+
+export function serializeStandPosition(position: StandPosition): string {
+  return JSON.stringify(position)
+}
+
+/** Tåler alt localStorage kan finne på å gi tilbake; ugyldig blir `null`. */
+export function parseStandPosition(raw: string | null | undefined): StandPosition | null {
+  if (!raw) return null
+  try {
+    const value = JSON.parse(raw) as Partial<StandPosition> | null
+    if (!value || typeof value !== 'object') return null
+    const { fileId, page, savedAt } = value
+    if (typeof fileId !== 'string' || !fileId) return null
+    if (typeof page !== 'number' || !Number.isFinite(page) || page < 1) return null
+    if (typeof savedAt !== 'number' || !Number.isFinite(savedAt)) return null
+    return { fileId, page: Math.floor(page), savedAt }
+  } catch {
+    return null
+  }
+}
+
+export type StandStart = {
+  index: number
+  page: number
+  /** Fortsetter vi fra en lagret posisjon (og ikke fra starten)? Da vises «Fra starten». */
+  resumed: boolean
+}
+
+/**
+ * Hvor stativet åpner:
+ * 1. `?fil=` som finnes på stativet vinner alltid — man ba om akkurat det
+ *    stykket. Er det samme fil som den lagrede, fortsetter man på siden.
+ * 2. Ellers den lagrede posisjonen, om fila fortsatt ligger på stativet og
+ *    posisjonen ikke er for gammel.
+ * 3. Ellers første side i første stykke.
+ */
+export function resolveStart(
+  entries: StandEntry[],
+  opts: { requestedFileId?: string | null; saved?: StandPosition | null; now: number },
+): StandStart {
+  const fresh = opts.saved && opts.now - opts.saved.savedAt <= POSITION_MAX_AGE_MS ? opts.saved : null
+  const requested = opts.requestedFileId ? entries.findIndex((e) => e.fileId === opts.requestedFileId) : -1
+  if (requested !== -1) {
+    const page = fresh && fresh.fileId === opts.requestedFileId ? fresh.page : 1
+    return { index: requested, page, resumed: page > 1 }
+  }
+  const index = fresh ? entries.findIndex((e) => e.fileId === fresh.fileId) : -1
+  if (index === -1 || !fresh) return { index: 0, page: 1, resumed: false }
+  return { index, page: fresh.page, resumed: !(index === 0 && fresh.page === 1) }
+}
+
+/** «II. Benedictus, side 3» — til «Fortsatt fra …». */
+export function resumeLabel(entry: Pick<StandEntry, 'number' | 'title'>, page: number): string {
+  return `${entry.number} ${entry.title}${page > 1 ? `, side ${page}` : ''}`
+}

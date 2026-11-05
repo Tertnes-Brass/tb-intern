@@ -13,6 +13,7 @@ import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist/lega
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadPdfJs } from '../../lib/pdf-loader'
 import { fitHeight, viewPages, viewsToRender } from '../../lib/stand-view'
+import { Icon } from '../Icons'
 
 // ---------- Lasting ----------
 
@@ -427,10 +428,41 @@ function FittedPage({ page, pageNumber, height }: { page: PDFPageProxy | null; p
 
 // ---------- Små ting ----------
 
-export function Spinner() {
+/** Hvor lenge vi venter før «Prøv igjen» dukker opp under en lasting som henger. */
+const SLOW_SPINNER_MS = 10_000
+
+/**
+ * Lasting. Med `onRetry` får en lasting som henger (en forespørsel som aldri
+ * svarer, et nett som så vidt er der) en vei videre etter en stund.
+ */
+export function Spinner({ onRetry }: { onRetry?: () => void } = {}) {
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    if (!onRetry) return
+    const timer = window.setTimeout(() => setSlow(true), SLOW_SPINNER_MS)
+    return () => window.clearTimeout(timer)
+  }, [onRetry])
   return (
-    <div className="grid min-h-[60dvh] place-items-center">
-      <span className="spinner text-(--stand-accent)" aria-label="Laster noten" />
+    <div className="grid h-full min-h-[60dvh] place-items-center px-6 text-center">
+      <div className="flex flex-col items-center">
+        <span className="spinner text-(--stand-accent)" aria-label="Laster noten" />
+        {slow && onRetry && (
+          <>
+            <p className="mt-5 text-sm text-(--stand-muted)">Det tar lang tid å hente noten.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setSlow(false)
+                onRetry()
+              }}
+              className="mt-3 inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-(--stand-line-strong) px-5 text-sm font-semibold text-(--stand-accent) transition-colors hover:bg-(--stand-hover)"
+            >
+              <Icon name="refresh" size={18} />
+              Prøv igjen
+            </button>
+          </>
+        )}
+      </div>
     </div>
   )
 }
