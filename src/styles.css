@@ -590,6 +590,30 @@ select.field-input {
   }
 }
 
+/* Berøringsskjerm, uansett bredde (iPad stående/liggende): alle felt og
+   nedtrekkslister er minst 44 px høye og har 16 px skrift. iPadOS-Safari
+   zoomer også inn på et felt med mindre skrift når siden ikke er i
+   «skrivebordsmodus», og et 30 px felt (rekkefølge i /innstillinger, oppmøte
+   på /kalender/:id) var et bomtrykk på et notestativ.
+   I `@layer base` med !important med vilje: flere kompakte felt har
+   `!py-1.5 !text-xs` i JSX, og et !important-utility i Tailwinds lag slår en
+   ulaget !important-regel. For !important gjelder lagrekkefølgen omvendt —
+   et TIDLIGERE lag vinner — så base-laget slår utilities-laget her. Med mus
+   (`pointer: fine`) er alt som før, kompakt. Tekstfelt (textarea) får bare
+   skriftstørrelsen; høyden deres styres av `rows`/`min-h-*`. */
+@layer base {
+  @media (pointer: coarse) {
+    .field-input,
+    select {
+      font-size: 16px !important;
+    }
+    input.field-input:not([type='checkbox']):not([type='radio']):not([type='range']),
+    select {
+      min-height: 44px !important;
+    }
+  }
+}
+
 /* ---------- Chat: kode og svarreferanser (#80) ----------
    Chatten formaterer BARE backticks (`src/lib/chat-format.ts`) — ingen annen
    markdown. Inline kode brekker med teksten, mens blokker heller scroller
@@ -717,34 +741,63 @@ select.field-input {
 .area-nav-wrap {
   margin: -0.25rem 0 1.75rem;
 }
+/* Rulleren går kant til kant (negativ marg), så pillen lengst ut forsvinner
+   under skjermkanten i stedet for å klippes midt i luften. Ruller lista,
+   toner kanten den kan rulles mot ut (`data-overflow` settes av `AreaNav`), så
+   det er tydelig at det finnes mer — før forsvant «Dokumenter» i Styre bare
+   ut over kanten på en iPhone. */
 .area-nav {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0;
   margin: 0 -1rem;
-  padding: 0 1rem 0.25rem;
+  /* Teksten i første pille står på linje med innholdet under (1 rem inn);
+     den aktive pillens bakgrunn stikker litt ut i margen, som i iOS. */
+  padding: 0 0.4rem 0.25rem;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
+  --area-fade: 2.25rem;
+}
+.area-nav[data-overflow='end'] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--area-fade)), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--area-fade)), transparent);
+}
+.area-nav[data-overflow='start'] {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - var(--area-fade)), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - var(--area-fade)), transparent);
+}
+.area-nav[data-overflow='both'] {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--area-fade), #000 calc(100% - var(--area-fade)), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 var(--area-fade), #000 calc(100% - var(--area-fade)), transparent);
 }
 .area-nav::-webkit-scrollbar {
   display: none;
 }
+/* Pillene: 44 pt høye (minstemålet for et trykkmål). Bare den aktive er en
+   fylt pille med ramme; de andre er ren tekst med samme luft (rammen er der,
+   men gjennomsiktig, så ingenting hopper ved bytte). Med rammer rundt alle fem
+   var Styre-raden 467 px — nå får Oppgaver · Prosjekter · Møter · Chat ·
+   Dokumenter plass på en 393 pt iPhone. Med ulest-merket på Chat, eller på en
+   smalere telefon, ruller den siste inn under tonen. */
 .area-link {
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 0.4rem;
-  min-height: 2.5rem;
-  padding: 0 1rem;
-  border: 1px solid var(--line-strong);
+  gap: 0.35rem;
+  min-height: 2.75rem;
+  padding: 0 0.55rem;
+  border: 1px solid transparent;
   border-radius: 9999px;
   white-space: nowrap;
-  font-size: 0.86rem;
+  font-size: 0.82rem;
   font-weight: 500;
   color: var(--ink-soft);
   text-decoration: none;
   transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+}
+.area-link:active {
+  background: var(--paper-sunken);
 }
 .area-link[data-status='active'] {
   border-color: var(--brass);
@@ -766,6 +819,7 @@ select.field-input {
     min-height: 0;
     padding: 0;
     border: 0;
+    font-weight: 500;
     border-radius: 0;
     font-family: var(--font-mono);
     font-size: 0.68rem;
@@ -775,6 +829,9 @@ select.field-input {
   }
   .area-link:hover {
     color: var(--ink);
+  }
+  .area-link:active {
+    background: transparent;
   }
   .area-link[data-status='active'] {
     background: transparent;
@@ -1528,7 +1585,7 @@ dialog.stand-sheet:focus-visible {
   }
   @media (pointer: coarse) {
     .segmented-option {
-      min-height: 40px;
+      min-height: 44px;
     }
   }
 }
@@ -2354,39 +2411,6 @@ button.chat-reply-ref:hover {
   }
 }
 
-/* Handlingsarket (melding og kanal). */
-.chat-action-list {
-  margin: 0 -0.5rem;
-}
-.chat-action-list li + li {
-  border-top: 1px solid var(--line);
-}
-.chat-action {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  width: 100%;
-  min-height: 52px;
-  padding: 0 0.75rem;
-  border-radius: 12px;
-  font-size: 1rem;
-  color: var(--ink);
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 0.15s;
-}
-.chat-action:hover,
-.chat-action:active {
-  background: var(--paper-sunken);
-}
-.chat-action svg {
-  color: var(--ink-faint);
-}
-.chat-action-danger,
-.chat-action-danger svg {
-  color: var(--danger);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .chat-skeleton,
   .chat-spinner {
@@ -2476,94 +2500,15 @@ button.chat-reply-ref:hover {
     opacity: 0.5;
     pointer-events: none;
   }
+  /* 44 pt på berøringsskjerm — også på iPad, uansett bredde. Sporet har 2 px
+     luft + 1 px ramme rundt, så hele kontrollen blir 50 px; selve trykkflaten
+     (valget) er 44. */
   @media (pointer: coarse) {
     .segmented-option {
-      min-height: 2.5rem;
+      min-height: 2.75rem;
       padding: 0 1rem;
       font-size: 0.9rem;
     }
-  }
-
-  /* «Administrer»-menyen (ActionMenu.tsx) */
-  .action-pop {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 6px);
-    z-index: 40;
-    min-width: 17rem;
-    padding: 0.35rem;
-    background: var(--paper-raised);
-    border: 1px solid var(--line-strong);
-    border-radius: 12px;
-    box-shadow: var(--shadow-lift);
-    animation: fadein 0.14s ease-out both;
-  }
-  .action-menu-item {
-    display: flex;
-    width: 100%;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.55rem 0.7rem;
-    border-radius: 8px;
-    text-align: left;
-    font-size: 0.88rem;
-    font-weight: 500;
-    color: var(--ink);
-    cursor: pointer;
-    transition: background-color 0.12s;
-  }
-  .action-menu-item:hover,
-  .action-menu-item:focus-visible {
-    background: var(--paper-sunken);
-    outline: none;
-  }
-  .action-menu-item:disabled {
-    opacity: 0.45;
-    pointer-events: none;
-  }
-  .action-menu-icon {
-    color: var(--ink-faint);
-  }
-  .action-menu-hint {
-    display: block;
-    margin-top: 1px;
-    font-size: 0.74rem;
-    font-weight: 400;
-    color: var(--ink-faint);
-  }
-  .action-menu-danger,
-  .action-menu-danger .action-menu-icon {
-    color: var(--danger);
-  }
-  .action-menu-sep {
-    height: 1px;
-    margin: 0.35rem 0.4rem;
-    background: var(--line);
-  }
-  .action-sheet-list {
-    overflow: hidden;
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    background: var(--paper-raised);
-  }
-  .action-sheet-list .action-menu-item {
-    min-height: 3.25rem;
-    padding: 0.7rem 1rem;
-    border-radius: 0;
-    font-size: 1rem;
-  }
-  .action-sheet-list .action-menu-item + .action-menu-item {
-    border-top: 1px solid var(--line);
-  }
-  .action-sheet-list .action-menu-sep {
-    height: 6px;
-    margin: 0;
-    background: var(--paper-sunken);
-    border-top: 1px solid var(--line);
-    border-bottom: 1px solid var(--line);
-  }
-  .action-sheet-list .action-menu-hint {
-    font-size: 0.8rem;
   }
 
   /* Den store messingknappen «Åpne notestativet» — primærhandlingen i noteområdet. */
@@ -2614,4 +2559,313 @@ button.chat-reply-ref:hover {
 @utility aside-sticky {
   position: sticky;
   top: calc(56px + 1.25rem);
+}
+
+/* ---------- Felles ark, handlingsrader og områdemenyen (runde 3) ----------
+   Ett mønster for alle ark og dialoger (ui.tsx: `SheetHeader`, `BottomSheet`,
+   `Modal`, `SheetActions`/`SheetAction`; ActionMenu.tsx): grep øverst på
+   bunnark, tittel til venstre med synlig lukkeknapp til høyre (44 pt «×», eller
+   «Ferdig» der valgene gjelder med en gang), en kropp som er det eneste som
+   ruller, og en valgfri bunnlinje med primærhandlingen festet over
+   hjem-indikatoren. Handlingsradene er 52 pt høye, ikon + etikett (+ én linje
+   forklaring), og ødeleggende valg står i `--danger` nederst etter et skille.
+   I `@layer components`, så Tailwind-utilities på samme element vinner. */
+@layer components {
+  .sheet-head {
+    flex-shrink: 0;
+    padding: 0.625rem 1.25rem 0;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  /* Modal: en sentrert dialog fra 641 px (der skal teksten kunne markeres og
+     siden ikke dras), et bunnark under det. */
+  .sheet-head-modal {
+    padding: 1.25rem 1.5rem 0;
+    touch-action: auto;
+    -webkit-user-select: auto;
+    user-select: auto;
+  }
+  @media (min-width: 640px) {
+    .sheet-head-modal {
+      padding-left: 1.75rem;
+      padding-right: 1.75rem;
+    }
+  }
+  @media (max-width: 640px) {
+    .sheet-head-modal {
+      padding-top: 0.625rem;
+      touch-action: none;
+    }
+  }
+  .sheet-head-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .sheet-title {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+    /* Lukkeknappen er høyere enn én linje tittel: midtstill linjen mot den. */
+    padding-top: 0.3rem;
+  }
+  .sheet-subtitle {
+    display: -webkit-box;
+    margin-top: 0.2rem;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 0.85rem;
+    line-height: 1.35;
+    color: var(--ink-soft);
+  }
+  .sheet-close {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    margin: -0.1rem -0.6rem 0 0;
+    border-radius: 9999px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s, transform 0.1s;
+  }
+  @media (hover: hover) {
+    .sheet-close:hover {
+      background: var(--paper-sunken);
+      color: var(--ink);
+    }
+    .sheet-close-text:hover {
+      background: var(--brass-soft);
+    }
+  }
+  .sheet-close:active {
+    background: var(--paper-sunken);
+    transform: scale(0.95);
+  }
+  .sheet-close-text {
+    flex-shrink: 0;
+    min-height: 2.25rem;
+    margin: -0.1rem -0.6rem 0 0;
+    padding: 0 0.6rem;
+    border-radius: 9px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--brass-strong);
+    cursor: pointer;
+    transition: background-color 0.15s;
+  }
+  .sheet-close-text:active {
+    background: var(--brass-soft);
+  }
+  /* Bunnark og alt med finger: 44 pt. */
+  .sheet-head-bottom .sheet-close,
+  .sheet-head-bottom .sheet-close-text {
+    margin-top: -0.35rem;
+  }
+  .sheet-head-bottom .sheet-close {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+  .sheet-head-bottom .sheet-close-text {
+    min-height: 2.75rem;
+  }
+  @media (pointer: coarse) {
+    .sheet-close {
+      width: 2.75rem;
+      height: 2.75rem;
+      margin-top: -0.35rem;
+    }
+    .sheet-close-text {
+      min-height: 2.75rem;
+      margin-top: -0.35rem;
+    }
+  }
+
+  /* flex-auto (ikke flex-1): flex-basis 0 % blir 0 px i WebKit på iPhone/
+     iPad, som regner dialogens høyde som bestemt. Med overflow-y: auto er
+     minimumshøyden også 0, så kroppen kollapset til bare padding. */
+  .sheet-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.875rem 1.25rem 1.25rem;
+  }
+  .sheet-body-modal {
+    padding: 1rem 1.5rem 1.5rem;
+  }
+  @media (min-width: 640px) {
+    .sheet-body-modal {
+      padding-left: 1.75rem;
+      padding-right: 1.75rem;
+    }
+  }
+  .has-footer > .sheet-body {
+    padding-bottom: 1rem;
+  }
+  /* Bunnlinjen ruller aldri bort; hjem-indikatoren dekkes av dialogens egen
+     `padding-bottom: env(safe-area-inset-bottom)`. */
+  .sheet-footer {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--line);
+    background: var(--paper-raised);
+  }
+  .sheet-dialog:not(.sheet-dialog-bottom) > .sheet-footer {
+    padding: 0.875rem 1.5rem;
+  }
+  @media (min-width: 640px) {
+    .sheet-dialog:not(.sheet-dialog-bottom) > .sheet-footer {
+      padding-left: 1.75rem;
+      padding-right: 1.75rem;
+    }
+  }
+
+  /* Handlingsrader. */
+  .sheet-actions {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper-raised);
+  }
+  .sheet-actions > * + * {
+    border-top: 1px solid var(--line);
+  }
+  .sheet-actions > .sheet-actions-sep {
+    height: 6px;
+    background: var(--paper-sunken);
+    border-bottom: 1px solid var(--line);
+  }
+  .sheet-actions > .sheet-actions-sep + * {
+    border-top: 0;
+  }
+  .sheet-action {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.85rem;
+    min-height: 3.25rem;
+    padding: 0.65rem 1rem;
+    text-align: left;
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--ink);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.12s;
+  }
+  @media (hover: hover) {
+    .sheet-action:hover {
+      background: color-mix(in srgb, var(--paper-sunken) 60%, transparent);
+    }
+  }
+  .sheet-action:active {
+    background: var(--paper-sunken);
+  }
+  .sheet-action:focus-visible {
+    outline: 2px solid var(--brass);
+    outline-offset: -2px;
+  }
+  .sheet-action:disabled,
+  .sheet-action[aria-disabled='true'] {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  /* En rad som ikke er en knapp (verdi + egen kontroll, f.eks. «Lagret offline»). */
+  .sheet-action.is-static {
+    cursor: default;
+    background: transparent;
+  }
+  .sheet-action-icon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    width: 1.5rem;
+    color: var(--ink-soft);
+  }
+  .sheet-action-hint {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.8rem;
+    font-weight: 400;
+    line-height: 1.35;
+    color: var(--ink-soft);
+  }
+  .sheet-action-value {
+    flex-shrink: 0;
+    font-size: 0.875rem;
+    font-weight: 400;
+    color: var(--ink-soft);
+  }
+  .sheet-action-danger,
+  .sheet-action-danger .sheet-action-icon {
+    color: var(--danger);
+  }
+  /* To grupper rader etter hverandre (f.eks. «Logg ut» for seg). */
+  .sheet-actions + .sheet-actions {
+    margin-top: 1rem;
+  }
+
+  /* ActionMenu med mus: samme rader, kompakte, i en liten meny under knappen. */
+  .action-pop {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 40;
+    min-width: 17rem;
+    padding: 0.35rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--line-strong);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lift);
+    animation: fadein 0.14s ease-out both;
+  }
+  .action-pop .sheet-actions {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .action-pop .sheet-action {
+    min-height: 0;
+    padding: 0.55rem 0.7rem;
+    border-top: 0;
+    border-radius: 8px;
+    font-size: 0.88rem;
+  }
+  .action-pop .sheet-action:focus-visible {
+    background: var(--paper-sunken);
+    outline: none;
+  }
+  .action-pop .sheet-action-icon {
+    width: 1.2rem;
+  }
+  .action-pop .sheet-action-hint {
+    font-size: 0.74rem;
+  }
+  .action-pop .sheet-actions > .sheet-actions-sep {
+    height: 1px;
+    margin: 0.35rem 0.4rem;
+    border: 0;
+    background: var(--line);
+  }
+}
+
+/* Ikonene i handlingsradene har samme størrelse, uansett hvor glyfen kom fra
+   (Icons.tsx er 19 px, chattens egne glyfer er tegnet i 14). */
+@layer components {
+  .sheet-action-icon > svg {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
 }

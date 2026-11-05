@@ -17,7 +17,7 @@ import { type MentionUser, mentionPlainText, toMarkers } from '../lib/mentions'
 import { ChatText } from './ChatText'
 import { MentionTextarea } from './MentionTextarea'
 import { toast, toastError } from './toast'
-import { Avatar, BottomSheet, Button, EmptyState, Field, Kicker, Modal } from './ui'
+import { Avatar, BottomSheet, Button, EmptyState, Field, Kicker, Modal, SheetAction, SheetActionSeparator, SheetActions } from './ui'
 
 /**
  * Chat-flaten, uavhengig av hvem som eier meldingene.
@@ -957,17 +957,19 @@ function MessageActionsSheet({
       open={message !== null}
       onClose={onClose}
       label="Valg for meldingen"
-      header={
-        message && (
-          <div className="pb-1">
-            <p className="text-[0.74rem] text-ink-faint">
-              <span className="font-semibold text-ink-soft">{mine ? 'Du' : (message.authorName ?? 'Ukjent')}</span>
-              <span className="font-mono tabular-nums"> · {formatTime(message.createdAt)}</span>
-            </p>
-            <p className="mt-0.5 line-clamp-2 text-[0.9rem] text-ink">{excerpt}</p>
-          </div>
+      title={
+        message ? (
+          <>
+            {mine ? 'Du' : (message.authorName ?? 'Ukjent')}
+            <span className="ml-2 align-middle font-sans text-[0.8rem] font-normal tabular-nums text-ink-soft">
+              {formatTime(message.createdAt)}
+            </span>
+          </>
+        ) : (
+          'Melding'
         )
       }
+      subtitle={excerpt}
     >
       {confirming ? (
         <div className="space-y-3">
@@ -991,37 +993,37 @@ function MessageActionsSheet({
           </div>
         </div>
       ) : (
-        <ul className="chat-action-list">
+        <SheetActions>
           {canReply && (
-            <li>
-              <button
-                type="button"
-                onClick={(e) => onReply(e.currentTarget.closest('dialog'))}
-                className="chat-action"
-              >
-                <ReplyGlyph />
-                Svar
-              </button>
-            </li>
+            <SheetAction
+              icon={<ReplyGlyph />}
+              label="Svar"
+              onClick={(e) => onReply(e.currentTarget.closest('dialog'))}
+            />
           )}
-          <li>
-            <button type="button" onClick={onCopy} className="chat-action">
+          <SheetAction
+            icon={
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
                 <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
                 <path d="M10.5 3.5v-.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h.5" stroke="currentColor" strokeWidth="1.4" />
               </svg>
-              Kopier tekst
-            </button>
-          </li>
+            }
+            label="Kopier tekst"
+            onClick={onCopy}
+          />
           {mine && (
-            <li>
-              <button type="button" onClick={() => setConfirming(true)} className="chat-action chat-action-danger">
-                <TrashGlyph />
-                Slett meldingen
-              </button>
-            </li>
+            <>
+              <SheetActionSeparator />
+              <SheetAction
+                tone="danger"
+                icon={<TrashGlyph />}
+                label="Slett meldingen"
+                hint="Slettes for alle i kanalen"
+                onClick={() => setConfirming(true)}
+              />
+            </>
           )}
-        </ul>
+        </SheetActions>
       )}
     </BottomSheet>
   )
@@ -1248,28 +1250,23 @@ export function ChatPanel({
         </div>
       </div>
 
-      {/* Telefon: kanallista som bunnark. */}
+      {/* Telefon: kanallista som bunnark. «Ny kanal» står fast nederst. */}
       <BottomSheet
         open={switcherOpen}
         onClose={() => setSwitcherOpen(false)}
-        label="Kanaler"
-        header={
-          <div className="flex items-center justify-between gap-3 pb-1">
-            <div className="min-w-0">
-              <Kicker className="mb-1">{kicker}</Kicker>
-              <p className="display-title text-xl font-semibold italic leading-none text-ink">Kanaler</p>
-            </div>
-            <Button
-              size="sm"
-              onClick={() => {
-                setSwitcherOpen(false)
-                setCreating(true)
-              }}
-            >
-              <PlusGlyph />
-              Ny kanal
-            </Button>
-          </div>
+        kicker={kicker}
+        title="Kanaler"
+        footer={
+          <Button
+            className="flex-1"
+            onClick={() => {
+              setSwitcherOpen(false)
+              setCreating(true)
+            }}
+          >
+            <PlusGlyph />
+            Ny kanal
+          </Button>
         }
       >
         <ChannelList channels={channels} activeChannel={active?.channel} onOpen={openChannel} />
@@ -1280,44 +1277,35 @@ export function ChatPanel({
         open={channelMenuOpen && !!customId}
         onClose={() => setChannelMenuOpen(false)}
         label="Kanalvalg"
-        header={
-          active && (
-            <div className="pb-1">
-              <p className="text-[0.74rem] text-ink-faint">{KIND_LABEL[active.kind]}</p>
-              <p className="display-title text-lg font-semibold text-ink">{active.title}</p>
-            </div>
-          )
-        }
+        kicker={active ? KIND_LABEL[active.kind] : undefined}
+        title={active?.title ?? 'Kanal'}
       >
         {active && customId && (
-          <ul className="chat-action-list">
+          <SheetActions>
             {!active.archived && (
-              <li>
-                <button
-                  type="button"
-                  className="chat-action"
-                  onClick={() => {
-                    setChannelMenuOpen(false)
-                    setRenaming(active)
-                  }}
-                >
-                  Gi nytt navn
-                </button>
-              </li>
-            )}
-            <li>
-              <button
-                type="button"
-                className="chat-action"
+              <SheetAction
+                icon={<PencilGlyph />}
+                label="Gi nytt navn"
                 onClick={() => {
                   setChannelMenuOpen(false)
-                  void setArchived(customId, !active.archived)
+                  setRenaming(active)
                 }}
-              >
-                {active.archived ? 'Gjenopprett kanalen' : 'Arkiver kanalen'}
-              </button>
-            </li>
-          </ul>
+              />
+            )}
+            <SheetAction
+              icon={<ArchiveGlyph />}
+              label={active.archived ? 'Gjenopprett kanalen' : 'Arkiver kanalen'}
+              hint={
+                active.archived
+                  ? 'Kanalen kommer tilbake i lista, og man kan skrive i den igjen.'
+                  : 'Historikken kan fortsatt leses, men ingen kan skrive i den.'
+              }
+              onClick={() => {
+                setChannelMenuOpen(false)
+                void setArchived(customId, !active.archived)
+              }}
+            />
+          </SheetActions>
         )}
       </BottomSheet>
 
@@ -1349,6 +1337,23 @@ export function ChatPanel({
         }}
       />
     </>
+  )
+}
+
+function PencilGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M10.5 2.5l3 3-8 8H2.5v-3z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function ArchiveGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="2" y="2.5" width="12" height="3" rx="0.8" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M3 5.5v7a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-7M6.5 8.5h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
   )
 }
 

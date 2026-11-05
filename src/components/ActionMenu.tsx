@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Icon, type IconName } from './Icons'
-import { BottomSheet } from './ui'
+import { BottomSheet, SheetAction, SheetActionSeparator, SheetActions } from './ui'
 
 export type ActionMenuItem = {
   label: string
@@ -23,14 +23,17 @@ export type ActionMenuItem = {
 export function ActionMenu({
   label = 'Administrer',
   title,
+  description,
   items,
   className = '',
   buttonClassName,
   iconOnly,
 }: {
   label?: string
-  /** Overskriften i arket på telefon (f.eks. prosjektnavnet). */
+  /** Overskriften i arket på berøringsskjerm (f.eks. prosjektnavnet). Uten den brukes `label`. */
   title?: ReactNode
+  /** Én linje under overskriften i arket (status, hvem som får varsel …). */
+  description?: ReactNode
   items: ActionMenuItem[]
   className?: string
   buttonClassName?: string
@@ -72,15 +75,15 @@ export function ActionMenu({
   }
 
   const list = (
-    <div role="menu" className={sheet ? 'action-sheet-list' : 'action-pop-list'}>
+    <SheetActions role="menu">
       {regular.map((item) => (
         <MenuRow key={item.label} item={item} onPick={pick} />
       ))}
-      {danger.length > 0 && regular.length > 0 && <div className="action-menu-sep" role="separator" />}
+      {danger.length > 0 && regular.length > 0 && <SheetActionSeparator />}
       {danger.map((item) => (
         <MenuRow key={item.label} item={item} onPick={pick} />
       ))}
-    </div>
+    </SheetActions>
   )
 
   return (
@@ -116,11 +119,8 @@ export function ActionMenu({
           open={open}
           onClose={() => setOpen(false)}
           label={label}
-          header={
-            title ? (
-              <p className="display-title mt-2 truncate text-center text-[1.05rem] font-semibold text-ink">{title}</p>
-            ) : undefined
-          }
+          title={title ?? label}
+          subtitle={description}
         >
           {list}
         </BottomSheet>
@@ -133,18 +133,14 @@ export function ActionMenu({
 
 function MenuRow({ item, onPick }: { item: ActionMenuItem; onPick: (item: ActionMenuItem) => void }) {
   return (
-    <button
-      type="button"
+    <SheetAction
       role="menuitem"
       disabled={item.disabled}
       onClick={() => onPick(item)}
-      className={`action-menu-item ${item.tone === 'danger' ? 'action-menu-danger' : ''}`}
-    >
-      {item.icon && <Icon name={item.icon} size={19} className="action-menu-icon" />}
-      <span className="min-w-0 flex-1">
-        <span className="block">{item.label}</span>
-        {item.hint && <span className="action-menu-hint">{item.hint}</span>}
-      </span>
-    </button>
+      tone={item.tone}
+      icon={item.icon && <Icon name={item.icon} size={19} />}
+      label={item.label}
+      hint={item.hint}
+    />
   )
 }
