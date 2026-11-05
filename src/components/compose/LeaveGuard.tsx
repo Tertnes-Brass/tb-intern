@@ -5,14 +5,26 @@ import { Button, Modal } from '../ui'
 
 /**
  * Spør før man forlater en skriveflate med ulagrede endringer — «Avbryt»,
- * tilbake-sveip, en fane eller en lenke. «Forkast» sletter også utkastet på
- * enheten; «Fortsett å skrive» blir stående. Lukking av vinduet/fanen får
- * nettleserens egen advarsel (`beforeunload`).
+ * tilbake-sveip, en fane eller en lenke. Tre valg: «Behold utkastet» går videre
+ * og lar teksten ligge på enheten (useLocalDraft skriver den ved avmontering),
+ * så man kan sjekke kalenderen og komme tilbake; «Forkast» sletter også
+ * utkastet på enheten; «Fortsett å skrive» blir stående. Filer som ikke er
+ * lastet opp, kan ikke lagres lokalt — da sier dialogen det. Lukking av
+ * vinduet/fanen får nettleserens egen advarsel (`beforeunload`).
  *
  * `shouldBlock` er en funksjon og ikke en verdi, så kalleren kan slå vakten av
  * i samme øyeblikk som en vellykket innsending navigerer videre.
  */
-export function LeaveGuard({ shouldBlock, onDiscard }: { shouldBlock: () => boolean; onDiscard: () => void }) {
+export function LeaveGuard({
+  shouldBlock,
+  onDiscard,
+  filesPending = false,
+}: {
+  shouldBlock: () => boolean
+  onDiscard: () => void
+  /** Bilder/vedlegg valgt, men ikke lastet opp — de blir ikke med i utkastet. */
+  filesPending?: boolean
+}) {
   const ref = useRef(shouldBlock)
   ref.current = shouldBlock
   const blocker = useBlocker({
@@ -22,12 +34,20 @@ export function LeaveGuard({ shouldBlock, onDiscard }: { shouldBlock: () => bool
   })
   const open = blocker.status === 'blocked'
   return (
-    <Modal open={open} onClose={() => blocker.reset?.()} title="Forkast endringene?">
+    <Modal open={open} onClose={() => blocker.reset?.()} title="Gå videre uten å publisere?">
       <p className="text-sm leading-relaxed text-ink-soft">
-        Det du har skrevet er ikke publisert. Forkaster du, slettes teksten også fra denne enheten.
+        Det du har skrevet er ikke publisert. Teksten er lagret på denne enheten, og ligger klar når du kommer
+        tilbake.
+        {filesPending && ' Bilder og vedlegg som ikke er lastet opp ennå, blir ikke med.'}
       </p>
-      <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse sm:justify-start">
         {/* type="button": vakten står inne i skjemaet, og en knapp uten type sender det. */}
+        <Button type="button" variant="primary" autoFocus onClick={() => blocker.reset?.()}>
+          Fortsett å skrive
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => blocker.proceed?.()}>
+          Behold utkastet og gå videre
+        </Button>
         <Button
           type="button"
           variant="danger"
@@ -37,9 +57,6 @@ export function LeaveGuard({ shouldBlock, onDiscard }: { shouldBlock: () => bool
           }}
         >
           Forkast
-        </Button>
-        <Button type="button" variant="primary" autoFocus onClick={() => blocker.reset?.()}>
-          Fortsett å skrive
         </Button>
       </div>
     </Modal>

@@ -57,7 +57,7 @@ import { Button, Modal } from './ui'
  * enheten mens man skriver (`useLocalDraft`, nøkkelen har brukerens id), og
  * kommer tilbake med «Gjenopprettet utkast fra kl. …» hvis man forlot siden
  * eller appen ble lastet på nytt. Forlater man en endret skriveflate, spør
- * `LeaveGuard` «Forkast endringene?» først. Bilder og vedlegg som ikke er
+ * `LeaveGuard` «Gå videre uten å publisere?» først. Bilder og vedlegg som ikke er
  * lastet opp ennå, er filer og kan ikke lagres slik.
  */
 
@@ -696,7 +696,13 @@ export function PostForm({
       <ComposerLayout main={main} side={side} sideOpen={optionsOpen} sideLabel="Valg for innlegget" />
     </form>
 
-      {draftKey && <LeaveGuard shouldBlock={() => dirtyRef.current && !leaving.current} onDiscard={() => local.discard()} />}
+      {draftKey && (
+        <LeaveGuard
+          shouldBlock={() => dirtyRef.current && !leaving.current}
+          onDiscard={() => local.discard()}
+          filesPending={files.length > 0 || attachmentFiles.length > 0}
+        />
+      )}
 
       {canPublish && (
         <Modal
