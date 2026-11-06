@@ -26,7 +26,8 @@ const LONG_PRESS_SLOP_PX = 10
  * Hvem som har reagert: verktøytipset med mus (de første navnene), og et langt
  * trykk på berøringsskjerm — eller høyreklikk/menytasten — åpner et ark med
  * alle, per emoji (`ReactionPeople`). Trykket som avslutter det lange trykket
- * slår IKKE reaksjonen av eller på.
+ * slår IKKE reaksjonen av eller på, og iOS markerer ikke teksten rundt
+ * (`AppBehaviour` i skallet).
  */
 export function ReactionBar({
   kind,
@@ -66,18 +67,10 @@ export function ReactionBar({
   const clearPress = () => {
     if (press.current) clearTimeout(press.current.timer)
     press.current = null
-    if (people === null) allowSelection()
   }
   useEffect(() => clearPress, [])
-  // iOS starter sin egen markering av tekst når man holder fingeren i ro — midt
-  // i det lange trykket, og over arket som nettopp åpnet seg under fingeren.
-  // Markering er av mens man holder og så lenge arket er åpent.
-  useEffect(() => {
-    if (people === null) return
-    window.getSelection()?.removeAllRanges()
-    blockSelection()
-    return allowSelection
-  }, [people])
+  // At iOS ikke markerer teksten rundt mens man holder, ordner skallet for alle
+  // knapper (`AppBehaviour`, src/lib/press-selection.ts).
   const showPeople = (emoji: string, el: HTMLElement) => {
     peopleAnchor.current = el
     setPeople(emoji)
@@ -86,7 +79,6 @@ export function ReactionBar({
     clearPress()
     // Med mus er det verktøytipset og høyreklikk som gjelder.
     if (e.pointerType === 'mouse') return
-    blockSelection()
     const el = e.currentTarget
     const timer = window.setTimeout(() => {
       if (press.current) press.current.fired = true
@@ -168,14 +160,6 @@ export function ReactionBar({
       </Popover>
     </div>
   )
-}
-
-const preventSelection = (e: Event) => e.preventDefault()
-function blockSelection() {
-  document.addEventListener('selectstart', preventSelection)
-}
-function allowSelection() {
-  document.removeEventListener('selectstart', preventSelection)
 }
 
 /**
