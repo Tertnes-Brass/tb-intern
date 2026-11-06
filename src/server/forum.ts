@@ -5,16 +5,16 @@ import { type ForumSort, FORUM_SORT_VALUES, effectiveForumSort, sortForumTopics 
 import { type SearchDoc, SEARCH_MAX_LENGTH, SEARCH_MIN_LENGTH, searchDocs } from '../lib/post-search'
 import { mentionMarker, mentionMatches, rankMentionCandidates } from '../lib/mentions'
 import { createServerFn } from '@tanstack/react-start'
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
 import { forumFollows as follows, forumTopics as topics, forumReplies as replies, forumReplyReads as reads, user } from '../db/schema'
-import { canEditForumText, canModerateForum, followsForumTopic } from '../lib/forum'
+import { FORUM_TOPIC_GONE, canEditForumText, canModerateForum, followsForumTopic } from '../lib/forum'
 import { replyPlacement } from '../lib/threads'
 import { EMPTY_MESSAGE, MAX_MEDIA_PER_ITEM, hasMessageContent, mediaLabel } from '../lib/message-media'
 import { requireMe, requirePermission } from './access'
-import { claimMessageMedia, hasMedia, mediaFor, releaseMessageMedia } from './message-media'
-import { reactionsFor } from './reaction-store'
+import { claimMessageMedia, deleteMediaFor, hasMedia, mediaFor, releaseMessageMedia } from './message-media'
+import { deleteReactionsFor, reactionsFor } from './reaction-store'
 
 const id = z.string().min(1).max(100)
 // Teksten kan være tom når innlegget har et bilde eller en GIF (`hasMessageContent`).
@@ -30,19 +30,27 @@ const PAGE_SIZE = 30
 /** Samme tekst som raden viser når kontoen er slettet. */
 const FORMER_MEMBER = 'Tidligere medlem'
 
-/** Kolonnene i en trådrad — delt av lista og søket, så tallene alltid er de samme. */
+/** Svarene i tråden, uten «slettet»-merkene. */
+const liveReplyCount = sql<number>`(select count(*) from forum_replies r where r.topic_id = ${topics.id} and r.deleted_at is null)`
+
+/**
+ * Kolonnene i en trådrad — delt av lista og søket, så tallene alltid er de
+ * samme. Et «slettet»-merke (`deleted_at`) er verken et svar eller ulest.
+ */
 function topicColumns(meId: string) {
   return {
     id: topics.id, title: topics.title, locked: topics.locked,
     author: user.name, activityAt: topics.activityAt, createdAt: topics.createdAt,
+    /** Trådstarten er slettet (tittelen og svarene står). */
+    deletedAt: topics.deletedAt,
     unreadMentionCount: sql<number>`(select count(*) from forum_replies r where r.topic_id = ${topics.id}
-      and (r.author_id is null or r.author_id <> ${meId})
+      and r.deleted_at is null and (r.author_id is null or r.author_id <> ${meId})
       and (instr(r.body, ${mentionMarker(meId)}) > 0 or instr(r.body, ${FORUM_ALL_MARKER}) > 0)
       and not exists (select 1 from forum_reply_reads rr where rr.reply_id = r.id and rr.user_id = ${meId}))`,
     unreadCount: sql<number>`(select count(*) from forum_replies r where r.topic_id = ${topics.id}
-      and (r.author_id is null or r.author_id <> ${meId})
+      and r.deleted_at is null and (r.author_id is null or r.author_id <> ${meId})
       and not exists (select 1 from forum_reply_reads rr where rr.reply_id = r.id and rr.user_id = ${meId}))`,
-    replyCount: sql<number>`(select count(*) from forum_replies where topic_id = ${topics.id})`,
+    replyCount: liveReplyCount,
   }
 }
 
@@ -50,7 +58,7 @@ function topicColumns(meId: string) {
 function topicOrder(sort: ForumSort) {
   const activity = [desc(topics.activityAt), desc(topics.id)]
   if (sort === 'nye') return [desc(topics.createdAt), ...activity]
-  if (sort === 'aktive') return [desc(sql`(select count(*) from forum_replies where topic_id = ${topics.id})`), ...activity]
+  if (sort === 'aktive') return [desc(liveReplyCount), ...activity]
   return activity
 }
 
@@ -85,8 +93,10 @@ export const searchForum = createServerFn()
     const [rows, bodies, replyRows, people] = await Promise.all([
       d.select(topicColumns(me.id)).from(topics).leftJoin(user, eq(user.id, topics.authorId)),
       d.select({ id: topics.id, body: topics.body }).from(topics),
+      // «Slettet»-merkene har verken tekst eller forfatter å finne.
       d.select({ id: replies.id, topicId: replies.topicId, body: replies.body, author: user.name })
-        .from(replies).leftJoin(user, eq(user.id, replies.authorId)).orderBy(asc(replies.createdAt), asc(replies.id)),
+        .from(replies).leftJoin(user, eq(user.id, replies.authorId)).where(isNull(replies.deletedAt))
+        .orderBy(asc(replies.createdAt), asc(replies.id)),
       // Navnene til omtalene; brukes bare til å gjøre markører om til «@Navn».
       d.select({ id: user.id, name: user.name }).from(user),
     ])
@@ -103,8 +113,9 @@ export const searchForum = createServerFn()
       body: forumPlainText(bodyOf.get(t.id) ?? '', people),
       // Raden viser ingen tekst fra innlegget — et treff der får alltid et utdrag.
       excerpt: '',
-      sender: t.author ?? FORMER_MEMBER,
-      author: t.author ?? FORMER_MEMBER,
+      // En slettet trådstart har ingen forfatter; «Tidligere medlem» skal ikke gi treff.
+      sender: t.deletedAt ? '' : t.author ?? FORMER_MEMBER,
+      author: t.deletedAt ? '' : t.author ?? FORMER_MEMBER,
       comments: repliesOf.get(t.id) ?? [],
       publishedAt: t.activityAt,
     }))
@@ -170,11 +181,11 @@ export const getForumTopic = createServerFn().validator(z.object({ id, page, sva
   const d = db()
   const topic = await d.select({ topic: topics, author: user.name }).from(topics)
     .leftJoin(user, eq(user.id, topics.authorId)).where(eq(topics.id, data.id)).get()
-  if (!topic) throw new Error('Emnet finnes ikke.')
+  if (!topic) throw new Error(FORUM_TOPIC_GONE)
   const located = data.svar ? await locateReply(data.id, data.svar) : null
   const pageNo = located?.page ?? data.page
   const columns = { reply: replies, author: user.name,
-    unread: sql<number>`(${replies.authorId} is null or ${replies.authorId} <> ${me.id}) and not exists
+    unread: sql<number>`${replies.deletedAt} is null and (${replies.authorId} is null or ${replies.authorId} <> ${me.id}) and not exists
       (select 1 from forum_reply_reads rr where rr.reply_id = ${replies.id} and rr.user_id = ${me.id})`,
   }
   const rows = await d.select(columns).from(replies).leftJoin(user, eq(user.id, replies.authorId))
@@ -194,20 +205,31 @@ export const getForumTopic = createServerFn().validator(z.object({ id, page, sva
     reactionsFor('forum_topic', [topic.topic.id], me.id),
     reactionsFor('forum_reply', replyIds, me.id),
   ])
-  const [follow, participated] = await Promise.all([
+  const [follow, participated, counts] = await Promise.all([
     d.select({ following: follows.following }).from(follows).where(and(eq(follows.topicId, data.id), eq(follows.userId, me.id))).get(),
     topic.topic.authorId === me.id ? true
       : d.select({ id: replies.id }).from(replies).where(and(eq(replies.topicId, data.id), eq(replies.authorId, me.id))).limit(1).get().then(Boolean),
+    d.select({ all: sql<number>`count(*)`, live: sql<number>`coalesce(sum(${replies.deletedAt} is null), 0)` })
+      .from(replies).where(eq(replies.topicId, data.id)).get(),
   ])
   const following = followsForumTopic({ explicit: follow?.following ?? null, participated })
-  const view = (r: (typeof rows)[number]) => ({ ...r, canEdit: canEditForumText(me, r.reply.authorId, topic.topic.locked) })
+  // Et «slettet»-merke kan verken redigeres, slettes på nytt eller få svar.
+  const view = (r: (typeof rows)[number]) => ({ ...r, deleted: r.reply.deletedAt !== null,
+    canEdit: r.reply.deletedAt === null && canEditForumText(me, r.reply.authorId, topic.topic.locked) })
+  const topicDeleted = topic.topic.deletedAt !== null
   const children = new Map<string, ReturnType<typeof view>[]>()
   for (const r of childRows) children.set(r.reply.parentId!, [...(children.get(r.reply.parentId!) ?? []), view(r)])
   return { ...topic, mentions, following,
     /** Bildene i tråden og i svarene på siden, `id → bilder` (tråd-id og svar-id-er er UUID-er og kolliderer ikke). */
     media: Object.fromEntries([...topicMedia, ...replyMedia]),
     /** Emoji-reaksjonene, `id → oppsummering` (samme nøkler som `media`). */
-    reactions: Object.fromEntries([...topicReactions, ...replyReactions]), canEdit: canEditForumText(me, topic.topic.authorId, topic.topic.locked), canModerate: canModerateForum(me.permissions),
+    reactions: Object.fromEntries([...topicReactions, ...replyReactions]),
+    deleted: topicDeleted,
+    /** Svarene i hele tråden, uten merkene — til bekreftelsen før en moderator sletter alt. */
+    replyCount: counts?.live ?? 0,
+    /** Står det svar (eller merker) i tråden? Da blir en slettet trådstart et merke, ikke borte. */
+    hasReplies: (counts?.all ?? 0) > 0,
+    canEdit: !topicDeleted && canEditForumText(me, topic.topic.authorId, topic.topic.locked), canModerate: canModerateForum(me.permissions),
     page: pageNo, focus: located ? data.svar! : null,
     replies: roots.map((r) => ({ ...view(r), children: children.get(r.reply.id) ?? [] })), hasMore: rows.length > PAGE_SIZE }
 })
@@ -226,10 +248,11 @@ export const replyToForum = createServerFn({ method: 'POST' })
     const d = db()
     await checkForumMentions(data.body)
     const target = data.replyToId
-      ? await d.select({ id: replies.id, parentId: replies.parentId, authorId: replies.authorId }).from(replies)
+      ? await d.select({ id: replies.id, parentId: replies.parentId, authorId: replies.authorId, deletedAt: replies.deletedAt }).from(replies)
         .where(and(eq(replies.id, data.replyToId), eq(replies.topicId, data.topicId))).get()
       : null
     if (data.replyToId && !target) throw new Error('Svaret du svarer på finnes ikke i denne tråden.')
+    if (target?.deletedAt) throw new Error('Svaret du svarer på er slettet.')
     const placement = target ? replyPlacement(target) : { parentId: null, replyToId: null }
     const replyId = crypto.randomUUID()
     const now = Date.now()
@@ -266,16 +289,117 @@ export const editForumText = createServerFn({ method: 'POST' }).validator(z.obje
     : await d.select({ body: replies.body, topicId: replies.topicId, title: topics.title }).from(replies)
       .innerJoin(topics, eq(topics.id, replies.topicId)).where(eq(replies.id, data.id)).get()
   if (data.kind === 'topic') {
-    const result = await d.update(topics).set({ body: data.body, updatedAt: Date.now() }).where(and(eq(topics.id, data.id),
+    const result = await d.update(topics).set({ body: data.body, updatedAt: Date.now() }).where(and(eq(topics.id, data.id), isNull(topics.deletedAt),
       moderator ? undefined : and(eq(topics.authorId, me.id), eq(topics.locked, false)))).returning({ id: topics.id })
     if (!result.length) throw new Error('Du kan ikke redigere denne teksten.')
   } else {
-    const result = await d.update(replies).set({ body: data.body, updatedAt: Date.now() }).where(and(eq(replies.id, data.id),
+    const result = await d.update(replies).set({ body: data.body, updatedAt: Date.now() }).where(and(eq(replies.id, data.id), isNull(replies.deletedAt),
       moderator ? undefined : and(eq(replies.authorId, me.id), sql`exists (select 1 from forum_topics where id = ${replies.topicId} and locked = 0)`))).returning({ id: replies.id })
     if (!result.length) throw new Error('Du kan ikke redigere denne teksten.')
   }
   if (before) await notifyForum({ topicId: before.topicId, topicTitle: before.title, replyId: data.kind === 'reply' ? data.id : null, authorId: me.id,
     authorName: me.name, body: data.body, previousBody: before.body })
+})
+
+/** Ingen andre svar peker på dette — verken som rot (`parent_id`) eller som svar (`reply_to_id`). */
+const unreferenced = (replyId: string) =>
+  sql`not exists (select 1 from forum_replies c where c.parent_id = ${replyId} or c.reply_to_id = ${replyId})`
+
+/**
+ * Rydder «slettet»-merker som ikke lenger holder noe sammen, oppover fra et
+ * svar som ble slettet helt (svaret det svarte på → roten) — og til slutt
+ * trådstarten, når den er et merke og tråden står uten svar. Et merke kan bli
+ * fritt først når et ANNET merke er ryddet, så en id kan dukke opp i køen
+ * igjen; løkken ender likevel, for noe legges bare i køen når en rad faktisk
+ * ble slettet, og hver rad kan slettes én gang. Sant når tråden er borte.
+ *
+ * Merkene har allerede mistet bildene og reaksjonene sine, og lesekvitteringene
+ * og følgerne går via cascade.
+ */
+async function sweepForumMarkers(topicId: string, start: Array<string | null>): Promise<boolean> {
+  const d = db()
+  const queue = start.filter((x): x is string => !!x)
+  while (queue.length) {
+    const replyId = queue.shift()!
+    const marker = await d.select({ parentId: replies.parentId, replyToId: replies.replyToId }).from(replies)
+      .where(and(eq(replies.id, replyId), isNotNull(replies.deletedAt))).get()
+    if (!marker) continue
+    const gone = await d.run(sql`delete from forum_replies where id = ${replyId} and deleted_at is not null and ${unreferenced(replyId)}`)
+    if (gone.meta.changes) queue.push(...[marker.parentId, marker.replyToId].filter((x): x is string => !!x))
+  }
+  const topicGone = await d.run(sql`delete from forum_topics where id = ${topicId} and deleted_at is not null
+    and not exists (select 1 from forum_replies where topic_id = ${topicId})`)
+  return topicGone.meta.changes > 0
+}
+
+/**
+ * Sletter et svar eller en trådstart. Samme regel som å redigere
+ * (`canEditForumText`): egen tekst så lenge tråden er åpen, alt for en
+ * moderator.
+ *
+ * - **Svar:** har noen svart på det, blir det et «slettet»-merke — teksten,
+ *   forfatteren, bildene og reaksjonene fjernes, men raden står, så svarene
+ *   under beholder sammenhengen (som kommentarene på veggen). Ellers forsvinner
+ *   det helt, og merker som dermed ikke holder noe sammen lenger, ryddes med.
+ * - **Trådstart:** uten svar forsvinner hele tråden. Med svar blir trådstarten
+ *   et merke: tittelen står, for svarene trenger en sammenheng (som på Reddit),
+ *   men teksten og forfatteren forsvinner. Å fjerne hele samtalen, også andres
+ *   svar, er moderatorens `deleteForumThread`.
+ *
+ * Valget mellom «helt» og «merke» er ÉN `DELETE … WHERE NOT EXISTS`: kommer et
+ * svar inn samtidig, blir det et merke i stedet for at svaret mister tråden sin.
+ * Svaret sier hva som skjedde; `thread` betyr at tråden er borte.
+ */
+export const deleteForumText = createServerFn({ method: 'POST' }).validator(z.object({ id, kind: z.enum(['topic', 'reply']) })).handler(async ({ data }) => {
+  const me = await requireMe()
+  const d = db()
+  const now = Date.now()
+  if (data.kind === 'topic') {
+    const topic = await d.select({ id: topics.id, authorId: topics.authorId, locked: topics.locked }).from(topics)
+      .where(and(eq(topics.id, data.id), isNull(topics.deletedAt))).get()
+    if (!topic) throw new Error('Fant ikke tråden.')
+    if (!canEditForumText(me, topic.authorId, topic.locked)) throw new Error('Du kan bare slette det du selv har skrevet.')
+    const removed = await d.run(sql`delete from forum_topics where id = ${topic.id}
+      and not exists (select 1 from forum_replies where topic_id = ${topic.id})`)
+    if (!removed.meta.changes) {
+      await d.update(topics).set({ body: '', authorId: null, deletedAt: now, updatedAt: now }).where(eq(topics.id, topic.id))
+    }
+    // Et merke har verken bilder eller reaksjoner, akkurat som det ikke har tekst.
+    await deleteMediaFor('forum_topic', [topic.id])
+    await deleteReactionsFor('forum_topic', [topic.id])
+    return { removed: removed.meta.changes ? 'thread' as const : 'marker' as const }
+  }
+  const reply = await d.select({ id: replies.id, topicId: replies.topicId, authorId: replies.authorId, parentId: replies.parentId,
+    replyToId: replies.replyToId, locked: topics.locked })
+    .from(replies).innerJoin(topics, eq(topics.id, replies.topicId))
+    .where(and(eq(replies.id, data.id), isNull(replies.deletedAt))).get()
+  if (!reply) throw new Error('Fant ikke svaret.')
+  if (!canEditForumText(me, reply.authorId, reply.locked)) throw new Error('Du kan bare slette det du selv har skrevet.')
+  const removed = await d.run(sql`delete from forum_replies where id = ${reply.id} and ${unreferenced(reply.id)}`)
+  if (!removed.meta.changes) {
+    await d.update(replies).set({ body: '', authorId: null, deletedAt: now, updatedAt: now }).where(eq(replies.id, reply.id))
+  }
+  await deleteMediaFor('forum_reply', [reply.id])
+  await deleteReactionsFor('forum_reply', [reply.id])
+  if (!removed.meta.changes) return { removed: 'marker' as const }
+  return { removed: (await sweepForumMarkers(reply.topicId, [reply.replyToId, reply.parentId])) ? 'thread' as const : 'reply' as const }
+})
+
+/**
+ * Moderatorens «Slett hele tråden»: trådstarten og ALLE svarene, også andres.
+ * Svarene, lesekvitteringene og følgerne går via cascade; bildene og
+ * reaksjonene ryddes her (og av den daglige cron-en hvis noe glipper).
+ */
+export const deleteForumThread = createServerFn({ method: 'POST' }).validator(z.object({ id })).handler(async ({ data }) => {
+  await requirePermission('forum.moderate')
+  const d = db()
+  const replyIds = (await d.select({ id: replies.id }).from(replies).where(eq(replies.topicId, data.id))).map((r) => r.id)
+  const removed = await d.delete(topics).where(eq(topics.id, data.id)).returning({ id: topics.id })
+  if (!removed.length) throw new Error('Fant ikke tråden.')
+  await deleteMediaFor('forum_topic', [data.id])
+  await deleteMediaFor('forum_reply', replyIds)
+  await deleteReactionsFor('forum_topic', [data.id])
+  await deleteReactionsFor('forum_reply', replyIds)
 })
 
 /**

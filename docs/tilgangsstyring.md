@@ -462,7 +462,8 @@ stedet bildet står.
   `messageMediaAccess` i `src/server/message-media.ts`.
 - **Gaten** (`currentUser()` først, uinnlogget gir 401):
   - ikke sendt ennå (utkast): bare den som lastet det opp;
-  - forumet: alle aktive medlemmer, så lenge tråden/svaret finnes;
+  - forumet: alle aktive medlemmer, så lenge tråden/svaret finnes og ikke er
+    et «slettet»-merke;
   - kommentar på veggen: `canReadPost` på innlegget (eller ditt eget innlegg),
     og aldri for et «slettet»-merke — avpubliseres innlegget eller flyttes det
     til «Bare styret», følger bildene med;
@@ -516,8 +517,8 @@ kopiert til 👍; mobil-API v1 sin `like` er 👍.
 - **Gaten** er `canReactTo` i `src/server/reaction-store.ts`, samme regel som å
   lese: et PUBLISERT innlegg medlemmet kan lese (`canReadPost`, eller sitt eget),
   en kommentar som ikke er et «slettet»-merke på et slikt innlegg, eller en
-  forumtråd/-svar som finnes. Utkast får ingen reaksjoner. «Finnes ikke» og
-  «ikke for deg» gir samme feil.
+  forumtråd/-svar som finnes og ikke er et «slettet»-merke. Utkast får ingen
+  reaksjoner. «Finnes ikke» og «ikke for deg» gir samme feil.
 - **Hvem som reagerte** (navnene i verktøytipset) sendes bare sammen med
   innhold medlemmet allerede får lese (`reactionsFor` kalles etter at
   kalleren har sjekket lesetilgangen). Siden får de ti første per emoji; hele

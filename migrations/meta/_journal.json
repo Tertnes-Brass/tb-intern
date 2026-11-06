@@ -232,6 +232,13 @@
       "when": 1793965091270,
       "tag": "0032_festede-innlegg",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1793978822350,
+      "tag": "0033_slett-i-forumet",
+      "breakpoints": true
     }
   ]
 }

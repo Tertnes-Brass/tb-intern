@@ -16,7 +16,7 @@ import { type Me, hasPermission } from './access'
  * Kan `me` reagere på (og dermed se reaksjonene på) dette? Samme regel som å
  * lese det: et publisert innlegg medlemmet kan lese (eller sitt eget), en
  * kommentar som ikke er slettet på et slikt innlegg, eller en forumtråd/-svar
- * som finnes. Utkast får ingen reaksjoner. «Finnes ikke» og «ikke for deg» er
+ * som finnes og ikke er et «slettet»-merke. Utkast får ingen reaksjoner. «Finnes ikke» og «ikke for deg» er
  * det samme svaret, så en id ikke kan brukes til å bekrefte at et styreinnlegg
  * finnes.
  */
@@ -45,9 +45,9 @@ export async function canReactTo(kind: ReactionTarget, targetId: string, me: Me)
       return !!post && readable(post)
     }
     case 'forum_topic':
-      return !!(await d.select({ id: forumTopics.id }).from(forumTopics).where(eq(forumTopics.id, targetId)).get())
+      return !!(await d.select({ id: forumTopics.id }).from(forumTopics).where(and(eq(forumTopics.id, targetId), isNull(forumTopics.deletedAt))).get())
     case 'forum_reply':
-      return !!(await d.select({ id: forumReplies.id }).from(forumReplies).where(eq(forumReplies.id, targetId)).get())
+      return !!(await d.select({ id: forumReplies.id }).from(forumReplies).where(and(eq(forumReplies.id, targetId), isNull(forumReplies.deletedAt))).get())
   }
 }
 
@@ -109,8 +109,8 @@ export async function sweepReactions(): Promise<void> {
       .where(
         sql`(${reactions.targetKind} = 'post' and not exists (select 1 from posts p where p.id = ${reactions.targetId}))
           or (${reactions.targetKind} = 'post_comment' and not exists (select 1 from post_comments c where c.id = ${reactions.targetId} and c.deleted_at is null))
-          or (${reactions.targetKind} = 'forum_topic' and not exists (select 1 from forum_topics t where t.id = ${reactions.targetId}))
-          or (${reactions.targetKind} = 'forum_reply' and not exists (select 1 from forum_replies r where r.id = ${reactions.targetId}))`,
+          or (${reactions.targetKind} = 'forum_topic' and not exists (select 1 from forum_topics t where t.id = ${reactions.targetId} and t.deleted_at is null))
+          or (${reactions.targetKind} = 'forum_reply' and not exists (select 1 from forum_replies r where r.id = ${reactions.targetId} and r.deleted_at is null))`,
       )
   } catch (err) {
     console.error('[reaksjoner] daglig rydding feilet:', err)
