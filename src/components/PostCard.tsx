@@ -2,13 +2,14 @@ import { Link, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { postImageUrl } from '../lib/post-images-client'
 import { seenThisSession } from '../lib/read-posts-client'
-import { highlightParts, type SearchHit } from '../lib/post-search'
+import type { SearchHit } from '../lib/post-search'
 import { commentCountLabel, reactionLabel, toggleReaction as nextReactionState } from '../lib/posts'
 import type { PostImage, PostListItem } from '../server/posts'
 import { toggleReaction } from '../server/posts'
 import { toastError } from './toast'
 import { Glyph } from './compose/Composer'
 import { shortWhen } from './compose/when'
+import { Highlight, SearchHitLine } from './Search'
 import { Avatar, Stamp } from './ui'
 
 /**
@@ -118,40 +119,6 @@ export function SenderMark({ post, size = 'md' }: { post: Pick<PostListItem, 'of
   return <Avatar name={post.author.name} size={size} />
 }
 
-/**
- * Teksten med søkeordene uthevet (`<mark>`). Uten søkeord er det bare teksten.
- * Posisjonene kommer fra `highlightParts`, som folder tegn én til én — så
- * «Café» i teksten utheves med søket «cafe» uten at noe forskyves.
- */
-export function Highlight({ text, terms }: { text: string; terms?: string[] }) {
-  if (!terms || terms.length === 0) return <>{text}</>
-  return (
-    <>
-      {highlightParts(text, terms).map((part, i) =>
-        part.match ? (
-          <mark key={i} className="search-mark">
-            {part.text}
-          </mark>
-        ) : (
-          part.text
-        ),
-      )}
-    </>
-  )
-}
-
-/** Hvorfor et søketreff kom med, når søkeordet ikke står i tittelen eller utdraget. */
-function SearchHitLine({ hit, terms }: { hit: NonNullable<SearchHit>; terms: string[] }) {
-  return (
-    <p className="search-hit">
-      <span className="search-hit-label">{hit.kind === 'comment' ? `Kommentar fra ${hit.author}` : 'Lenger ned i teksten'}</span>
-      <span className="block wrap-anywhere">
-        <Highlight text={hit.snippet} terms={terms} />
-      </span>
-    </p>
-  )
-}
-
 export function PostCard({ post, terms, hit }: { post: PostListItem; terms?: string[]; hit?: SearchHit }) {
   const unread = post.unread && !seenThisSession(post.id)
   const institutional = post.official || post.fromArchive
@@ -200,7 +167,13 @@ export function PostCard({ post, terms, hit }: { post: PostListItem; terms?: str
         <span className={`block wrap-anywhere text-[0.92rem] leading-relaxed text-ink-soft ${post.title ? 'mt-1 line-clamp-3' : 'line-clamp-5'}`}>
           <Highlight text={post.excerpt} terms={terms} />
         </span>
-        {hit && terms && <SearchHitLine hit={hit} terms={terms} />}
+        {hit && terms && (
+          <SearchHitLine
+            label={hit.kind === 'comment' ? `Kommentar fra ${hit.author}` : 'Lenger ned i teksten'}
+            snippet={hit.snippet}
+            terms={terms}
+          />
+        )}
       </Link>
 
       <PostImageGrid images={post.images} total={post.imageCount} />

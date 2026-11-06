@@ -2,19 +2,10 @@ import { Link, createFileRoute, redirect } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { useScrollRow } from '../../components/AreaNav'
 import { z } from 'zod'
-import { Icon } from '../../components/Icons'
 import { PostCard, postSender } from '../../components/PostCard'
 import { shortWhen } from '../../components/compose/when'
-import {
-  BackArrow,
-  BottomSheet,
-  Button,
-  buttonClass,
-  EmptyState,
-  PageHeader,
-  SheetAction,
-  SheetActions,
-} from '../../components/ui'
+import { SearchField, SortButton, SortSheet, useSearchText } from '../../components/Search'
+import { BackArrow, Button, buttonClass, EmptyState, PageHeader } from '../../components/ui'
 import {
   type PostSort,
   POST_SORTS,
@@ -153,34 +144,18 @@ function PostsPage() {
   useScrollRow(chipsRef, vis, '[aria-current="page"]')
   const [sortOpen, setSortOpen] = useState(false)
 
-  // Søkefeltet har lokal tilstand, så skrivingen ikke venter på ruteren; URL-en
-  // oppdateres når man tar en pause. `pushed` er det vi selv la i URL-en: en
-  // endring vi har sendt skal ikke skrive feltet tilbake midt i neste ord,
-  // men «Tøm søket», en delt lenke eller «tilbake» skal.
-  const [text, setText] = useState(q)
-  const pushed = useRef(q)
-  useEffect(() => {
-    if (q !== pushed.current) {
-      pushed.current = q
-      setText(q)
-    }
-  }, [q])
-  useEffect(() => {
-    if (text === pushed.current) return
-    const timer = setTimeout(() => {
-      pushed.current = text
-      navigate({
-        search: (prev) => ({
-          ...prev,
-          q: text.trim() ? text : undefined,
-          // Utkastene er ikke med i søket; et søk viser de publiserte.
-          vis: text.trim() && prev.vis === 'utkast' ? 'alt' : prev.vis,
-        }),
-        replace: true,
-      })
-    }, 250)
-    return () => clearTimeout(timer)
-  }, [text, navigate])
+  // URL-en oppdateres når man tar en pause i skrivingen.
+  const field = useSearchText(q, (text) =>
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        q: text.trim() ? text : undefined,
+        // Utkastene er ikke med i søket; et søk viser de publiserte.
+        vis: text.trim() && prev.vis === 'utkast' ? 'alt' : prev.vis,
+      }),
+      replace: true,
+    }),
+  )
 
   const searching = isSearchable(q)
   const terms = searching ? searchTerms(q) : undefined
@@ -188,12 +163,10 @@ function PostsPage() {
   const sort = effectiveSort(sortering, searching)
 
   const clearSearch = () => {
-    pushed.current = ''
-    setText('')
+    field.reset()
     navigate({ search: (prev) => ({ ...prev, q: undefined, sortering: prev.sortering === 'treff' ? undefined : prev.sortering }), replace: true })
   }
   const chooseSort = (value: PostSort) => {
-    setSortOpen(false)
     // Standardvalget står ikke i URL-en.
     navigate({ search: (prev) => ({ ...prev, sortering: value === effectiveSort(undefined, searching) ? undefined : value }), replace: true })
   }
@@ -274,55 +247,16 @@ function PostsPage() {
           {/* Søket står alltid synlig; sorteringen bor bak en knapp ved siden
               av under lg, og i sidespalten fra lg. */}
           <div className="rise flex items-center gap-2" role="search">
-            <div className="relative min-w-0 flex-1">
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 14 14"
-                fill="none"
-                aria-hidden
-                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
-              >
-                <circle cx="6" cy="6" r="4.6" stroke="currentColor" strokeWidth="1.4" />
-                <path d="M9.5 9.5L13 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-              </svg>
-              <input
-                type="search"
-                value={text}
-                maxLength={SEARCH_MAX_LENGTH}
-                placeholder="Søk i beskjeder og kommentarer"
-                className="field-input !pl-10"
-                enterKeyHint="search"
-                autoCorrect="off"
-                autoCapitalize="none"
-                spellCheck={false}
-                aria-label="Søk i tittel, tekst, avsender og kommentarer"
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape' && text) {
-                    e.preventDefault()
-                    clearSearch()
-                  }
-                  // Lukk tastaturet på telefonen — treffene står under.
-                  if (e.key === 'Enter') e.currentTarget.blur()
-                }}
-              />
-            </div>
+            <SearchField
+              value={field.text}
+              onChange={field.setText}
+              onClear={clearSearch}
+              maxLength={SEARCH_MAX_LENGTH}
+              placeholder="Søk i beskjeder og kommentarer"
+              label="Søk i tittel, tekst, avsender og kommentarer"
+            />
             {vis !== 'utkast' && (
-              <button
-                type="button"
-                onClick={() => setSortOpen(true)}
-                aria-haspopup="dialog"
-                aria-label={`Sortering: ${sortLabel}`}
-                className={`inline-flex min-h-[2.6rem] shrink-0 cursor-pointer items-center gap-1.5 rounded-[9px] border px-3 text-sm font-medium transition-colors pointer-coarse:min-h-11 lg:hidden ${
-                  sortIsDefault
-                    ? 'border-line-strong bg-paper-raised text-ink hover:border-brass'
-                    : 'border-brass bg-[var(--brass-soft)] text-brass-strong'
-                }`}
-              >
-                <Icon name="sort" size={17} />
-                <span className="max-sm:sr-only">{sortLabel}</span>
-              </button>
+              <SortButton label={sortLabel} isDefault={sortIsDefault} onClick={() => setSortOpen(true)} className="lg:hidden" />
             )}
           </div>
 
@@ -461,21 +395,13 @@ function PostsPage() {
         </aside>
       </div>
 
-      <BottomSheet open={sortOpen} onClose={() => setSortOpen(false)} title="Sorter" closeLabel="Ferdig">
-        <SheetActions role="radiogroup">
-          {sortOptions(searching).map((option) => (
-            <SheetAction
-              key={option.value}
-              role="radio"
-              aria-checked={sort === option.value}
-              label={option.label}
-              hint={option.hint}
-              onClick={() => chooseSort(option.value)}
-              trailing={sort === option.value ? <Icon name="check" size={18} className="text-brass" /> : undefined}
-            />
-          ))}
-        </SheetActions>
-      </BottomSheet>
+      <SortSheet
+        open={sortOpen}
+        onClose={() => setSortOpen(false)}
+        options={sortOptions(searching)}
+        value={sort}
+        onChange={chooseSort}
+      />
     </div>
   )
 }
