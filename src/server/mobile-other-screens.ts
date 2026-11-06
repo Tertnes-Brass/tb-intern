@@ -8,6 +8,7 @@ import { MobileError } from '../lib/mobile-http';
 import { mentionPlainText, mentionDraft } from '../lib/mentions';
 import { postPlainText } from '../lib/markdown';
 import { postEmailFrom } from '../lib/posts';
+import { MAX_PINNED_POSTS, sortPinned } from '../lib/pins';
 import { mobileMediaRow } from '../lib/message-media';
 import { reactionsText } from '../lib/reactions';
 import { ATTENDANCE_LABELS, effectiveStatus } from '../lib/attendance';
@@ -56,7 +57,9 @@ export async function otherScreen(path: string[], me: Me, query: URLSearchParams
         const archiveFields: Field[] = [select('importance', 'Viktighet', [choice('normal', 'Vanlig'), choice('important', 'Viktig')]), field('fromArchive', 'Fra notearkivar', 'toggle')];
         if (!id) {
             const d = await posts.listPosts();
-            return { title: 'Innlegg og utkast', sections: [section('drafts', 'Utkast', d.drafts.map(p => link('posts/' + p.id, p.heading, postEmailFrom(p.author.name, p.official, p.fromArchive)))), section('posts', 'Publisert', d.posts.map(p => link('posts/' + p.id, p.heading, postEmailFrom(p.author.name, p.official, p.fromArchive))))], actions: [action('posts.createPost', 'Nytt utkast', { format: 'plain_text', audience: 'all', importance: 'normal', official: false }, [...fields, ...(d.canPublish ? [...privilegedFields, field('fromArchive', 'Fra notearkivar', 'toggle')] : d.canArchive ? archiveFields : [])])] };
+            // Tillegg (november 2026): «Festet» først, når noe er festet.
+            const pinned = sortPinned(d.posts.filter(p => p.pinned));
+            return { title: 'Innlegg og utkast', sections: [...(pinned.length ? [section('pinned', 'Festet', pinned.map(p => link('posts/' + p.id, p.heading, postEmailFrom(p.author.name, p.official, p.fromArchive))))] : []), section('drafts', 'Utkast', d.drafts.map(p => link('posts/' + p.id, p.heading, postEmailFrom(p.author.name, p.official, p.fromArchive)))), section('posts', 'Publisert', d.posts.map(p => link('posts/' + p.id, p.heading, postEmailFrom(p.author.name, p.official, p.fromArchive))))], actions: [action('posts.createPost', 'Nytt utkast', { format: 'plain_text', audience: 'all', importance: 'normal', official: false }, [...fields, ...(d.canPublish ? [...privilegedFields, field('fromArchive', 'Fra notearkivar', 'toggle')] : d.canArchive ? archiveFields : [])])] };
         }
         const d = await posts.getPost({ data: { id } });
         const p = d.post;
@@ -65,6 +68,14 @@ export async function otherScreen(path: string[], me: Me, query: URLSearchParams
         const actions = [action('posts.toggleReaction', p.likedByMe ? 'Fjern liker' : 'Lik innlegg', { postId: id }), action('posts.addComment', 'Kommenter', { postId: id }, [field('body', 'Kommentar', 'multiline', { required: true })])];
         if (p.canEdit)
             actions.push(action('posts.updatePost', 'Rediger innlegg', editValues, [...fields, ...(d.canPublish ? [...privilegedFields, field('fromArchive', 'Fra notearkivar', 'toggle')] : canArchiveEdit ? archiveFields : [])], { mentions: mentionDraft(p.body, p.mentions).chosen }), action('upload.image', 'Legg til bilde', { postId: id }, [], { upload: 'image' }), ...(p.publishedAt ? [action('posts.unpublishPost', 'Flytt til utkast', { id })] : [action('posts.publishPost', 'Publiser', { id, sendEmail: false }, d.canPublish || canArchiveEdit ? [field('sendEmail', 'Send beskjed på e-post', 'toggle')] : [])]), remove('posts.deletePost', 'Slett innlegg', { id }));
+        // Festing (tillegg, november 2026): samme gate som på nettsiden, håndhevet i `setPostPinned`.
+        if (d.canPublish && p.publishedAt) {
+            const untilField = field('until', 'Festet til og med (tom = til noen løsner det)', 'date', { nullable: true });
+            if (p.pinned)
+                actions.push(action('posts.setPostPinned', 'Endre festingen', { id, pinned: true, until: p.pinnedUntil }, [untilField]), action('posts.setPostPinned', 'Løsne fra toppen', { id, pinned: false }));
+            else
+                actions.push(action('posts.setPostPinned', 'Fest øverst på veggen', { id, pinned: true, until: null }, [untilField], { message: `Står øverst på veggen for alle som kan se innlegget. Inntil ${MAX_PINNED_POSTS} kan være festet samtidig.` }));
+        }
         if (d.delivery)
             actions.push(action('posts.resendPostNotifications', 'Send beskjedvarsler på nytt', { id }, [], { message: 'Sender e-post til mottakerne etter nettsidens regler.' }));
         return { title: p.heading, sections: [section('post', postEmailFrom(p.author.name, p.official, p.fromArchive), [row('body', '', p.publishedAt ? dateLabel(p.publishedAt) : 'Utkast', { body: mentionPlainText(postPlainText(p.body, p.format), p.mentions), ...(p.format === 'markdown' ? { markdown: mentionPlainText(p.body, p.mentions) } : {}) }), row('reactions', 'Reaksjoner', reactionsText(p.reactions) || 'Ingen ennå'), ...p.images.map(i => row(i.id, 'Bilde', i.fileName, { imagePath: '/api/post-images/' + i.id, actions: p.canEdit ? [remove('posts.deletePostImage', 'Slett bilde', { id: i.id })] : [] }))]), section('comments', 'Kommentarer', d.comments.map(c => row(c.id, c.author.name, dateLabel(c.createdAt), { ...mobileMediaRow(mentionPlainText(c.body, c.mentions), c.media), actions: c.canDelete ? [remove('posts.deleteComment', 'Slett kommentar', { id: c.id })] : [] }))), ...(d.delivery ? [section('delivery', 'E-postlevering', Object.entries(d.delivery).map(([k, v]) => row(k, ({ sent: 'Sendt', logged: 'Logget', failed: 'Feilet', pending: 'Venter' } as Record<string, string>)[k] ?? k, String(v))))] : [])], actions };

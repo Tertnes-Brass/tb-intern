@@ -93,6 +93,13 @@ const PATHS = {
   close: <path d="M6 6l12 12M18 6 6 18" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   sort: <path d="M7.5 19.5v-15M4 8l3.5-3.5L11 8M16.5 4.5v15M13 16l3.5 3.5L20 16" />,
+  // Festet øverst på veggen (`pin` over er en kartnål for steder).
+  pushpin: (
+    <>
+      <path d="M12 17v5" />
+      <path d="M9 3h6l-1 4.5v3l3 3.5v3H7v-3l3-3.5v-3z" />
+    </>
+  ),
   pin: (
     <>
       <path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z" />
