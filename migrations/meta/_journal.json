@@ -225,6 +225,13 @@
       "when": 1793830694095,
       "tag": "0031_reaksjoner",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1793965091270,
+      "tag": "0032_festede-innlegg",
+      "breakpoints": true
     }
   ]
 }

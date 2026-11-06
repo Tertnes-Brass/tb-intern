@@ -51,6 +51,8 @@ import {
   recipientsFor,
   sanitizePostInput,
 } from '../lib/posts'
+import { toOsloDate } from '../lib/format'
+import { MAX_PINNED_POSTS, PIN_DRAFT_MESSAGE, isPinned, pinLimitMessage, pinUntilRejection } from '../lib/pins'
 import { type Me, hasPermission, requireMe } from './access'
 import { canAttachImages } from './post-images'
 import { claimMessageMedia, deleteMediaFor, mediaFor, releaseMessageMedia } from './message-media'
@@ -125,6 +127,12 @@ export type PostListItem = {
   importance: PostImportance
   fromArchive: boolean
   official: boolean
+  /** Festet øverst på veggen akkurat nå (src/lib/pins.ts). Utløpt festing = `false`. */
+  pinned: boolean
+  /** Når det ble festet — rekkefølgen i «Festet». `null` når `pinned` er `false`. */
+  pinnedAt: number | null
+  /** Festet til og med denne norske datoen; `null` = til noen løsner det. */
+  pinnedUntil: string | null
   author: PostAuthor
   publishedAt: number | null
   createdAt: number
@@ -206,6 +214,8 @@ type Row = {
   importance: PostImportance
   fromArchive: boolean
   official: boolean
+  pinnedAt: Date | null
+  pinnedUntil: string | null
   authorId: string | null
   authorName: string | null
   publishedAt: Date | null
@@ -224,6 +234,8 @@ function selectPosts() {
       importance: posts.importance,
       official: posts.official,
       fromArchive: posts.fromArchive,
+      pinnedAt: posts.pinnedAt,
+      pinnedUntil: posts.pinnedUntil,
       authorId: posts.authorId,
       authorName: user.name,
       publishedAt: posts.publishedAt,
@@ -386,6 +398,10 @@ function toListItem(
   // e-postemnet skal aldri vise «#» eller «**» — og aldri en omtale-markør.
   // Rekkefølgen er nødvendig: markdown strippes først, så settes navnene inn.
   const plain = mentionPlainText(postPlainText(row.body, row.format), mentions)
+  const pinned = isPinned(
+    { pinnedAt: row.pinnedAt?.getTime() ?? null, pinnedUntil: row.pinnedUntil, publishedAt: row.publishedAt?.getTime() ?? null },
+    toOsloDate(Date.now()),
+  )
   return {
     id: row.id,
     heading: postHeading({ title: row.title, body: plain }),
@@ -396,6 +412,9 @@ function toListItem(
     importance: row.importance,
     official: row.official,
     fromArchive: row.fromArchive,
+    pinned,
+    pinnedAt: pinned ? row.pinnedAt!.getTime() : null,
+    pinnedUntil: pinned ? row.pinnedUntil : null,
     author: authorOf(row),
     publishedAt: row.publishedAt ? row.publishedAt.getTime() : null,
     createdAt: row.createdAt.getTime(),
@@ -434,6 +453,8 @@ export const listPosts = createServerFn().handler(async () => {
 
   return {
     canPublish,
+    // Festing endrer hva alle ser først, og følger derfor moderasjonsretten.
+    canPin: canPublish,
     canArchive: hasPermission(me, 'posts.archive'),
     meId: me.id,
     posts: visible
@@ -772,9 +793,63 @@ export const unpublishPost = createServerFn({ method: 'POST' })
     if (!row || !visibleTo(row, canPublish, me)) throw new Error('Fant ikke beskjeden')
     if (!canEditPost(me, row, canPublish)) throw new Error('Du kan bare endre dine egne innlegg')
     // `notification_log` beholdes med vilje: publiseres innlegget igjen, skal
-    // ingen få den samme e-posten to ganger.
-    await db().update(posts).set({ publishedAt: null, updatedAt: new Date() }).where(eq(posts.id, data.id))
+    // ingen få den samme e-posten to ganger. Festingen går derimot: et utkast
+    // kan ikke stå øverst på veggen, og en republisering er et nytt valg.
+    await db()
+      .update(posts)
+      .set({ publishedAt: null, pinnedAt: null, pinnedUntil: null, updatedAt: new Date() })
+      .where(eq(posts.id, data.id))
     return { ok: true }
+  })
+
+/**
+ * Fester et publisert innlegg øverst på veggen, endrer varigheten, eller
+ * løsner det (`pinned: false`). Krever `posts.publish` — også for å løsne
+ * forfatterens eget innlegg, for festingen er styrets valg, ikke forfatterens.
+ *
+ * Taket (`MAX_PINNED_POSTS`) sjekkes i SELVE `UPDATE`-en som compare-and-set:
+ * to som fester samtidig kan aldri begge komme forbi det. Innlegget selv teller
+ * ikke med, så varigheten på et festet innlegg kan alltid endres. `updated_at`
+ * røres ikke — festing er ikke en redigering av innholdet.
+ */
+export const setPostPinned = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      id: z.string().min(1),
+      pinned: z.boolean(),
+      until: z.string().max(10).nullish(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const me = await requireMe()
+    if (!hasPermission(me, PUBLISH_PERMISSION)) throw new Error('Bare styret kan feste innlegg på veggen')
+    const row = await readablePost(data.id, true, me)
+
+    if (!data.pinned) {
+      await db().update(posts).set({ pinnedAt: null, pinnedUntil: null }).where(eq(posts.id, row.id))
+      return { ok: true, pinned: false }
+    }
+
+    if (!row.publishedAt) throw new Error(PIN_DRAFT_MESSAGE)
+    const today = toOsloDate(Date.now())
+    const until = data.until?.trim() ? data.until.trim() : null
+    const rejection = pinUntilRejection(until, today)
+    if (rejection) throw new Error(rejection)
+
+    // Behold det opprinnelige tidspunktet når bare varigheten endres, så
+    // innlegget ikke hopper til toppen av «Festet».
+    const wasPinned = isPinned(
+      { pinnedAt: row.pinnedAt?.getTime() ?? null, pinnedUntil: row.pinnedUntil, publishedAt: row.publishedAt.getTime() },
+      today,
+    )
+    const pinnedAt = wasPinned ? row.pinnedAt!.getTime() : Date.now()
+    const result = await db().run(sql`update posts set pinned_at = ${pinnedAt}, pinned_until = ${until}
+      where id = ${row.id} and published_at is not null
+        and (select count(*) from posts other
+             where other.id <> ${row.id} and other.pinned_at is not null and other.published_at is not null
+               and (other.pinned_until is null or other.pinned_until >= ${today})) < ${MAX_PINNED_POSTS}`)
+    if (!result.meta.changes) throw new Error(pinLimitMessage())
+    return { ok: true, pinned: true }
   })
 
 export const deletePost = createServerFn({ method: 'POST' })

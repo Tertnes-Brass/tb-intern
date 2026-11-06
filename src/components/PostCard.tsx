@@ -6,6 +6,7 @@ import { commentCountLabel } from '../lib/posts'
 import type { PostImage, PostListItem } from '../server/posts'
 import { ReactionBar } from './Reactions'
 import { Glyph } from './compose/Composer'
+import { Icon } from './Icons'
 import { shortWhen } from './compose/when'
 import { Highlight, SearchHitLine } from './Search'
 import { Avatar, Stamp } from './ui'
@@ -96,6 +97,13 @@ export function PostCard({ post, terms, hit }: { post: PostListItem; terms?: str
               </>
             )}
             {shortWhen(post.publishedAt ?? post.createdAt)}
+            {post.pinned && (
+              <span className="whitespace-nowrap">
+                {' · '}
+                <Icon name="pushpin" size={12} className="-mt-0.5 inline align-middle" />
+                {' Festet'}
+              </span>
+            )}
           </p>
         </div>
         {(post.importance === 'important' || post.audience === 'board') && (

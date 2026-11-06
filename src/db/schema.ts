@@ -598,6 +598,13 @@ export const posts = sqliteTable(
     // «Fra styret»: kun `posts.publish` kan sette den.
     official: integer('official', { mode: 'boolean' }).notNull().default(false),
     fromArchive: integer('from_archive', { mode: 'boolean' }).notNull().default(false),
+    // Festet øverst på veggen (kun `posts.publish`, se src/lib/pins.ts).
+    // `pinned_at` = når det ble festet (null = ikke festet); `pinned_until` er
+    // en norsk kalenderdato «YYYY-MM-DD», festet TIL OG MED den dagen
+    // (null = til noen løsner det). En utløpt festing ryddes aldri — den
+    // teller bare ikke lenger, verken på veggen eller mot taket.
+    pinnedAt: integer('pinned_at', { mode: 'timestamp_ms' }),
+    pinnedUntil: text('pinned_until'),
     authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
     publishedAt: integer('published_at', { mode: 'timestamp_ms' }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),

@@ -33,6 +33,8 @@ function mobilePost(post: PostListItem) {
     // Tillegg 4. november 2026: alle emoji-reaksjonene. `likes`/`liked` er fortsatt 👍.
     reactions: post.reactions.map(({ emoji, count, mine }) => ({ emoji, count, mine })),
     imagePaths: post.images.map((image) => `/api/post-images/${encodeURIComponent(image.id)}`),
+    // Tillegg november 2026: festet øverst på veggen. Rekkefølgen i lista er uendret (v1).
+    pinned: post.pinned, pinnedUntil: post.pinnedUntil,
   }
 }
 

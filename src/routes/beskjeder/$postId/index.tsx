@@ -9,6 +9,7 @@ import { ReactionBar } from '../../../components/Reactions'
 import { Dock } from '../../../components/compose/Dock'
 import { draftKey } from '../../../lib/drafts'
 import { Icon } from '../../../components/Icons'
+import { PinDialog, unpinPost } from '../../../components/PinDialog'
 import { useThreadMark } from '../../../components/useThreadMark'
 import { buildThreads, foldChildren, replyContext } from '../../../lib/threads'
 import { SenderMark, postSender } from '../../../components/PostCard'
@@ -17,7 +18,8 @@ import { shortWhen } from '../../../components/compose/when'
 import { rememberPostRead } from '../../../lib/read-posts-client'
 import { toast, toastError } from '../../../components/toast'
 import { Avatar, BackArrow, Button, buttonClass, EmptyState, Modal, Stamp } from '../../../components/ui'
-import { formatDateTime } from '../../../lib/format'
+import { formatDateTime, toOsloDate } from '../../../lib/format'
+import { pinDurationLabel } from '../../../lib/pins'
 import { markdownToHtml } from '../../../lib/markdown'
 import { type MentionUser, UNKNOWN_MENTION, postLineTokens, renderCommentHtml } from '../../../lib/mentions'
 import { postImageUrl } from '../../../lib/post-images-client'
@@ -375,6 +377,7 @@ function PostPage() {
   const [confirmPublish, setConfirmPublish] = useState(false)
   /** «Sende e-post til N?» — utsending går aldri rett fra menyen. */
   const [confirmSend, setConfirmSend] = useState(false)
+  const [pinning, setPinning] = useState(false)
   // Avslått som standard (#85): publisering og masseutsending er to handlinger.
   const [notify, setNotify] = useState(DEFAULT_NOTIFY)
   const [busy, setBusy] = useState<'resend' | 'publish' | 'unpublish' | 'delete' | null>(null)
@@ -467,6 +470,15 @@ function PostPage() {
           : delivery
             ? [{ label: sendLabel, hint: deliveryHint, icon: 'bell' as const, disabled: pending === 0 || busy === 'resend', onSelect: () => setConfirmSend(true) }]
             : []),
+        // Festing er styrets valg (`posts.publish`), og bare for publiserte innlegg.
+        ...(!isDraft && data.canPublish
+          ? post.pinned
+            ? [
+                { label: 'Endre festingen', hint: pinDurationLabel(post.pinnedUntil, toOsloDate(Date.now())), icon: 'pushpin' as const, onSelect: () => setPinning(true) },
+                { label: 'Løsne fra toppen', hint: 'Innlegget blir stående på sin plass i feeden', icon: 'close' as const, onSelect: () => void unpinPost(post.id, () => router.invalidate()) },
+              ]
+            : [{ label: 'Fest øverst på veggen', hint: 'Til noen løsner det, eller til en dato', icon: 'pushpin' as const, onSelect: () => setPinning(true) }]
+          : []),
         ...(!isDraft && data.canPublish
           ? [{ label: 'Avpubliser', hint: 'Tar innlegget av veggen og gjør det til et utkast', icon: 'refresh' as const, disabled: busy === 'unpublish', onSelect: () => void unpublish() }]
           : []),
@@ -476,7 +488,10 @@ function PostPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <header className="rise">
+      {/* `relative z-10`: `.rise` (animasjon med `both`) gjør både hodet og artikkelen
+          til egne stablingskontekster, og artikkelen kommer senere — uten dette la den
+          seg over «Administrer»-menyen med mus, så valg midt i den ikke kunne klikkes. */}
+      <header className="rise relative z-10">
         <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
           <Link to="/beskjeder" className="back-link">
             <BackArrow />
@@ -485,11 +500,19 @@ function PostPage() {
           {post.canEdit && <ActionMenu label="Administrer" title={post.heading} items={manageItems} />}
         </div>
 
-        {(post.importance === 'important' || post.audience === 'board' || isDraft) && (
+        {(post.importance === 'important' || post.audience === 'board' || isDraft || post.pinned) && (
           <div className="mb-2 flex flex-wrap items-center gap-2">
             {isDraft && <Stamp tone="oxblood">Utkast</Stamp>}
             {post.importance === 'important' && <Stamp tone="oxblood">Viktig</Stamp>}
             {post.audience === 'board' && <Stamp>Kun styret</Stamp>}
+            {/* Ikke et stempel: festingen sier hvor innlegget står, ikke hva det er. */}
+            {post.pinned && (
+              <span className="inline-flex items-center gap-1 text-[0.8rem] text-ink-faint">
+                <Icon name="pushpin" size={14} />
+                Festet øverst på veggen
+                {post.pinnedUntil && <> · {pinDurationLabel(post.pinnedUntil, toOsloDate(Date.now())).toLowerCase()}</>}
+              </span>
+            )}
           </div>
         )}
 
@@ -633,6 +656,8 @@ function PostPage() {
           </Button>
         </div>
       </Modal>
+
+      {data.canPublish && !isDraft && <PinDialog open={pinning} onClose={() => setPinning(false)} post={post} />}
 
       <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Slette innlegget?" kicker="Veggen">
         <p className="text-sm leading-relaxed text-ink-soft">

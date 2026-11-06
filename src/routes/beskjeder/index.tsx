@@ -1,11 +1,16 @@
-import { Link, createFileRoute, redirect } from '@tanstack/react-router'
+import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
+import { ActionMenu } from '../../components/ActionMenu'
 import { useScrollRow } from '../../components/AreaNav'
+import { Icon } from '../../components/Icons'
+import { PinDialog, unpinPost } from '../../components/PinDialog'
 import { z } from 'zod'
 import { PostCard, postSender } from '../../components/PostCard'
 import { shortWhen } from '../../components/compose/when'
 import { SearchField, SortButton, SortSheet, useSearchText } from '../../components/Search'
-import { BackArrow, Button, buttonClass, EmptyState, PageHeader } from '../../components/ui'
+import { BackArrow, Button, buttonClass, EmptyState, PageHeader, Stamp } from '../../components/ui'
+import { toOsloDate } from '../../lib/format'
+import { pinDurationLabel, sortPinned } from '../../lib/pins'
 import {
   type PostSort,
   POST_SORTS,
@@ -93,6 +98,80 @@ function DraftList({ drafts }: { drafts: Drafts }) {
         </li>
       ))}
     </ul>
+  )
+}
+
+type WallPost = Awaited<ReturnType<typeof listPosts>>['posts'][number]
+
+/**
+ * «Festet»: det styret vil at alle skal finne igjen — øvingstider, praktisk
+ * informasjon, viktige beskjeder før en konsert. Kompakte rader over feeden,
+ * ikke fulle kort: det første NYE innlegget skal fortsatt stå på første skjerm
+ * på telefonen. Innleggene står også på sin vanlige plass i feeden, der
+ * reaksjonene og kommentarene er.
+ */
+function PinnedList({ posts, canPin, isUnread }: { posts: WallPost[]; canPin: boolean; isUnread: (p: WallPost) => boolean }) {
+  const router = useRouter()
+  const [editing, setEditing] = useState<WallPost | null>(null)
+  const today = toOsloDate(Date.now())
+  return (
+    <section aria-labelledby="wall-pinned-heading" className="mb-4">
+      <h2 id="wall-pinned-heading" className="group-label flex items-center gap-1.5">
+        <Icon name="pushpin" size={13} />
+        Festet
+      </h2>
+      <ul className="list-group">
+        {posts.map((post) => {
+          const unread = isUnread(post)
+          return (
+            <li key={post.id} className="flex items-center">
+              <Link
+                to="/beskjeder/$postId"
+                params={{ postId: post.id }}
+                className={`list-row-link link-quiet flex min-h-[56px] min-w-0 flex-1 items-center gap-3 py-2.5 pl-4 ${canPin ? 'pr-1' : 'pr-4'}`}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className={`flex items-center gap-2 text-[0.95rem] leading-snug text-ink ${unread ? 'font-semibold' : 'font-medium'}`}>
+                    <span className="truncate">{post.heading}</span>
+                    {unread && (
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-brass" title="Ulest">
+                        <span className="sr-only">Ulest</span>
+                      </span>
+                    )}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[0.78rem] text-ink-faint">
+                    {postSender(post)} · {shortWhen(post.publishedAt ?? post.createdAt)}
+                    {/* Varigheten er et skriveverktøy; leserne trenger den ikke. */}
+                    {canPin && post.pinnedUntil && <> · {pinDurationLabel(post.pinnedUntil, today).toLowerCase()}</>}
+                  </span>
+                </span>
+                {(post.importance === 'important' || post.audience === 'board') && (
+                  <span className="flex shrink-0 gap-1.5">
+                    {post.importance === 'important' && <Stamp tone="oxblood">Viktig</Stamp>}
+                    {post.audience === 'board' && <Stamp>Kun styret</Stamp>}
+                  </span>
+                )}
+                {!canPin && <Icon name="chevronRight" size={16} className="text-ink-faint" />}
+              </Link>
+              {canPin && (
+                <ActionMenu
+                  iconOnly
+                  className="shrink-0 pr-2"
+                  label={`Festingen av «${post.heading}»`}
+                  title={post.heading}
+                  description={pinDurationLabel(post.pinnedUntil, today)}
+                  items={[
+                    { label: 'Endre festingen', hint: 'Til noen løsner det, eller til en dato', icon: 'pushpin', onSelect: () => setEditing(post) },
+                    { label: 'Løsne fra toppen', hint: 'Innlegget blir stående på sin plass i feeden', icon: 'close', onSelect: () => void unpinPost(post.id, () => router.invalidate()) },
+                  ]}
+                />
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      {editing && <PinDialog open onClose={() => setEditing(null)} post={editing} />}
+    </section>
   )
 }
 
@@ -204,6 +283,10 @@ function PostsPage() {
   const hits = results ? new Map(results.map((r) => [r.id, r.hit])) : null
   const visible = sortPosts((results ?? (searching ? [] : data.posts)).filter(matchesFilter), sort)
 
+  // Festet øverst — bare på den ufiltrerte veggen. Et søk eller et filter er et
+  // spørsmål, og svaret skal ikke ha noe foran seg.
+  const pinned = vis === 'alt' && !searching ? sortPinned(data.posts.filter((p) => p.pinned)) : []
+
   const sortLabel = POST_SORTS.find((s) => s.value === sort)?.label ?? 'Nyeste'
   const sortIsDefault = sort === effectiveSort(undefined, searching)
 
@@ -292,6 +375,7 @@ function PostsPage() {
             aria-label={searching ? 'Søketreff' : 'Innlegg'}
             aria-busy={loading || undefined}
           >
+            {pinned.length > 0 && <PinnedList posts={pinned} canPin={data.canPin} isUnread={isUnread} />}
             {vis === 'utkast' ? (
               data.drafts.length === 0 ? (
                 <EmptyState title="Ingen utkast">Utkast du lagrer, havner her til de er publisert.</EmptyState>

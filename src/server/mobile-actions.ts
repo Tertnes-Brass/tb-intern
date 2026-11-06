@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MobileError } from '../lib/mobile-http';
+import { PIN_ERRORS } from '../lib/pins';
 import { getRequest } from '@tanstack/react-start/server';
 import { getAuth } from './auth-instance';
 import { memberNameSchema, passwordSchema } from '../lib/profile';
@@ -97,6 +98,7 @@ const operations = new Map<string, (input: never) => Promise<unknown>>([
     ['posts.toggleReaction', m9.toggleReaction],
     ['posts.deletePostImage', m9.deletePostImage],
     ['posts.resendPostNotifications', m9.resendPostNotifications],
+    ['posts.setPostPinned', m9.setPostPinned],
 ]);
 export async function runMobileAction(operation: string, values: Record<string, unknown>, mentions: MentionUser[] = []) {
     if (typeof values.body === 'string' && mentions.length > 0)
@@ -114,7 +116,15 @@ export async function runMobileAction(operation: string, values: Record<string, 
     const fn = operations.get(operation);
     if (!fn)
         throw new MobileError(404, 'unknown_action', 'Handlingen er ikke tilgjengelig.');
-    const result = await fn({ data: values } as never);
+    // Festefeilene (taket, datoen, utkast) er ment for brukeren og røper ingenting;
+    // uten dette ville appen bare vist den generiske 500-feilen.
+    const result = operation === 'posts.setPostPinned'
+        ? await fn({ data: values } as never).catch((err: unknown) => {
+            if (err instanceof Error && PIN_ERRORS.includes(err.message))
+                throw new MobileError(409, 'pin_rejected', err.message);
+            throw err;
+        })
+        : await fn({ data: values } as never);
     if (operation === 'members.inviteMember') {
         const delivery = (result as {
             delivery: string;

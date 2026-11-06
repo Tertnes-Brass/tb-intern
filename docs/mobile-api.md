@@ -97,6 +97,18 @@ likes were copied to 👍). `POST posts/{id}/like` still toggles 👍 and return
 `{mine, count}` for 👍. New, additive: `reactions: [{emoji, count, mine}]` on
 posts and on each comment, in the order each emoji was first used.
 
+### Pinned posts (added 6 November 2026, additive)
+
+Posts in the snapshot and `GET posts/{id}` have `pinned` (boolean) and
+`pinnedUntil` (`"YYYY-MM-DD"` Norwegian date, pinned through that day, or `null`
+= until someone unpins it). The order of the post list is unchanged (v1); a
+client that wants a «Pinned» section filters on `pinned`. Only `posts.publish`
+can pin: the workspace post screen offers `posts.setPostPinned`
+(`{id, pinned, until?}`) to them, and the posts screen gets a leading «Festet»
+section when something is pinned. At most five posts are pinned at once; the
+server rejects a sixth — like a past date or a draft — with 409
+`{error: {code: 'pin_rejected', message}}`, where `message` is shown as is.
+
 Returned file/image paths use `/api/files/{id}`, `/api/post-images/{id}` and
 `/api/message-media/{id}`.
 These existing routes repeat authorization before streaming private R2 content.
