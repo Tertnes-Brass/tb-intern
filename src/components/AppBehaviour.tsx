@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { appScrollTop } from '../lib/app-scroll'
 import { claimOfflineNotes } from '../lib/offline-notes'
 import { resyncPush } from '../lib/push-client'
+import { EDITABLE, PRESS_CONTROLS, type Press, blocksSelection, pressFrom } from '../lib/press-selection'
 import { isIos, isStandalone } from '../lib/pwa'
 import { refreshShellCounts } from '../lib/shell-events'
 import { Icon } from './Icons'
@@ -22,6 +23,15 @@ const RESUME_AFTER_MS = 60_000
  *   noe man skal se ved hvert trykk. Etter første navigasjon får `<html>`
  *   klassen `navigated`, og styles.css slår den av — sideskift skal være
  *   umiddelbare.
+ *
+ * - **Langt trykk på en knapp markerer ikke tekst:** holder man fingeren på en
+ *   knapp, en lenke eller en fane, markerer iOS ellers teksten ved siden av —
+ *   eller hele siden — og viser «Kopier · Slå opp». Mens fingeren holder på en
+ *   kontroll, har `<html>` klassen `press-no-select` (ingenting kan markeres),
+ *   og en markering som likevel kommer fra et slikt trykk, fjernes. iOS sender
+ *   ikke `selectstart` for denne markeringen, så det går ikke å stoppe den der.
+ *   Reglene er i `src/lib/press-selection.ts`; tekst i innlegg og kommentarer
+ *   markeres som før.
  *
  * «Dra for å oppdatere» (`PullToRefresh`) bor i toppmenyen i `Shell.tsx`.
  */
@@ -43,6 +53,52 @@ export function AppBehaviour() {
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [router])
+
+  useEffect(() => {
+    const root = document.documentElement
+    let press: Press | null = null
+    let release = 0
+    const unlock = () => {
+      window.clearTimeout(release)
+      root.classList.remove('press-no-select')
+    }
+    const elementOf = (node: EventTarget | Node | null | undefined) =>
+      node instanceof Element ? node : node instanceof Node ? node.parentElement : null
+    const onPointerDown = (e: PointerEvent) => {
+      const el = elementOf(e.target)
+      press = pressFrom(e.pointerType, !!el?.closest(PRESS_CONTROLS), !!el?.closest(EDITABLE), performance.now())
+      window.clearTimeout(release)
+      root.classList.toggle('press-no-select', !!press?.control)
+    }
+    // iOS kan avbryte trykket (pointercancel) like før den markerer, så låsen
+    // står litt etter at fingeren er borte.
+    const onPointerEnd = () => {
+      window.clearTimeout(release)
+      release = window.setTimeout(unlock, 700)
+    }
+    const inEditable = (node: Node | null | undefined) => !!elementOf(node)?.closest(EDITABLE)
+    const onSelectStart = (e: Event) => {
+      if (blocksSelection(press, inEditable(e.target as Node), performance.now())) e.preventDefault()
+    }
+    const onSelectionChange = () => {
+      const selection = window.getSelection()
+      if (!selection || selection.isCollapsed) return
+      if (blocksSelection(press, inEditable(selection.anchorNode), performance.now())) selection.removeAllRanges()
+    }
+    document.addEventListener('pointerdown', onPointerDown, { capture: true, passive: true })
+    document.addEventListener('pointerup', onPointerEnd, { capture: true, passive: true })
+    document.addEventListener('pointercancel', onPointerEnd, { capture: true, passive: true })
+    document.addEventListener('selectstart', onSelectStart, true)
+    document.addEventListener('selectionchange', onSelectionChange)
+    return () => {
+      unlock()
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('pointerup', onPointerEnd, true)
+      document.removeEventListener('pointercancel', onPointerEnd, true)
+      document.removeEventListener('selectstart', onSelectStart, true)
+      document.removeEventListener('selectionchange', onSelectionChange)
+    }
+  }, [])
 
   useEffect(() => {
     return router.subscribe('onBeforeNavigate', () => {

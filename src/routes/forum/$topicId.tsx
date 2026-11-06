@@ -1,4 +1,9 @@
 import { MentionTextarea } from '../../components/MentionTextarea'
+import { MediaDraftStrip, MessageMediaGallery, type MediaDraft, canSendWith, dropMedia, insertAtCursor, pasteMedia, useMediaDraft } from '../../components/MessageMedia'
+import { ComposerTools } from '../../components/MediaPicker'
+import { ReactionBar } from '../../components/Reactions'
+import type { ReactionSummary } from '../../lib/reactions'
+import type { MessageMediaItem } from '../../lib/message-media'
 import { forumMarkers, forumMentionDraft, forumMentionHtml } from '../../lib/forum-mentions'
 import type { MentionUser } from '../../lib/mentions'
 import { useForumRefresh } from '../../components/useForumRefresh'
@@ -39,6 +44,9 @@ type ReplyTarget = { id: string; rootId: string; name: string }
 type Draft = { body: string; chosen: MentionUser[] }
 
 const EMPTY_DRAFT: Draft = { body: '', chosen: [] }
+/** Én felles tom liste, så standardverdien ikke er en ny liste ved hver tegning. */
+const NO_REACTIONS: ReactionSummary[] = []
+const NO_MEDIA: MessageMediaItem[] = []
 const displayName = (author: string | null) => author ?? 'Tidligere medlem'
 const replyDomId = (id: string) => `svar-${id}`
 const replyRef = (r: ChildReply) => ({ id: r.reply.id, parentId: r.reply.parentId, replyToId: r.reply.replyToId, createdAt: r.reply.createdAt })
@@ -46,8 +54,11 @@ const replyRef = (r: ChildReply) => ({ id: r.reply.id, parentId: r.reply.parentI
 /** Cmd/Ctrl+Enter sender; Enter alene er linjeskift, for forumsvar kan være lange. */
 const isSubmitShortcut = (e: React.KeyboardEvent) => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing
 
-function ForumText({ id, kind, body, author, createdAt, updatedAt, canEdit, unread = false, topicId, mentions, domId, marked = false, context, onReply }: {
+function ForumText({ id, kind, body, author, createdAt, updatedAt, canEdit, unread = false, topicId, mentions, media = NO_MEDIA, reactions = NO_REACTIONS, domId, marked = false, context, onReply }: {
   id: string; kind: 'topic' | 'reply'; body: string; author: string | null; createdAt: number; updatedAt: number; canEdit: boolean; unread?: boolean; topicId?: string; mentions: MentionUser[]
+  /** Bildene og GIF-ene i innlegget. Redigeringen endrer bare teksten. */
+  media?: MessageMediaItem[]
+  reactions?: ReactionSummary[]
   /** Ankeret `?svar=` og «Svar til …» ruller til. */
   domId?: string
   marked?: boolean
@@ -95,9 +106,11 @@ function ForumText({ id, kind, body, author, createdAt, updatedAt, canEdit, unre
       try { await editForumText({ data: { id, kind, body: forumMarkers(draft, chosen) } }); setEditing(false); await router.invalidate() }
       catch (e) { setError(e instanceof Error ? e.message : 'Kunne ikke lagre.') } finally { setBusy(false) }
     }}>
-      <Field label="Rediger tekst" hint="Skriv @ for å omtale noen."><MentionTextarea className="field-input min-h-40" required maxLength={20000} value={draft} onChange={setDraft} chosen={chosen} onChosenChange={setChosen} search={(query) => searchForumMentions({ data: { query } })} /></Field>
-      <div className="flex gap-2"><Button type="submit" disabled={busy || !draft.trim()}>Lagre</Button><Button type="button" disabled={busy} onClick={() => setEditing(false)}>Avbryt</Button></div>
-    </form> : <p className={`whitespace-pre-wrap break-words leading-relaxed ${kind === 'topic' ? 'text-[1.02rem] text-ink' : 'text-[0.95rem] text-ink-soft'}`} dangerouslySetInnerHTML={{ __html: forumMentionHtml(body, mentions) }} />}
+      <Field label="Rediger tekst" hint="Skriv @ for å omtale noen."><MentionTextarea className="field-input min-h-40" required={!media.length} maxLength={20000} value={draft} onChange={setDraft} chosen={chosen} onChosenChange={setChosen} search={(query) => searchForumMentions({ data: { query } })} /></Field>
+      <div className="flex gap-2"><Button type="submit" disabled={busy || (!draft.trim() && !media.length)}>Lagre</Button><Button type="button" disabled={busy} onClick={() => setEditing(false)}>Avbryt</Button></div>
+    </form> : body && <p className={`whitespace-pre-wrap break-words leading-relaxed ${kind === 'topic' ? 'text-[1.02rem] text-ink' : 'text-[0.95rem] text-ink-soft'}`} dangerouslySetInnerHTML={{ __html: forumMentionHtml(body, mentions) }} />}
+    <MessageMediaGallery items={media} className={body || editing ? 'pt-1' : ''} />
+    <ReactionBar kind={kind === 'topic' ? 'forum_topic' : 'forum_reply'} targetId={id} reactions={reactions} className="pt-0.5" />
     {error && <p role="alert" className="text-danger">{error}</p>}
   </article>
 }
@@ -105,8 +118,8 @@ function ForumText({ id, kind, body, author, createdAt, updatedAt, canEdit, unre
 type Restored = { savedAt: number; stale: boolean } | null
 
 /** Feltet for et nytt svar på tråden: fast nederst på berøringsskjerm (`Dock`), som kommentarfeltet på veggen. */
-function ReplyDock({ draft, onDraft, busy, error, onSubmit, restored, onDiscard }: {
-  draft: Draft; onDraft: (draft: Draft) => void; busy: boolean; error: string; onSubmit: () => void
+function ReplyDock({ draft, onDraft, media, busy, error, onSubmit, restored, onDiscard }: {
+  draft: Draft; onDraft: (draft: Draft) => void; media: MediaDraft; busy: boolean; error: string; onSubmit: () => void
   restored: Restored; onDiscard: () => void
 }) {
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -116,16 +129,19 @@ function ReplyDock({ draft, onDraft, busy, error, onSubmit, restored, onDiscard 
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight + 2, 160)}px`
   }, [draft.body])
-  return <Dock><form onSubmit={(e) => { e.preventDefault(); onSubmit() }}>
+  return <Dock><form onSubmit={(e) => { e.preventDefault(); onSubmit() }} {...dropMedia(media)}>
     {error && <p role="alert" className="mb-2 text-sm text-danger">{error}</p>}
     <DraftNotice restored={restored} onDiscard={onDiscard} />
-    <div className="flex items-end gap-2">
+    <MediaDraftStrip draft={media} className="mb-2" />
+    <div className="flex items-end gap-1.5">
+      <ComposerTools media={media} disabled={busy} compact onEmoji={(emoji) => insertAtCursor(ref.current, draft.body, (body) => onDraft({ ...draft, body }), emoji)} />
       <MentionTextarea
         textareaRef={ref}
         wrapperClassName="min-w-0 flex-1"
         className="field-input comment-dock-input"
         rows={1}
-        required
+        required={!media.ids.length}
+        onPaste={pasteMedia(media)}
         maxLength={20000}
         aria-label="Svar på tråden"
         aria-describedby="forum-reply-hint"
@@ -137,11 +153,11 @@ function ReplyDock({ draft, onDraft, busy, error, onSubmit, restored, onDiscard 
         search={(query) => searchForumMentions({ data: { query } })}
         onKeyDown={(e) => { if (isSubmitShortcut(e)) { e.preventDefault(); onSubmit() } }}
       />
-      <Button type="submit" variant="primary" loading={busy} disabled={!draft.body.trim()} aria-label="Publiser svar" className="comment-dock-send">
+      <Button type="submit" variant="primary" loading={busy} disabled={!canSendWith(draft.body, media)} aria-label="Publiser svar" className="comment-dock-send">
         {!busy && <Glyph name="send" size={18} />}
       </Button>
     </div>
-    <p id="forum-reply-hint" className="sr-only">Skriv @ for å velge et medlem eller Alle i korpset. Vil du svare noen bestemt, trykk «Svar» under svaret deres.</p>
+    <p id="forum-reply-hint" className="sr-only">Skriv @ for å velge et medlem eller Alle i korpset. Vil du svare noen bestemt, trykk «Svar» under svaret deres. Bilder og GIF-er kan også limes inn eller dras hit.</p>
   </form></Dock>
 }
 
@@ -150,23 +166,27 @@ function ReplyDock({ draft, onDraft, busy, error, onSubmit, restored, onDiscard 
  * havner. Teksten bor hos siden, ikke her: bytter man hvem man svarer, følger
  * det man har skrevet med i stedet for å forsvinne.
  */
-function InlineReply({ target, draft, onDraft, busy, error, onSubmit, onCancel, restored, onDiscard }: {
-  target: ReplyTarget; draft: Draft; onDraft: (draft: Draft) => void; busy: boolean; error: string
+function InlineReply({ target, draft, onDraft, media, busy, error, onSubmit, onCancel, restored, onDiscard }: {
+  target: ReplyTarget; draft: Draft; onDraft: (draft: Draft) => void; media: MediaDraft; busy: boolean; error: string
   onSubmit: () => void; onCancel: () => void; restored: Restored; onDiscard: () => void
 }) {
-  return <form className="mt-1 space-y-2 rounded-[9px] border border-line bg-paper-sunken/40 p-3" onSubmit={(e) => { e.preventDefault(); onSubmit() }}>
+  const field = useRef<HTMLTextAreaElement>(null)
+  return <form className="mt-1 space-y-2 rounded-[9px] border border-line bg-paper-sunken/40 p-3" onSubmit={(e) => { e.preventDefault(); onSubmit() }} {...dropMedia(media)}>
     <div className="flex items-center gap-2 text-xs text-ink-soft">
       <span className="h-4 w-[3px] shrink-0 rounded-full bg-brass" aria-hidden />
       <span className="min-w-0 flex-1 truncate">Svarer <strong className="text-ink">{target.name}</strong></span>
-      <button type="button" className="shrink-0 cursor-pointer px-1 py-0.5 text-ink-faint hover:text-ink" onClick={onCancel}>Avbryt</button>
+      {/* Ikke mens svaret sendes: «Avbryt» sletter bildene, og de kan være på vei inn i svaret. */}
+      <button type="button" disabled={busy} className="shrink-0 cursor-pointer px-1 py-0.5 text-ink-faint hover:text-ink disabled:pointer-events-none disabled:opacity-40" onClick={onCancel}>Avbryt</button>
     </div>
     <DraftNotice restored={restored} onDiscard={onDiscard} />
     <MentionTextarea
       // Fokus i samme trykk som åpnet feltet, så tastaturet kommer opp på iPhone.
       autoFocus
+      textareaRef={field}
       className="field-input min-h-20 w-full"
-      required
+      required={!media.ids.length}
       maxLength={20000}
+      onPaste={pasteMedia(media)}
       aria-label={`Svar til ${target.name}`}
       placeholder={`Svar ${target.name} … @ nevner noen`}
       value={draft.body}
@@ -177,11 +197,15 @@ function InlineReply({ target, draft, onDraft, busy, error, onSubmit, onCancel, 
       onKeyDown={(e) => {
         if (isSubmitShortcut(e)) { e.preventDefault(); onSubmit() }
         // Escape lukker først forslagslista (i MentionTextarea), så et tomt felt.
-        else if (e.key === 'Escape' && !draft.body.trim()) onCancel()
+        else if (e.key === 'Escape' && !busy && !draft.body.trim() && !media.items.length) onCancel()
       }}
     />
+    <MediaDraftStrip draft={media} />
     {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-    <Button type="submit" variant="primary" size="sm" loading={busy} disabled={!draft.body.trim()}>Svar</Button>
+    <div className="flex items-center gap-2">
+      <Button type="submit" variant="primary" size="sm" loading={busy} disabled={!canSendWith(draft.body, media)}>Svar</Button>
+      <ComposerTools media={media} disabled={busy} onEmoji={(emoji) => insertAtCursor(field.current, draft.body, (body) => onDraft({ ...draft, body }), emoji)} />
+    </div>
   </form>
 }
 
@@ -198,6 +222,9 @@ function TopicPage() {
   const [error, setError] = useState('')
   const [replying, setReplying] = useState<ReplyTarget | null>(null)
   const [replyDraft, setReplyDraft] = useState<Draft>(EMPTY_DRAFT)
+  // Bildene bor hos siden, som teksten: de følger med når man bytter hvem man svarer.
+  const replyMedia = useMediaDraft()
+  const topMedia = useMediaDraft()
   const [replyBusy, setReplyBusy] = useState(false)
   const [replyError, setReplyError] = useState('')
   /** Røtter der alle svarene er foldet ut. */
@@ -234,14 +261,17 @@ function TopicPage() {
   const expand = (rootId: string) => setExpanded((prev) => new Set(prev).add(rootId))
   const jumpTo = (id: string, rootId: string) => { expand(rootId); markElement(replyDomId(id)) }
   const startReply = (target: ReplyTarget) => { setReplyError(''); setReplying(target) }
-  const cancelReply = () => { setReplying(null); setReplyDraft(EMPTY_DRAFT); setReplyError('') }
+  const cancelReply = () => { setReplying(null); setReplyDraft(EMPTY_DRAFT); setReplyError(''); replyMedia.discardAll() }
 
   const sendReply = async () => {
     const text = forumMarkers(replyDraft.body, replyDraft.chosen)
-    if (!replying || replyBusy || !text.trim()) return
+    if (!replying || replyBusy || !canSendWith(text, replyMedia)) return
     setReplyBusy(true); setReplyError('')
+    const mediaIds = replyMedia.ids
     try {
-      const result = await replyToForum({ data: { topicId: topic.id, body: text, replyToId: replying.id } })
+      const result = await replyToForum({ data: { topicId: topic.id, body: text, replyToId: replying.id, mediaIds } })
+      // Bildene hører til svaret nå — `clear` før `cancelReply`, som ellers ville slettet dem.
+      replyMedia.clear(mediaIds)
       // Svaret er lagret. Navigasjonen henter tråden på nytt og ruller til det.
       replyLocal.clear()
       await navigate({ search: { page: result.page, svar: result.id }, replace: true }).catch(() => undefined)
@@ -256,7 +286,7 @@ function TopicPage() {
       ? { hidden: 0, visible: root.children }
       : foldChildren(root.children, { mustShow: (c) => !!c.unread || c.reply.id === data.focus || c.reply.id === replying?.id || replyDomId(c.reply.id) === markedId })
     return <div key={root.reply.id} className="py-1">
-      <ForumText {...root.reply} kind="reply" mentions={data.mentions} author={root.author} canEdit={root.canEdit} unread={!!root.unread} topicId={topic.id}
+      <ForumText {...root.reply} kind="reply" mentions={data.mentions} media={data.media[root.reply.id]} reactions={data.reactions[root.reply.id]} author={root.author} canEdit={root.canEdit} unread={!!root.unread} topicId={topic.id}
         domId={replyDomId(root.reply.id)} marked={markedId === replyDomId(root.reply.id)}
         onReply={canReply ? () => startReply({ id: root.reply.id, rootId: root.reply.id, name: displayName(root.author) }) : undefined} />
       {(root.children.length > 0 || composerHere) && <div className="mb-2 ml-1 border-l-2 border-line pl-3 sm:ml-3 sm:pl-5">
@@ -265,7 +295,7 @@ function TopicPage() {
         </button>}
         {fold.visible.map((child) => {
           const ctx = replyContext(child, root.children, replyRef)
-          return <ForumText key={child.reply.id} {...child.reply} kind="reply" mentions={data.mentions} author={child.author} canEdit={child.canEdit} unread={!!child.unread} topicId={topic.id}
+          return <ForumText key={child.reply.id} {...child.reply} kind="reply" mentions={data.mentions} media={data.media[child.reply.id]} reactions={data.reactions[child.reply.id]} author={child.author} canEdit={child.canEdit} unread={!!child.unread} topicId={topic.id}
             domId={replyDomId(child.reply.id)} marked={markedId === replyDomId(child.reply.id)}
             context={ctx.kind === 'sibling'
               ? <button type="button" title="Vis svaret" className="inline-flex max-w-full cursor-pointer items-center gap-1 text-xs text-ink-faint hover:text-ink" onClick={() => jumpTo(ctx.target.reply.id, root.reply.id)}>
@@ -274,7 +304,7 @@ function TopicPage() {
               : ctx.kind === 'gone' ? <p className="text-xs italic text-ink-faint">Svar på et svar som ikke finnes lenger</p> : null}
             onReply={canReply ? () => startReply({ id: child.reply.id, rootId: root.reply.id, name: displayName(child.author) }) : undefined} />
         })}
-        {composerHere && replying && <InlineReply target={replying} draft={replyDraft} onDraft={setReplyDraft} busy={replyBusy} error={replyError} onSubmit={() => void sendReply()} onCancel={cancelReply}
+        {composerHere && replying && <InlineReply target={replying} draft={replyDraft} onDraft={setReplyDraft} media={replyMedia} busy={replyBusy} error={replyError} onSubmit={() => void sendReply()} onCancel={cancelReply}
           restored={replyLocal.restored} onDiscard={() => { replyLocal.discard(); setReplyDraft(EMPTY_DRAFT) }} />}
       </div>}
     </div>
@@ -282,10 +312,13 @@ function TopicPage() {
 
   const sendTopLevel = async () => {
     const text = forumMarkers(topDraft.body, topDraft.chosen)
-    if (busy || !text.trim()) return
+    if (busy || !canSendWith(text, topMedia)) return
     setBusy(true); setError('')
+    const mediaIds = topMedia.ids
     try {
-      const result = await replyToForum({ data: { topicId: topic.id, body: text } })
+      const result = await replyToForum({ data: { topicId: topic.id, body: text, mediaIds } })
+      // Bildene hører til svaret nå og skal ikke slettes når siden byttes.
+      topMedia.clear(mediaIds)
       topLocal.clear()
       setTopDraft(EMPTY_DRAFT)
       await navigate({ search: { page: result.page, svar: result.id }, replace: true }).catch(() => undefined)
@@ -317,7 +350,7 @@ function TopicPage() {
       </div>
     </header>
     <div className="rise mt-5" style={{ animationDelay: '60ms' }}>
-      <ForumText key={topic.id} {...topic} kind="topic" mentions={data.mentions} author={data.author} canEdit={data.canEdit} />
+      <ForumText key={topic.id} {...topic} kind="topic" mentions={data.mentions} media={data.media[topic.id]} reactions={data.reactions[topic.id]} author={data.author} canEdit={data.canEdit} />
     </div>
     {/* Feil fra «Følg»/«Lås» og fra svaret vises i svarfeltet når det står der. */}
     {error && (topic.locked || replying) && <p role="alert" className="mt-3 text-danger">{error}</p>}
@@ -333,7 +366,7 @@ function TopicPage() {
     {topic.locked
       ? <p className="mt-6 rounded-[12px] border border-dashed border-line-strong bg-paper-sunken px-4 py-3 text-sm text-ink-soft">Tråden er låst. Du kan fortsatt lese samtalen.</p>
       // Skjult mens man svarer noen bestemt, så det ikke står to skrivefelt på skjermen.
-      : !replying && <ReplyDock draft={topDraft} onDraft={setTopDraft} busy={busy} error={error} onSubmit={() => void sendTopLevel()}
+      : !replying && <ReplyDock draft={topDraft} onDraft={setTopDraft} media={topMedia} busy={busy} error={error} onSubmit={() => void sendTopLevel()}
           restored={topLocal.restored} onDiscard={() => { topLocal.discard(); setTopDraft(EMPTY_DRAFT) }} />}
   </div>
 }

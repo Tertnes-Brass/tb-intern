@@ -516,6 +516,18 @@ html:has(dialog[open]) {
   overflow: hidden;
 }
 
+/* Mens fingeren holder på en knapp, lenke eller fane: ingenting kan markeres,
+   ellers markerer iOS teksten ved siden av (eller hele siden). Settes og tas
+   bort av `AppBehaviour` (src/lib/press-selection.ts). Felt er unntatt. */
+html.press-no-select {
+  -webkit-user-select: none;
+  user-select: none;
+}
+html.press-no-select :is(input, textarea, [contenteditable]) {
+  -webkit-user-select: auto;
+  user-select: auto;
+}
+
 /* ---------- Fanelinjen (telefon) ---------- */
 /* Ingen «forhåndsvisning» ved langt trykk på en fane. */
 .tab-link {

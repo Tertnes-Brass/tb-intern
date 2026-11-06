@@ -84,6 +84,8 @@ export async function notifyForum(input: {
   authorId: string
   authorName: string
   body: string
+  /** «GIF»/«Bilde» når svaret har bilder (`mediaLabel`) — utdraget i varselet når teksten er tom. */
+  mediaLabel?: string
   previousBody?: string
 }): Promise<void> {
   try {
@@ -101,7 +103,7 @@ export async function notifyForum(input: {
     const reply = isNewReply ? plan.reply : []
     if (!plan.mention.length && !plan.direct.length && !reply.length) return
 
-    const excerpt = forumPlainText(input.body, await forumMentionNames([input.body]))
+    const excerpt = forumPlainText(input.body, await forumMentionNames([input.body])) || input.mediaLabel || ''
     const about = { topicId: input.topicId, replyId: input.replyId, authorName: input.authorName, excerpt }
     if (plan.mention.length) {
       await sendPushToUsers(plan.mention, forumMentionPushMessage(about), { ttl: PUSH_TTL.mention, urgency: 'high' })

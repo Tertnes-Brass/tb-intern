@@ -4,12 +4,14 @@ import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-rout
 import { useEffect, useMemo, useState } from 'react'
 import { ActionMenu, type ActionMenuItem } from '../../../components/ActionMenu'
 import { CommentComposer } from '../../../components/CommentComposer'
+import { MessageMediaGallery } from '../../../components/MessageMedia'
+import { ReactionBar } from '../../../components/Reactions'
 import { Dock } from '../../../components/compose/Dock'
 import { draftKey } from '../../../lib/drafts'
 import { Icon } from '../../../components/Icons'
 import { useThreadMark } from '../../../components/useThreadMark'
 import { buildThreads, foldChildren, replyContext } from '../../../lib/threads'
-import { LikeButton, SenderMark, postSender } from '../../../components/PostCard'
+import { SenderMark, postSender } from '../../../components/PostCard'
 import { Glyph } from '../../../components/compose/Composer'
 import { shortWhen } from '../../../components/compose/when'
 import { rememberPostRead } from '../../../lib/read-posts-client'
@@ -171,9 +173,9 @@ function CommentThread({
 
   const expand = (rootId: string) => setExpanded((prev) => new Set(prev).add(rootId))
 
-  const submit = async (body: string, target: CommentReplyTarget | null) => {
+  const submit = async (body: string, mediaIds: string[], target: CommentReplyTarget | null) => {
     try {
-      const result = await addComment({ data: { postId, body, replyToId: target?.id ?? null } })
+      const result = await addComment({ data: { postId, body, replyToId: target?.id ?? null, mediaIds } })
       await router.invalidate()
       if (target) {
         setReplying(null)
@@ -259,21 +261,27 @@ function CommentThread({
           {/* Omtaler blir chips og nettadresser blir lenker; brukerinnhold escapes av `renderCommentHtml`
               (allowlist ved konstruksjon, som i markdown.ts). Linjeskift
               beholdes av `whitespace-pre-wrap`, akkurat som før. */}
-          <p
-            className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink-soft"
-            dangerouslySetInnerHTML={{ __html: renderCommentHtml(comment.body, comment.mentions) }}
-          />
-          {canComment && (
-            <button
-              type="button"
-              aria-label={`Svar ${comment.author.name}`}
-              onClick={() => setReplying({ id: comment.id, rootId, name: comment.author.name })}
-              className="hit mt-1.5 inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-ink-soft transition-colors hover:text-ink"
-            >
-              <Icon name="reply" size={13} />
-              Svar
-            </button>
+          {comment.body && (
+            <p
+              className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink-soft"
+              dangerouslySetInnerHTML={{ __html: renderCommentHtml(comment.body, comment.mentions) }}
+            />
           )}
+          <MessageMediaGallery items={comment.media} className="mt-2" />
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+            {canComment && (
+              <button
+                type="button"
+                aria-label={`Svar ${comment.author.name}`}
+                onClick={() => setReplying({ id: comment.id, rootId, name: comment.author.name })}
+                className="hit inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-ink-soft transition-colors hover:text-ink"
+              >
+                <Icon name="reply" size={13} />
+                Svar
+              </button>
+            )}
+            <ReactionBar kind="post_comment" targetId={comment.id} reactions={comment.reactions} canReact={canComment} />
+          </div>
         </div>
       </li>
     )
@@ -315,7 +323,7 @@ function CommentThread({
                       draftKey={userId ? draftKey(userId, { kind: 'comment', postId, replyToId: replying.id }) : undefined}
                       replyTo={{ name: replying.name }}
                       onCancel={() => setReplying(null)}
-                      onSubmit={(body) => submit(body, replying)}
+                      onSubmit={(body, mediaIds) => submit(body, mediaIds, replying)}
                     />
                   )}
                 </div>
@@ -336,7 +344,7 @@ function CommentThread({
           variant="dock"
           postId={postId}
           draftKey={userId ? draftKey(userId, { kind: 'comment', postId }) : undefined}
-          onSubmit={(body) => submit(body, null)}
+          onSubmit={(body, mediaIds) => submit(body, mediaIds, null)}
         />
       </Dock>
     )}
@@ -562,7 +570,7 @@ function PostPage() {
         )}
         {!isDraft && (
           <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
-            <LikeButton postId={post.id} count={post.likeCount} mine={post.likedByMe} />
+            <ReactionBar kind="post" targetId={post.id} reactions={post.reactions} size="md" />
           </div>
         )}
       </article>

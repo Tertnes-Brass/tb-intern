@@ -448,3 +448,89 @@ inline og har `private, no-store`. Det finnes ingen offentlig R2-lenke eller
 vikartoken for disse filene. Opplasting bruker servergenererte nøkler og en
 atomisk antallsgrense. R2-bytene slettes før metadata, også ved sletting av hele
 beskjeden.
+
+## 10. Bilder, GIF-er, stickers og memes i samtalene (4. november 2026)
+
+Forumet, kommentarene på veggen og de to chattene kan ha egne bilder og valg fra
+GIF-velgeren (KLIPY) (`message_media`, migrasjon `0030_bilder-i-samtaler.sql`).
+Grunnregelen gjelder uendret: én server-gate, og den spør samme spørsmål som
+stedet bildet står.
+
+- **Egen rute.** Bytene ligger i R2 under `message-media/<fersk id>.<ext>` og
+  strømmes kun fra `src/routes/api/message-media/$mediaId.ts` (aldri via
+  `$fileId`, `post-images` eller `board-files`). Logikken er
+  `messageMediaAccess` i `src/server/message-media.ts`.
+- **Gaten** (`currentUser()` først, uinnlogget gir 401):
+  - ikke sendt ennå (utkast): bare den som lastet det opp;
+  - forumet: alle aktive medlemmer, så lenge tråden/svaret finnes;
+  - kommentar på veggen: `canReadPost` på innlegget (eller ditt eget innlegg),
+    og aldri for et «slettet»-merke — avpubliseres innlegget eller flyttes det
+    til «Bare styret», følger bildene med;
+  - styrechatten: `board.manage`; lederchatten: `isGroupLeader` (aktiv
+    leiarbinding, ikke rettigheten alene — en admin uten binding får 404).
+  «Finnes ikke» og «ikke for deg» svarer likt (404).
+- **Opplasting** (`api/message-media/upload.ts`, PUT) krever bare innlogging:
+  bildet er et utkast ingen andre ser. Formatet leses fra BYTENE (`sniffImage`
+  i `src/lib/message-media.ts`) — `Content-Type` og filnavn fra klienten brukes
+  ikke. Kun GIF, PNG, JPEG og WebP (aldri SVG eller HEIC), maks 10 MB, maks
+  100 MP, maks 12 utkast per medlem. Svaret har `nosniff` og
+  `Content-Security-Policy: default-src 'none'; sandbox` i tillegg til
+  `private, max-age=300`, `noindex` og `no-referrer`.
+- **Kobling til meldingen** skjer i serverfunksjonen som sender meldingen (som
+  allerede gater området): `claimMessageMedia` er en compare-and-set på
+  `owner_id = meg AND target_id IS NULL`. Et rått kall kan derfor ikke legge
+  andres bilde i sin melding, og samme utkast kan ikke sendes to ganger.
+- **Sletting:** meldingen/kommentaren slettes først, så bildene (R2 før rad).
+  Gaten ser at målet er borte og svarer 404 med en gang; feiler R2-slettingen,
+  tar den daglige cron-en (`sweepMessageMedia`) resten, sammen med utkast eldre
+  enn et døgn og bilder i rader som forsvant via cascade.
+- **KLIPY — det ene unntaket fra «ingen bilder fra tredjepart»** (bevisst valg,
+  4. november 2026; se `docs/bilder-i-samtaler.md`). KLIPYs vilkår krever at
+  søket går fra nettleseren og at GIF-ene vises rett fra KLIPYs CDN, så KLIPY
+  ser leserens IP og tidspunkt. Avgrensningen:
+  - et KLIPY-valg lagres bare med en adresse `isKlipyMediaUrl` godtar (https, KLIPYs
+    tre CDN-verter, bildeformat) — sjekket i valideringen av `addKlipyMedia` OG i
+    `createKlipyMedia`, så et rått kall ikke kan legge inn et sporingsbilde;
+  - gaten svarer for et KLIPY-valg med `302` til KLIPY-adressen, men først
+    ETTER samme tilgangssjekk (mobilappen følger ikke omdirigeringer og viser
+    bare merkelappen); nettsiden viser adressen
+    direkte, med `referrerPolicy="no-referrer"`;
+  - API-nøkkelen (`KLIPY_API_KEY`) står i adressen til hvert søk — slik er
+    KLIPYs nettleser-API laget — og gis derfor bare til innloggede
+    (`getKlipyConfig`); `customer_id` er et HMAC-pseudonym, aldri bruker-id-en.
+
+| Aktør | Forum | Kommentar, åpent innlegg | Kommentar, `board`-innlegg | Styrechat | Lederchat | Andres utkast |
+|---|---|---|---|---|---|---|
+| Medlem | Ja | Ja | **404** | **404** | **404** | **404** |
+| `posts.publish` | Ja | Ja | Ja | **404** | **404** | **404** |
+| `board.manage` | Ja | Ja | Bare med `posts.publish` (styrerollen har den) | Ja | **404** | **404** |
+| Gruppeleder (binding) | Ja | Ja | **404** | **404** | Ja | **404** |
+| Uinnlogget | **401** | 401 | 401 | 401 | 401 | 401 |
+
+## 11. Emoji-reaksjoner (4. november 2026)
+
+Reaksjoner på innlegg og kommentarer på veggen og på forumtråder og -svar
+(`reactions`, migrasjon `0031_reaksjoner.sql`). Erstatter «👍 Liker», som ble
+kopiert til 👍; mobil-API v1 sin `like` er 👍.
+
+- **Gaten** er `canReactTo` i `src/server/reaction-store.ts`, samme regel som å
+  lese: et PUBLISERT innlegg medlemmet kan lese (`canReadPost`, eller sitt eget),
+  en kommentar som ikke er et «slettet»-merke på et slikt innlegg, eller en
+  forumtråd/-svar som finnes. Utkast får ingen reaksjoner. «Finnes ikke» og
+  «ikke for deg» gir samme feil.
+- **Hvem som reagerte** (navnene i verktøytipset) sendes bare sammen med
+  innhold medlemmet allerede får lese (`reactionsFor` kalles etter at
+  kalleren har sjekket lesetilgangen). Siden får de ti første per emoji; hele
+  lista (arket ved langt trykk) kommer fra `listReactionPeople`, som har den
+  samme gaten `canReactTo` som å reagere.
+- **Bare emoji**: `isReactionEmoji` i serverfunksjonens validering — aldri
+  fritekst. Maks 20 ulike emojier per innlegg.
+- **Sletting:** reaksjonene slettes med innlegget og kommentaren; et
+  «slettet»-merke har ingen. Den daglige cron-en (`sweepReactions`) tar det
+  cascade lot ligge.
+
+| Aktør | Åpent innlegg | `board`-innlegg | Utkast | Forum |
+|---|---|---|---|---|
+| Medlem | Ja | **Nei** | **Nei** | Ja |
+| `posts.publish` | Ja | Ja | **Nei** | Ja |
+| Uinnlogget | **401** | 401 | 401 | 401 |

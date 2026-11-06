@@ -49,6 +49,8 @@ import {
 } from '../lib/mentions'
 import { type Me, requirePermission } from './access'
 import { deleteBoardObject } from './board-files'
+import { claimMessageMedia, deleteMediaFor, mediaFor, releaseMessageMedia } from './message-media'
+import { EMPTY_MESSAGE, MAX_MEDIA_PER_ITEM, hasMessageContent } from '../lib/message-media'
 import { notifyTaskAssigned } from './board-notify'
 
 /**
@@ -873,8 +875,12 @@ export const deleteBoardProject = createServerFn({ method: 'POST' })
     const d = db()
     // Oppgavene overlever prosjektet (ON DELETE SET NULL) og havner tilbake i
     // den vanlige lista. Tråden derimot hører til prosjektet og går med.
-    await d.delete(boardMessages).where(eq(boardMessages.channel, projectChannel(data.id)))
+    const gone = await d
+      .delete(boardMessages)
+      .where(eq(boardMessages.channel, projectChannel(data.id)))
+      .returning({ id: boardMessages.id })
     await d.delete(boardProjects).where(eq(boardProjects.id, data.id))
+    await deleteMediaFor('board_message', gone.map((m) => m.id))
     return { ok: true }
   })
 
@@ -1241,6 +1247,8 @@ export const listMessages = createServerFn()
     // navnene sendes som ett oppslag for hele sida — klienten slår opp selv når
     // den rendrer chip-ene.
     const mentions = await mentionNamesFor(rows.flatMap((m) => [m.body, m.replyBody]))
+    // Bildene i meldingene og i originalene det svares på (til «GIF» i svarreferansen).
+    const media = await mediaFor('board_message', rows.flatMap((m) => (m.replyId ? [m.id, m.replyId] : [m.id])))
 
     const messages: ChatMessage[] = rows
       .map((m) => ({
@@ -1249,7 +1257,8 @@ export const listMessages = createServerFn()
         authorName: m.authorName,
         body: m.body,
         createdAt: m.createdAt.getTime(),
-        replyTo: replyReference(m, mentions),
+        replyTo: replyReference(m, mentions, m.replyId ? media.get(m.replyId) : []),
+        media: media.get(m.id) ?? [],
       }))
       .sort((a, b) => a.createdAt - b.createdAt)
     return {
@@ -1264,10 +1273,15 @@ export const postMessage = createServerFn({ method: 'POST' })
   .validator(
     z.object({
       channel: z.string().min(1).max(120),
-      body: z.string().min(1, 'Skriv noe først').max(4000),
+      // Kan være tom når meldingen har et bilde eller en GIF (`hasMessageContent`).
+      body: z.string().max(4000),
       /** Meldingen det svares på. Må ligge i samme kanal — ingen kryssvar. */
       replyToId: z.string().nullish(),
-    }),
+      /** Opplastede bilder (`/api/message-media/upload`) som skal stå i meldingen. */
+      mediaIds: z.array(z.string().min(1).max(100)).max(MAX_MEDIA_PER_ITEM).default([]),
+    })
+    // Tekst eller bilde — en valideringsfeil (400 i mobil-API-et), ikke en serverfeil.
+    .refine((d) => hasMessageContent(d.body, d.mediaIds), { message: EMPTY_MESSAGE, path: ['body'] }),
   )
   .handler(async ({ data }) => {
     const me = await requirePermission(BOARD_PERMISSION)
@@ -1304,9 +1318,17 @@ export const postMessage = createServerFn({ method: 'POST' })
 
     const id = newId()
     const createdAt = new Date()
-    await d
-      .insert(boardMessages)
-      .values({ id, channel: data.channel, authorId: me.id, body: data.body.trim(), replyToId, replyToDeleted, createdAt })
+    // Bildene kobles FØR meldingen skrives (compare-and-set): et dobbelttrykk
+    // kan aldri gi to meldinger med de samme bildene.
+    await claimMessageMedia({ ids: data.mediaIds, ownerId: me.id, kind: 'board_message', targetId: id })
+    try {
+      await d
+        .insert(boardMessages)
+        .values({ id, channel: data.channel, authorId: me.id, body: data.body.trim(), replyToId, replyToDeleted, createdAt })
+    } catch (err) {
+      await releaseMessageMedia(id)
+      throw err
+    }
     return { id, createdAt: createdAt.getTime() }
   })
 
@@ -1333,6 +1355,7 @@ export const deleteMessage = createServerFn({ method: 'POST' })
       .set({ replyToId: null, replyToDeleted: true })
       .where(eq(boardMessages.replyToId, data.id))
     await d.delete(boardMessages).where(eq(boardMessages.id, data.id))
+    await deleteMediaFor('board_message', [data.id])
     return { ok: true }
   })
 

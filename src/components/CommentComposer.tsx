@@ -3,6 +3,8 @@ import { type TextDraft, isTextDraft } from '../lib/drafts'
 import { type MentionUser, toMarkers } from '../lib/mentions'
 import { searchMentionableMembers } from '../server/posts'
 import { MentionTextarea } from './MentionTextarea'
+import { ComposerTools } from './MediaPicker'
+import { MediaDraftStrip, canSendWith, dropMedia, insertAtCursor, pasteMedia, useMediaDraft } from './MessageMedia'
 import { Glyph } from './compose/Composer'
 import { DraftNotice } from './compose/LeaveGuard'
 import { useLocalDraft } from './compose/useLocalDraft'
@@ -23,6 +25,9 @@ import { Button } from './ui'
  * Forslagslista legges OVER feltet: kommentarfeltet ligger nederst i tråden, og
  * på mobil står det rett over tastaturet når det har fokus. Plassen er der oppe.
  *
+ * Bilder og GIF-er (knappen, lim inn eller dra inn) lastes opp straks de velges
+ * og sendes som id-er sammen med teksten — se `MessageMedia.tsx`.
+ *
  * `variant="dock"` er feltet i linjen nederst på detaljsiden (`.comment-dock`):
  * én linje som vokser med teksten (opp til ~6 linjer) og en rund sendeknapp,
  * som i en meldingsapp.
@@ -40,8 +45,8 @@ export function CommentComposer({
   draftKey,
 }: {
   postId: string
-  /** Kalles med den ferdige teksten (markører, ikke navn). Kaster den, beholdes teksten. */
-  onSubmit: (body: string) => Promise<void>
+  /** Kalles med den ferdige teksten (markører, ikke navn) og bildene. Kaster den, beholdes teksten og bildene. */
+  onSubmit: (body: string, mediaIds: string[]) => Promise<void>
   /**
    * Svar på en kommentar: feltet åpner seg i tråden, får fokus i samme trykk
    * (ellers kommer ikke tastaturet opp på iPhone) og viser hvem man svarer.
@@ -55,6 +60,8 @@ export function CommentComposer({
   const [busy, setBusy] = useState(false)
   /** Medlemmene som FAKTISK er valgt fra lista — grunnlaget for `toMarkers`. */
   const [chosen, setChosen] = useState<MentionUser[]>([])
+  const media = useMediaDraft()
+  const textRef = useRef<HTMLTextAreaElement>(null)
   const dockRef = useRef<HTMLTextAreaElement>(null)
   const local = useLocalDraft<TextDraft>({
     storageKey: draftKey,
@@ -83,10 +90,13 @@ export function CommentComposer({
 
   const submit = async () => {
     const text = toMarkers(body, chosen)
-    if (!text.trim()) return
+    if (busy || !canSendWith(text, media)) return
     setBusy(true)
+    const mediaIds = media.ids
     try {
-      await onSubmit(text)
+      await onSubmit(text, mediaIds)
+      // Bildene hører til kommentaren nå og skal ikke slettes når feltet lukkes.
+      media.clear(mediaIds)
       local.clear()
       setBody('')
       setChosen([])
@@ -102,7 +112,9 @@ export function CommentComposer({
     return (
       <>
       {notice}
-      <div className="flex items-end gap-2">
+      <MediaDraftStrip draft={media} className="mb-2" />
+      <div className="flex items-end gap-1.5" {...dropMedia(media)}>
+        <ComposerTools media={media} disabled={busy} compact onEmoji={(emoji) => insertAtCursor(dockRef.current, body, setBody, emoji)} />
         <MentionTextarea
           textareaRef={dockRef}
           wrapperClassName="min-w-0 flex-1"
@@ -114,6 +126,7 @@ export function CommentComposer({
           onChosenChange={setChosen}
           search={(query) => searchMentionableMembers({ data: { postId, query } })}
           onEnter={() => void submit()}
+          onPaste={pasteMedia(media)}
           aria-label="Ny kommentar"
           placeholder="Skriv en kommentar …"
         />
@@ -121,7 +134,7 @@ export function CommentComposer({
           type="button"
           variant="primary"
           loading={busy}
-          disabled={!body.trim()}
+          disabled={!canSendWith(body, media)}
           onClick={() => void submit()}
           aria-label="Kommenter"
           className="comment-dock-send"
@@ -134,8 +147,10 @@ export function CommentComposer({
   }
 
   const field = (
-    <div className={replyTo ? 'flex flex-col gap-2 sm:flex-row sm:items-end' : 'mt-4 flex flex-col gap-2 sm:flex-row sm:items-end'}>
+    <div className={replyTo ? 'space-y-2' : 'mt-4 space-y-2'} {...dropMedia(media)}>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
       <MentionTextarea
+        textareaRef={textRef}
         wrapperClassName="flex-1"
         className="field-input min-h-16 w-full resize-y text-sm"
         value={body}
@@ -146,24 +161,30 @@ export function CommentComposer({
         // medlemmer som selv kan lese det.
         search={(query) => searchMentionableMembers({ data: { postId, query } })}
         onEnter={() => void submit()}
+        onPaste={pasteMedia(media)}
         // Escape lukker først forslagslista (i MentionTextarea), så et tomt svarfelt.
         onKeyDown={(e) => {
-          if (e.key === 'Escape' && onCancel && !body.trim()) onCancel()
+          if (e.key === 'Escape' && onCancel && !busy && !body.trim() && !media.items.length) onCancel()
         }}
         autoFocus={!!replyTo}
         aria-label={replyTo ? `Svar til ${replyTo.name}` : 'Ny kommentar'}
         placeholder={replyTo ? `Svar ${replyTo.name} … bruk @ for å nevne noen` : 'Skriv en kommentar … bruk @ for å nevne noen'}
       />
-      <Button
-        type="button"
-        variant="primary"
-        loading={busy}
-        disabled={!body.trim()}
-        onClick={() => void submit()}
-        className="w-full sm:w-auto"
-      >
-        {replyTo ? 'Svar' : 'Kommenter'}
-      </Button>
+      <div className="flex gap-2">
+        <ComposerTools media={media} disabled={busy} compact onEmoji={(emoji) => insertAtCursor(textRef.current, body, setBody, emoji)} />
+        <Button
+          type="button"
+          variant="primary"
+          loading={busy}
+          disabled={!canSendWith(body, media)}
+          onClick={() => void submit()}
+          className="flex-1 sm:flex-none"
+        >
+          {replyTo ? 'Svar' : 'Kommenter'}
+        </Button>
+      </div>
+    </div>
+    <MediaDraftStrip draft={media} />
     </div>
   )
   if (!replyTo) return <>{local.restored && <DraftNotice restored={local.restored} onDiscard={discard} className="mt-4" />}{field}</>
@@ -174,8 +195,14 @@ export function CommentComposer({
         <span className="min-w-0 flex-1 truncate">
           Svarer <strong className="text-ink">{replyTo.name}</strong>
         </span>
+        {/* Ikke mens kommentaren sendes: «Avbryt» sletter bildene, og de kan være på vei inn. */}
         {onCancel && (
-          <button type="button" onClick={onCancel} className="shrink-0 cursor-pointer px-1 py-0.5 text-ink-faint hover:text-ink">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="shrink-0 cursor-pointer px-1 py-0.5 text-ink-faint hover:text-ink disabled:pointer-events-none disabled:opacity-40"
+          >
             Avbryt
           </button>
         )}

@@ -1,12 +1,10 @@
-import { Link, useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { postImageUrl } from '../lib/post-images-client'
 import { seenThisSession } from '../lib/read-posts-client'
 import type { SearchHit } from '../lib/post-search'
-import { commentCountLabel, reactionLabel, toggleReaction as nextReactionState } from '../lib/posts'
+import { commentCountLabel } from '../lib/posts'
 import type { PostImage, PostListItem } from '../server/posts'
-import { toggleReaction } from '../server/posts'
-import { toastError } from './toast'
+import { ReactionBar } from './Reactions'
 import { Glyph } from './compose/Composer'
 import { shortWhen } from './compose/when'
 import { Highlight, SearchHitLine } from './Search'
@@ -48,54 +46,6 @@ export function PostImageGrid({ images, total }: { images: PostImage[]; total: n
         </li>
       ))}
     </ul>
-  )
-}
-
-export function LikeButton({
-  postId,
-  count,
-  mine,
-  className = '',
-}: {
-  postId: string
-  count: number
-  mine: boolean
-  className?: string
-}) {
-  const router = useRouter()
-  // Optimistisk: samme regel som serveren (`toggleReaction` i lib/posts.ts).
-  const [state, setState] = useState({ count, mine })
-  const [busy, setBusy] = useState(false)
-
-  const click = async () => {
-    const optimistic = nextReactionState(state)
-    setState(optimistic)
-    setBusy(true)
-    try {
-      const result = await toggleReaction({ data: { postId } })
-      setState({ count: result.count, mine: result.mine })
-      await router.invalidate()
-    } catch (err) {
-      setState({ count, mine })
-      toastError(err)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => void click()}
-      disabled={busy}
-      aria-pressed={state.mine}
-      title={reactionLabel(state)}
-      className={`post-chip hit ${state.mine ? 'is-on' : ''} ${className}`}
-    >
-      <span aria-hidden>👍</span>
-      <span>Liker</span>
-      {state.count > 0 && <span className="tabular font-mono text-[0.72rem]">{state.count}</span>}
-    </button>
   )
 }
 
@@ -178,8 +128,8 @@ export function PostCard({ post, terms, hit }: { post: PostListItem; terms?: str
 
       <PostImageGrid images={post.images} total={post.imageCount} />
 
-      <div className="mt-3 flex items-center gap-2">
-        <LikeButton postId={post.id} count={post.likeCount} mine={post.likedByMe} />
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <ReactionBar kind="post" targetId={post.id} reactions={post.reactions} size="md" />
         <Link to="/beskjeder/$postId" params={{ postId: post.id }} className="post-chip hit">
           <Glyph name="comment" size={15} />
           {post.commentCount === 0 ? 'Kommenter' : commentCountLabel(post.commentCount)}

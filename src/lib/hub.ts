@@ -52,7 +52,6 @@ export type HubPost = {
   fromArchive?: boolean
   authorName: string
   commentCount: number
-  likeCount: number
 }
 
 export type HubCalendar = {

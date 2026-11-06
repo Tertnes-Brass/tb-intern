@@ -83,7 +83,12 @@ beforeEach(() => {
 })
 afterEach(() => { sqlite.close(); vi.restoreAllMocks() })
 
-const comment = (body: string, replyToId?: string, postId = 'post') => addComment({ data: { postId, body, replyToId } })
+// Hver kommentar får sitt eget millisekund: kommentarene sorteres på tid (og id
+// ved likt tidspunkt), og tre kommentarer i samme millisekund ga tilfeldig rekkefølge.
+const comment = async (body: string, replyToId?: string, postId = 'post') => {
+  await new Promise((resolve) => setTimeout(resolve, 2))
+  return addComment({ data: { postId, body, replyToId } })
+}
 const row = (id: string) => sqlite.prepare('SELECT parent_id, reply_to_id, author_id, body, deleted_at IS NOT NULL AS deleted FROM post_comments WHERE id = ?').get(id)
 const ids = () => (sqlite.prepare('SELECT id FROM post_comments ORDER BY id').all() as Array<{ id: string }>).map((r) => r.id)
 

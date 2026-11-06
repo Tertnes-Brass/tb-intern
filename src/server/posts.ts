@@ -12,8 +12,8 @@ import {
   postImages,
   postAttachments,
   postMentions,
-  postReactions,
   postReads,
+  reactions,
   posts,
   rolePermissions,
   user,
@@ -53,6 +53,10 @@ import {
 } from '../lib/posts'
 import { type Me, hasPermission, requireMe } from './access'
 import { canAttachImages } from './post-images'
+import { claimMessageMedia, deleteMediaFor, mediaFor, releaseMessageMedia } from './message-media'
+import { deleteReactionsFor, reactionsFor } from './reaction-store'
+import { LIKE_EMOJI, MAX_DISTINCT_REACTIONS, type ReactionSummary, canAddDistinct, likeState } from '../lib/reactions'
+import { EMPTY_MESSAGE, MAX_MEDIA_PER_ITEM, type MessageMediaItem, hasMessageContent, mediaLabel } from '../lib/message-media'
 import { mentionEmail, postEmail, postMentionEmail, sendEmail } from './email'
 import { PUSH_TTL, commentReplyPushMessage, commentUrl, mentionPushMessage, postPushMessage } from '../lib/push'
 import { replyPlacement } from '../lib/threads'
@@ -126,8 +130,11 @@ export type PostListItem = {
   createdAt: number
   updatedAt: number
   commentCount: number
+  /** 👍 — det mobil-API v1 kaller «likes» (`likeState`). */
   likeCount: number
   likedByMe: boolean
+  /** Alle emoji-reaksjonene, i rekkefølgen de først ble brukt. */
+  reactions: ReactionSummary[]
   /**
    * Siste kommentar eller publisering (ms) — sorteringen «Siste aktivitet».
    * Et «slettet»-merke teller ikke.
@@ -172,6 +179,10 @@ export type PostComment = {
    * gammelt navn og aldri som markørtekst.
    */
   mentions: MentionUser[]
+  /** Bildene og GIF-ene i kommentaren (tom for et «slettet»-merke). */
+  media: MessageMediaItem[]
+  /** Emoji-reaksjonene (tom for et «slettet»-merke). */
+  reactions: ReactionSummary[]
 }
 
 export type PostDetail = Omit<PostListItem, 'images'> & { body: string; images: PostImage[] }
@@ -265,15 +276,14 @@ async function perChunk<R>(ids: string[], query: (chunk: string[]) => Promise<R[
   return parts.flat()
 }
 
-/** Kommentartall, likes og bilder for innleggene — noen små spørringer per 90 innlegg. */
+/** Kommentartall, reaksjoner og bilder for innleggene — noen små spørringer per 90 innlegg. */
 async function decorate(
   rows: Row[],
   me: Me,
 ): Promise<{
   comments: Map<string, number>
   lastComment: Map<string, number>
-  likes: Map<string, number>
-  mine: Set<string>
+  reactions: Map<string, ReactionSummary[]>
   images: Map<string, PostImage[]>
   mentions: Map<string, MentionUser[]>
   read: Set<string>
@@ -283,8 +293,7 @@ async function decorate(
     return {
       comments: new Map(),
       lastComment: new Map(),
-      likes: new Map(),
-      mine: new Set(),
+      reactions: new Map(),
       images: new Map(),
       mentions: new Map(),
       read: new Set(),
@@ -305,12 +314,8 @@ async function decorate(
         .where(and(inArray(postComments.postId, chunk), isNull(postComments.deletedAt)))
         .groupBy(postComments.postId),
     ),
-    perChunk(ids, (chunk) =>
-      d
-        .select({ postId: postReactions.postId, userId: postReactions.userId })
-        .from(postReactions)
-        .where(inArray(postReactions.postId, chunk)),
-    ),
+    // Deler selv id-ene i biter på 90.
+    reactionsFor('post', ids, me.id),
     perChunk(ids, (chunk) =>
       d
         .select({
@@ -333,12 +338,6 @@ async function decorate(
     ),
   ])
 
-  const likes = new Map<string, number>()
-  const mine = new Set<string>()
-  for (const r of reactionRows) {
-    likes.set(r.postId, (likes.get(r.postId) ?? 0) + 1)
-    if (r.userId === me.id) mine.add(r.postId)
-  }
   const images = new Map<string, PostImage[]>()
   for (const img of imageRows) {
     const list = images.get(img.postId) ?? []
@@ -348,8 +347,7 @@ async function decorate(
   return {
     comments: new Map(commentRows.map((r) => [r.postId, r.n])),
     lastComment: new Map(commentRows.map((r) => [r.postId, Number(r.last)])),
-    likes,
-    mine,
+    reactions: reactionRows,
     images,
     mentions,
     read: new Set(readRows.map((r) => r.postId)),
@@ -403,8 +401,9 @@ function toListItem(
     createdAt: row.createdAt.getTime(),
     updatedAt: row.updatedAt.getTime(),
     commentCount: extra.comments.get(row.id) ?? 0,
-    likeCount: extra.likes.get(row.id) ?? 0,
-    likedByMe: extra.mine.has(row.id),
+    likeCount: likeState(extra.reactions.get(row.id) ?? []).count,
+    likedByMe: likeState(extra.reactions.get(row.id) ?? []).mine,
+    reactions: extra.reactions.get(row.id) ?? [],
     lastActivityAt: Math.max(
       row.publishedAt?.getTime() ?? row.createdAt.getTime(),
       extra.lastComment.get(row.id) ?? 0,
@@ -563,7 +562,12 @@ export const getPost = createServerFn()
     const detail: PostDetail = { ...item, body: row.body }
     // Omtalene løses til DAGENS navn her, ikke ved lagring: bytter noen navn,
     // følger omtalen med av seg selv (#83).
-    const mentionsByComment = await mentionsFor(commentRows.map((c) => c.id))
+    const live = commentRows.filter((c) => !c.deletedAt).map((c) => c.id)
+    const [mentionsByComment, mediaByComment, reactionsByComment] = await Promise.all([
+      mentionsFor(commentRows.map((c) => c.id)),
+      mediaFor('post_comment', live),
+      reactionsFor('post_comment', live, me.id),
+    ])
 
     return {
       post: detail,
@@ -583,6 +587,8 @@ export const getPost = createServerFn()
           replyToId: c.replyToId,
           deleted: !!c.deletedAt,
           mentions: mentionsByComment.get(c.id) ?? [],
+          media: mediaByComment.get(c.id) ?? [],
+          reactions: reactionsByComment.get(c.id) ?? [],
         }),
       ),
       // Leveringsstatus er et skriveverktøy; medlemmer skal ikke se hvem som fikk e-post.
@@ -785,7 +791,14 @@ export const deletePost = createServerFn({ method: 'POST' })
     const images = await db().select({ r2Key: postImages.r2Key }).from(postImages).where(eq(postImages.postId, data.id))
     const attachments = await db().select({ r2Key: postAttachments.r2Key }).from(postAttachments).where(eq(postAttachments.postId, data.id))
     await Promise.all([...images, ...attachments].map((file) => env.FILES.delete(file.r2Key)))
+    const commentIds = (await db().select({ id: postComments.id }).from(postComments).where(eq(postComments.postId, data.id))).map((c) => c.id)
     await db().delete(posts).where(eq(posts.id, data.id)) // kommentarer/likes/bilder/vedlegg via cascade
+    // Bildene og reaksjonene har ingen fremmednøkkel (de kan stå i flere
+    // tabeller). Gaten viser dem ikke lenger; feiler slettingen, tar den daglige
+    // ryddingen dem.
+    await deleteMediaFor('post_comment', commentIds)
+    await deleteReactionsFor('post', [data.id])
+    await deleteReactionsFor('post_comment', commentIds)
     return { ok: true }
   })
 
@@ -912,10 +925,15 @@ export const addComment = createServerFn({ method: 'POST' })
   .validator(
     z.object({
       postId: z.string().min(1),
-      body: z.string().trim().min(1, 'Skriv noe først').max(4_000, 'Kommentaren er for lang'),
+      // Kan være tom når kommentaren har et bilde eller en GIF (`hasMessageContent`).
+      body: z.string().trim().max(4_000, 'Kommentaren er for lang'),
       /** Svar på en annen kommentar. Serveren avgjør hvor svaret står (`replyPlacement`). */
       replyToId: z.string().min(1).max(100).nullish(),
-    }),
+      /** Opplastede bilder (`/api/message-media/upload`) som skal stå i kommentaren. */
+      mediaIds: z.array(z.string().min(1).max(100)).max(MAX_MEDIA_PER_ITEM).default([]),
+    })
+    // Tekst eller bilde — en valideringsfeil (400 i mobil-API-et), ikke en serverfeil.
+    .refine((d) => hasMessageContent(d.body, d.mediaIds), { message: EMPTY_MESSAGE, path: ['body'] }),
   )
   .handler(async ({ data }) => {
     const me = await requireMe()
@@ -965,9 +983,17 @@ export const addComment = createServerFn({ method: 'POST' })
 
     const ts = new Date()
     const id = newId()
-    await db()
-      .insert(postComments)
-      .values({ id, postId: row.id, authorId: me.id, body: data.body, ...placement, createdAt: ts, updatedAt: ts })
+    // Bildene kobles FØR kommentaren skrives (compare-and-set): et dobbelttrykk
+    // kan aldri gi to kommentarer med de samme bildene.
+    const media = await claimMessageMedia({ ids: data.mediaIds, ownerId: me.id, kind: 'post_comment', targetId: id })
+    try {
+      await db()
+        .insert(postComments)
+        .values({ id, postId: row.id, authorId: me.id, body: data.body, ...placement, createdAt: ts, updatedAt: ts })
+    } catch (err) {
+      await releaseMessageMedia(id)
+      throw err
+    }
     if (mentionIds.length > 0) {
       // Den spørrbare koblingen. Cascader med kommentaren ved sletting.
       await db()
@@ -985,7 +1011,7 @@ export const addComment = createServerFn({ method: 'POST' })
     }
     if (target?.authorId && target.authorId !== me.id) {
       await pushSafely('svar på kommentar', () =>
-        notifyCommentReply({ post: row, commentId: id, commenterId: me.id, commenterName: me.name, body: data.body, repliedTo: target.authorId!, mentionIds, mentioned }),
+        notifyCommentReply({ post: row, commentId: id, commenterId: me.id, commenterName: me.name, body: data.body, mediaLabel: mediaLabel(media), repliedTo: target.authorId!, mentionIds, mentioned }),
       )
     }
     // TODO(varsling): svar på eget innlegg bør kunne gi e-post/varsel senere.
@@ -1048,6 +1074,8 @@ async function notifyCommentReply(input: {
   commenterId: string
   commenterName: string
   body: string
+  /** «GIF»/«Bilde» — utdraget i varselet når kommentaren bare er et bilde. */
+  mediaLabel: string
   repliedTo: string
   mentionIds: string[]
   mentioned: MentionUser[]
@@ -1072,7 +1100,7 @@ async function notifyCommentReply(input: {
       postId: input.post.id,
       commentId: input.commentId,
       authorName: input.commenterName,
-      excerpt: mentionPlainText(input.body, input.mentioned),
+      excerpt: mentionPlainText(input.body, input.mentioned) || input.mediaLabel,
     }),
     { ttl: PUSH_TTL.mention, urgency: 'high' },
   )
@@ -1125,8 +1153,13 @@ export const deleteComment = createServerFn({ method: 'POST' })
         .set({ body: '', authorId: null, deletedAt: now, updatedAt: now })
         .where(eq(postComments.id, comment.id))
       await d.delete(postCommentMentions).where(eq(postCommentMentions.commentId, comment.id))
+      // Et «slettet»-merke har verken bilder eller reaksjoner, akkurat som det ikke har tekst.
+      await deleteMediaFor('post_comment', [comment.id])
+      await deleteReactionsFor('post_comment', [comment.id])
       return { ok: true }
     }
+    await deleteMediaFor('post_comment', [comment.id])
+    await deleteReactionsFor('post_comment', [comment.id])
     // Rydd merker oppover som nå står uten svar (svar → svaret det svarte på →
     // roten). Et merke kan bli fritt først når et ANNET merke er ryddet, så en
     // id kan dukke opp i køen igjen; løkken ender likevel, for noe legges bare i
@@ -1150,33 +1183,36 @@ export const deleteComment = createServerFn({ method: 'POST' })
 
 // ---------- Reaksjoner ----------
 
+/**
+ * «👍 Liker» — mobil-API v1 (`POST posts/{id}/like`) og appens «Lik innlegg».
+ * Samme som en 👍-reaksjon (`toggleEmojiReaction` i reactions.ts), og svaret har
+ * fortsatt v1-formen `{ mine, count }` for 👍.
+ */
 export const toggleReaction = createServerFn({ method: 'POST' })
   .validator(z.object({ postId: z.string().min(1) }))
   .handler(async ({ data }) => {
     const me = await requireMe()
     const canPublish = hasPermission(me, PUBLISH_PERMISSION)
-    const row = await readablePost(data.postId, canPublish)
+    const row = await readablePost(data.postId, canPublish, me)
+    if (!row.publishedAt) throw new Error('Fant ikke beskjeden')
     const d = db()
-    const existing = (
+    const mine = and(eq(reactions.targetKind, 'post'), eq(reactions.targetId, row.id), eq(reactions.userId, me.id), eq(reactions.emoji, LIKE_EMOJI))
+    const removed = await d.delete(reactions).where(mine).returning({ emoji: reactions.emoji })
+    if (removed.length === 0) {
+      // Samme tak som `toggleEmojiReaction`: 👍 er en emoji som alle andre.
+      const existing = await d
+        .selectDistinct({ emoji: reactions.emoji })
+        .from(reactions)
+        .where(and(eq(reactions.targetKind, 'post'), eq(reactions.targetId, row.id)))
+      if (!canAddDistinct(existing.map((r) => r.emoji), LIKE_EMOJI)) {
+        throw new Error(`Maks ${MAX_DISTINCT_REACTIONS} ulike reaksjoner`)
+      }
       await d
-        .select({ postId: postReactions.postId })
-        .from(postReactions)
-        .where(and(eq(postReactions.postId, row.id), eq(postReactions.userId, me.id)))
-        .limit(1)
-    )[0]
-    if (existing) {
-      await d.delete(postReactions).where(and(eq(postReactions.postId, row.id), eq(postReactions.userId, me.id)))
-    } else {
-      await d
-        .insert(postReactions)
-        .values({ postId: row.id, userId: me.id, kind: 'like', createdAt: new Date() })
+        .insert(reactions)
+        .values({ targetKind: 'post', targetId: row.id, userId: me.id, emoji: LIKE_EMOJI, createdAt: new Date() })
         .onConflictDoNothing()
     }
-    const count = await d
-      .select({ n: sql<number>`count(*)` })
-      .from(postReactions)
-      .where(eq(postReactions.postId, row.id))
-    return { mine: !existing, count: count[0]?.n ?? 0 }
+    return likeState((await reactionsFor('post', [row.id], me.id)).get(row.id) ?? [])
   })
 
 // ---------- Bilder ----------

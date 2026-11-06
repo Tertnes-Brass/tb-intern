@@ -42,7 +42,10 @@ import { Route as VTokenRouteImport } from './routes/v/$token'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiBoardFilesDocumentIdRouteImport } from './routes/api/board-files/$documentId'
 import { Route as ApiBoardFilesUploadRouteImport } from './routes/api/board-files/upload'
+import { Route as ApiDevKlipySplatRouteImport } from './routes/api/dev-klipy/$'
 import { Route as ApiFilesFileIdRouteImport } from './routes/api/files/$fileId'
+import { Route as ApiMessageMediaMediaIdRouteImport } from './routes/api/message-media/$mediaId'
+import { Route as ApiMessageMediaUploadRouteImport } from './routes/api/message-media/upload'
 import { Route as ApiPostAttachmentsAttachmentIdRouteImport } from './routes/api/post-attachments/$attachmentId'
 import { Route as ApiPostAttachmentsUploadRouteImport } from './routes/api/post-attachments/upload'
 import { Route as ApiPostImagesImageIdRouteImport } from './routes/api/post-images/$imageId'
@@ -236,9 +239,24 @@ const ApiBoardFilesUploadRoute = ApiBoardFilesUploadRouteImport.update({
   path: '/api/board-files/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDevKlipySplatRoute = ApiDevKlipySplatRouteImport.update({
+  id: '/api/dev-klipy/$',
+  path: '/api/dev-klipy/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiFilesFileIdRoute = ApiFilesFileIdRouteImport.update({
   id: '/api/files/$fileId',
   path: '/api/files/$fileId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMessageMediaMediaIdRoute = ApiMessageMediaMediaIdRouteImport.update({
+  id: '/api/message-media/$mediaId',
+  path: '/api/message-media/$mediaId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMessageMediaUploadRoute = ApiMessageMediaUploadRouteImport.update({
+  id: '/api/message-media/upload',
+  path: '/api/message-media/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPostAttachmentsAttachmentIdRoute =
@@ -411,7 +429,10 @@ export interface FileRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
   '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
+  '/api/dev-klipy/$': typeof ApiDevKlipySplatRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/message-media/$mediaId': typeof ApiMessageMediaMediaIdRoute
+  '/api/message-media/upload': typeof ApiMessageMediaUploadRoute
   '/api/post-attachments/$attachmentId': typeof ApiPostAttachmentsAttachmentIdRoute
   '/api/post-attachments/upload': typeof ApiPostAttachmentsUploadRoute
   '/api/post-images/$imageId': typeof ApiPostImagesImageIdRoute
@@ -470,7 +491,10 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
   '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
+  '/api/dev-klipy/$': typeof ApiDevKlipySplatRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/message-media/$mediaId': typeof ApiMessageMediaMediaIdRoute
+  '/api/message-media/upload': typeof ApiMessageMediaUploadRoute
   '/api/post-attachments/$attachmentId': typeof ApiPostAttachmentsAttachmentIdRoute
   '/api/post-attachments/upload': typeof ApiPostAttachmentsUploadRoute
   '/api/post-images/$imageId': typeof ApiPostImagesImageIdRoute
@@ -533,7 +557,10 @@ export interface FileRoutesById {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
   '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
+  '/api/dev-klipy/$': typeof ApiDevKlipySplatRoute
   '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/message-media/$mediaId': typeof ApiMessageMediaMediaIdRoute
+  '/api/message-media/upload': typeof ApiMessageMediaUploadRoute
   '/api/post-attachments/$attachmentId': typeof ApiPostAttachmentsAttachmentIdRoute
   '/api/post-attachments/upload': typeof ApiPostAttachmentsUploadRoute
   '/api/post-images/$imageId': typeof ApiPostImagesImageIdRoute
@@ -597,7 +624,10 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/board-files/$documentId'
     | '/api/board-files/upload'
+    | '/api/dev-klipy/$'
     | '/api/files/$fileId'
+    | '/api/message-media/$mediaId'
+    | '/api/message-media/upload'
     | '/api/post-attachments/$attachmentId'
     | '/api/post-attachments/upload'
     | '/api/post-images/$imageId'
@@ -656,7 +686,10 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/board-files/$documentId'
     | '/api/board-files/upload'
+    | '/api/dev-klipy/$'
     | '/api/files/$fileId'
+    | '/api/message-media/$mediaId'
+    | '/api/message-media/upload'
     | '/api/post-attachments/$attachmentId'
     | '/api/post-attachments/upload'
     | '/api/post-images/$imageId'
@@ -718,7 +751,10 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/board-files/$documentId'
     | '/api/board-files/upload'
+    | '/api/dev-klipy/$'
     | '/api/files/$fileId'
+    | '/api/message-media/$mediaId'
+    | '/api/message-media/upload'
     | '/api/post-attachments/$attachmentId'
     | '/api/post-attachments/upload'
     | '/api/post-images/$imageId'
@@ -777,7 +813,10 @@ export interface RootRouteChildren {
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiBoardFilesDocumentIdRoute: typeof ApiBoardFilesDocumentIdRoute
   ApiBoardFilesUploadRoute: typeof ApiBoardFilesUploadRoute
+  ApiDevKlipySplatRoute: typeof ApiDevKlipySplatRoute
   ApiFilesFileIdRoute: typeof ApiFilesFileIdRoute
+  ApiMessageMediaMediaIdRoute: typeof ApiMessageMediaMediaIdRoute
+  ApiMessageMediaUploadRoute: typeof ApiMessageMediaUploadRoute
   ApiPostAttachmentsAttachmentIdRoute: typeof ApiPostAttachmentsAttachmentIdRoute
   ApiPostAttachmentsUploadRoute: typeof ApiPostAttachmentsUploadRoute
   ApiPostImagesImageIdRoute: typeof ApiPostImagesImageIdRoute
@@ -1026,11 +1065,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiBoardFilesUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/dev-klipy/$': {
+      id: '/api/dev-klipy/$'
+      path: '/api/dev-klipy/$'
+      fullPath: '/api/dev-klipy/$'
+      preLoaderRoute: typeof ApiDevKlipySplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/files/$fileId': {
       id: '/api/files/$fileId'
       path: '/api/files/$fileId'
       fullPath: '/api/files/$fileId'
       preLoaderRoute: typeof ApiFilesFileIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/message-media/$mediaId': {
+      id: '/api/message-media/$mediaId'
+      path: '/api/message-media/$mediaId'
+      fullPath: '/api/message-media/$mediaId'
+      preLoaderRoute: typeof ApiMessageMediaMediaIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/message-media/upload': {
+      id: '/api/message-media/upload'
+      path: '/api/message-media/upload'
+      fullPath: '/api/message-media/upload'
+      preLoaderRoute: typeof ApiMessageMediaUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/post-attachments/$attachmentId': {
@@ -1311,7 +1371,10 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiBoardFilesDocumentIdRoute: ApiBoardFilesDocumentIdRoute,
   ApiBoardFilesUploadRoute: ApiBoardFilesUploadRoute,
+  ApiDevKlipySplatRoute: ApiDevKlipySplatRoute,
   ApiFilesFileIdRoute: ApiFilesFileIdRoute,
+  ApiMessageMediaMediaIdRoute: ApiMessageMediaMediaIdRoute,
+  ApiMessageMediaUploadRoute: ApiMessageMediaUploadRoute,
   ApiPostAttachmentsAttachmentIdRoute: ApiPostAttachmentsAttachmentIdRoute,
   ApiPostAttachmentsUploadRoute: ApiPostAttachmentsUploadRoute,
   ApiPostImagesImageIdRoute: ApiPostImagesImageIdRoute,

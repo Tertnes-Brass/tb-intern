@@ -14,8 +14,12 @@ import {
 import { chatPlainText } from '../lib/chat-format'
 import { formatDate, formatDateShort, formatTime, formatWeekday, toOsloDate } from '../lib/format'
 import { type MentionUser, mentionPlainText, toMarkers } from '../lib/mentions'
+import { type MessageMediaItem, textOrMediaLabel } from '../lib/message-media'
+import { discardMessageMedia } from '../lib/message-media-client'
 import { ChatText } from './ChatText'
 import { MentionTextarea } from './MentionTextarea'
+import { ComposerTools } from './MediaPicker'
+import { MediaDraftStrip, MessageMediaGallery, canSendWith, dropMedia, insertAtCursor, pasteMedia, useMediaDraft } from './MessageMedia'
 import { toast, toastError } from './toast'
 import { Avatar, BottomSheet, Button, EmptyState, Field, Kicker, Modal, SheetAction, SheetActionSeparator, SheetActions } from './ui'
 
@@ -77,7 +81,9 @@ export type ChatApi = {
      */
     mentionNames: Record<string, string>
   }>
-  postMessage: (opts: { data: { channel: string; body: string; replyToId?: string | null } }) => Promise<unknown>
+  postMessage: (opts: {
+    data: { channel: string; body: string; replyToId?: string | null; mediaIds?: string[] }
+  }) => Promise<unknown>
   deleteMessage: (opts: { data: { id: string } }) => Promise<unknown>
   markChannelRead: (opts: { data: { channel: string; at?: number } }) => Promise<unknown>
   /** Forslagslista bak `@`. Gated på området funksjonen kom fra. */
@@ -207,6 +213,8 @@ export function ChatThread({
   const [body, setBody] = useState('')
   /** Medlemmene som er valgt fra `@`-lista — grunnlaget for `toMarkers`. */
   const [chosen, setChosen] = useState<MentionUser[]>([])
+  /** Bilder og GIF-er som sendes med neste melding. */
+  const media = useMediaDraft()
   /**
    * Navnene på alle omtalte vi har sett i denne kanalen. De akkumuleres fordi
    * pollingen bare henter NYE meldinger: navnene fra første lasting må stå igjen
@@ -375,7 +383,17 @@ export function ChatThread({
       if (stickRef.current) box.scrollTop = box.scrollHeight
     })
     ro.observe(box)
-    return () => ro.disconnect()
+    // En GIF eller et bilde lastes etter at meldingen er tegnet, og skyver
+    // bunnen ned: den som sto nederst blir stående der, den som har rullet opp
+    // for å lese får være i fred. (`load` bobler ikke, derfor fanges den på vei ned.)
+    const onLoad = (e: Event) => {
+      if (stickRef.current && e.target instanceof HTMLImageElement) box.scrollTop = box.scrollHeight
+    }
+    box.addEventListener('load', onLoad, true)
+    return () => {
+      ro.disconnect()
+      box.removeEventListener('load', onLoad, true)
+    }
   }, [])
 
   const onScroll = () => {
@@ -423,28 +441,57 @@ export function ChatThread({
   const send = async () => {
     // `@Navn` → markører helt til slutt; serveren validerer hver av dem.
     const text = toMarkers(body.trim(), chosen)
-    if (!text.trim() || sending) return
+    if (!canSendWith(text, media) || sending) return
     setSending(true)
+    const mediaIds = media.ids
     try {
-      await api.postMessage({ data: { channel, body: text, replyToId: replyTo?.id ?? null } })
+      await api.postMessage({ data: { channel, body: text, replyToId: replyTo?.id ?? null, mediaIds } })
+      media.clear(mediaIds)
       setBody('')
       setChosen([])
       setReplyTo(null)
-      forceBottomRef.current = true
-      // Sendt fra feiltilstanden: da finnes ingen historikk å bygge videre på,
-      // så hele kanalen lastes på nytt i stedet for «alt etter 0».
-      if (!loadedRef.current) {
-        setAttempt((n) => n + 1)
-        return
-      }
-      const res = await api.listMessages({ data: { channel, after: latestRef.current } })
-      setMessages((prev) => {
-        const known = new Set(prev.map((m) => m.id))
-        return [...prev, ...res.messages.filter((m) => !known.has(m.id))]
-      })
-      setMentionNames((prev) => ({ ...prev, ...res.mentionNames }))
-      latestRef.current = res.messages[res.messages.length - 1]?.createdAt ?? latestRef.current
+      await pullNew()
     } catch (err) {
+      toastError(err)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  /**
+   * Det som har kommet siden sist (vår egen melding medregnet), uten å vente på
+   * pollingen — og rull ned til den.
+   */
+  const pullNew = async () => {
+    forceBottomRef.current = true
+    // Sendt fra feiltilstanden: da finnes ingen historikk å bygge videre på,
+    // så hele kanalen lastes på nytt i stedet for «alt etter 0».
+    if (!loadedRef.current) {
+      setAttempt((n) => n + 1)
+      return
+    }
+    const res = await api.listMessages({ data: { channel, after: latestRef.current } })
+    setMessages((prev) => {
+      const known = new Set(prev.map((m) => m.id))
+      return [...prev, ...res.messages.filter((m) => !known.has(m.id))]
+    })
+    setMentionNames((prev) => ({ ...prev, ...res.mentionNames }))
+    latestRef.current = res.messages[res.messages.length - 1]?.createdAt ?? latestRef.current
+  }
+
+  /**
+   * En GIF, sticker eller meme fra velgeren sendes med en gang, som egen melding
+   * (som i Discord) — som svar hvis man holdt på å svare. Teksten i feltet blir
+   * stående til man sender den selv.
+   */
+  const sendPicked = async (item: MessageMediaItem) => {
+    setSending(true)
+    try {
+      await api.postMessage({ data: { channel, body: '', replyToId: replyTo?.id ?? null, mediaIds: [item.id] } })
+      setReplyTo(null)
+      await pullNew()
+    } catch (err) {
+      discardMessageMedia(item.id)
       toastError(err)
     } finally {
       setSending(false)
@@ -464,7 +511,7 @@ export function ChatThread({
       id: message.id,
       authorName: message.authorName,
       // Utdraget viser «@Navn», aldri markøren — som svarreferansen serveren lager.
-      excerpt: replyExcerpt(plainText(message)),
+      excerpt: replyExcerpt(textOrMediaLabel(plainText(message), message.media ?? [])),
     })
     inputRef.current?.focus()
   }
@@ -607,7 +654,7 @@ export function ChatThread({
       </div>
 
       {writable ? (
-        <div className="chat-composer shrink-0 border-t border-line bg-paper-raised px-3 pb-3 pt-2.5 sm:px-4">
+        <div className="chat-composer shrink-0 border-t border-line bg-paper-raised px-3 pb-3 pt-2.5 sm:px-4" {...dropMedia(media)}>
           {replyTo && (
             <div className="mb-2 flex items-center gap-2 rounded-[10px] bg-paper-sunken py-1.5 pl-3 pr-1">
               <span className="h-7 w-[3px] shrink-0 rounded-full bg-brass" aria-hidden />
@@ -625,7 +672,15 @@ export function ChatThread({
               </button>
             </div>
           )}
-          <div className="flex items-end gap-2">
+          <MediaDraftStrip draft={media} className="mb-2" />
+          <div className="flex items-end gap-1.5 sm:gap-2">
+            <ComposerTools
+              media={media}
+              disabled={sending}
+              compact
+              onGif={sendPicked}
+              onEmoji={(emoji) => insertAtCursor(inputRef.current, body, setBody, emoji)}
+            />
             <MentionTextarea
               textareaRef={inputRef}
               wrapperClassName="min-w-0 flex-1"
@@ -641,6 +696,7 @@ export function ChatThread({
               // Enter sender, Shift+Enter gir linjeskift — som i chatten dette
               // erstatter. Er forslagslista åpen, tar den Enter først.
               onEnter={() => void send()}
+              onPaste={pasteMedia(media)}
               onKeyDown={(e) => {
                 // Escape lukker først lista (i MentionTextarea), så svaret.
                 if (e.key === 'Escape' && replyTo) setReplyTo(null)
@@ -656,7 +712,7 @@ export function ChatThread({
               // kommer tilbake og flytter knappen) midt i trykket.
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => void send()}
-              disabled={!body.trim() || sending}
+              disabled={!canSendWith(body, media) || sending}
               aria-label="Send"
               className="chat-send grid h-[42px] w-[42px] shrink-0 cursor-pointer place-items-center rounded-full bg-brass text-paper-raised transition-[background-color,opacity,transform] hover:bg-brass-strong active:scale-95 disabled:cursor-default disabled:opacity-35 disabled:hover:bg-brass dark:text-paper pointer-coarse:h-11 pointer-coarse:w-11"
             >
@@ -683,7 +739,7 @@ export function ChatThread({
         message={actionFor}
         mine={actionFor?.authorId === meId}
         canReply={writable}
-        excerpt={actionFor ? replyExcerpt(plainText(actionFor)) : ''}
+        excerpt={actionFor ? replyExcerpt(textOrMediaLabel(plainText(actionFor), actionFor.media ?? [])) : ''}
         onClose={() => setActionFor(null)}
         onReply={(sheet) => {
           // Arket lukkes FØR feltet får fokus, og i samme trykk: iOS åpner bare
@@ -825,9 +881,12 @@ function MessageRow({
           }`}
         >
           {message.replyTo && <ReplyReference reply={message.replyTo} onJump={onJump} />}
-          <div className="whitespace-pre-wrap break-words">
-            <ChatText text={message.body} mentions={mentions} />
-          </div>
+          {message.body && (
+            <div className="whitespace-pre-wrap break-words">
+              <ChatText text={message.body} mentions={mentions} />
+            </div>
+          )}
+          {message.media && <MessageMediaGallery items={message.media} className={message.body ? 'mt-1.5 mb-1' : 'my-1'} />}
         </div>
       </div>
 
@@ -1001,16 +1060,19 @@ function MessageActionsSheet({
               onClick={(e) => onReply(e.currentTarget.closest('dialog'))}
             />
           )}
-          <SheetAction
-            icon={
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
-                <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-                <path d="M10.5 3.5v-.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h.5" stroke="currentColor" strokeWidth="1.4" />
-              </svg>
-            }
-            label="Kopier tekst"
-            onClick={onCopy}
-          />
+          {/* En melding som bare er en GIF eller et bilde, har ingen tekst å kopiere. */}
+          {message?.body.trim() && (
+            <SheetAction
+              icon={
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                  <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+                  <path d="M10.5 3.5v-.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h.5" stroke="currentColor" strokeWidth="1.4" />
+                </svg>
+              }
+              label="Kopier tekst"
+              onClick={onCopy}
+            />
+          )}
           {mine && (
             <>
               <SheetActionSeparator />

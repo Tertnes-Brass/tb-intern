@@ -181,12 +181,12 @@ describe('searchDocs', () => {
 })
 
 describe('sortering', () => {
-  const post = (id: string, publishedAt: number, commentCount = 0, likeCount = 0, lastActivityAt = publishedAt) => ({
+  const post = (id: string, publishedAt: number, commentCount = 0, reactionCount = 0, lastActivityAt = publishedAt) => ({
     id,
     publishedAt,
     createdAt: publishedAt,
     commentCount,
-    likeCount,
+    reactions: reactionCount ? [{ count: reactionCount }] : [],
     lastActivityAt,
   })
   const posts = [post('a', 1, 0, 0, 50), post('b', 3, 1, 0), post('c', 2, 2, 5)]
@@ -203,6 +203,11 @@ describe('sortering', () => {
     expect(ids(sortPosts(posts, 'treff'))).toEqual(['a', 'b', 'c'])
     sortPosts(posts, 'eldste')
     expect(ids(posts)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('mest aktive teller alle reaksjonene, ikke bare 👍', () => {
+    const mixed = [post('likes', 1, 0, 2), { ...post('emoji', 2), reactions: [{ count: 1 }, { count: 1 }, { count: 1 }] }]
+    expect(ids(sortPosts(mixed, 'aktive'))).toEqual(['emoji', 'likes'])
   })
 
   it('lik aktivitet faller tilbake på nyeste først', () => {

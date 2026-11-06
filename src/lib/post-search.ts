@@ -259,7 +259,7 @@ export const POST_SORTS: ReadonlyArray<{ value: PostSort; label: string; hint: s
   { value: 'treff', label: 'Beste treff', hint: 'Treff i tittelen først' },
   { value: 'nyeste', label: 'Nyeste', hint: 'Sist publisert først' },
   { value: 'eldste', label: 'Eldste', hint: 'Først publisert først' },
-  { value: 'aktive', label: 'Mest aktive', hint: 'Flest kommentarer og likes' },
+  { value: 'aktive', label: 'Mest aktive', hint: 'Flest kommentarer og reaksjoner' },
   { value: 'aktivitet', label: 'Siste aktivitet', hint: 'Sist kommentert eller publisert' },
 ]
 
@@ -279,7 +279,8 @@ type Sortable = {
   publishedAt: number | null
   createdAt: number
   commentCount: number
-  likeCount: number
+  /** Alle emoji-reaksjonene, ikke bare 👍. */
+  reactions: readonly { count: number }[]
   lastActivityAt: number
 }
 
@@ -291,6 +292,7 @@ type Sortable = {
 export function sortPosts<T extends Sortable>(posts: readonly T[], sort: PostSort): T[] {
   const time = (p: T) => p.publishedAt ?? p.createdAt
   const newest = (a: T, b: T) => time(b) - time(a)
+  const activity = (p: T) => p.commentCount + p.reactions.reduce((sum, r) => sum + r.count, 0)
   const list = [...posts]
   switch (sort) {
     case 'treff':
@@ -300,7 +302,7 @@ export function sortPosts<T extends Sortable>(posts: readonly T[], sort: PostSor
     case 'eldste':
       return list.sort((a, b) => time(a) - time(b))
     case 'aktive':
-      return list.sort((a, b) => b.commentCount + b.likeCount - (a.commentCount + a.likeCount) || newest(a, b))
+      return list.sort((a, b) => activity(b) - activity(a) || newest(a, b))
     case 'aktivitet':
       return list.sort((a, b) => b.lastActivityAt - a.lastActivityAt || newest(a, b))
   }

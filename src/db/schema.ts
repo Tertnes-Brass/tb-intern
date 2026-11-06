@@ -971,3 +971,75 @@ export const forumFollows = sqliteTable('forum_follows', {
   following: integer('following', { mode: 'boolean' }).notNull(),
   updatedAt: integer('updated_at').notNull(),
 }, (t) => [primaryKey({ columns: [t.topicId, t.userId] }), index('forum_follows_user_idx').on(t.userId)])
+
+// ---------- Bilder og GIF-er i samtalene ----------
+// Ett bilde, én GIF, en sticker eller et meme i forumet, i en kommentar på
+// veggen eller i en av chattene (src/lib/message-media.ts). To kilder:
+//
+// - `upload`: medlemmets egen fil. Bytene ligger i R2 under `r2_key` (bygd av en
+//   fersk id), `content_type` kommer fra bytene, aldri fra klienten.
+// - `klipy`: valgt i GIF-velgeren. Ingen bytes hos oss — KLIPYs vilkår krever at
+//   medieadressen brukes slik den kom (`external_url`, kun KLIPYs CDN-er, se
+//   `isKlipyMediaUrl`), og leserens nettleser henter den derfra.
+//
+// Lages FØR teksten sendes: til da er `target_kind`/`target_id` null, og bare
+// eieren ser raden. Når meldingen sendes, kobles den til raden den står i — én
+// gang, med compare-and-set på `target_id IS NULL`. Ingen fremmednøkkel til
+// målet (det kan være fem tabeller); `/api/message-media/$mediaId` sjekker at
+// målet finnes og at leseren kan se det, og den daglige cron-en rydder bort
+// rader som står uten mål (se `sweepMessageMedia`).
+export const messageMedia = sqliteTable(
+  'message_media',
+  {
+    id: text('id').primaryKey(),
+    ownerId: text('owner_id').references(() => user.id, { onDelete: 'set null' }),
+    targetKind: text('target_kind', {
+      enum: ['forum_topic', 'forum_reply', 'post_comment', 'board_message', 'leader_message'],
+    }),
+    targetId: text('target_id'),
+    source: text('source', { enum: ['upload', 'klipy'] }).notNull().default('upload'),
+    r2Key: text('r2_key'),
+    externalUrl: text('external_url'),
+    externalKind: text('external_kind', { enum: ['gif', 'sticker', 'meme'] }),
+    externalSlug: text('external_slug'),
+    title: text('title'),
+    contentType: text('content_type').notNull(),
+    size: integer('size').notNull(),
+    width: integer('width'),
+    height: integer('height'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    attachedAt: integer('attached_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [
+    index('message_media_target_idx').on(t.targetKind, t.targetId, t.sortOrder),
+    index('message_media_owner_idx').on(t.ownerId, t.targetId),
+  ],
+)
+
+// ---------- Emoji-reaksjoner ----------
+// Én rad per medlem per emoji per innlegg/kommentar/forumtråd/forumsvar
+// (src/lib/reactions.ts). Erstatter `post_reactions` (bare «👍 Liker»), som er
+// kopiert hit med emojien 👍 i migrasjon 0031 og ikke skrives til lenger — men
+// står igjen, så en eldre versjon av Workeren fortsatt kan lese den.
+// Mobil-API v1 sin «like» er 👍 i denne tabellen.
+//
+// Ingen fremmednøkkel til målet (fire tabeller): `canReactTo` sjekker at det
+// finnes og at medlemmet kan lese det, sletting av innlegg/kommentarer rydder
+// reaksjonene, og den daglige cron-en tar resten (`sweepReactions`).
+export const reactions = sqliteTable(
+  'reactions',
+  {
+    targetKind: text('target_kind', { enum: ['post', 'post_comment', 'forum_topic', 'forum_reply'] }).notNull(),
+    targetId: text('target_id').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    emoji: text('emoji').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.targetKind, t.targetId, t.userId, t.emoji] }),
+    index('reactions_target_idx').on(t.targetKind, t.targetId, t.createdAt),
+  ],
+)

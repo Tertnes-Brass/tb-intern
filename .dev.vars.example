@@ -10,3 +10,9 @@ ADMIN_EMAIL=din@epost.no
 # embed-adressen og settes normalt som var i wrangler.jsonc.
 # CALENDAR_ICS_URL=https://calendar.google.com/calendar/ical/.../private-.../basic.ics
 # CALENDAR_EMBED_URL=https://calendar.google.com/calendar/embed?src=...
+
+# GIF-velgeren (valgfritt lokalt). Nøkkelen lages i KLIPYs partnerpanel
+# (https://partner.klipy.com → API Keys); i produksjon settes den med
+# `wrangler secret put KLIPY_API_KEY`. Uten den bruker `pnpm dev` en lokal
+# etterligning (/api/dev-klipy) med KLIPYs eksempelfiler.
+# KLIPY_API_KEY=…
