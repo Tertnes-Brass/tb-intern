@@ -46,3 +46,17 @@ export const toggleEmojiReaction = createServerFn({ method: 'POST' })
     }
     return { reactions: (await reactionsFor(data.kind, [data.targetId], me.id)).get(data.targetId) ?? [] }
   })
+
+/**
+ * Alle som har reagert på ett innlegg, en kommentar eller et forumsvar, per
+ * emoji — arket «Hvem har reagert» (langt trykk på en reaksjon). Oppsummeringen
+ * siden får med seg har bare de ti første navnene. Samme tilgang som å reagere:
+ * «finnes ikke» og «ikke for deg» er samme svar.
+ */
+export const listReactionPeople = createServerFn({ method: 'POST' })
+  .validator(z.object({ kind: z.enum(REACTION_TARGETS), targetId: z.string().min(1).max(100) }))
+  .handler(async ({ data }): Promise<{ reactions: ReactionSummary[] }> => {
+    const me = await requireMe()
+    if (!(await canReactTo(data.kind, data.targetId, me))) throw new Error('Fant ikke innholdet')
+    return { reactions: (await reactionsFor(data.kind, [data.targetId], me.id, Number.POSITIVE_INFINITY)).get(data.targetId) ?? [] }
+  })

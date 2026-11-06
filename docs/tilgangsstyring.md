@@ -520,7 +520,9 @@ kopiert til 👍; mobil-API v1 sin `like` er 👍.
   «ikke for deg» gir samme feil.
 - **Hvem som reagerte** (navnene i verktøytipset) sendes bare sammen med
   innhold medlemmet allerede får lese (`reactionsFor` kalles etter at
-  kalleren har sjekket lesetilgangen).
+  kalleren har sjekket lesetilgangen). Siden får de ti første per emoji; hele
+  lista (arket ved langt trykk) kommer fra `listReactionPeople`, som har den
+  samme gaten `canReactTo` som å reagere.
 - **Bare emoji**: `isReactionEmoji` i serverfunksjonens validering — aldri
   fritekst. Maks 20 ulike emojier per innlegg.
 - **Sletting:** reaksjonene slettes med innlegget og kommentaren; et

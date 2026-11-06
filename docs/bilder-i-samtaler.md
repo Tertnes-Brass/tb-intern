@@ -94,7 +94,8 @@ Under hvert innlegg på veggen (også i feeden), hver kommentar og hver forumtr�
 og -svar: én «chip» per emoji med antall, dine markert. Trykk på en chip for å
 bli med eller trekke din tilbake; smilefjes-pluss gir hurtigvalgene
 👍 ❤️ 😂 😮 😢 🎉 🎺 og «Flere» (hele emoji-velgeren, søk på norsk). Holder man
-over en chip, står det hvem som reagerte.
+musepekeren over en chip, står de første navnene; et langt trykk (eller
+høyreklikk) åpner et ark med ALLE som har reagert, én fane per emoji.
 
 - Én rad per medlem per emoji (`reactions`, migrasjon `0031_reaksjoner.sql`).
   Flere ulike emojier per medlem er lov, men bare én av hver.

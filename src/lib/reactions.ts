@@ -98,7 +98,10 @@ export type ReactionSummary = {
   count: number
   /** Har jeg reagert med denne? */
   mine: boolean
-  /** De første navnene (i rekkefølgen de reagerte) — til verktøytipset. */
+  /**
+   * De første navnene (i rekkefølgen de reagerte) — til verktøytipset. På
+   * siden høyst `MAX_REACTION_NAMES`; arket «Hvem har reagert» henter alle.
+   */
   names: string[]
 }
 
@@ -109,7 +112,7 @@ export type ReactionRow = { emoji: string; userId: string; userName: string | nu
  * først ble brukt (som i Discord: en ny reaksjon havner bakerst, og rekkefølgen
  * hopper ikke når tallene endrer seg).
  */
-export function summarizeReactions(rows: readonly ReactionRow[], meId: string): ReactionSummary[] {
+export function summarizeReactions(rows: readonly ReactionRow[], meId: string, maxNames: number = MAX_REACTION_NAMES): ReactionSummary[] {
   const sorted = [...rows].sort((a, b) => a.createdAt - b.createdAt)
   const byEmoji = new Map<string, ReactionSummary>()
   for (const row of sorted) {
@@ -117,7 +120,7 @@ export function summarizeReactions(rows: readonly ReactionRow[], meId: string): 
     if (!s) byEmoji.set(row.emoji, (s = { emoji: row.emoji, count: 0, mine: false, names: [] }))
     s.count += 1
     if (row.userId === meId) s.mine = true
-    if (s.names.length < MAX_REACTION_NAMES) s.names.push(row.userId === meId ? 'Du' : (row.userName ?? 'Tidligere medlem'))
+    if (s.names.length < maxNames) s.names.push(row.userId === meId ? 'Du' : (row.userName ?? 'Tidligere medlem'))
   }
   return [...byEmoji.values()]
 }

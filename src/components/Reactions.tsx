@@ -1,10 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react'
 import { QUICK_REACTIONS, type ReactionSummary, type ReactionTarget, reactionTitle, toggleInSummary } from '../lib/reactions'
-import { toggleEmojiReaction } from '../server/reactions'
+import { listReactionPeople, toggleEmojiReaction } from '../server/reactions'
 import { EmojiPicker } from './EmojiPicker'
 import { Icon } from './Icons'
 import { Popover } from './Popover'
 import { toastError } from './toast'
+import { Avatar } from './ui'
+
+/** Så lenge man holder en reaksjon før arket «Hvem har reagert» åpner seg. */
+const LONG_PRESS_MS = 450
+/** Flytter fingeren seg mer enn dette, ruller man — det er ikke et langt trykk. */
+const LONG_PRESS_SLOP_PX = 10
 
 /**
  * Emoji-reaksjonene under et innlegg, en kommentar eller et forumsvar: én
@@ -16,6 +22,11 @@ import { toastError } from './toast'
  * serveren) og erstattes av serverens fasit når svaret kommer. Bare svaret på
  * det SISTE trykket får gjelde (et løpenummer som aldri nullstilles), så raske
  * trykk ikke kan ende i feil rekkefølge.
+ *
+ * Hvem som har reagert: verktøytipset med mus (de første navnene), og et langt
+ * trykk på berøringsskjerm — eller høyreklikk/menytasten — åpner et ark med
+ * alle, per emoji (`ReactionPeople`). Trykket som avslutter det lange trykket
+ * slår IKKE reaksjonen av eller på.
  */
 export function ReactionBar({
   kind,
@@ -48,6 +59,52 @@ export function ReactionBar({
     if (inflight.current === 0) setState(reactions)
   }, [signature])
 
+  /** Emojien arket «Hvem har reagert» står på, og chipen det åpnet seg fra. */
+  const [people, setPeople] = useState<string | null>(null)
+  const peopleAnchor = useRef<HTMLElement | null>(null)
+  const press = useRef<{ timer: number; x: number; y: number; fired: boolean } | null>(null)
+  const clearPress = () => {
+    if (press.current) clearTimeout(press.current.timer)
+    press.current = null
+    if (people === null) allowSelection()
+  }
+  useEffect(() => clearPress, [])
+  // iOS starter sin egen markering av tekst når man holder fingeren i ro — midt
+  // i det lange trykket, og over arket som nettopp åpnet seg under fingeren.
+  // Markering er av mens man holder og så lenge arket er åpent.
+  useEffect(() => {
+    if (people === null) return
+    window.getSelection()?.removeAllRanges()
+    blockSelection()
+    return allowSelection
+  }, [people])
+  const showPeople = (emoji: string, el: HTMLElement) => {
+    peopleAnchor.current = el
+    setPeople(emoji)
+  }
+  const onPressStart = (emoji: string, e: ReactPointerEvent<HTMLButtonElement>) => {
+    clearPress()
+    // Med mus er det verktøytipset og høyreklikk som gjelder.
+    if (e.pointerType === 'mouse') return
+    blockSelection()
+    const el = e.currentTarget
+    const timer = window.setTimeout(() => {
+      if (press.current) press.current.fired = true
+      showPeople(emoji, el)
+    }, LONG_PRESS_MS)
+    press.current = { timer, x: e.clientX, y: e.clientY, fired: false }
+  }
+  const onPressMove = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const p = press.current
+    if (p && !p.fired && Math.hypot(e.clientX - p.x, e.clientY - p.y) > LONG_PRESS_SLOP_PX) clearPress()
+  }
+  const onChipClick = (emoji: string) => {
+    // Slutten på et langt trykk er ikke et trykk.
+    if (press.current?.fired) return clearPress()
+    clearPress()
+    void toggle(emoji)
+  }
+
   const toggle = async (emoji: string) => {
     if (!canReact) return
     const before = state
@@ -72,12 +129,26 @@ export function ReactionBar({
         <button
           key={r.emoji}
           type="button"
-          onClick={() => void toggle(r.emoji)}
-          disabled={!canReact}
+          onClick={() => onChipClick(r.emoji)}
+          onPointerDown={(e) => onPressStart(r.emoji, e)}
+          onPointerMove={onPressMove}
+          onPointerUp={() => {
+            // Etter et langt trykk står merket til klikket som følger (det skal ikke telle).
+            if (!press.current?.fired) clearPress()
+          }}
+          onPointerCancel={clearPress}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            clearPress()
+            showPeople(r.emoji, e.currentTarget)
+          }}
+          // Ikke `disabled`: da får man heller ikke se hvem som har reagert.
+          aria-disabled={!canReact || undefined}
           aria-pressed={r.mine}
+          aria-haspopup="dialog"
           title={reactionTitle(r)}
-          aria-label={`${reactionTitle(r)}. ${r.mine ? 'Trykk for å fjerne din.' : 'Trykk for å bli med.'}`}
-          className={`hit inline-flex cursor-pointer items-center gap-1 rounded-full border transition-colors disabled:cursor-default ${
+          aria-label={`${reactionTitle(r)}. ${canReact ? (r.mine ? 'Trykk for å fjerne din. ' : 'Trykk for å bli med. ') : ''}Trykk lenge for å se alle.`}
+          className={`hit inline-flex cursor-pointer touch-manipulation select-none items-center gap-1 rounded-full border transition-colors [-webkit-touch-callout:none] aria-disabled:cursor-default ${
             size === 'md' ? 'h-8 px-2.5 text-[0.8rem]' : 'h-7 px-2 text-xs'
           } ${
             r.mine
@@ -92,6 +163,104 @@ export function ReactionBar({
         </button>
       ))}
       {canReact && <AddReaction onPick={(emoji) => void toggle(emoji)} hasAny={state.length > 0} size={size} />}
+      <Popover anchor={peopleAnchor} open={people !== null} onClose={() => setPeople(null)} label="Hvem har reagert" width={300} height="fit">
+        {people !== null && <ReactionPeople kind={kind} targetId={targetId} summary={state} initial={people} signature={signature} />}
+      </Popover>
+    </div>
+  )
+}
+
+const preventSelection = (e: Event) => e.preventDefault()
+function blockSelection() {
+  document.addEventListener('selectstart', preventSelection)
+}
+function allowSelection() {
+  document.removeEventListener('selectstart', preventSelection)
+}
+
+/**
+ * Arket «Hvem har reagert»: én fane per emoji (som i Discord), og alle som har
+ * reagert med den i rekkefølgen de gjorde det. Siden har bare de ti første
+ * navnene; resten hentes når arket åpner seg (`listReactionPeople`, samme
+ * tilgang som å reagere), og på nytt når reaksjonene endrer seg mens det er åpent.
+ */
+function ReactionPeople({
+  kind,
+  targetId,
+  summary,
+  initial,
+  signature,
+}: {
+  kind: ReactionTarget
+  targetId: string
+  summary: readonly ReactionSummary[]
+  initial: string
+  signature: string
+}) {
+  const [active, setActive] = useState(initial)
+  const [full, setFull] = useState<readonly ReactionSummary[] | null>(null)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    let live = true
+    listReactionPeople({ data: { kind, targetId } })
+      .then((res) => {
+        if (!live) return
+        setFull(res.reactions)
+        setFailed(false)
+      })
+      .catch(() => {
+        if (live) setFailed(true)
+      })
+    return () => {
+      live = false
+    }
+  }, [kind, targetId, signature])
+
+  // Fasiten fra serveren når den er her og stemmer med det siden viser.
+  const list = full && full.length > 0 ? full : summary
+  const current = list.find((r) => r.emoji === active) ?? list[0]
+  if (!current) return <p className="px-4 py-6 text-center text-sm text-ink-soft">Ingen reaksjoner ennå.</p>
+  const rest = current.count - current.names.length
+  return (
+    <div className="flex min-h-0 flex-col">
+      <div role="tablist" aria-label="Reaksjoner" className="flex shrink-0 gap-1 overflow-x-auto border-b border-line px-3 pt-1 pb-2">
+        {list.map((r) => {
+          const selected = r.emoji === current.emoji
+          return (
+            <button
+              key={r.emoji}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              aria-label={`${r.emoji} ${r.count}`}
+              onClick={() => setActive(r.emoji)}
+              className={`inline-flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-full border px-3 transition-colors pointer-coarse:h-11 ${
+                selected ? 'border-brass bg-[var(--brass-soft)] text-brass-strong' : 'border-transparent text-ink-soft hover:bg-paper-sunken'
+              }`}
+            >
+              <span className="text-[1.1rem] leading-none" aria-hidden>
+                {r.emoji}
+              </span>
+              <span className="tabular font-mono text-[0.75rem]" aria-hidden>
+                {r.count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      <ul role="tabpanel" aria-label={`Reagerte med ${current.emoji}`} className="min-h-0 overflow-y-auto px-4 py-2 sm:max-h-[min(60vh,360px)]">
+        {current.names.map((name, i) => (
+          <li key={`${i}-${name}`} className="flex min-h-11 items-center gap-3 text-sm text-ink">
+            <Avatar name={name} size="sm" />
+            <span className="min-w-0 truncate">{name}</span>
+          </li>
+        ))}
+        {rest > 0 && (
+          <li className="flex min-h-11 items-center text-sm text-ink-faint">
+            {full === null && !failed ? 'Henter resten …' : `og ${rest} ${rest === 1 ? 'annen' : 'andre'}`}
+          </li>
+        )}
+      </ul>
     </div>
   )
 }

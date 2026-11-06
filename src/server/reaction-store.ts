@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { db } from '../db'
 import { forumReplies, forumTopics, postComments, posts, reactions, user } from '../db/schema'
 import { canReadPost } from '../lib/posts'
-import { type ReactionSummary, type ReactionTarget, summarizeReactions } from '../lib/reactions'
+import { MAX_REACTION_NAMES, type ReactionSummary, type ReactionTarget, summarizeReactions } from '../lib/reactions'
 import { type Me, hasPermission } from './access'
 
 /**
@@ -54,8 +54,14 @@ export async function canReactTo(kind: ReactionTarget, targetId: string, me: Me)
 /**
  * Reaksjonene på en side med innlegg/kommentarer/svar, `id → oppsummering`.
  * Kalles bare ETTER at kalleren har sjekket at medlemmet kan lese dem.
+ * `maxNames` er hvor mange navn hver emoji tar med (standard: de første ti).
  */
-export async function reactionsFor(kind: ReactionTarget, targetIds: readonly string[], meId: string): Promise<Map<string, ReactionSummary[]>> {
+export async function reactionsFor(
+  kind: ReactionTarget,
+  targetIds: readonly string[],
+  meId: string,
+  maxNames: number = MAX_REACTION_NAMES,
+): Promise<Map<string, ReactionSummary[]>> {
   const ids = [...new Set(targetIds)]
   const out = new Map<string, ReactionSummary[]>()
   if (ids.length === 0) return out
@@ -74,7 +80,7 @@ export async function reactionsFor(kind: ReactionTarget, targetIds: readonly str
   const grouped = new Map<string, typeof rows>()
   for (const row of rows) grouped.set(row.targetId, [...(grouped.get(row.targetId) ?? []), row])
   for (const [id, list] of grouped) {
-    out.set(id, summarizeReactions(list.map((r) => ({ ...r, createdAt: r.createdAt.getTime() })), meId))
+    out.set(id, summarizeReactions(list.map((r) => ({ ...r, createdAt: r.createdAt.getTime() })), meId, maxNames))
   }
   return out
 }

@@ -67,7 +67,7 @@ import { addKlipyMedia, getKlipyConfig } from './klipy'
 import { MEDIA_CLAIM_FAILED, discardPendingMedia, messageMediaAccess, storeMessageMedia, sweepMessageMedia } from './message-media'
 import { addComment, deleteComment, deletePost, getPost, listPosts, toggleReaction } from './posts'
 import { sweepReactions } from './reaction-store'
-import { toggleEmojiReaction } from './reactions'
+import { listReactionPeople, toggleEmojiReaction } from './reactions'
 
 let sqlite: DatabaseSync
 const people = {
@@ -405,6 +405,22 @@ describe('reaksjoner', () => {
     // Et «slettet»-merke har ingen reaksjoner, og får ingen nye.
     expect(sqlite.prepare("SELECT count(*) AS n FROM reactions WHERE target_kind = 'post_comment'").get()).toEqual({ n: 0 })
     await expect(react('post_comment', c.id, '❤️')).rejects.toThrow('Fant ikke innholdet')
+  })
+
+  it('«Hvem har reagert» viser alle, ikke bare de ti første — med samme tilgang som å reagere', async () => {
+    const others = Array.from({ length: 11 }, (_, i) => `m${String(i).padStart(2, '0')}`)
+    sqlite.exec(others.map((id, i) => `INSERT INTO user (id, name, email, created_at, updated_at) VALUES ('${id}', 'Medlem ${i}', '${id}@example.invalid', 1, 1);
+      INSERT INTO reactions (target_kind, target_id, user_id, emoji, created_at) VALUES ('post', 'open', '${id}', '👍', ${10 + i});`).join('\n'))
+    await react('post', 'open', '👍')
+    await react('post', 'open', '🎺')
+    expect((await getPost({ data: { id: 'open' } })).post.reactions[0]).toMatchObject({ emoji: '👍', count: 12 })
+    expect((await getPost({ data: { id: 'open' } })).post.reactions[0]!.names).toHaveLength(10)
+    const { reactions } = await listReactionPeople({ data: { kind: 'post', targetId: 'open' } })
+    expect(reactions.map((r) => [r.emoji, r.count, r.names.length])).toEqual([['👍', 12, 12], ['🎺', 1, 1]])
+    expect(reactions[0]!.names.at(-1)).toBe('Du')
+    await expect(listReactionPeople({ data: { kind: 'post', targetId: 'board-only' } })).rejects.toThrow('Fant ikke innholdet')
+    as(null)
+    await expect(listReactionPeople({ data: { kind: 'post', targetId: 'open' } })).rejects.toThrow()
   })
 
   it('i forumet for alle medlemmer', async () => {

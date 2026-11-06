@@ -62,6 +62,12 @@ describe('summarizeReactions', () => {
     ])
   })
 
+  it('tar med de første navnene på siden, og alle når arket ber om dem', () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({ emoji: '👍', userId: `u${i}`, userName: `Medlem ${i}`, createdAt: i }))
+    expect(summarizeReactions(many, 'me')[0]).toMatchObject({ count: 12, names: many.slice(0, 10).map((r) => r.userName) })
+    expect(summarizeReactions(many, 'me', Number.POSITIVE_INFINITY)[0]!.names).toHaveLength(12)
+  })
+
   it('gir mobil-API-ets like, totalen og teksten', () => {
     const s = summarizeReactions(rows, 'me')
     expect(likeState(s)).toEqual({ count: 2, mine: true })
