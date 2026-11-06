@@ -135,7 +135,8 @@ export type SearchDoc = {
   sender: string
   /** Forfatterens navn (står også på kortet for styret og notearkivaren). */
   author: string
-  comments: Array<{ author: string; text: string }>
+  /** Kommentarene (veggen) eller svarene (forumet). `id` gjør at treffet kan lenke rett dit. */
+  comments: Array<{ id?: string; author: string; text: string }>
   publishedAt: number
 }
 
@@ -146,7 +147,7 @@ export type SearchDoc = {
  */
 export type SearchHit =
   | { kind: 'body'; snippet: string }
-  | { kind: 'comment'; author: string; snippet: string }
+  | { kind: 'comment'; author: string; snippet: string; commentId?: string }
   | null
 
 export type SearchResult = { id: string; score: number; hit: SearchHit }
@@ -232,7 +233,7 @@ export function scoreDoc(doc: SearchDoc, terms: string[]): SearchResult | null {
       }
       if (best) {
         const at = Math.min(...missing.map((term) => best.folded.indexOf(term)).filter((i) => i !== -1))
-        hit = { kind: 'comment', author: best.author, snippet: snippetAround(best.flat, at) }
+        hit = { kind: 'comment', author: best.author, snippet: snippetAround(best.flat, at), ...(best.id ? { commentId: best.id } : {}) }
       }
     }
   }

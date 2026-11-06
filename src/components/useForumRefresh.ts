@@ -1,10 +1,14 @@
 import { useEffect } from 'react'
 import { useRouter } from '@tanstack/react-router'
 
-/** Keep reply counts current while the forum is open, without polling hidden tabs. */
-export function useForumRefresh() {
+/**
+ * Keep reply counts current while the forum is open, without polling hidden tabs.
+ * `enabled: false` pauses it (a search reads the whole forum — not every 12 s).
+ */
+export function useForumRefresh(enabled = true) {
   const router = useRouter()
   useEffect(() => {
+    if (!enabled) return
     let pending = false
     const refresh = async () => {
       if (pending || document.visibilityState !== 'visible') return
@@ -15,5 +19,5 @@ export function useForumRefresh() {
     const timer = window.setInterval(() => void refresh(), 12000)
     document.addEventListener('visibilitychange', refresh)
     return () => { clearInterval(timer); document.removeEventListener('visibilitychange', refresh) }
-  }, [router])
+  }, [router, enabled])
 }

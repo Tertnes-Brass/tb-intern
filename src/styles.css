@@ -1808,6 +1808,7 @@ dialog.stand-sheet:focus-visible {
     font-weight: inherit;
   }
   .search-hit {
+    display: block;
     margin-top: 0.6rem;
     padding: 0.45rem 0.7rem;
     border-left: 2px solid var(--line-strong);

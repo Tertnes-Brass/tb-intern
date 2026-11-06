@@ -155,6 +155,13 @@ describe('scoreDoc', () => {
     const hit = scoreDoc(d, searchTerms('åsane tuba'))!.hit
     expect(hit).toMatchObject({ kind: 'comment', author: 'Ingrid' })
   })
+
+  it('et kommentartreff har kommentarens id når den finnes, så det kan lenke dit', () => {
+    const d = doc({ id: '1', body: 'Spørsmål', comments: [{ id: 'svar-7', author: 'Karim', text: 'Lageret er åpent.' }] })
+    expect(scoreDoc(d, searchTerms('lageret'))!.hit).toEqual({ kind: 'comment', author: 'Karim', snippet: 'Lageret er åpent.', commentId: 'svar-7' })
+    const anonymous = doc({ id: '2', body: 'Spørsmål', comments: [{ author: 'Karim', text: 'Lageret er åpent.' }] })
+    expect(scoreDoc(anonymous, searchTerms('lageret'))!.hit).not.toHaveProperty('commentId')
+  })
 })
 
 describe('searchDocs', () => {

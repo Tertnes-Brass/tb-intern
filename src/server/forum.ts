@@ -1,6 +1,8 @@
 import { checkForumMentions, forumMembers, forumMentionNames } from './forum-mentions'
 import { notifyForum } from './forum-notify'
-import { FORUM_ALL, FORUM_ALL_MARKER } from '../lib/forum-mentions'
+import { FORUM_ALL, FORUM_ALL_MARKER, forumPlainText } from '../lib/forum-mentions'
+import { type ForumSort, FORUM_SORT_VALUES, effectiveForumSort, sortForumTopics } from '../lib/forum-search'
+import { type SearchDoc, SEARCH_MAX_LENGTH, SEARCH_MIN_LENGTH, searchDocs } from '../lib/post-search'
 import { mentionMarker, mentionMatches, rankMentionCandidates } from '../lib/mentions'
 import { createServerFn } from '@tanstack/react-start'
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
@@ -16,24 +18,100 @@ const body = z.string().trim().min(1, 'Skriv en tekst.').max(20000)
 const page = z.number().int().min(0).max(100000).default(0)
 const topicInput = z.object({ title: z.string().trim().min(1).max(180), body })
 const PAGE_SIZE = 30
+/** Samme tekst som raden viser når kontoen er slettet. */
+const FORMER_MEMBER = 'Tidligere medlem'
 
-export const listForum = createServerFn().validator(z.object({ page })).handler(async ({ data }) => {
-  const me = await requireMe()
-  const d = db()
-  const rows = await d.select({ id: topics.id, title: topics.title, locked: topics.locked,
-      author: user.name, activityAt: topics.activityAt,
-      unreadMentionCount: sql<number>`(select count(*) from forum_replies r where r.topic_id = ${topics.id}
-        and (r.author_id is null or r.author_id <> ${me.id})
-        and (instr(r.body, ${mentionMarker(me.id)}) > 0 or instr(r.body, ${FORUM_ALL_MARKER}) > 0)
-        and not exists (select 1 from forum_reply_reads rr where rr.reply_id = r.id and rr.user_id = ${me.id}))`,
-      unreadCount: sql<number>`(select count(*) from forum_replies r where r.topic_id = ${topics.id}
-        and (r.author_id is null or r.author_id <> ${me.id})
-        and not exists (select 1 from forum_reply_reads rr where rr.reply_id = r.id and rr.user_id = ${me.id}))`,
-      replyCount: sql<number>`(select count(*) from forum_replies where topic_id = ${topics.id})`,
-    }).from(topics).leftJoin(user, eq(user.id, topics.authorId))
-      .orderBy(desc(topics.activityAt), desc(topics.id)).limit(PAGE_SIZE + 1).offset(data.page * PAGE_SIZE)
-  return { topics: rows.slice(0, PAGE_SIZE), hasMore: rows.length > PAGE_SIZE, canModerate: canModerateForum(me.permissions) }
-})
+/** Kolonnene i en trådrad — delt av lista og søket, så tallene alltid er de samme. */
+function topicColumns(meId: string) {
+  return {
+    id: topics.id, title: topics.title, locked: topics.locked,
+    author: user.name, activityAt: topics.activityAt, createdAt: topics.createdAt,
+    unreadMentionCount: sql<number>`(select count(*) from forum_replies r where r.topic_id = ${topics.id}
+      and (r.author_id is null or r.author_id <> ${meId})
+      and (instr(r.body, ${mentionMarker(meId)}) > 0 or instr(r.body, ${FORUM_ALL_MARKER}) > 0)
+      and not exists (select 1 from forum_reply_reads rr where rr.reply_id = r.id and rr.user_id = ${meId}))`,
+    unreadCount: sql<number>`(select count(*) from forum_replies r where r.topic_id = ${topics.id}
+      and (r.author_id is null or r.author_id <> ${meId})
+      and not exists (select 1 from forum_reply_reads rr where rr.reply_id = r.id and rr.user_id = ${meId}))`,
+    replyCount: sql<number>`(select count(*) from forum_replies where topic_id = ${topics.id})`,
+  }
+}
+
+/** Rekkefølgen i SQL — samme regel som `sortForumTopics` bruker på søketreffene. */
+function topicOrder(sort: ForumSort) {
+  const activity = [desc(topics.activityAt), desc(topics.id)]
+  if (sort === 'nye') return [desc(topics.createdAt), ...activity]
+  if (sort === 'aktive') return [desc(sql`(select count(*) from forum_replies where topic_id = ${topics.id})`), ...activity]
+  return activity
+}
+
+export const listForum = createServerFn()
+  .validator(z.object({ page, sort: z.enum(FORUM_SORT_VALUES).optional() }))
+  .handler(async ({ data }) => {
+    const me = await requireMe()
+    const rows = await db().select(topicColumns(me.id)).from(topics).leftJoin(user, eq(user.id, topics.authorId))
+      .orderBy(...topicOrder(effectiveForumSort(data.sort, false))).limit(PAGE_SIZE + 1).offset(data.page * PAGE_SIZE)
+    return { topics: rows.slice(0, PAGE_SIZE), hasMore: rows.length > PAGE_SIZE, canModerate: canModerateForum(me.permissions) }
+  })
+
+/** Flere treff enn dette er ikke et søk, men en liste — da hjelper et ord til mer enn å bla. */
+const SEARCH_LIMIT = 100
+
+/**
+ * Søk i forumet: tittel, trådstarten, hvem som startet den og alle svarene —
+ * som ren tekst med dagens navn i omtalene (`forumPlainText`), så markører
+ * verken treffer eller vises. Alle medlemmer leser hele forumet, så det finnes
+ * ingen målgruppe å filtrere på (motsatt veggens `searchPosts`).
+ *
+ * Rangeringen og utdraget er de samme som på veggen (`searchDocs`). Står
+ * treffet i et svar, har treffet svarets id, så raden kan lenke rett dit
+ * (`?svar=`). Maks `SEARCH_LIMIT` treff, de beste; deretter sortering.
+ */
+export const searchForum = createServerFn()
+  .validator(z.object({ q: z.string().trim().min(SEARCH_MIN_LENGTH).max(SEARCH_MAX_LENGTH), sort: z.enum(FORUM_SORT_VALUES).optional() }))
+  .handler(async ({ data }) => {
+    const me = await requireMe()
+    const d = db()
+    // Hele forumet, uten `inArray` over id-er (D1 tillater maks 100 parametere).
+    const [rows, bodies, replyRows, people] = await Promise.all([
+      d.select(topicColumns(me.id)).from(topics).leftJoin(user, eq(user.id, topics.authorId)),
+      d.select({ id: topics.id, body: topics.body }).from(topics),
+      d.select({ id: replies.id, topicId: replies.topicId, body: replies.body, author: user.name })
+        .from(replies).leftJoin(user, eq(user.id, replies.authorId)).orderBy(asc(replies.createdAt), asc(replies.id)),
+      // Navnene til omtalene; brukes bare til å gjøre markører om til «@Navn».
+      d.select({ id: user.id, name: user.name }).from(user),
+    ])
+    const bodyOf = new Map(bodies.map((b) => [b.id, b.body]))
+    const repliesOf = new Map<string, SearchDoc['comments']>()
+    for (const r of replyRows) {
+      const list = repliesOf.get(r.topicId) ?? []
+      list.push({ id: r.id, author: r.author ?? FORMER_MEMBER, text: forumPlainText(r.body, people) })
+      repliesOf.set(r.topicId, list)
+    }
+    const docs: SearchDoc[] = rows.map((t) => ({
+      id: t.id,
+      title: t.title,
+      body: forumPlainText(bodyOf.get(t.id) ?? '', people),
+      // Raden viser ingen tekst fra innlegget — et treff der får alltid et utdrag.
+      excerpt: '',
+      sender: t.author ?? FORMER_MEMBER,
+      author: t.author ?? FORMER_MEMBER,
+      comments: repliesOf.get(t.id) ?? [],
+      publishedAt: t.activityAt,
+    }))
+    const ranked = searchDocs(docs, data.q)
+    const byId = new Map(rows.map((t) => [t.id, t]))
+    const results = ranked.slice(0, SEARCH_LIMIT).flatMap((r) => {
+      const topic = byId.get(r.id)
+      return topic ? [{ ...topic, hit: r.hit }] : []
+    })
+    return {
+      query: data.q,
+      topics: sortForumTopics(results, effectiveForumSort(data.sort, true)),
+      total: ranked.length,
+      limited: ranked.length > SEARCH_LIMIT,
+    }
+  })
 
 export const createForumTopic = createServerFn({ method: 'POST' }).validator(topicInput).handler(async ({ data }) => {
   const me = await requireMe()
