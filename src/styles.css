@@ -1793,6 +1793,36 @@ dialog.stand-sheet:focus-visible {
       min-height: 44px;
     }
   }
+  .wall-rail-link:is(button) {
+    width: 100%;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  /* Søket på veggen: uthevede treff og linjen som sier hvor treffet står. */
+  .search-mark {
+    border-radius: 3px;
+    background: var(--brass-soft);
+    box-shadow: 0 0 0 1px var(--brass-soft);
+    color: inherit;
+    font-weight: inherit;
+  }
+  .search-hit {
+    margin-top: 0.6rem;
+    padding: 0.45rem 0.7rem;
+    border-left: 2px solid var(--line-strong);
+    border-radius: 0 8px 8px 0;
+    background: var(--paper-sunken);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+  .search-hit-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--ink-faint);
+  }
 
   /* Kortet på veggen. */
   .post-card {

@@ -2,6 +2,7 @@ import { Link, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { postImageUrl } from '../lib/post-images-client'
 import { seenThisSession } from '../lib/read-posts-client'
+import { highlightParts, type SearchHit } from '../lib/post-search'
 import { commentCountLabel, reactionLabel, toggleReaction as nextReactionState } from '../lib/posts'
 import type { PostImage, PostListItem } from '../server/posts'
 import { toggleReaction } from '../server/posts'
@@ -117,7 +118,41 @@ export function SenderMark({ post, size = 'md' }: { post: Pick<PostListItem, 'of
   return <Avatar name={post.author.name} size={size} />
 }
 
-export function PostCard({ post }: { post: PostListItem }) {
+/**
+ * Teksten med søkeordene uthevet (`<mark>`). Uten søkeord er det bare teksten.
+ * Posisjonene kommer fra `highlightParts`, som folder tegn én til én — så
+ * «Café» i teksten utheves med søket «cafe» uten at noe forskyves.
+ */
+export function Highlight({ text, terms }: { text: string; terms?: string[] }) {
+  if (!terms || terms.length === 0) return <>{text}</>
+  return (
+    <>
+      {highlightParts(text, terms).map((part, i) =>
+        part.match ? (
+          <mark key={i} className="search-mark">
+            {part.text}
+          </mark>
+        ) : (
+          part.text
+        ),
+      )}
+    </>
+  )
+}
+
+/** Hvorfor et søketreff kom med, når søkeordet ikke står i tittelen eller utdraget. */
+function SearchHitLine({ hit, terms }: { hit: NonNullable<SearchHit>; terms: string[] }) {
+  return (
+    <p className="search-hit">
+      <span className="search-hit-label">{hit.kind === 'comment' ? `Kommentar fra ${hit.author}` : 'Lenger ned i teksten'}</span>
+      <span className="block wrap-anywhere">
+        <Highlight text={hit.snippet} terms={terms} />
+      </span>
+    </p>
+  )
+}
+
+export function PostCard({ post, terms, hit }: { post: PostListItem; terms?: string[]; hit?: SearchHit }) {
   const unread = post.unread && !seenThisSession(post.id)
   const institutional = post.official || post.fromArchive
   return (
@@ -126,7 +161,9 @@ export function PostCard({ post }: { post: PostListItem }) {
         <SenderMark post={post} />
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2 text-[0.9rem] font-semibold leading-tight text-ink">
-            <span className="truncate">{postSender(post)}</span>
+            <span className="truncate">
+              <Highlight text={postSender(post)} terms={terms} />
+            </span>
             {/* Samme messingprikk som uleste svar i forumet. */}
             {unread && (
               <span className="h-2 w-2 shrink-0 rounded-full bg-brass" title="Ulest">
@@ -135,7 +172,12 @@ export function PostCard({ post }: { post: PostListItem }) {
             )}
           </p>
           <p className="mt-0.5 truncate text-[0.78rem] text-ink-faint">
-            {institutional && `${post.author.name} · `}
+            {institutional && (
+              <>
+                <Highlight text={post.author.name} terms={terms} />
+                {' · '}
+              </>
+            )}
             {shortWhen(post.publishedAt ?? post.createdAt)}
           </p>
         </div>
@@ -152,12 +194,13 @@ export function PostCard({ post }: { post: PostListItem }) {
           <span
             className={`display-title block wrap-anywhere text-[1.12rem] leading-snug text-ink sm:text-[1.22rem] ${unread ? 'font-bold' : 'font-semibold'}`}
           >
-            {post.title}
+            <Highlight text={post.title} terms={terms} />
           </span>
         )}
         <span className={`block wrap-anywhere text-[0.92rem] leading-relaxed text-ink-soft ${post.title ? 'mt-1 line-clamp-3' : 'line-clamp-5'}`}>
-          {post.excerpt}
+          <Highlight text={post.excerpt} terms={terms} />
         </span>
+        {hit && terms && <SearchHitLine hit={hit} terms={terms} />}
       </Link>
 
       <PostImageGrid images={post.images} total={post.imageCount} />
