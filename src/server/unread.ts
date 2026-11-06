@@ -86,7 +86,7 @@ export async function forumHasUnread(me: Pick<Me, 'id'>, now = Date.now()): Prom
   const rows = await db().all<{ n: number }>(sql`
     select exists (
       select 1 from forum_replies r
-      where r.created_at >= ${since}
+      where r.created_at >= ${since} and r.deleted_at is null
         and (r.author_id is null or r.author_id <> ${me.id})
         and not exists (select 1 from forum_reply_reads rr where rr.reply_id = r.id and rr.user_id = ${me.id})
     ) as n`)

@@ -168,7 +168,8 @@ export async function createKlipyMedia(
  * Kan `me` se bildet? Samme regel som det bildet står i:
  *
  * - Ikke sendt ennå: bare den som lastet det opp.
- * - Forumet: alle aktive medlemmer (som forumet selv), så lenge innlegget finnes.
+ * - Forumet: alle aktive medlemmer (som forumet selv), så lenge innlegget finnes
+ *   og ikke er et «slettet»-merke.
  * - Kommentar på veggen: den som kan lese innlegget (`canReadPost`, eller det er
  *   ditt eget) — avpubliseres innlegget eller flyttes til «Bare styret», følger
  *   bildene med. En slettet kommentar har ingen bilder.
@@ -205,9 +206,9 @@ async function canSeeTarget(kind: MessageMediaTarget, targetId: string, me: Me):
   const d = db()
   switch (kind) {
     case 'forum_topic':
-      return !!(await d.select({ id: forumTopics.id }).from(forumTopics).where(eq(forumTopics.id, targetId)).get())
+      return !!(await d.select({ id: forumTopics.id }).from(forumTopics).where(and(eq(forumTopics.id, targetId), isNull(forumTopics.deletedAt))).get())
     case 'forum_reply':
-      return !!(await d.select({ id: forumReplies.id }).from(forumReplies).where(eq(forumReplies.id, targetId)).get())
+      return !!(await d.select({ id: forumReplies.id }).from(forumReplies).where(and(eq(forumReplies.id, targetId), isNull(forumReplies.deletedAt))).get())
     case 'board_message':
       return (
         hasPermission(me, 'board.manage') &&
@@ -430,8 +431,8 @@ export async function sweepMessageMedia(now = Date.now()): Promise<number> {
       .from(messageMedia)
       .where(
         sql`${messageMedia.targetId} is not null and ${messageMedia.attachedAt} < ${attachedBefore} and (
-            (${messageMedia.targetKind} = 'forum_topic' and not exists (select 1 from forum_topics t where t.id = ${messageMedia.targetId}))
-            or (${messageMedia.targetKind} = 'forum_reply' and not exists (select 1 from forum_replies r where r.id = ${messageMedia.targetId}))
+            (${messageMedia.targetKind} = 'forum_topic' and not exists (select 1 from forum_topics t where t.id = ${messageMedia.targetId} and t.deleted_at is null))
+            or (${messageMedia.targetKind} = 'forum_reply' and not exists (select 1 from forum_replies r where r.id = ${messageMedia.targetId} and r.deleted_at is null))
             or (${messageMedia.targetKind} = 'post_comment' and not exists (select 1 from post_comments c where c.id = ${messageMedia.targetId} and c.deleted_at is null))
             or (${messageMedia.targetKind} = 'board_message' and not exists (select 1 from board_messages m where m.id = ${messageMedia.targetId}))
             or (${messageMedia.targetKind} = 'leader_message' and not exists (select 1 from leader_messages m where m.id = ${messageMedia.targetId}))

@@ -130,7 +130,9 @@ function ForumPage() {
             <span className="min-w-0 flex-1">
               <span className={`block break-words text-[1rem] leading-snug text-ink ${unread ? 'font-bold' : 'font-semibold'}`}><Highlight text={topic.title} terms={terms} /></span>
               <span className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[0.8rem] text-ink-faint">
-                <span><Highlight text={topic.author ?? 'Tidligere medlem'} terms={terms} /></span>
+                {topic.deletedAt
+                  ? <span className="italic">Innlegget er slettet</span>
+                  : <span><Highlight text={topic.author ?? 'Tidligere medlem'} terms={terms} /></span>}
                 <span aria-hidden>·</span>
                 <span>{topic.replyCount === 1 ? '1 svar' : `${topic.replyCount} svar`}</span>
                 <span aria-hidden>·</span>

@@ -21,7 +21,9 @@ vi.mock('./access', () => ({
     return state.me
   },
 }))
-import { createForumTopic, editForumText, getForumTopic, listForum, markForumRepliesRead, replyToForum, searchForum, searchForumMentions, setForumFollow, setForumLock } from './forum'
+import { createForumTopic, deleteForumText, deleteForumThread, editForumText, getForumTopic, listForum, markForumRepliesRead, replyToForum, searchForum, searchForumMentions, setForumFollow, setForumLock } from './forum'
+import { canReactTo } from './reaction-store'
+import { FORUM_TOPIC_GONE } from '../lib/forum'
 
 let sqlite: DatabaseSync
 beforeEach(() => {
@@ -46,6 +48,7 @@ beforeEach(() => {
   // 0031 kopierer veggens gamle likes; tabellen må bare finnes.
   sqlite.exec('CREATE TABLE post_reactions (post_id text, user_id text, created_at integer)')
   sqlite.exec(readFileSync(new URL('../../migrations/0031_reaksjoner.sql', import.meta.url), 'utf8'))
+  sqlite.exec(readFileSync(new URL('../../migrations/0033_slett-i-forumet.sql', import.meta.url), 'utf8'))
   // Exercise real Drizzle D1 queries against SQLite, including conditional writes.
   const prepare = (query: string) => {
     let values: any[] = []
@@ -533,5 +536,167 @@ describe('forum search and sorting', () => {
     expect(await order('aktive')).toEqual([busy.id, quiet.id, newest.id])
     // Søketreffene sorteres med samme regel.
     expect((await searchForum({ data: { q: 'tråd', sort: 'aktive' } })).topics.map((t) => t.id)).toEqual([busy.id, quiet.id, newest.id])
+  })
+})
+
+describe('deleting in the forum', () => {
+  let tick = 1810000000000
+  beforeEach(() => { vi.spyOn(Date, 'now').mockImplementation(() => ++tick) })
+  afterEach(() => { vi.restoreAllMocks() })
+  const as = (id: 'one' | 'two' | 'three', permissions: string[] = []) => {
+    state.me = { id, name: { one: 'Ingrid', two: 'Jonas', three: 'Karim' }[id], permissions }
+  }
+  type Row = { body: string; authorId: string | null; deletedAt: number | null }
+  const replyRow = (id: string) => sqlite.prepare('SELECT body, author_id AS authorId, deleted_at AS deletedAt FROM forum_replies WHERE id = ?').get(id) as Row | undefined
+  const topicRow = (id: string) => sqlite.prepare('SELECT title, body, author_id AS authorId, deleted_at AS deletedAt FROM forum_topics WHERE id = ?').get(id) as (Row & { title: string }) | undefined
+  const count = (query: string, ...args: string[]) => (sqlite.prepare(query).get(...args) as { n: number }).n
+  /** En sendt GIF og en reaksjon på det som skal slettes. */
+  const decorate = (kind: 'forum_topic' | 'forum_reply', targetId: string) => {
+    sqlite.prepare(`INSERT INTO message_media (id, owner_id, target_kind, target_id, r2_key, content_type, size, created_at, attached_at)
+      VALUES (?, 'one', ?, ?, ?, 'image/gif', 10, ?, ?)`).run(`m-${targetId}`, kind, targetId, `message-media/m-${targetId}`, Date.now(), Date.now())
+    sqlite.prepare("INSERT INTO reactions (target_kind, target_id, user_id, emoji, created_at) VALUES (?, ?, 'three', '👍', ?)").run(kind, targetId, Date.now())
+  }
+  const decorations = (targetId: string) =>
+    count('SELECT count(*) AS n FROM message_media WHERE target_id = ?', targetId) + count('SELECT count(*) AS n FROM reactions WHERE target_id = ?', targetId)
+
+  it('removes your own reply entirely when nobody answered it, with its images and reactions', async () => {
+    const { id } = await topic()
+    as('two')
+    const reply = await replyToForum({ data: { topicId: id, body: 'Dobbelt opp, sorry' } })
+    decorate('forum_reply', reply.id)
+    expect(await deleteForumText({ data: { id: reply.id, kind: 'reply' } })).toEqual({ removed: 'reply' })
+    expect(replyRow(reply.id)).toBeUndefined()
+    expect(decorations(reply.id)).toBe(0)
+    expect((await listForum({ data: { page: 0 } })).topics[0].replyCount).toBe(0)
+  })
+
+  it('leaves «Svaret er slettet» when someone answered — a marker nobody can edit, answer, react to or count as unread', async () => {
+    const { id } = await topic()
+    as('two')
+    const root = await replyToForum({ data: { topicId: id, body: 'Jeg skrev feil' } })
+    decorate('forum_reply', root.id)
+    as('three')
+    const child = await replyToForum({ data: { topicId: id, body: 'Hva mente du?', replyToId: root.id } })
+    as('two')
+    expect(await deleteForumText({ data: { id: root.id, kind: 'reply' } })).toEqual({ removed: 'marker' })
+    expect(replyRow(root.id)).toMatchObject({ body: '', authorId: null })
+    expect(replyRow(root.id)!.deletedAt).not.toBeNull()
+    expect(decorations(root.id)).toBe(0)
+
+    as('one')
+    const detail = await getForumTopic({ data: { id, page: 0 } })
+    expect(detail.replies[0]).toMatchObject({ deleted: true, canEdit: false, unread: 0, author: null })
+    expect(detail.replies[0].children.map((c) => c.reply.body)).toEqual(['Hva mente du?'])
+    expect(detail.replyCount).toBe(1)
+    const listed = (await listForum({ data: { page: 0 } })).topics[0]
+    expect([listed.replyCount, listed.unreadCount]).toEqual([1, 1])
+    expect(await canReactTo('forum_reply', root.id, state.me as never)).toBe(false)
+    await expect(replyToForum({ data: { topicId: id, body: 'Hei', replyToId: root.id } })).rejects.toThrow('er slettet')
+    as('one', ['forum.moderate'])
+    await expect(editForumText({ data: { id: root.id, kind: 'reply', body: 'Gjenoppstått' } })).rejects.toThrow()
+    await expect(deleteForumText({ data: { id: root.id, kind: 'reply' } })).rejects.toThrow('Fant ikke svaret')
+    // Samtalen under merket går videre, under samme rot.
+    const more = await replyToForum({ data: { topicId: id, body: 'Jeg svarer Karim', replyToId: child.id } })
+    expect(sqlite.prepare('SELECT parent_id AS parentId FROM forum_replies WHERE id = ?').get(more.id)).toEqual({ parentId: root.id })
+  })
+
+  it('clears markers that no longer hold anything together, and a deleted opening post with them', async () => {
+    const { id } = await topic()
+    as('two')
+    const root = await replyToForum({ data: { topicId: id, body: 'Rot' } })
+    as('three')
+    const child = await replyToForum({ data: { topicId: id, body: 'Svar', replyToId: root.id } })
+    as('one')
+    const grandchild = await replyToForum({ data: { topicId: id, body: 'Svar på svaret', replyToId: child.id } })
+    as('two')
+    expect((await deleteForumText({ data: { id: root.id, kind: 'reply' } })).removed).toBe('marker')
+    as('three')
+    expect((await deleteForumText({ data: { id: child.id, kind: 'reply' } })).removed).toBe('marker')
+    as('one')
+    expect((await deleteForumText({ data: { id: grandchild.id, kind: 'reply' } })).removed).toBe('reply')
+    expect(count('SELECT count(*) AS n FROM forum_replies WHERE topic_id = ?', id)).toBe(0)
+    expect(topicRow(id)).toBeDefined()
+
+    // Trådstarten var slettet: med det siste svaret går hele tråden.
+    as('two')
+    const last = await replyToForum({ data: { topicId: id, body: 'Noen her?' } })
+    as('one')
+    expect((await deleteForumText({ data: { id, kind: 'topic' } })).removed).toBe('marker')
+    as('two')
+    expect(await deleteForumText({ data: { id: last.id, kind: 'reply' } })).toEqual({ removed: 'thread' })
+    expect(topicRow(id)).toBeUndefined()
+  })
+
+  it('deletes a thread nobody answered, and keeps the title and replies of one that was', async () => {
+    const lonely = await createForumTopic({ data: { title: 'Feilpostet', body: 'Oi' } })
+    decorate('forum_topic', lonely.id)
+    expect(await deleteForumText({ data: { id: lonely.id, kind: 'topic' } })).toEqual({ removed: 'thread' })
+    expect(topicRow(lonely.id)).toBeUndefined()
+    expect(decorations(lonely.id)).toBe(0)
+    await expect(getForumTopic({ data: { id: lonely.id, page: 0 } })).rejects.toThrow(FORUM_TOPIC_GONE)
+
+    const { id } = await topic()
+    decorate('forum_topic', id)
+    as('two')
+    await replyToForum({ data: { topicId: id, body: 'Jeg kommer' } })
+    as('one')
+    expect(await deleteForumText({ data: { id, kind: 'topic' } })).toEqual({ removed: 'marker' })
+    expect(topicRow(id)).toMatchObject({ title: 'Hvem blir med på fest?', body: '', authorId: null })
+    expect(decorations(id)).toBe(0)
+    const detail = await getForumTopic({ data: { id, page: 0 } })
+    expect(detail).toMatchObject({ deleted: true, canEdit: false, author: null, hasReplies: true, replyCount: 1 })
+    expect(detail.replies[0].reply.body).toBe('Jeg kommer')
+    expect((await listForum({ data: { page: 0 } })).topics[0].deletedAt).not.toBeNull()
+    await expect(editForumText({ data: { id, kind: 'topic', body: 'Tilbake' } })).rejects.toThrow()
+    await expect(deleteForumText({ data: { id, kind: 'topic' } })).rejects.toThrow('Fant ikke tråden')
+    // Tittelen kan fortsatt søkes fram; den slettede forfatteren kan ikke.
+    expect((await searchForum({ data: { q: 'fest' } })).topics.map((t) => t.id)).toEqual([id])
+    expect((await searchForum({ data: { q: 'Tidligere medlem' } })).topics).toEqual([])
+  })
+
+  it('lets only the author delete — while the thread is open — and a moderator always', async () => {
+    const { id } = await topic()
+    const reply = await replyToForum({ data: { topicId: id, body: 'Mitt svar' } })
+    as('two')
+    await expect(deleteForumText({ data: { id: reply.id, kind: 'reply' } })).rejects.toThrow('bare slette det du selv har skrevet')
+    await expect(deleteForumText({ data: { id, kind: 'topic' } })).rejects.toThrow('bare slette det du selv har skrevet')
+    await expect(deleteForumThread({ data: { id } })).rejects.toThrow('Forbidden')
+    as('two', ['forum.moderate'])
+    await setForumLock({ data: { id, locked: true } })
+    as('one')
+    await expect(deleteForumText({ data: { id: reply.id, kind: 'reply' } })).rejects.toThrow('bare slette')
+    as('two', ['forum.moderate'])
+    expect((await deleteForumText({ data: { id: reply.id, kind: 'reply' } })).removed).toBe('reply')
+  })
+
+  it('lets a moderator delete a whole thread, everyone’s replies included', async () => {
+    const { id } = await topic()
+    as('two')
+    const reply = await replyToForum({ data: { topicId: id, body: 'Spam' } })
+    decorate('forum_reply', reply.id)
+    await setForumFollow({ data: { topicId: id, following: true } })
+    as('three', ['forum.moderate'])
+    await deleteForumThread({ data: { id } })
+    expect(topicRow(id)).toBeUndefined()
+    expect(count('SELECT count(*) AS n FROM forum_replies WHERE topic_id = ?', id)).toBe(0)
+    expect(count('SELECT count(*) AS n FROM forum_follows WHERE topic_id = ?', id)).toBe(0)
+    expect(decorations(reply.id)).toBe(0)
+    await expect(deleteForumThread({ data: { id } })).rejects.toThrow('Fant ikke tråden')
+  })
+
+  it('never lets a deleted reply hold the thread push back', async () => {
+    const { id } = await topic()
+    as('two')
+    const first = await replyToForum({ data: { topicId: id, body: 'Først' } })
+    as('three')
+    const answer = await replyToForum({ data: { topicId: id, body: 'Enig', replyToId: first.id } })
+    as('one')
+    // Ingrid leser Karims svar, men aldri Jonas sitt — som så slettes.
+    await markForumRepliesRead({ data: { topicId: id, replyIds: [answer.id] } })
+    as('two')
+    expect((await deleteForumText({ data: { id: first.id, kind: 'reply' } })).removed).toBe('marker')
+    state.pushes = []
+    await replyToForum({ data: { topicId: id, body: 'Nytt svar' } })
+    expect(state.pushes.flatMap((p) => p.to)).toContain('one')
   })
 })

@@ -942,12 +942,17 @@ export const forumTopics = sqliteTable('forum_topics', {
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
   activityAt: integer('activity_at').notNull(),
+  // Trådstarten er slettet, men andre har svart: tittelen og svarene står, mens
+  // teksten, forfatteren, bildene og reaksjonene er borte (se `deleteForumText`).
+  deletedAt: integer('deleted_at'),
 }, (t) => [index('forum_topics_activity_idx').on(t.activityAt)])
 
 // Svar på svar (se `src/lib/threads.ts`): `parent_id` er svaret på tråden som
 // dette står under (null = svar rett på tråden), `reply_to_id` det konkrete
-// svaret det svarer på. Forumsvar kan ikke slettes; SET NULL er siste skanse
-// hvis det noen gang kommer, slik at ingen andres tekst forsvinner med.
+// svaret det svarer på. Et svar som noen har svart på, blir et «slettet»-merke
+// (`deleted_at`, tom tekst, ingen forfatter) i stedet for å forsvinne — ellers
+// ville svarene mistet sammenhengen. SET NULL er siste skanse; `deleteForumText`
+// lar den aldri slå inn.
 export const forumReplies = sqliteTable('forum_replies', {
   id: text('id').primaryKey(),
   topicId: text('topic_id').notNull().references(() => forumTopics.id, { onDelete: 'cascade' }),
@@ -955,6 +960,7 @@ export const forumReplies = sqliteTable('forum_replies', {
   body: text('body').notNull(),
   parentId: text('parent_id').references((): AnySQLiteColumn => forumReplies.id, { onDelete: 'set null' }),
   replyToId: text('reply_to_id').references((): AnySQLiteColumn => forumReplies.id, { onDelete: 'set null' }),
+  deletedAt: integer('deleted_at'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 }, (t) => [

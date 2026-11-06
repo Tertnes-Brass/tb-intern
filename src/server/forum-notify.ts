@@ -42,7 +42,7 @@ async function candidates(topicId: string, replyId: string | null, mentioned: st
       (u.id = t.author_id or exists (select 1 from forum_replies r where r.topic_id = t.id and r.author_id = u.id)) as participated,
       ff.following as explicit,
       not exists (select 1 from forum_replies r
-        where r.topic_id = t.id and r.id <> ${replyId ?? ''}
+        where r.topic_id = t.id and r.id <> ${replyId ?? ''} and r.deleted_at is null
           and (r.author_id is null or r.author_id <> u.id)
           and r.created_at > max(
             case when t.author_id = u.id then t.created_at else 0 end,

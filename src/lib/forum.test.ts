@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { followsForumTopic, forumNotifyPlan, type ForumNotifyCandidate } from './forum'
+import { canEditForumText, followsForumTopic, forumNotifyPlan, type ForumNotifyCandidate } from './forum'
 import { forumPlainText } from './forum-mentions'
 import { forumDirectReplyPushMessage, forumMentionPushMessage, forumReplyPushMessage } from './push'
 
@@ -7,6 +7,21 @@ const base: Omit<ForumNotifyCandidate, 'userId'> = {
   isActive: true, participated: true, explicit: null, caughtUp: true, forumReplies: 'all', mentions: 'all',
 }
 const c = (userId: string, over: Partial<ForumNotifyCandidate> = {}): ForumNotifyCandidate => ({ ...base, userId, ...over })
+
+describe('canEditForumText (rediger og slett)', () => {
+  const member = { id: 'me', permissions: [] }
+  const moderator = { id: 'mod', permissions: ['forum.moderate'] }
+  it('lets the author change their own text while the thread is open, and a moderator always', () => {
+    expect(canEditForumText(member, 'me', false)).toBe(true)
+    expect(canEditForumText(member, 'me', true)).toBe(false)
+    expect(canEditForumText(member, 'other', false)).toBe(false)
+    expect(canEditForumText(moderator, 'other', true)).toBe(true)
+  })
+  it('never treats a marker or a deleted account as anyone’s own text', () => {
+    expect(canEditForumText(member, null, false)).toBe(false)
+    expect(canEditForumText({ id: 'admin', permissions: ['*'] }, null, false)).toBe(true)
+  })
+})
 
 describe('followsForumTopic', () => {
   it('lets an explicit choice win over taking part', () => {

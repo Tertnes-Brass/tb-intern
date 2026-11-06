@@ -2,9 +2,17 @@ export function canModerateForum(permissions: string[]): boolean {
   return permissions.includes('*') || permissions.includes('forum.moderate')
 }
 
+/**
+ * Kan `me` redigere — og slette — denne teksten? Egen tekst så lenge tråden er
+ * åpen, alt for en moderator. Et «slettet»-merke har ingen forfatter, så bare
+ * en moderator kommer forbi her; serveren nekter uansett å røre et merke.
+ */
 export function canEditForumText(me: { id: string; permissions: string[] }, authorId: string | null, locked: boolean): boolean {
-  return canModerateForum(me.permissions) || (!locked && authorId === me.id)
+  return canModerateForum(me.permissions) || (!locked && authorId !== null && authorId === me.id)
 }
+
+/** Feilen når tråden ikke finnes — slettet, eller en gammel lenke. Ruta viser den som en rolig side. */
+export const FORUM_TOPIC_GONE = 'Tråden finnes ikke lenger.'
 
 // ---------- Varsler om nye svar ----------
 
