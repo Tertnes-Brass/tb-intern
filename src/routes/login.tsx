@@ -116,12 +116,15 @@ function LoginPage() {
       />
 
       <header className="rise relative mb-8 text-center">
-        <Kicker className="mb-4">Tertnes Brass · siden 1969</Kicker>
-        <h1 className="display-title text-[clamp(3rem,9vw,5.5rem)] font-semibold italic leading-[0.95] text-ink">
-          Notearkivet
+        <Kicker className="mb-4">Siden 1969</Kicker>
+        {/* Samme navn og samme oppsett som i toppmenyen: «Tertnes Brass» i
+            blekk, «Intern» i messing. Appen het «Notearkivet» før den ble hele
+            internsiden (31. august 2026). */}
+        <h1 className="display-title text-[clamp(2.6rem,9vw,4.75rem)] font-semibold italic leading-[0.98] text-ink">
+          Tertnes Brass <span className="block text-brass-strong">Intern</span>
         </h1>
         <p className="mx-auto mt-4 max-w-md text-[0.95rem] leading-relaxed text-ink-soft">
-          Finn notene dine, kommende konserter og lytteeksempler.
+          Beskjeder, kalender, noter og forum for korpset — samlet på ett sted.
         </p>
       </header>
 

@@ -12,6 +12,13 @@
    ellers «henger igjen» etter et trykk på berøringsskjerm. */
 @custom-variant can-hover (@media (hover: hover));
 
+/* Navigasjonsmodellen følger INPUT, ikke bare bredde: på berøringsskjerm
+   (telefon og iPad, også på tvers) er det fanelinjen + «Meg og mer»; med mus
+   fra 1024 px er det toppmenyen. Ellers byttet iPad-en navigasjon bare fordi
+   den ble snudd. `appnav`/`desknav` dekker hverandre nøyaktig. */
+@custom-variant appnav (@media (max-width: 1023.98px), (pointer: coarse));
+@custom-variant desknav (@media (min-width: 1024px) and (not (pointer: coarse)));
+
 /* ============================================================
    TERTNES BRASS · NOTEARKIV — «Konsertprogrammet»
    Varmt papir, dyp blekk, antikk messing. Fraunces til plakat-
@@ -24,10 +31,12 @@
   --paper-sunken: #efe7d6;
   --ink: #211b12;
   --ink-soft: #5f5640;
-  --ink-faint: #8e8468;
+  /* 4,8:1 mot papir — sekundærtekst skal kunne leses, ikke bare antydes. */
+  --ink-faint: #736a52;
   --line: #ddd2ba;
   --line-strong: #c4b794;
-  --brass: #95762a;
+  /* 5,0:1 med lys tekst på primærknappen (WCAG AA). */
+  --brass: #86691f;
   --brass-strong: #7a5f1d;
   --brass-soft: rgba(149, 118, 42, 0.12);
   --oxblood: #7c3220;
@@ -43,7 +52,7 @@
   --paper-sunken: #100d0a;
   --ink: #ede4cf;
   --ink-soft: #b5a98b;
-  --ink-faint: #857b62;
+  --ink-faint: #958a6f;
   --line: #3a3225;
   --line-strong: #51462f;
   --brass: #d3ac4d;
@@ -516,7 +525,7 @@ html:has(dialog[open]) {
 }
 /* Når tastaturet er oppe, tar fanelinjen bare plass (Android flytter den opp
    over tastaturet). Skjules mens et tekstfelt har fokus. */
-@media (max-width: 767px) {
+@media (max-width: 1023.98px), (pointer: coarse) {
   body:has(:is(textarea, select, [contenteditable='true'], input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit']):not([type='range'])):focus) .tab-bar {
     display: none;
   }
@@ -526,7 +535,7 @@ html:has(dialog[open]) {
 .main-with-tabs {
   padding-bottom: calc(58px + 2.5rem + env(safe-area-inset-bottom));
 }
-@media (min-width: 768px) {
+@media (min-width: 1024px) and (not (pointer: coarse)) {
   .main-with-tabs {
     padding-bottom: 5rem;
   }
@@ -536,7 +545,7 @@ html:has(dialog[open]) {
 .toast-stack {
   bottom: calc(1.25rem + env(safe-area-inset-bottom));
 }
-@media (max-width: 767px) {
+@media (max-width: 1023.98px), (pointer: coarse) {
   body:has(.tab-bar) .toast-stack {
     bottom: calc(58px + 0.9rem + env(safe-area-inset-bottom));
   }
@@ -578,6 +587,30 @@ select.field-input {
 @media (max-width: 640px) {
   .field-input {
     font-size: 16px;
+  }
+}
+
+/* Berøringsskjerm, uansett bredde (iPad stående/liggende): alle felt og
+   nedtrekkslister er minst 44 px høye og har 16 px skrift. iPadOS-Safari
+   zoomer også inn på et felt med mindre skrift når siden ikke er i
+   «skrivebordsmodus», og et 30 px felt (rekkefølge i /innstillinger, oppmøte
+   på /kalender/:id) var et bomtrykk på et notestativ.
+   I `@layer base` med !important med vilje: flere kompakte felt har
+   `!py-1.5 !text-xs` i JSX, og et !important-utility i Tailwinds lag slår en
+   ulaget !important-regel. For !important gjelder lagrekkefølgen omvendt —
+   et TIDLIGERE lag vinner — så base-laget slår utilities-laget her. Med mus
+   (`pointer: fine`) er alt som før, kompakt. Tekstfelt (textarea) får bare
+   skriftstørrelsen; høyden deres styres av `rows`/`min-h-*`. */
+@layer base {
+  @media (pointer: coarse) {
+    .field-input,
+    select {
+      font-size: 16px !important;
+    }
+    input.field-input:not([type='checkbox']):not([type='radio']):not([type='range']),
+    select {
+      min-height: 44px !important;
+    }
   }
 }
 
@@ -700,47 +733,81 @@ select.field-input {
 }
 
 /* ---------- Områdemenyer (Noter, Styre, Gruppeledere) ----------
-   designprinsipper §6 (a): hvert område eier sin egen meny. På telefon er det
-   en rad med «piller» som er store nok for tommelen og kan rulles vannrett;
-   fra 640 px er det de smale mono-fanene med messingstrek under (`.nav-link`). */
+   designprinsipper §6 (a): hvert område eier sin egen meny. På berøringsskjerm
+   er det en rad med «piller» som er store nok for tommelen og kan rulles
+   vannrett; med mus/styreflate fra 640 px er det de smale mono-fanene med
+   messingstrek under (`.nav-link`). Bredden alene avgjorde det før, og da fikk
+   iPad-en fanene: 11 px mono-tekst uten minstehøyde, under 20 pt å treffe. */
 .area-nav-wrap {
   margin: -0.25rem 0 1.75rem;
 }
+/* Rulleren går kant til kant (negativ marg), så pillen lengst ut forsvinner
+   under skjermkanten i stedet for å klippes midt i luften. Ruller lista,
+   toner kanten den kan rulles mot ut (`data-overflow` settes av `AreaNav`), så
+   det er tydelig at det finnes mer — før forsvant «Dokumenter» i Styre bare
+   ut over kanten på en iPhone. */
 .area-nav {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0;
   margin: 0 -1rem;
-  padding: 0 1rem 0.25rem;
+  /* Teksten i første pille står på linje med innholdet under (1 rem inn);
+     den aktive pillens bakgrunn stikker litt ut i margen, som i iOS. */
+  padding: 0 0.4rem 0.25rem;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
+  --area-fade: 2.25rem;
+}
+.area-nav[data-overflow='end'],
+.wall-chips[data-overflow='end'] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--area-fade)), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--area-fade)), transparent);
+}
+.area-nav[data-overflow='start'],
+.wall-chips[data-overflow='start'] {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - var(--area-fade)), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - var(--area-fade)), transparent);
+}
+.area-nav[data-overflow='both'],
+.wall-chips[data-overflow='both'] {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--area-fade), #000 calc(100% - var(--area-fade)), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 var(--area-fade), #000 calc(100% - var(--area-fade)), transparent);
 }
 .area-nav::-webkit-scrollbar {
   display: none;
 }
+/* Pillene: 44 pt høye (minstemålet for et trykkmål). Bare den aktive er en
+   fylt pille med ramme; de andre er ren tekst med samme luft (rammen er der,
+   men gjennomsiktig, så ingenting hopper ved bytte). Med rammer rundt alle fem
+   var Styre-raden 467 px — nå får Oppgaver · Prosjekter · Møter · Chat ·
+   Dokumenter plass på en 393 pt iPhone. Med ulest-merket på Chat, eller på en
+   smalere telefon, ruller den siste inn under tonen. */
 .area-link {
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 0.4rem;
-  min-height: 2.5rem;
-  padding: 0 1rem;
-  border: 1px solid var(--line-strong);
+  gap: 0.35rem;
+  min-height: 2.75rem;
+  padding: 0 0.55rem;
+  border: 1px solid transparent;
   border-radius: 9999px;
   white-space: nowrap;
-  font-size: 0.86rem;
+  font-size: 0.82rem;
   font-weight: 500;
   color: var(--ink-soft);
   text-decoration: none;
   transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+}
+.area-link:active {
+  background: var(--paper-sunken);
 }
 .area-link[data-status='active'] {
   border-color: var(--brass);
   background: var(--brass-soft);
   color: var(--brass-strong);
 }
-@media (min-width: 640px) {
+@media (min-width: 640px) and (pointer: fine) {
   .area-nav-wrap {
     margin: -0.5rem 0 2.25rem;
     border-bottom: 1px solid var(--line);
@@ -755,6 +822,7 @@ select.field-input {
     min-height: 0;
     padding: 0;
     border: 0;
+    font-weight: 500;
     border-radius: 0;
     font-family: var(--font-mono);
     font-size: 0.68rem;
@@ -764,6 +832,9 @@ select.field-input {
   }
   .area-link:hover {
     color: var(--ink);
+  }
+  .area-link:active {
+    background: transparent;
   }
   .area-link[data-status='active'] {
     background: transparent;
@@ -782,6 +853,76 @@ select.field-input {
   .area-link:hover::after,
   .area-link[data-status='active']::after {
     right: 0;
+  }
+}
+
+/* ---------- Trykkflate ----------
+   `.hit` gir et lite element (filterbrikke, reaksjon, avkrysningsboks,
+   tekstlenke) en usynlig trykkflate på minst 44×44 pt på berøringsskjerm, uten
+   å endre hvordan det ser ut. Elementet må ikke klippe (`overflow: hidden`). */
+.hit {
+  position: relative;
+}
+@media (pointer: coarse) {
+  .hit::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* ---------- Tilbakelenken øverst på en detaljside ----------
+   «← Veggen», «← Kalender» osv. (med `BackArrow` fra ui.tsx). Med mus er den
+   den lille mono-etiketten som før. På berøringsskjerm var det 11 px tekst
+   med en trykkflate på rundt 15 pt, øverst i hjørnet; der blir den i stedet
+   en iOS-aktig «‹ Veggen» i vanlig skrift og messing, 44 pt høy, med pila
+   på linje med innholdet under. I `@layer components`, så utilities som
+   `mb-4` på lenken fortsatt vinner. */
+@layer components {
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    text-decoration: none;
+    transition: color 0.15s, background-color 0.15s;
+  }
+  .back-link:hover {
+    color: var(--brass-strong);
+  }
+  .back-link .back-link-arrow {
+    width: 6px;
+    height: 10px;
+  }
+  @media (pointer: coarse) {
+    .back-link {
+      min-height: 44px;
+      margin-top: -0.5rem;
+      margin-left: -0.55rem;
+      padding: 0 0.85rem 0 0.55rem;
+      border-radius: 9999px;
+      font-family: var(--font-sans);
+      font-size: 1rem;
+      font-weight: 500;
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--brass-strong);
+    }
+    .back-link:active {
+      background: var(--paper-sunken);
+    }
+    .back-link .back-link-arrow {
+      width: 9px;
+      height: 15px;
+    }
   }
 }
 
@@ -1020,12 +1161,131 @@ select.field-input {
 }
 
 /* ---------- Notestativet (/noter/stativ/$projectId) ---------- */
+/* Stativet er alltid mørkt, uansett tema: noten skal være det lyseste i
+   rommet. Egne tokens, så Notestativ.tsx og arkene ikke har løse hex-verdier.
+   På :root fordi `useStandStatusBar` leser `--stand-bg` til meta-taggen. */
+:root {
+  --stand-bg: #15120f;
+  --stand-bar: rgb(21 18 15 / 0.88);
+  --stand-raised: #1f1b16;
+  --stand-raised-2: #2b251e;
+  --stand-sunken: #0f0d0b;
+  --stand-ink: #ede4cf;
+  --stand-ink-soft: #d8cdb4;
+  --stand-muted: #b5a98b;
+  --stand-accent: #e7c468;
+  --stand-accent-soft: rgb(231 196 104 / 0.13);
+  --stand-hover: rgb(255 255 255 / 0.06);
+  --stand-line: rgb(255 255 255 / 0.1);
+  --stand-line-strong: rgb(255 255 255 / 0.22);
+  /* Arket: hvitt papir, og varmt mørkt i nattlys. */
+  --stand-paper: #ffffff;
+  --stand-paper-night: #1c1915;
+  --stand-paper-ink: #8e8468;
+}
+.stand-bar {
+  background: var(--stand-bar);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.stand-paper {
+  background: var(--stand-paper);
+}
 /* Nattlys: arket inverteres til lys skrift på mørkt, litt varmt. */
 .stand-night canvas {
   filter: invert(0.9) sepia(0.25) brightness(0.95);
 }
-.stand-night > div > div {
-  background: #1c1915;
+.stand-night .stand-paper {
+  background: var(--stand-paper-night);
+}
+/* Hel side / To sider: noten fyller flaten innenfor de trygge kantene. Ingen
+   fast linje ligger over den; menyene kommer og går (Notestativ.tsx). */
+.stand-stage {
+  padding: calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 8px)
+    calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 8px);
+}
+.stand-stage > div {
+  height: 100%;
+}
+/* Pillen nederst i sidevisningene: forrige · side 1–2 av 4 · neste. */
+.stand-pill {
+  background: var(--stand-bar);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--stand-line);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.45);
+}
+
+/* Arkene (Program, Visning): sidepanel fra høyre på iPad og bredere, bunnark
+   på telefon stående. Mørke, som stativet. */
+dialog.stand-sheet {
+  position: fixed;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--stand-raised);
+  color: var(--stand-ink);
+  overflow: hidden;
+  overscroll-behavior: contain;
+  box-shadow: 0 0 60px rgb(0 0 0 / 0.55);
+}
+dialog.stand-sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+dialog.stand-sheet::backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
+dialog.stand-sheet:focus,
+dialog.stand-sheet:focus-visible {
+  outline: none;
+}
+.stand-sheet-grab > span {
+  display: block;
+  width: 38px;
+  height: 5px;
+  margin: 0 auto;
+  border-radius: 9999px;
+  background: var(--stand-line-strong);
+}
+@media (min-width: 700px) {
+  dialog.stand-sheet {
+    inset: 0 0 0 auto;
+    width: min(400px, 88vw);
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    border-left: 1px solid var(--stand-line);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0;
+  }
+  dialog.stand-sheet[open] {
+    animation: stand-panel-in 0.28s cubic-bezier(0.2, 0.75, 0.25, 1);
+  }
+  .stand-sheet-grab {
+    display: none;
+  }
+}
+@media (max-width: 699.98px) {
+  dialog.stand-sheet {
+    inset: auto 0 0 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: 86dvh;
+    border-top: 1px solid var(--stand-line);
+    border-radius: 20px 20px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  dialog.stand-sheet[open] {
+    animation: sheet-in 0.32s cubic-bezier(0.2, 0.75, 0.25, 1);
+  }
+}
+@keyframes stand-panel-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
 }
 /* Neste/forrige stykke glir inn fra den siden man sveipet mot. */
 @keyframes stand-in-next {
@@ -1054,9 +1314,1779 @@ select.field-input {
 .stand-slide-prev {
   animation: stand-in-prev 0.26s cubic-bezier(0.2, 0.7, 0.25, 1);
 }
+/* Hjelpen for bladingen (StandHelp.tsx): noten skimtes gjennom, trykkfeltene
+   skilles med stiplede linjer der de faktisk går. */
+.stand-help {
+  background: color-mix(in srgb, var(--stand-sunken) 84%, transparent);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  animation: stand-fade-in 0.22s ease-out;
+}
+.stand-help-divider {
+  border-left: 1px dashed var(--stand-line-strong);
+}
+/* «Fortsatt fra …» glir rolig ned under topplinjen. */
+.stand-notice {
+  animation: stand-notice-in 0.3s cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+@keyframes stand-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes stand-notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .stand-slide-next,
-  .stand-slide-prev {
+  .stand-slide-prev,
+  .stand-help,
+  .stand-notice,
+  dialog.stand-sheet[open] {
     animation: none;
+  }
+}
+
+/* ---------- Veggen, forumet og skriveflaten (vegg-forum) ----------
+   Alt under her hører til /beskjeder, /forum og skriveflaten i
+   src/components/compose/Composer.tsx. `--shell-top` er høyden på toppmenyen
+   i Shell.tsx (56 px med fanelinje, 60 px med toppmeny, pluss hakket), slik at
+   det som klistrer seg (linjen øverst i skriveflaten, sidespalten på veggen)
+   legger seg rett under den. */
+:root {
+  --shell-top: calc(56px + env(safe-area-inset-top));
+}
+@media (min-width: 1024px) and (not (pointer: coarse)) {
+  :root {
+    --shell-top: 60px;
+  }
+}
+
+/* I `@layer components`, så Tailwind-klasser som `md:hidden` og `ml-auto` på
+   de samme elementene fortsatt vinner. */
+@layer components {
+  /* Linjen «Avbryt · Nytt innlegg · Publiser». Dras opp til toppmenyen (main har
+     pt-6/sm:pt-10) og ut til kantene, så den leses som en verktøylinje i appen,
+     ikke som et kort på siden. */
+  .composer-bar {
+    position: sticky;
+    top: var(--shell-top);
+    z-index: 30;
+    margin: -1.5rem -1rem 0;
+    padding: 0 1rem;
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+  }
+  @media (min-width: 640px) {
+    .composer-bar {
+      margin: -2.5rem -1.5rem 0;
+      padding: 0 1.5rem;
+    }
+  }
+  .composer-bar-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    max-width: 64rem;
+    min-height: 52px;
+    margin: 0 auto;
+  }
+  .composer-narrow .composer-bar-inner {
+    max-width: 46rem;
+  }
+  .composer-cancel {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-left: -0.5rem;
+    padding: 0 0.5rem;
+    border-radius: 9px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--brass-strong);
+    text-decoration: none;
+  }
+  .composer-cancel:hover,
+  .composer-cancel:active {
+    background: var(--paper-sunken);
+  }
+  .composer-notice {
+    max-width: 64rem;
+    margin: 0.9rem auto 0;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+  }
+
+  .composer-layout {
+    max-width: 64rem;
+    margin: 1rem auto 0;
+  }
+  .composer-narrow .composer-layout {
+    max-width: 46rem;
+  }
+  @media (min-width: 768px) {
+    .composer-layout {
+      margin-top: 1.5rem;
+    }
+    .composer-layout-split {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      gap: 1.5rem;
+      align-items: start;
+    }
+  }
+
+  /* Skrivearket. På telefon går det kant til kant, som et notat; fra 640 px er
+     det et ark på papiret. */
+  .composer-sheet {
+    background: var(--paper-raised);
+    border-block: 1px solid var(--line);
+    margin: 0 -1rem;
+  }
+  @media (min-width: 640px) {
+    .composer-sheet {
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow-soft);
+    }
+  }
+  .composer-title-wrap {
+    border-bottom: 1px solid var(--line);
+  }
+  .composer-title {
+    display: block;
+    width: 100%;
+    padding: 1rem 1rem 0.8rem;
+    background: transparent;
+    border: 0;
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--ink);
+  }
+  .composer-title::placeholder {
+    color: var(--ink-faint);
+    font-weight: 500;
+  }
+  .composer-body,
+  .composer-preview {
+    display: block;
+    width: 100%;
+    min-height: max(13rem, 38vh);
+    padding: 0.9rem 1rem 0.6rem;
+    background: transparent;
+    border: 0;
+    resize: none;
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--ink);
+  }
+  .composer-body::placeholder {
+    color: var(--ink-faint);
+  }
+  @media (min-width: 640px) {
+    .composer-title {
+      padding: 1.2rem 1.25rem 0.9rem;
+      font-size: 1.6rem;
+    }
+    .composer-body,
+    .composer-preview {
+      padding: 1rem 1.25rem 0.6rem;
+      font-size: 1rem;
+    }
+  }
+  .composer-hint {
+    padding: 0 1rem 0.75rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: var(--ink-faint);
+  }
+  @media (min-width: 640px) {
+    .composer-hint {
+      padding: 0 1.25rem 0.85rem;
+    }
+  }
+  /* Bryter heller enn å klippe: blir det for trangt, går «Valg» til en egen
+     linje. `.is-compact` (vedlegg eller Markdown) tar bort sammendraget på
+     «Valg» på smal skjerm og strammer inn knappene, så de vanligvis får plass
+     på én linje fra 375 px. */
+  .composer-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.4rem 0.5rem;
+    border-top: 1px solid var(--line);
+  }
+  .tool-summary {
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 400;
+    color: var(--ink-faint);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  @media (max-width: 380px) {
+    .tool-summary {
+      display: none;
+    }
+  }
+  @media (max-width: 559.98px) {
+    .composer-toolbar.is-compact {
+      gap: 0.1rem;
+      padding-inline: 0.35rem;
+    }
+    .composer-toolbar.is-compact .tool-button {
+      gap: 0.3rem;
+      padding-inline: 0.55rem;
+    }
+    .composer-toolbar.is-compact .tool-summary {
+      display: none;
+    }
+  }
+  .tool-button {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 36px;
+    padding: 0 0.7rem;
+    border-radius: 9999px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+  }
+  .tool-button:hover {
+    background: var(--paper-sunken);
+    color: var(--ink);
+  }
+  .tool-button.is-active {
+    background: var(--brass-soft);
+    color: var(--brass-strong);
+  }
+  .tool-button:disabled {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .tool-button:focus-visible {
+    outline: 2px solid var(--brass);
+    outline-offset: 1px;
+  }
+  @media (pointer: coarse) {
+    .tool-button {
+      min-height: 44px;
+    }
+  }
+
+  /* Valgene: egen spalte fra 768 px (klistret under linjen øverst), under
+     teksten på telefon når «Valg» er åpnet. */
+  .composer-side {
+    margin-top: 1rem;
+    padding: 1.1rem 1.1rem 1.25rem;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper);
+  }
+  @media (min-width: 768px) {
+    .composer-side {
+      position: sticky;
+      top: calc(var(--shell-top) + 52px + 1.5rem);
+      margin-top: 0;
+    }
+  }
+  .composer-label {
+    display: block;
+    margin-bottom: 0.45rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+  .segmented {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 11px;
+    background: var(--paper-sunken);
+    border: 1px solid var(--line);
+  }
+  .segmented-option {
+    flex: 1 1 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 34px;
+    padding: 0 0.5rem;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    text-align: center;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+  }
+  .segmented-option:hover {
+    color: var(--ink);
+  }
+  .segmented-option.is-on {
+    background: var(--paper-raised);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(43, 34, 16, 0.12), 0 0 0 1px var(--line);
+  }
+  .segmented-option:has(:focus-visible) {
+    outline: 2px solid var(--brass);
+    outline-offset: 1px;
+  }
+  @media (pointer: coarse) {
+    .segmented-option {
+      min-height: 44px;
+    }
+  }
+}
+
+/* Utenfor laget med vilje: den globale `:focus-visible`-ringen er ulaget og
+   ville ellers tegnet en messingramme rundt de rammeløse feltene. Fokus vises
+   av markøren i teksten. */
+.composer-title:focus,
+.composer-body:focus {
+  outline: none;
+}
+
+@layer components {
+  /* Veggens filterrad: brikker som kan dras sidelengs, kant til kant på
+     telefon. Raden har 4 px luft over og under, så `.hit`-flaten på 44 pt
+     ikke klippes av rullingen. */
+  .wall-chips {
+    --area-fade: 2.25rem;
+    display: flex;
+    gap: 0.4rem;
+    margin: 0 -1rem;
+    padding: 4px 1rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .wall-chips::-webkit-scrollbar {
+    display: none;
+  }
+  @media (min-width: 640px) {
+    .wall-chips {
+      margin: 0;
+      padding: 4px 0;
+    }
+  }
+  .wall-chip {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.4rem;
+    height: 36px;
+    padding: 0 0.9rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 9999px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    text-decoration: none;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .wall-chip:hover {
+    border-color: var(--brass);
+    color: var(--ink);
+  }
+  .wall-chip.is-on {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--paper);
+  }
+  .wall-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 0.35rem;
+    border-radius: 9999px;
+    background: var(--brass-soft);
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--brass-strong);
+  }
+  .wall-chip.is-on .wall-count {
+    background: color-mix(in srgb, var(--paper) 22%, transparent);
+    color: var(--paper);
+  }
+
+  /* Utkastene (filteret «Utkast» på telefon og iPad på høykant). */
+  .wall-drafts {
+    border: 1px dashed var(--line-strong);
+    border-radius: 12px;
+    background: var(--paper-sunken);
+  }
+  .wall-draft {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 52px;
+    padding: 0.45rem 0.9rem;
+    text-decoration: none;
+    transition: background-color 0.15s;
+  }
+  .wall-draft:hover {
+    background: color-mix(in srgb, var(--paper-raised) 60%, transparent);
+  }
+  .wall-draft svg {
+    width: 7px;
+    height: 12px;
+    color: var(--ink-faint);
+    transform: rotate(180deg);
+  }
+  .wall-rail .wall-draft {
+    padding-inline: 0.25rem;
+  }
+
+  /* Sidespalten på iPad på tvers og desktop. */
+  .wall-rail {
+    position: sticky;
+    top: calc(var(--shell-top) + 1.5rem);
+  }
+  .wall-rail-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-height: 40px;
+    padding: 0 0.75rem;
+    border-radius: 9px;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+    text-decoration: none;
+    transition: background-color 0.15s, color 0.15s;
+  }
+  .wall-rail-link:hover {
+    background: var(--paper-sunken);
+    color: var(--ink);
+  }
+  .wall-rail-link.is-on {
+    background: var(--paper-sunken);
+    color: var(--ink);
+    font-weight: 600;
+    box-shadow: inset 2px 0 0 var(--brass);
+  }
+  @media (pointer: coarse) {
+    .wall-rail-link {
+      min-height: 44px;
+    }
+  }
+  .wall-rail-link:is(button) {
+    width: 100%;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  /* Søket på veggen: uthevede treff og linjen som sier hvor treffet står. */
+  .search-mark {
+    border-radius: 3px;
+    background: var(--brass-soft);
+    box-shadow: 0 0 0 1px var(--brass-soft);
+    color: inherit;
+    font-weight: inherit;
+  }
+  .search-hit {
+    display: block;
+    margin-top: 0.6rem;
+    padding: 0.45rem 0.7rem;
+    border-left: 2px solid var(--line-strong);
+    border-radius: 0 8px 8px 0;
+    background: var(--paper-sunken);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+  .search-hit-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--ink-faint);
+  }
+
+  /* Kortet på veggen. */
+  .post-card {
+    padding: 0.95rem 1rem 0.8rem;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper-raised);
+  }
+  @media (min-width: 640px) {
+    .post-card {
+      padding: 1.1rem 1.25rem 0.9rem;
+    }
+  }
+  /* Liker / kommentarer: små brikker, 44 pt trykkflate via `.hit`. */
+  .post-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    height: 32px;
+    padding: 0 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .post-chip:hover {
+    border-color: var(--brass);
+    color: var(--brass-strong);
+  }
+  .post-chip.is-on {
+    border-color: var(--brass);
+    background: var(--brass-soft);
+    color: var(--brass-strong);
+  }
+  .post-chip:disabled {
+    opacity: 0.6;
+  }
+}
+
+@layer components {
+  .wall-chip.is-draft:not(.is-on) {
+    border-style: dashed;
+  }
+}
+
+@layer components {
+  /* Kommentarfeltet nederst på et innlegg og svarfeltet i en forumtråd
+     (`Dock` i src/components/compose/Dock.tsx). På berøringsskjerm ligger det
+     FAST mot skjermen rett over fanelinjen (58 px + hjem-indikatoren) — ikke
+     sticky, som fulgte sin egen beholder og havnet bak fanelinjen. Mens et
+     tekstfelt har fokus er fanelinjen skjult (regelen under «Fanelinjen»), og
+     da står feltet nederst, over tastaturet (`--dock-kb`, målt med
+     visualViewport). Tomrommet `.comment-dock-spacer` har feltets høyde, så det
+     siste svaret aldri ligger bak det. Med mus fra 1024 px står feltet bare
+     under tråden. */
+  .comment-dock {
+    margin-top: 1.25rem;
+  }
+  .comment-dock-spacer {
+    display: none;
+  }
+  @media (max-width: 1023.98px), (pointer: coarse) {
+    .comment-dock {
+      position: fixed;
+      inset-inline: 0;
+      /* Fanelinjen er 58 px + 1 px kantlinje over. */
+      bottom: calc(59px + env(safe-area-inset-bottom));
+      z-index: 35;
+      margin: 0;
+      padding: 0.55rem max(1rem, env(safe-area-inset-right)) 0.55rem max(1rem, env(safe-area-inset-left));
+      background: var(--paper);
+      border-top: 1px solid var(--line);
+    }
+    body:has(:is(textarea, select, [contenteditable='true'], input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit']):not([type='range'])):focus) .comment-dock {
+      bottom: var(--dock-kb, 0px);
+      padding-bottom: calc(0.55rem + env(safe-area-inset-bottom));
+    }
+    body:has(:is(textarea, select, [contenteditable='true'], input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit']):not([type='range'])):focus) .comment-dock[data-keyboard='open'] {
+      padding-bottom: 0.55rem;
+    }
+    .comment-dock-inner {
+      max-width: 42rem;
+      margin-inline: auto;
+    }
+    .comment-dock-spacer {
+      display: block;
+      height: calc(var(--comment-dock-h, 4.5rem) + 0.5rem);
+    }
+  }
+  .comment-dock-send {
+    width: 44px;
+    height: 44px;
+    padding: 0 !important;
+    border-radius: 9999px !important;
+    flex-shrink: 0;
+  }
+
+  /* Handlingene i «Administrer innlegget». */
+  .manage-list {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper-raised);
+  }
+  .manage-list > :is(a, button) {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.1rem;
+    min-height: 56px;
+    padding: 0.6rem 1rem;
+    text-align: left;
+    text-decoration: none;
+    color: var(--ink);
+    cursor: pointer;
+    transition: background-color 0.15s;
+  }
+  .manage-list > :is(a, button) + :is(a, button) {
+    border-top: 1px solid var(--line);
+  }
+  .manage-list > :is(a, button):hover,
+  .manage-list > :is(a, button):active {
+    background: var(--paper-sunken);
+  }
+  .manage-list > :is(a, button) > span {
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .manage-list > :is(a, button) > small {
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: var(--ink-faint);
+  }
+  .manage-list > .is-danger > span {
+    color: var(--danger);
+  }
+  .manage-list > button:disabled {
+    opacity: 0.55;
+    pointer-events: none;
+  }
+}
+
+/* Utenfor laget: `.field-input` er ulaget, og runde hjørner og høyde her skal
+   vinne over den. */
+.comment-dock-input {
+  min-height: 44px;
+  max-height: 160px;
+  resize: none;
+  border-radius: 22px;
+  padding: 0.6rem 1rem;
+  line-height: 1.4;
+}
+/* Toastene legger seg over skrivefeltet, ikke bak det. Ulaget, som regelen
+   for fanelinjen den overstyrer. */
+@media (max-width: 1023.98px), (pointer: coarse) {
+  body:has(.tab-bar):has(.comment-dock) .toast-stack {
+    bottom: calc(59px + var(--comment-dock-h, 4.5rem) + 0.9rem + env(safe-area-inset-bottom));
+  }
+}
+
+@layer components {
+  /* «Lagret på enheten» under tittelen i skriveflatens topplinje. Hengt
+     absolutt under tittelen, så tittelen står stille. */
+  .composer-status {
+    position: absolute;
+    inset-inline: 0;
+    top: 100%;
+    overflow: hidden;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    color: var(--ink-faint);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .composer-status:empty {
+    display: none;
+  }
+  /* «Gjenopprettet utkast fra kl. 14:32 · Forkast». */
+  .draft-notice {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.6rem;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: var(--ink-soft);
+  }
+  .draft-notice-action {
+    font-weight: 600;
+    color: var(--brass-strong);
+    cursor: pointer;
+  }
+  .draft-notice-action:hover {
+    text-decoration: underline;
+  }
+  /* Over kommentarfeltet i linjen nederst. */
+  .comment-dock .draft-notice {
+    margin: 0 0.25rem 0.4rem;
+    font-size: 0.75rem;
+  }
+}
+
+@layer components {
+  /* Trådlista i forumet: én liste, like rader, uleste til høyre. */
+  .forum-list {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper-raised);
+  }
+  .forum-list > li + li {
+    border-top: 1px solid var(--line);
+  }
+  .forum-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 64px;
+    padding: 0.8rem 0.9rem 0.8rem 1rem;
+    text-decoration: none;
+    transition: background-color 0.15s;
+  }
+  .forum-row:hover,
+  .forum-row:active {
+    background: var(--paper-sunken);
+  }
+  .forum-row-chevron svg {
+    width: 7px;
+    height: 12px;
+    color: var(--ink-faint);
+    transform: rotate(180deg);
+  }
+  @media (max-width: 639.98px) {
+    .forum-list {
+      margin-inline: -1rem;
+      border-inline: 0;
+      border-radius: 0;
+    }
+  }
+}
+
+/* ---------- Hjem, Kalender og hendelsen ----------
+   Datoflisen, listeoverskriften og «Neste»-modulen (src/components/calendar/
+   parts.tsx, src/routes/index.tsx, src/routes/kalender/*). Én hevet flate per
+   side — «Neste» på Hjem, den valgte hendelsen i kalenderens detaljpanel —
+   og ellers rene, delte lister. */
+
+.date-tile {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--paper-sunken) 60%, transparent);
+  color: var(--ink);
+  line-height: 1;
+}
+.date-tile-sm {
+  width: 3rem;
+  height: 3.1rem;
+  gap: 0.2rem;
+}
+.date-tile-lg {
+  width: 4.25rem;
+  padding: 0.6rem 0 0.55rem;
+  gap: 0.28rem;
+}
+.date-tile-weekday,
+.date-tile-month {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.date-tile-month {
+  color: var(--brass);
+}
+.date-tile-day {
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+.date-tile-lg .date-tile-day {
+  font-size: 2.1rem;
+  font-weight: 560;
+}
+.date-tile-brass {
+  border-color: color-mix(in srgb, var(--brass) 55%, transparent);
+  background: var(--brass-soft);
+}
+.date-tile-brass .date-tile-weekday {
+  color: var(--brass-strong);
+}
+.date-tile-muted {
+  opacity: 0.55;
+}
+
+.list-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+/* «Neste» på Hjem: den ene hevede flaten. Messingstreken øverst er det som
+   skiller den fra alt annet på siden. */
+.next-card {
+  position: relative;
+  overflow: hidden;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-soft);
+}
+.next-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--brass), color-mix(in srgb, var(--brass) 20%, transparent));
+}
+.next-card-row {
+  border-top: 1px solid var(--line);
+}
+
+/* Agenda-raden i kalenderen. Den neste hendelsen får en messingkant; den
+   valgte (i tospaltevisningen) en svak flate. */
+.agenda-row {
+  position: relative;
+  border-radius: 10px;
+  transition: background-color 0.15s;
+}
+.agenda-row::before {
+  content: '';
+  position: absolute;
+  left: -0.3rem;
+  top: 0.65rem;
+  bottom: 0.65rem;
+  width: 3px;
+  border-radius: 2px;
+  background: transparent;
+}
+.agenda-row[data-next='true']::before {
+  background: var(--brass);
+}
+.agenda-row[data-selected='true'] {
+  background: var(--brass-soft);
+}
+@media (hover: hover) {
+  .agenda-row:hover {
+    background: color-mix(in srgb, var(--paper-sunken) 70%, transparent);
+  }
+  .agenda-row[data-selected='true']:hover {
+    background: var(--brass-soft);
+  }
+}
+.agenda-row:active {
+  background: var(--paper-sunken);
+}
+
+/* Detaljpanelet ved siden av agendaen (≥ 768 px): står stille mens lista
+   ruller, under den klebrige toppmenyen. */
+@media (min-width: 768px) {
+  .calendar-pane {
+    position: sticky;
+    top: calc(56px + env(safe-area-inset-top) + 1.25rem);
+    max-height: calc(100dvh - 56px - env(safe-area-inset-top) - 2.5rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+/* Med fanelinjen nederst (berøring, iPad) må panelet også slutte over den. */
+@media (min-width: 768px) and (pointer: coarse), (min-width: 768px) and (max-width: 1023.98px) {
+  .calendar-pane {
+    max-height: calc(100dvh - 56px - env(safe-area-inset-top) - 58px - env(safe-area-inset-bottom) - 2.5rem);
+  }
+}
+
+/* Hjem: én spalte på telefon (DOM-rekkefølgen er §7 pkt 3), to fra 768 px.
+   «Neste» spenner over de to første radene, så «Mine noter» og beskjedene
+   står tett i høyre spalte, og «Kommende» begynner rett under «Neste». */
+.hub-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 1.75rem;
+}
+@media (min-width: 768px) {
+  .hub-grid {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-areas:
+      'next notes'
+      'next posts'
+      'upcoming posts';
+    grid-template-rows: auto auto 1fr;
+    column-gap: 1.75rem;
+    row-gap: 1.75rem;
+    align-items: start;
+  }
+  .hub-next {
+    grid-area: next;
+  }
+  .hub-notes {
+    grid-area: notes;
+  }
+  .hub-posts {
+    grid-area: posts;
+  }
+  .hub-upcoming {
+    grid-area: upcoming;
+  }
+}
+@media (min-width: 1024px) {
+  .hub-grid {
+    column-gap: 2.75rem;
+  }
+}
+
+/* Kalenderen: agenda alene på telefon, agenda + detaljpanel fra 768 px. */
+@media (min-width: 768px) {
+  .calendar-layout {
+    display: grid;
+    grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+    column-gap: 2rem;
+    align-items: start;
+  }
+}
+@media (min-width: 1024px) {
+  .calendar-layout {
+    grid-template-columns: minmax(340px, 400px) minmax(0, 1fr);
+    column-gap: 3rem;
+  }
+}
+
+/* Hendelsen (/kalender/$eventId): én spalte på telefon i rekkefølgen
+   hendelse → ditt oppmøte (én linje + sammenleggbare tall) → plan →
+   navneliste, tett nok til at første punkt i planen står på første skjerm på
+   en iPhone. Fra 768 px står oppmøtet i en egen spalte til høyre, på linje med
+   tittelen, og planen og navnelistene til venstre. Reglene gjelder bare inne
+   i `.event-layout`. */
+.event-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 1.25rem;
+}
+.event-layout .back-link {
+  margin-bottom: 0.75rem;
+}
+@media (min-width: 768px) {
+  .event-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 330px);
+    grid-template-areas:
+      'head side'
+      'plan side'
+      'people side';
+    grid-template-rows: auto auto 1fr;
+    column-gap: 2rem;
+    row-gap: 2rem;
+    align-items: start;
+  }
+  .event-layout .event-head {
+    grid-area: head;
+  }
+  .event-layout .event-side {
+    grid-area: side;
+    position: sticky;
+    top: calc(56px + env(safe-area-inset-top) + 1.25rem);
+  }
+  .event-layout .event-plan {
+    grid-area: plan;
+  }
+  .event-layout .event-people {
+    grid-area: people;
+  }
+}
+@media (min-width: 1024px) {
+  .event-layout {
+    grid-template-columns: minmax(0, 1fr) 360px;
+    column-gap: 3rem;
+  }
+}
+
+/* ---------- Chat: arbeidsflaten (styret, gruppelederne) ----------
+   `ChatPanel` i src/components/ChatPanel.tsx er en meldingsapp: den fyller
+   plassen ned til fanelinjen, og det eneste som ruller er historikken.
+   Høyden (`--chat-h`) måles i JS (`useFillHeight`); fallbacken under gjelder
+   bare før første måling. Siden under skal da ikke rulle i det hele tatt, så
+   hovedfeltets bunnmarg (som ellers holder innholdet over fanelinjen) og
+   bunnteksten tas bort på akkurat disse sidene. */
+body:has(.chat-workspace) .main-with-tabs {
+  padding-bottom: 0;
+}
+body:has(.chat-workspace) .app-shell > footer {
+  display: none;
+}
+
+.chat-workspace {
+  height: var(--chat-h, calc(100dvh - 15rem));
+  min-height: 260px;
+}
+.chat-frame {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+.chat-sidebar {
+  display: none;
+}
+.chat-conversation {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.chat-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 60px;
+  padding: 0.4rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Telefon: kant til kant, som en meldingsapp. Områdemenyen og toppen krymper
+   så samtalen får plassen. Margene speiler `.px-safe`. */
+@media (max-width: 767.98px) {
+  body:has(.chat-workspace) .main-with-tabs {
+    padding-top: 0.75rem;
+  }
+  body:has(.chat-workspace) .area-nav-wrap {
+    margin-bottom: 0.6rem;
+  }
+  .chat-workspace {
+    margin-left: calc(-1 * max(1rem, env(safe-area-inset-left)));
+    margin-right: calc(-1 * max(1rem, env(safe-area-inset-right)));
+  }
+  .chat-frame {
+    border-top: 1px solid var(--line);
+    background: var(--paper);
+  }
+  .chat-header {
+    min-height: 54px;
+    padding: 0.25rem max(1rem, env(safe-area-inset-right)) 0.25rem max(1rem, env(safe-area-inset-left));
+    background: var(--paper-raised);
+  }
+  .chat-workspace .chat-scroll,
+  .chat-workspace .chat-composer {
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+  }
+}
+@media (min-width: 640px) and (max-width: 767.98px) {
+  .chat-workspace {
+    margin-left: calc(-1 * max(1.5rem, env(safe-area-inset-left)));
+    margin-right: calc(-1 * max(1.5rem, env(safe-area-inset-right)));
+  }
+}
+
+/* iPad og desktop: to ruter i én innrammet flate. */
+@media (min-width: 768px) {
+  body:has(.chat-workspace) .main-with-tabs {
+    padding-top: 1.25rem;
+  }
+  body:has(.chat-workspace) .area-nav-wrap {
+    margin-bottom: 1rem;
+  }
+  .chat-frame {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--paper-raised);
+    box-shadow: var(--shadow-soft);
+  }
+  .chat-sidebar {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    width: 240px;
+    border-right: 1px solid var(--line);
+    background: color-mix(in srgb, var(--paper-sunken) 55%, var(--paper-raised));
+  }
+}
+@media (min-width: 1024px) {
+  .chat-sidebar {
+    width: 260px;
+  }
+}
+
+/* Kanalene i sidekolonnen og i bunnarket. */
+.chat-channel {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 50px;
+  padding: 0.4rem 0.75rem;
+  border-radius: 10px;
+  color: var(--ink-soft);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+.chat-channel:hover {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--ink);
+}
+.chat-channel.is-active {
+  background: var(--brass-soft);
+  color: var(--brass-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brass) 45%, transparent);
+}
+.chat-channel-title {
+  font-size: 0.93rem;
+  font-weight: 500;
+}
+.chat-channel.is-unread .chat-channel-title {
+  font-weight: 700;
+  color: var(--ink);
+}
+.chat-channel.is-active .chat-channel-title {
+  color: var(--brass-strong);
+}
+.chat-channel.is-archived {
+  opacity: 0.7;
+}
+@media (pointer: coarse) {
+  .chat-channel {
+    min-height: 56px;
+  }
+}
+
+.chat-badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  height: 19px;
+  min-width: 19px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  background: var(--brass);
+  color: var(--paper-raised);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.dark .chat-badge {
+  color: var(--paper);
+}
+
+/* Dagsskillet: en liten etikett midt i tråden. Bevisst ikke klebrig — en
+   etikett som flyter oppå meldingene la seg over teksten i dem. */
+.chat-day-label {
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  padding: 0.2rem 0.7rem;
+  background: var(--paper-raised);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.chat-bubble-theirs {
+  background: var(--paper-sunken);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.chat-bubble-mine {
+  background: var(--brass-soft);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brass) 32%, transparent);
+}
+@media (max-width: 767.98px) {
+  .chat-workspace .chat-bubble-theirs {
+    background: var(--paper-raised);
+  }
+}
+/* Berøring: langt trykk åpner meldingens handlingsark (med «Kopier tekst»),
+   så iOS sin egen markering/forstørrelsesmeny skal ikke komme i tillegg. */
+@media (pointer: coarse) {
+  .chat-msg {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+.chat-reply-ref {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--ink-soft);
+  transition: background-color 0.15s;
+}
+button.chat-reply-ref:hover {
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+}
+
+/* Skrivefeltet: rund «pille» som vokser med teksten (høyden settes i JS). */
+.chat-input.field-input {
+  min-height: 42px;
+  max-height: 168px;
+  border-radius: 21px;
+  padding: 0.6rem 1rem;
+  line-height: 1.4;
+  overflow-y: auto;
+}
+@media (pointer: coarse) {
+  .chat-input.field-input {
+    min-height: 44px;
+    border-radius: 22px;
+    font-size: 16px;
+  }
+}
+/* Uten fanelinje og uten tastatur (iPad med fysisk tastatur, desktop-bredde)
+   står skrivefeltet helt nederst — over hjem-indikatoren, ikke bak den. */
+.chat-workspace[data-tabbar='hidden'][data-keyboard='closed'] .chat-composer {
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+}
+
+.chat-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 9999px;
+  animation: chat-spin 0.7s linear infinite;
+}
+@keyframes chat-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.chat-skeleton {
+  display: block;
+  height: 2.5rem;
+  border-radius: 16px;
+  background: var(--paper-sunken);
+  animation: chat-pulse 1.4s ease-in-out infinite;
+}
+@keyframes chat-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-skeleton,
+  .chat-spinner {
+    animation: none;
+  }
+}
+
+/* ---------- Noter og oversiktene (WP5: noter, prosjekt, arkiv, styre, profil, medlemmer, innstillinger) ----------
+   Flatehierarkiet: lister er delte lister (`.list-group`, hårfine skiller, ingen
+   skygge), grupperte innstillinger er rammede grupper (`.surface-group`), og
+   bare den ene primærmodulen på en side (notestativ-kortet) er et løftet ark
+   (`.sheet`). Fraunces er for sidetitler og verkstitler; operative etiketter er
+   Schibsted. */
+/* I `@layer components`, så Tailwind-utilities på samme element (mt-6,
+   border-brass/40, overflow-visible …) fortsatt vinner. */
+@layer components {
+  .surface-group {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+  .list-group {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .list-group > li + li,
+  .list-group > .list-row + .list-row {
+    border-top: 1px solid var(--line);
+  }
+  .list-row-link {
+    transition: background-color 0.15s;
+  }
+  @media (hover: hover) {
+    .list-row-link:hover {
+      background: color-mix(in srgb, var(--paper-sunken) 55%, transparent);
+    }
+  }
+  .list-row-link:active {
+    background: var(--paper-sunken);
+  }
+  .group-label {
+    margin: 0 0 0.5rem 0.25rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--ink-faint);
+  }
+
+  /* Segmentert kontroll (Segmented.tsx) */
+  .segmented {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--paper-sunken);
+  }
+  .segmented-stretch {
+    display: flex;
+    width: 100%;
+  }
+  .segmented-stretch .segmented-option {
+    flex: 1 1 0;
+  }
+  .segmented-option {
+    min-height: 2rem;
+    padding: 0 0.9rem;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: color 0.15s, background-color 0.15s, box-shadow 0.15s;
+  }
+  .segmented-option:hover {
+    color: var(--ink);
+  }
+  .segmented-option[aria-checked='true'] {
+    background: var(--paper-raised);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(43, 34, 16, 0.12), 0 0 0 1px var(--line);
+  }
+  .segmented-option:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  /* 44 pt på berøringsskjerm — også på iPad, uansett bredde. Sporet har 2 px
+     luft + 1 px ramme rundt, så hele kontrollen blir 50 px; selve trykkflaten
+     (valget) er 44. */
+  @media (pointer: coarse) {
+    .segmented-option {
+      min-height: 2.75rem;
+      padding: 0 1rem;
+      font-size: 0.9rem;
+    }
+  }
+
+  /* Den store messingknappen «Åpne notestativet» — primærhandlingen i noteområdet. */
+  .stand-cta {
+    display: flex;
+    min-height: 60px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: 0 1.25rem;
+    border-radius: 14px;
+    background: var(--brass);
+    color: var(--paper-raised);
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    box-shadow: 0 1px 2px rgba(43, 34, 16, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    transition: background-color 0.15s, transform 0.1s;
+  }
+  .dark .stand-cta {
+    color: var(--paper);
+  }
+  .stand-cta:hover {
+    background: var(--brass-strong);
+  }
+  .stand-cta:active {
+    transform: translateY(1px);
+  }
+}
+
+/* Kompakt nedtrekksliste i en filterrad — samme høyde som `Segmented`. Utenfor
+   laget, siden den skal vinne over `.field-input` (som heller ikke er i et lag). */
+.field-input.compact-select {
+  min-height: 2.25rem;
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
+  font-size: 0.85rem;
+}
+@media (pointer: coarse) {
+  .field-input.compact-select {
+    min-height: 2.75rem;
+    font-size: 16px;
+  }
+}
+
+/* Sidekolonnen på prosjektsiden og i arkivet: følger med når man ruller
+   (i installert iOS-app ruller `.app-shell`, og sticky virker der også). */
+@utility aside-sticky {
+  position: sticky;
+  top: calc(56px + 1.25rem);
+}
+
+/* ---------- Felles ark, handlingsrader og områdemenyen (runde 3) ----------
+   Ett mønster for alle ark og dialoger (ui.tsx: `SheetHeader`, `BottomSheet`,
+   `Modal`, `SheetActions`/`SheetAction`; ActionMenu.tsx): grep øverst på
+   bunnark, tittel til venstre med synlig lukkeknapp til høyre (44 pt «×», eller
+   «Ferdig» der valgene gjelder med en gang), en kropp som er det eneste som
+   ruller, og en valgfri bunnlinje med primærhandlingen festet over
+   hjem-indikatoren. Handlingsradene er 52 pt høye, ikon + etikett (+ én linje
+   forklaring), og ødeleggende valg står i `--danger` nederst etter et skille.
+   I `@layer components`, så Tailwind-utilities på samme element vinner. */
+@layer components {
+  .sheet-head {
+    flex-shrink: 0;
+    padding: 0.625rem 1.25rem 0;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  /* Modal: en sentrert dialog fra 641 px (der skal teksten kunne markeres og
+     siden ikke dras), et bunnark under det. */
+  .sheet-head-modal {
+    padding: 1.25rem 1.5rem 0;
+    touch-action: auto;
+    -webkit-user-select: auto;
+    user-select: auto;
+  }
+  @media (min-width: 640px) {
+    .sheet-head-modal {
+      padding-left: 1.75rem;
+      padding-right: 1.75rem;
+    }
+  }
+  @media (max-width: 640px) {
+    .sheet-head-modal {
+      padding-top: 0.625rem;
+      touch-action: none;
+    }
+  }
+  .sheet-head-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .sheet-title {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+    /* Lukkeknappen er høyere enn én linje tittel: midtstill linjen mot den. */
+    padding-top: 0.3rem;
+  }
+  .sheet-subtitle {
+    display: -webkit-box;
+    margin-top: 0.2rem;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 0.85rem;
+    line-height: 1.35;
+    color: var(--ink-soft);
+  }
+  .sheet-close {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    margin: -0.1rem -0.6rem 0 0;
+    border-radius: 9999px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s, transform 0.1s;
+  }
+  @media (hover: hover) {
+    .sheet-close:hover {
+      background: var(--paper-sunken);
+      color: var(--ink);
+    }
+    .sheet-close-text:hover {
+      background: var(--brass-soft);
+    }
+  }
+  .sheet-close:active {
+    background: var(--paper-sunken);
+    transform: scale(0.95);
+  }
+  .sheet-close-text {
+    flex-shrink: 0;
+    min-height: 2.25rem;
+    margin: -0.1rem -0.6rem 0 0;
+    padding: 0 0.6rem;
+    border-radius: 9px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--brass-strong);
+    cursor: pointer;
+    transition: background-color 0.15s;
+  }
+  .sheet-close-text:active {
+    background: var(--brass-soft);
+  }
+  /* Bunnark og alt med finger: 44 pt. */
+  .sheet-head-bottom .sheet-close,
+  .sheet-head-bottom .sheet-close-text {
+    margin-top: -0.35rem;
+  }
+  .sheet-head-bottom .sheet-close {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+  .sheet-head-bottom .sheet-close-text {
+    min-height: 2.75rem;
+  }
+  @media (pointer: coarse) {
+    .sheet-close {
+      width: 2.75rem;
+      height: 2.75rem;
+      margin-top: -0.35rem;
+    }
+    .sheet-close-text {
+      min-height: 2.75rem;
+      margin-top: -0.35rem;
+    }
+  }
+
+  /* flex-auto (ikke flex-1): flex-basis 0 % blir 0 px i WebKit på iPhone/
+     iPad, som regner dialogens høyde som bestemt. Med overflow-y: auto er
+     minimumshøyden også 0, så kroppen kollapset til bare padding. */
+  .sheet-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.875rem 1.25rem 1.25rem;
+  }
+  .sheet-body-modal {
+    padding: 1rem 1.5rem 1.5rem;
+  }
+  @media (min-width: 640px) {
+    .sheet-body-modal {
+      padding-left: 1.75rem;
+      padding-right: 1.75rem;
+    }
+  }
+  .has-footer > .sheet-body {
+    padding-bottom: 1rem;
+  }
+  /* Bunnlinjen ruller aldri bort; hjem-indikatoren dekkes av dialogens egen
+     `padding-bottom: env(safe-area-inset-bottom)`. */
+  .sheet-footer {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--line);
+    background: var(--paper-raised);
+  }
+  .sheet-dialog:not(.sheet-dialog-bottom) > .sheet-footer {
+    padding: 0.875rem 1.5rem;
+  }
+  @media (min-width: 640px) {
+    .sheet-dialog:not(.sheet-dialog-bottom) > .sheet-footer {
+      padding-left: 1.75rem;
+      padding-right: 1.75rem;
+    }
+  }
+
+  /* Handlingsrader. */
+  .sheet-actions {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper-raised);
+  }
+  .sheet-actions > * + * {
+    border-top: 1px solid var(--line);
+  }
+  .sheet-actions > .sheet-actions-sep {
+    height: 6px;
+    background: var(--paper-sunken);
+    border-bottom: 1px solid var(--line);
+  }
+  .sheet-actions > .sheet-actions-sep + * {
+    border-top: 0;
+  }
+  .sheet-action {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.85rem;
+    min-height: 3.25rem;
+    padding: 0.65rem 1rem;
+    text-align: left;
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--ink);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.12s;
+  }
+  @media (hover: hover) {
+    .sheet-action:hover {
+      background: color-mix(in srgb, var(--paper-sunken) 60%, transparent);
+    }
+  }
+  .sheet-action:active {
+    background: var(--paper-sunken);
+  }
+  .sheet-action:focus-visible {
+    outline: 2px solid var(--brass);
+    outline-offset: -2px;
+  }
+  .sheet-action:disabled,
+  .sheet-action[aria-disabled='true'] {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  /* En rad som ikke er en knapp (verdi + egen kontroll, f.eks. «Lagret offline»). */
+  .sheet-action.is-static {
+    cursor: default;
+    background: transparent;
+  }
+  .sheet-action-icon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    width: 1.5rem;
+    color: var(--ink-soft);
+  }
+  .sheet-action-hint {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.8rem;
+    font-weight: 400;
+    line-height: 1.35;
+    color: var(--ink-soft);
+  }
+  .sheet-action-value {
+    flex-shrink: 0;
+    font-size: 0.875rem;
+    font-weight: 400;
+    color: var(--ink-soft);
+  }
+  .sheet-action-danger,
+  .sheet-action-danger .sheet-action-icon {
+    color: var(--danger);
+  }
+  /* To grupper rader etter hverandre (f.eks. «Logg ut» for seg). */
+  .sheet-actions + .sheet-actions {
+    margin-top: 1rem;
+  }
+
+  /* ActionMenu med mus: samme rader, kompakte, i en liten meny under knappen. */
+  .action-pop {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 40;
+    min-width: 17rem;
+    padding: 0.35rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--line-strong);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lift);
+    animation: fadein 0.14s ease-out both;
+  }
+  .action-pop .sheet-actions {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .action-pop .sheet-action {
+    min-height: 0;
+    padding: 0.55rem 0.7rem;
+    border-top: 0;
+    border-radius: 8px;
+    font-size: 0.88rem;
+  }
+  .action-pop .sheet-action:focus-visible {
+    background: var(--paper-sunken);
+    outline: none;
+  }
+  .action-pop .sheet-action-icon {
+    width: 1.2rem;
+  }
+  .action-pop .sheet-action-hint {
+    font-size: 0.74rem;
+  }
+  .action-pop .sheet-actions > .sheet-actions-sep {
+    height: 1px;
+    margin: 0.35rem 0.4rem;
+    border: 0;
+    background: var(--line);
+  }
+}
+
+/* Ikonene i handlingsradene har samme størrelse, uansett hvor glyfen kom fra
+   (Icons.tsx er 19 px, chattens egne glyfer er tegnet i 14). */
+@layer components {
+  .sheet-action-icon > svg {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+}
+
+/* ---------- Administrasjon: medlemmer, innstillinger og filtilganger (R3-E) ----------
+   /medlemmer, /innstillinger og /innstillinger/nedlastinger. Disse flatene
+   bruker ellers `.list-group`/`.surface-group`, ActionMenu og BottomSheet;
+   her står bare det som er særegent for dem. */
+@layer components {
+  /* Underrader i en utvidet rad (invitasjonene under «Invitasjoner · N»). */
+  .admin-subrows {
+    border-top: 1px solid var(--line);
+    background: color-mix(in srgb, var(--paper-sunken) 35%, transparent);
+  }
+  .admin-subrows > li + li {
+    border-top: 1px solid var(--line);
+  }
+}
+@layer components {
+  /* Seksjonene på /innstillinger: hopp lander under toppmenyen. */
+  .admin-anchor {
+    scroll-margin-top: calc(var(--shell-top) + 1rem);
+  }
+  /* Rollematrisen (md+): rettighetskolonnen står fast når rollene ruller
+     sidelengs (mange egendefinerte roller). */
+  .admin-matrix-sticky {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 13rem;
+    max-width: 18rem;
+    background: var(--paper-raised);
+  }
+  .admin-matrix th:not(.admin-matrix-sticky),
+  .admin-matrix td {
+    min-width: 4.75rem;
+  }
+  /* Matrisen ruller i sin egen flate (begge retninger), så overskriftsraden
+     kan stå fast øverst: høyden er skjermen minus toppmenyen, fanelinjen og
+     litt luft, aldri over innholdet. */
+  .admin-matrix-scroll {
+    max-height: calc(100dvh - var(--shell-top, 56px) - 58px - env(safe-area-inset-bottom) - 6rem);
+  }
+  .admin-matrix-head > th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--paper-raised);
+    box-shadow: inset 0 -1px 0 var(--line);
+  }
+  .admin-matrix-head > th.admin-matrix-sticky {
+    z-index: 3;
   }
 }

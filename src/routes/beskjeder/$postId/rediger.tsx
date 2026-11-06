@@ -1,6 +1,7 @@
-import { Link, createFileRoute, redirect } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { PostForm } from '../../../components/PostForm'
-import { EmptyState, Kicker, Stamp } from '../../../components/ui'
+import { draftKey } from '../../../lib/drafts'
+import { EmptyState } from '../../../components/ui'
 import { getPost } from '../../../server/posts'
 
 /**
@@ -19,37 +20,19 @@ export const Route = createFileRoute('/beskjeder/$postId/rediger')({
 
 function EditPostPage() {
   const { post, canPublish, canArchive, attachments } = Route.useLoaderData()
-  const isDraft = post.publishedAt === null
+  const me = Route.useRouteContext().me
 
   if (!post.canEdit) {
     return <EmptyState title="Du kan bare endre dine egne innlegg">Gå tilbake til veggen for å lese det.</EmptyState>
   }
 
+  // Samme skriveflate som et nytt innlegg; «Avbryt» går tilbake til innlegget.
   return (
-    <div className="mx-auto max-w-2xl space-y-8">
-      <header className="rise">
-        <Link
-          to="/beskjeder/$postId"
-          params={{ postId: post.id }}
-          className="link-quiet mb-4 inline-flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-brass-strong"
-        >
-          ← Tilbake til innlegget
-        </Link>
-        <div className="flex flex-wrap items-center gap-2">
-          <Kicker>Rediger</Kicker>
-          {isDraft ? <Stamp tone="oxblood">Utkast</Stamp> : <Stamp tone="brass">Publisert</Stamp>}
-        </div>
-        <h1 className="display-title mt-2 text-3xl font-semibold italic text-ink sm:text-4xl">{post.heading}</h1>
-        <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-          {isDraft
-            ? 'Utkastet er ikke synlig for medlemmene ennå.'
-            : 'Innlegget er publisert. Endringer vises med det samme; e-post går kun til dem som ikke allerede har fått den.'}
-        </p>
-      </header>
-
-      <section className="rise" style={{ animationDelay: '80ms' }}>
-        <PostForm post={{ ...post, attachments }} canPublish={canPublish} canArchive={canArchive} />
-      </section>
-    </div>
+    <PostForm
+      post={{ ...post, attachments }}
+      canPublish={canPublish}
+      canArchive={canArchive}
+      draftKey={me ? draftKey(me.id, { kind: 'edit-post', postId: post.id }) : undefined}
+    />
   )
 }

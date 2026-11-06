@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers'
 import { createServerFn } from '@tanstack/react-start'
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
 import {
@@ -20,6 +20,7 @@ import {
 } from '../db/schema'
 import { newId } from '../lib/id'
 import { postPlainText } from '../lib/markdown'
+import { type SearchDoc, type SearchHit, SEARCH_MAX_LENGTH, SEARCH_MIN_LENGTH, searchDocs } from '../lib/post-search'
 import { isUnread } from '../lib/unread'
 import {
   type MentionCandidate,
@@ -134,6 +135,11 @@ export type PostListItem = {
   likedByMe: boolean
   /** Alle emoji-reaksjonene, i rekkefølgen de først ble brukt. */
   reactions: ReactionSummary[]
+  /**
+   * Siste kommentar eller publisering (ms) — sorteringen «Siste aktivitet».
+   * Et «slettet»-merke teller ikke.
+   */
+  lastActivityAt: number
   /**
    * Samme regel som tallet på Beskjeder-fanen (`isUnread` i src/lib/unread.ts),
    * så kortene som er merket «Ulest» alltid er de fanetallet teller.
@@ -251,12 +257,32 @@ async function readablePost(id: string, canPublish: boolean, me?: Me): Promise<R
   return row
 }
 
-/** Kommentartall, reaksjoner og bilder for en håndfull innlegg — noen få små spørringer. */
+/**
+ * D1 tillater maks 100 bundne parametere per spørring, og `inArray` binder
+ * hver id for seg. Veggen har hele historikken i én liste, så id-ene deles i
+ * biter — ellers ville `listPosts` sluttet å virke ved innlegg nummer 100.
+ */
+const IN_CHUNK = 90
+
+function chunked<T>(items: T[], size: number = IN_CHUNK): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
+  return out
+}
+
+/** Kjører samme spørring for hver bit av id-ene og slår sammen radene. */
+async function perChunk<R>(ids: string[], query: (chunk: string[]) => Promise<R[]>): Promise<R[]> {
+  const parts = await Promise.all(chunked(ids).map(query))
+  return parts.flat()
+}
+
+/** Kommentartall, reaksjoner og bilder for innleggene — noen små spørringer per 90 innlegg. */
 async function decorate(
   rows: Row[],
   me: Me,
 ): Promise<{
   comments: Map<string, number>
+  lastComment: Map<string, number>
   reactions: Map<string, ReactionSummary[]>
   images: Map<string, PostImage[]>
   mentions: Map<string, MentionUser[]>
@@ -264,33 +290,52 @@ async function decorate(
 }> {
   const ids = rows.map((r) => r.id)
   if (ids.length === 0) {
-    return { comments: new Map(), reactions: new Map(), images: new Map(), mentions: new Map(), read: new Set() }
+    return {
+      comments: new Map(),
+      lastComment: new Map(),
+      reactions: new Map(),
+      images: new Map(),
+      mentions: new Map(),
+      read: new Set(),
+    }
   }
   const d = db()
   const [commentRows, reactionRows, imageRows, mentions, readRows] = await Promise.all([
-    d
-      .select({ postId: postComments.postId, n: sql<number>`count(*)` })
-      .from(postComments)
-      // Et «slettet»-merke er ikke en kommentar.
-      .where(and(inArray(postComments.postId, ids), isNull(postComments.deletedAt)))
-      .groupBy(postComments.postId),
+    perChunk(ids, (chunk) =>
+      d
+        .select({
+          postId: postComments.postId,
+          n: sql<number>`count(*)`,
+          // Rå millisekunder (kolonnen er timestamp_ms); mapWith ville gjort det til Date.
+          last: sql<number>`max(${postComments.createdAt})`,
+        })
+        .from(postComments)
+        // Et «slettet»-merke er ikke en kommentar.
+        .where(and(inArray(postComments.postId, chunk), isNull(postComments.deletedAt)))
+        .groupBy(postComments.postId),
+    ),
+    // Deler selv id-ene i biter på 90.
     reactionsFor('post', ids, me.id),
-    d
-      .select({
-        id: postImages.id,
-        postId: postImages.postId,
-        fileName: postImages.fileName,
-        width: postImages.width,
-        height: postImages.height,
-      })
-      .from(postImages)
-      .where(inArray(postImages.postId, ids))
-      .orderBy(asc(postImages.sortOrder), asc(postImages.createdAt)),
+    perChunk(ids, (chunk) =>
+      d
+        .select({
+          id: postImages.id,
+          postId: postImages.postId,
+          fileName: postImages.fileName,
+          width: postImages.width,
+          height: postImages.height,
+        })
+        .from(postImages)
+        .where(inArray(postImages.postId, chunk))
+        .orderBy(asc(postImages.sortOrder), asc(postImages.createdAt)),
+    ),
     postMentionsFor(ids),
-    d
-      .select({ postId: postReads.postId })
-      .from(postReads)
-      .where(and(eq(postReads.userId, me.id), inArray(postReads.postId, ids))),
+    perChunk(ids, (chunk) =>
+      d
+        .select({ postId: postReads.postId })
+        .from(postReads)
+        .where(and(eq(postReads.userId, me.id), inArray(postReads.postId, chunk))),
+    ),
   ])
 
   const images = new Map<string, PostImage[]>()
@@ -301,6 +346,7 @@ async function decorate(
   }
   return {
     comments: new Map(commentRows.map((r) => [r.postId, r.n])),
+    lastComment: new Map(commentRows.map((r) => [r.postId, Number(r.last)])),
     reactions: reactionRows,
     images,
     mentions,
@@ -312,11 +358,13 @@ async function decorate(
 async function postMentionsFor(postIds: string[]): Promise<Map<string, MentionUser[]>> {
   const out = new Map<string, MentionUser[]>()
   if (postIds.length === 0) return out
-  const rows = await db()
-    .select({ postId: postMentions.postId, id: user.id, name: user.name })
-    .from(postMentions)
-    .innerJoin(user, eq(postMentions.userId, user.id))
-    .where(inArray(postMentions.postId, postIds))
+  const rows = await perChunk(postIds, (chunk) =>
+    db()
+      .select({ postId: postMentions.postId, id: user.id, name: user.name })
+      .from(postMentions)
+      .innerJoin(user, eq(postMentions.userId, user.id))
+      .where(inArray(postMentions.postId, chunk)),
+  )
   for (const r of rows) {
     const list = out.get(r.postId) ?? []
     list.push({ id: r.id, name: r.name })
@@ -356,6 +404,10 @@ function toListItem(
     likeCount: likeState(extra.reactions.get(row.id) ?? []).count,
     likedByMe: likeState(extra.reactions.get(row.id) ?? []).mine,
     reactions: extra.reactions.get(row.id) ?? [],
+    lastActivityAt: Math.max(
+      row.publishedAt?.getTime() ?? row.createdAt.getTime(),
+      extra.lastComment.get(row.id) ?? 0,
+    ),
     unread: isUnread(
       {
         publishedAt: row.publishedAt ? row.publishedAt.getTime() : null,
@@ -395,6 +447,91 @@ export const listPosts = createServerFn().handler(async () => {
       .map((r) => toListItem(r, me, canPublish, extra, FEED_IMAGES)),
   }
 })
+
+/** Et treff i søket: kortet som på veggen, pluss hvorfor det kom med. */
+export type PostSearchResult = PostListItem & { hit: SearchHit }
+
+/**
+ * Søk i veggen — hele historikken, ikke bare det `listPosts` viser i utdrag:
+ * tittel, HELE teksten, avsender og kommentarer. Bare publiserte innlegg den
+ * som spør kan lese (samme `visibleTo` som veggen, så et innlegg til styret
+ * kan ikke bekreftes ved å søke etter ord i det), og bare kommentarer på dem.
+ *
+ * Teksten søkes som REN tekst med dagens navn i omtalene — slik den leses,
+ * ikke slik den er lagret (`**`, `#` og `@[u:…]` skal hverken treffe eller
+ * synes i utdraget). Rangeringen og utdraget er `searchDocs` i
+ * src/lib/post-search.ts; sorteringen gjør skjermen, som for veggen.
+ */
+export const searchPosts = createServerFn()
+  .validator(z.object({ q: z.string().trim().min(SEARCH_MIN_LENGTH).max(SEARCH_MAX_LENGTH) }))
+  .handler(async ({ data }): Promise<{ query: string; results: PostSearchResult[] }> => {
+    const me = await requireMe()
+    const canPublish = hasPermission(me, PUBLISH_PERMISSION)
+    const d = db()
+    const [postRows, commentRows, mentionRows, people] = await Promise.all([
+      selectPosts().where(isNotNull(posts.publishedAt)),
+      // Alle kommentarene (ingen `inArray` over hele veggen — se IN_CHUNK);
+      // de som hører til innlegg leseren ikke ser, sorteres bort under.
+      d
+        .select({ postId: postComments.postId, body: postComments.body, authorName: user.name })
+        .from(postComments)
+        .leftJoin(user, eq(postComments.authorId, user.id))
+        .where(isNull(postComments.deletedAt))
+        .orderBy(asc(postComments.createdAt)),
+      d
+        .select({ postId: postMentions.postId, id: user.id, name: user.name })
+        .from(postMentions)
+        .innerJoin(user, eq(postMentions.userId, user.id)),
+      // Navnene til omtalene i kommentarene. Brukes bare til å gjøre markører
+      // om til «@Navn» i tekst leseren allerede har tilgang til.
+      d.select({ id: user.id, name: user.name }).from(user),
+    ])
+
+    const rows = postRows.filter((r) => visibleTo(r, canPublish, me))
+    const readable = new Set(rows.map((r) => r.id))
+    const mentionsByPost = new Map<string, MentionUser[]>()
+    for (const m of mentionRows) {
+      if (!readable.has(m.postId)) continue
+      const list = mentionsByPost.get(m.postId) ?? []
+      list.push({ id: m.id, name: m.name })
+      mentionsByPost.set(m.postId, list)
+    }
+    const commentsByPost = new Map<string, SearchDoc['comments']>()
+    for (const c of commentRows) {
+      if (!readable.has(c.postId)) continue
+      const list = commentsByPost.get(c.postId) ?? []
+      list.push({ author: c.authorName ?? UNKNOWN_AUTHOR, text: mentionPlainText(c.body, people) })
+      commentsByPost.set(c.postId, list)
+    }
+
+    const docs: SearchDoc[] = rows.map((r) => {
+      const plain = mentionPlainText(postPlainText(r.body, r.format), mentionsByPost.get(r.id) ?? [])
+      const author = authorOf(r).name
+      return {
+        id: r.id,
+        title: r.title,
+        body: plain,
+        excerpt: excerpt(plain),
+        // Samme avsender som kortet viser (`postSender` i PostCard.tsx).
+        sender: r.fromArchive ? 'Notearkivar' : r.official ? OFFICIAL_AUTHOR : author,
+        author,
+        comments: commentsByPost.get(r.id) ?? [],
+        publishedAt: r.publishedAt?.getTime() ?? 0,
+      }
+    })
+
+    const ranked = searchDocs(docs, data.q)
+    const byId = new Map(rows.map((r) => [r.id, r]))
+    const matched = ranked.map((hit) => byId.get(hit.id)).filter((r): r is Row => r !== undefined)
+    const extra = await decorate(matched, me)
+    return {
+      query: data.q,
+      results: ranked.flatMap((hit) => {
+        const row = byId.get(hit.id)
+        return row ? [{ ...toListItem(row, me, canPublish, extra, FEED_IMAGES), hit: hit.hit }] : []
+      }),
+    }
+  })
 
 export const getPost = createServerFn()
   .validator(idInput)

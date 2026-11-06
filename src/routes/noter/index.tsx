@@ -3,7 +3,7 @@ import { useEffect, useMemo } from 'react'
 import { Icon } from '../../components/Icons'
 import { OfflineStandRow } from '../../components/OfflineStand'
 import { RepertoireList } from '../../components/Repertoire'
-import { EmptyState, Kicker, SectionHeading, Stamp } from '../../components/ui'
+import { Kicker, PageHeader, Stamp } from '../../components/ui'
 import { formatDate, formatWeekday, relativeDays } from '../../lib/format'
 import { pruneOfflineStands } from '../../lib/offline-notes'
 import { percussionLines } from '../../lib/percussion'
@@ -36,186 +36,187 @@ function HomePage() {
     void pruneOfflineStands([...(next ? [next.id] : []), ...data.upcoming.map((p) => p.id)]).catch(() => {})
   }, [next, data.upcoming])
 
+  const partsLine =
+    data.me.parts.length > 0
+      ? data.me.parts.map((p) => p.nameNo).join(' · ')
+      : 'Ingen stemme registrert — du får partituret'
+
   return (
-    <div className="space-y-14">
+    <div>
+      <PageHeader title="Mine noter" summary={partsLine} className="rise" />
+
       {next ? (
-        <section className="rise">
-          <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
-            <div className="min-w-0">
-              <Kicker className="mb-3">
-                Neste prosjekt · {relativeDays(next.eventDate)}
-              </Kicker>
-              <Link
-                to="/noter/prosjekter/$projectId"
-                params={{ projectId: next.id }}
-                className="link-quiet block"
-              >
-                <h1 className="display-title text-[clamp(2.6rem,7vw,4.6rem)] font-semibold italic leading-[0.98] text-ink transition-colors hover:text-brass-strong break-words [hyphens:auto]">
-                  {next.name}
-                </h1>
-              </Link>
-              {/* På telefon står datoen her i stedet for i datoblokken (som bare
-                  vises fra md) — så «Åpne notestativet» kommer over bretten. */}
-              {next.eventDate && (
-                <p className="mt-3 text-[0.95rem] text-ink md:hidden">
-                  {formatWeekday(next.eventDate)} {formatDate(next.eventDate)}
-                  {next.venue ? ` · ${next.venue}` : ''}
-                </p>
-              )}
-              <p className="mt-3 max-w-xl text-[0.95rem] leading-relaxed text-ink-soft md:mt-4">
-                {next.description}
-              </p>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                {data.me.parts.map((p) => (
-                  <Stamp key={p.id} tone="brass">
-                    {p.nameNo}
-                  </Stamp>
-                ))}
-                <Stamp>{data.me.roleName}</Stamp>
-              </div>
-            </div>
-
-            {next.eventDate && (
-              <div className="sheet hidden shrink-0 items-stretch self-end overflow-hidden md:flex">
-                <div className="flex flex-col items-center justify-center px-6 py-4">
-                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-ink-faint">
-                    {formatWeekday(next.eventDate)}
-                  </span>
-                  <span className="display-title tabular text-[2.6rem] font-semibold leading-none text-ink">
-                    {Number(next.eventDate.slice(8, 10))}
-                  </span>
-                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-brass">
-                    {formatDate(next.eventDate).split(' ').slice(1).join(' ')}
-                  </span>
-                </div>
-                {next.venue && (
-                  <div className="flex items-center border-l border-line bg-paper-sunken/60 px-5">
-                    <span className="max-w-[120px] text-xs leading-snug text-ink-soft">{next.venue}</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {standFileIds.length > 0 && (
-            <div className="mt-7 grid gap-3 sm:grid-cols-2">
-              <Link
-                to="/noter/stativ/$projectId"
-                params={{ projectId: next.id }}
-                className="flex min-h-[68px] items-center justify-center gap-2.5 rounded-[14px] bg-brass px-5 text-[0.98rem] font-semibold text-paper-raised shadow-[var(--shadow-soft)] transition-colors hover:bg-brass-strong active:translate-y-px dark:text-paper"
-              >
-                <Icon name="notes" size={22} />
-                Åpne notestativet
-              </Link>
-              <OfflineStandRow project={{ id: next.id, name: next.name }} fileIds={standFileIds} ownerId={me.id} />
-            </div>
-          )}
-
-          <div className="staff-rule mt-8 w-full opacity-50" aria-hidden />
-
-          {next.percussionNotes && (
-            <div className="mt-6 rounded-2xl border border-line bg-paper-raised px-5 py-4">
-              <p className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-brass">Slagverksnotater</p>
-              <div className="mt-1.5 space-y-1">
-                {percussionLines(next.percussionNotes).map((line, i) => (
-                  <p key={i} className="text-sm leading-relaxed text-ink-soft">
-                    {line}
-                  </p>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="mt-2">
-            <RepertoireList items={data.repertoire} standProjectId={next.id} />
-            {data.repertoire.length === 0 && (
-              <EmptyState title="Programmet er ikke satt ennå">
-                Repertoaret dukker opp her så snart det er publisert.
-              </EmptyState>
-            )}
-          </div>
-        </section>
-      ) : (
-        <section className="rise">
-          <EmptyState
-            title="Ingen kommende prosjekter"
-            action={
-              <Link to="/noter/prosjekter" className="link-brass text-sm">
-                Se tidligere prosjekter
-              </Link>
-            }
-          >
-            Når neste konsert publiseres finner du programmet og notene dine her.
-          </EmptyState>
-        </section>
-      )}
-
-      <div className={data.archive ? 'grid gap-10 md:grid-cols-2' : 'max-w-2xl'}>
-        <section className="rise" style={{ animationDelay: '120ms' }}>
-          <SectionHeading kicker="Lenger frem" title="Kommende" className="mb-4" />
-          {data.upcoming.length === 0 ? (
-            <p className="text-sm text-ink-faint">Ingenting mer planlagt — foreløpig.</p>
-          ) : (
-            <ul className="space-y-3">
-              {data.upcoming.map((p) => (
-                <li key={p.id}>
+        <div className="mt-6 grid gap-x-12 gap-y-10 lg:grid-cols-[22rem_minmax(0,1fr)]">
+          {/* Den ene primærmodulen: neste prosjekt og veien inn på notestativet. */}
+          <section className="rise lg:self-start" aria-labelledby="neste-prosjekt">
+            <div className="sheet overflow-hidden">
+              <div className="px-5 pb-5 pt-5 sm:px-6 sm:pt-6 md:grid md:grid-cols-[minmax(0,1fr)_18rem] md:gap-8 lg:block">
+                <div className="min-w-0">
+                  <Kicker className="mb-2">Neste prosjekt · {relativeDays(next.eventDate)}</Kicker>
                   <Link
                     to="/noter/prosjekter/$projectId"
-                    params={{ projectId: p.id }}
-                    className="sheet sheet-hover link-quiet flex items-center justify-between gap-4 px-5 py-4"
+                    params={{ projectId: next.id }}
+                    className="link-quiet group block"
+                    id="neste-prosjekt"
                   >
-                    <span>
-                      <span className="display-title block text-lg font-semibold">{p.name}</span>
-                      <span className="mt-0.5 block text-xs text-ink-soft">
-                        {formatDate(p.eventDate)}
-                        {p.venue ? ` · ${p.venue}` : ''}
-                      </span>
-                    </span>
-                    <span className="font-mono text-[0.64rem] uppercase tracking-[0.14em] text-brass">
-                      {relativeDays(p.eventDate)}
-                    </span>
+                    <h2 className="display-title break-words text-[clamp(2rem,6vw,2.6rem)] font-semibold italic leading-[1.02] text-ink transition-colors [hyphens:auto] group-hover:text-brass-strong">
+                      {next.name}
+                    </h2>
                   </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {data.archive && (
-          <section className="rise" style={{ animationDelay: '200ms' }}>
-            <SectionHeading
-              kicker="Arkivet"
-              title="Nytt i hyllene"
-              className="mb-4"
-              action={
-                <Link to="/noter/arkiv" className="link-brass text-sm">
-                  Hele arkivet →
-                </Link>
-              }
-            />
-            <ul className="sheet divide-y divide-[var(--line)] overflow-hidden">
-              {data.archive.latestWorks.map((w) => (
-                <li key={w.id}>
-                  <Link
-                    to="/noter/arkiv/$workId"
-                    params={{ workId: w.id }}
-                    className="link-quiet flex items-baseline justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-paper-sunken/50"
-                  >
-                    <span className="min-w-0">
-                      <span className="display-title block truncate text-[1.02rem] font-semibold">{w.title}</span>
-                      <span className="block text-xs text-ink-soft">{w.composer ?? '—'}</span>
-                    </span>
-                    {w.genre && <Stamp>{w.genre}</Stamp>}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-3 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint">
-              {data.archive.stats.works} verk · {data.archive.stats.files} filer i arkivet
-            </p>
+                  {next.eventDate && (
+                    <p className="mt-2 text-[0.95rem] text-ink">
+                      {formatWeekday(next.eventDate)} {formatDate(next.eventDate)}
+                      {next.venue ? <span className="text-ink-soft"> · {next.venue}</span> : null}
+                    </p>
+                  )}
+                  {next.description && (
+                    <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-ink-soft lg:line-clamp-4">{next.description}</p>
+                  )}
+                </div>
+                <div className="mt-5 space-y-3 md:mt-0 lg:mt-5">
+                  {standFileIds.length > 0 ? (
+                    <>
+                      <Link to="/noter/stativ/$projectId" params={{ projectId: next.id }} className="stand-cta">
+                        <Icon name="notes" size={22} />
+                        Åpne notestativet
+                      </Link>
+                      <OfflineStandRow project={{ id: next.id, name: next.name }} fileIds={standFileIds} ownerId={me.id} />
+                    </>
+                  ) : (
+                    <p className="surface-group px-4 py-3.5 text-sm leading-snug text-ink-soft">
+                      {data.repertoire.length === 0
+                        ? 'Programmet er ikke satt ennå. Notene dukker opp her så snart det er publisert.'
+                        : 'Ingen noter til deg i dette programmet ennå.'}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {next.percussionNotes && (
+                <div className="border-t border-line bg-paper-sunken/50 px-5 py-4 sm:px-6">
+                  <p className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-brass">Slagverksnotater</p>
+                  <div className="mt-1.5 space-y-1">
+                    {percussionLines(next.percussionNotes).map((line, i) => (
+                      <p key={i} className="text-sm leading-relaxed text-ink-soft">
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </section>
-        )}
-      </div>
+
+          <div className="min-w-0 space-y-12">
+            {data.repertoire.length > 0 && (
+              <section className="rise" style={{ animationDelay: '80ms' }}>
+                <div className="flex items-baseline justify-between gap-4 border-b border-line pb-2.5">
+                  <h2 className="display-title text-xl font-semibold text-ink">På stativet</h2>
+                  <p className="text-sm text-ink-faint">
+                    {data.repertoire.length === 1 ? '1 verk' : `${data.repertoire.length} verk`}
+                  </p>
+                </div>
+                <RepertoireList items={data.repertoire} standProjectId={next.id} />
+              </section>
+            )}
+
+            {data.upcoming.length > 0 && (
+              <section className="rise" style={{ animationDelay: '120ms' }}>
+                <p className="group-label">Senere</p>
+                <UpcomingList projects={data.upcoming} />
+              </section>
+            )}
+
+            {data.archive && <ArchiveShelf archive={data.archive} />}
+          </div>
+        </div>
+      ) : (
+        <div className={`mt-6 grid gap-x-12 gap-y-10 ${data.archive ? 'lg:grid-cols-2' : ''}`}>
+          {/* Ingen kommende prosjekt: én tydelig tilstand og én vei videre — ikke
+              en tom «Kommende»-seksjon i tillegg. */}
+          <section className="rise surface-group flex flex-col items-start gap-3 px-6 py-8 sm:px-8">
+            <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brass-soft)] text-brass-strong">
+              <Icon name="notes" size={24} />
+            </span>
+            <h2 className="display-title text-[1.4rem] font-semibold leading-tight text-ink sm:text-[1.6rem]">
+              Ingenting på notestativet ennå
+            </h2>
+            <p className="max-w-md text-[0.95rem] leading-relaxed text-ink-soft">
+              Når neste konsert publiseres, ligger programmet og notene dine klare her — og kan lagres på enheten
+              før øvelser med dårlig nett.
+            </p>
+            <Link
+              to="/noter/prosjekter"
+              search={{ status: 'tidligere' }}
+              className="mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-full border border-line-strong bg-paper px-4 text-sm font-medium text-ink transition-colors hover:border-brass hover:text-brass-strong"
+            >
+              Se tidligere prosjekter
+              <Icon name="chevronRight" size={16} />
+            </Link>
+          </section>
+
+          {data.archive && <ArchiveShelf archive={data.archive} />}
+        </div>
+      )}
     </div>
+  )
+}
+
+type HomeData = Awaited<ReturnType<typeof getHome>>
+
+function UpcomingList({ projects }: { projects: HomeData['upcoming'] }) {
+  return (
+    <ul className="list-group">
+      {projects.map((p) => (
+        <li key={p.id}>
+          <Link
+            to="/noter/prosjekter/$projectId"
+            params={{ projectId: p.id }}
+            className="list-row-link link-quiet flex min-h-[60px] items-center justify-between gap-4 px-4 py-3 sm:px-5"
+          >
+            <span className="min-w-0">
+              <span className="display-title block truncate text-[1.05rem] font-semibold text-ink">{p.name}</span>
+              <span className="mt-0.5 block truncate text-xs text-ink-soft">
+                {formatDate(p.eventDate)}
+                {p.venue ? ` · ${p.venue}` : ''}
+              </span>
+            </span>
+            <span className="shrink-0 text-xs font-medium text-brass-strong">{relativeDays(p.eventDate)}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function ArchiveShelf({ archive }: { archive: NonNullable<HomeData['archive']> }) {
+  return (
+    <section className="rise" style={{ animationDelay: '160ms' }}>
+      <div className="mb-2 flex items-baseline justify-between gap-3 px-1">
+        <p className="group-label !m-0">Nytt i arkivet</p>
+        <Link to="/noter/arkiv" className="link-brass hit text-sm">
+          Hele arkivet →
+        </Link>
+      </div>
+      <ul className="list-group">
+        {archive.latestWorks.map((w) => (
+          <li key={w.id}>
+            <Link
+              to="/noter/arkiv/$workId"
+              params={{ workId: w.id }}
+              className="list-row-link link-quiet flex min-h-[60px] items-center justify-between gap-4 px-4 py-3 sm:px-5"
+            >
+              <span className="min-w-0">
+                <span className="display-title block truncate text-[1.02rem] font-semibold text-ink">{w.title}</span>
+                <span className="block truncate text-xs text-ink-soft">{w.composer ?? '—'}</span>
+              </span>
+              {w.genre && <Stamp>{w.genre}</Stamp>}
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2.5 px-1 text-xs text-ink-faint">
+        {archive.stats.works} verk · {archive.stats.files} filer i arkivet
+      </p>
+    </section>
   )
 }

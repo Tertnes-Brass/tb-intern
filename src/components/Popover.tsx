@@ -15,6 +15,10 @@ import { createPortal } from 'react-dom'
  *
  * `'fit'` gjør panelet akkurat så stort som innholdet (målt i nettleseren), så
  * en rad med knapper aldri klippes — heller ikke med større skrift eller zoom.
+ *
+ * Bunnarket står over tastaturet når et felt i det har fokus (søket i GIF- og
+ * emoji-velgeren): iOS legger tastaturet OVER siden, så høyden måles med
+ * `visualViewport`, som `Dock` gjør.
  */
 export function Popover({
   anchor,
@@ -38,6 +42,8 @@ export function Popover({
   const panel = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   const [sheet, setSheet] = useState(false)
+  /** Hvor mye tastaturet dekker, og hvor mye plass som er igjen over det (px). */
+  const [keyboard, setKeyboard] = useState({ covered: 0, room: 0 })
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
 
@@ -66,6 +72,30 @@ export function Popover({
       window.removeEventListener('scroll', place, true)
     }
   }, [open, anchor, width, height])
+
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!open || !sheet || !vv) return
+    let frame = 0
+    const measure = () => {
+      const covered = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))
+      // Under ~80 px er det verktøylinjer og avrunding, ikke et tastatur.
+      setKeyboard(covered > 80 ? { covered, room: Math.round(vv.height) } : { covered: 0, room: 0 })
+    }
+    const schedule = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(measure)
+    }
+    measure()
+    vv.addEventListener('resize', schedule)
+    vv.addEventListener('scroll', schedule)
+    return () => {
+      cancelAnimationFrame(frame)
+      vv.removeEventListener('resize', schedule)
+      vv.removeEventListener('scroll', schedule)
+      setKeyboard({ covered: 0, room: 0 })
+    }
+  }, [open, sheet])
 
   useEffect(() => {
     if (!open) return
@@ -115,9 +145,10 @@ export function Popover({
         }
         style={
           sheet
-            ? height === 'fit'
-              ? undefined
-              : { height: Math.min(height + 40, 640) }
+            ? {
+                ...(height === 'fit' ? {} : { height: Math.min(height + 40, 640, keyboard.room ? keyboard.room - 12 : Infinity) }),
+                ...(keyboard.covered ? { bottom: keyboard.covered, maxHeight: keyboard.room - 12 } : {}),
+              }
             : {
                 width: width === 'fit' ? 'max-content' : Math.min(width, window.innerWidth - 16),
                 maxWidth: window.innerWidth - 16,

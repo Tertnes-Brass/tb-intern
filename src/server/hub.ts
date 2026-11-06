@@ -1,8 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import { db } from '../db'
-import { type ReactionSummary, reactionsText } from '../lib/reactions'
-import { reactionsFor } from './reaction-store'
 import {
   eventAttendance,
   eventSetlist,
@@ -136,14 +134,13 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
 
   // Tellerne hentes for de tre innleggene som faktisk vises — ikke for hele veggen.
   const postIds = postRows.map((p) => p.id)
-  const [commentRows, reactionRows, mentionRows] = postIds.length
+  const [commentRows, mentionRows] = postIds.length
     ? await Promise.all([
         d
           .select({ postId: postComments.postId, n: sql<number>`count(*)` })
           .from(postComments)
           .where(and(inArray(postComments.postId, postIds), isNull(postComments.deletedAt)))
           .groupBy(postComments.postId),
-        reactionsFor('post', postIds, me.id),
         // Navnene på de omtalte: utdraget skal vise «@Ola», aldri «@[u:kd9…]».
         d
           .select({ postId: postMentions.postId, id: user.id, name: user.name })
@@ -151,7 +148,7 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
           .innerJoin(user, eq(postMentions.userId, user.id))
           .where(inArray(postMentions.postId, postIds)),
       ])
-    : [[], new Map<string, ReactionSummary[]>(), []]
+    : [[], []]
   const commentCounts = new Map(commentRows.map((r) => [r.postId, r.n]))
   const mentionsByPost = new Map<string, MentionUser[]>()
   for (const r of mentionRows) {
@@ -202,8 +199,6 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
         fromArchive: p.fromArchive,
         authorName: p.authorName ?? (p.fromArchive ? 'Notearkivar' : p.official ? 'Styret' : 'Ukjent'),
         commentCount: commentCounts.get(p.id) ?? 0,
-        /** «👍 3 · 😂 1», tom uten reaksjoner. */
-        reactionText: reactionsText(reactionRows.get(p.id) ?? []),
       }
     }),
     importantUnread,

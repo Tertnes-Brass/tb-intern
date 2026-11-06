@@ -2,7 +2,8 @@ import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { PushCard } from '../components/PushCard'
 import { toast, toastError } from '../components/toast'
-import { Button, Field, Kicker, Stamp } from '../components/ui'
+import { Segmented } from '../components/Segmented'
+import { Button, Field, PageHeader, Stamp } from '../components/ui'
 import { authClient } from '../lib/auth-client'
 import {
   PASSWORD_MIN_LENGTH,
@@ -62,77 +63,128 @@ function MyProfilePage() {
   }
 
   return (
-    <div className="space-y-9">
-      <header className="rise">
-        <Kicker className="mb-2">Din konto</Kicker>
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Min profil</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft">
-              Hold kontaktinformasjonen oppdatert og velg hvordan du vil logge inn.
-            </p>
-          </div>
-          <Stamp tone="brass">{profile.roleName}</Stamp>
-        </div>
-      </header>
+    <div className="space-y-7">
+      <PageHeader
+        className="rise"
+        title="Min profil"
+        summary={profile.email}
+        action={<Stamp tone="brass">{profile.roleName}</Stamp>}
+      />
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-        <section className="sheet rise p-5 sm:p-7" style={{ animationDelay: '70ms' }}>
-          <div className="mb-6 border-b border-line pb-4">
-            <Kicker className="mb-2">Personopplysninger</Kicker>
-            <h2 className="display-title text-2xl font-semibold text-ink">Slik kjenner korpset deg</h2>
-          </div>
-          <form onSubmit={saveProfile} className="space-y-5">
-            <Field label="Navn">
-              <input
-                className="field-input"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoComplete="name"
-              />
-            </Field>
-            <Field label="Telefon" hint="Valgfritt. Synlig for administratorer.">
-              <input
-                type="tel"
-                className="field-input"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                autoComplete="tel"
-                inputMode="tel"
-                placeholder="+47 900 00 000"
-              />
-            </Field>
-            <Field label="E-post" hint="Dette er innloggingsadressen din og kan ikke endres her ennå.">
-              <input className="field-input opacity-75" value={profile.email} readOnly aria-readonly />
-            </Field>
-            {profile.parts.length > 0 && (
-              <div>
-                <p className="mb-2 text-[0.8rem] font-medium text-ink-soft">Stemme</p>
-                <div className="flex flex-wrap gap-2">
-                  {profile.parts.map((part) => (
-                    <Stamp key={part}>{part}</Stamp>
-                  ))}
+      {/* Fra md (iPad stående) to kolonner: deg selv til venstre, varsler til høyre. */}
+      <div className="grid items-start gap-x-8 gap-y-8 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+        <div className="space-y-8">
+          <section className="rise" style={{ animationDelay: '60ms' }} aria-labelledby="profil-heading">
+            <h2 id="profil-heading" className="group-label">
+              Personopplysninger
+            </h2>
+            <form onSubmit={saveProfile} className="surface-group space-y-5 p-5 sm:p-6">
+              <Field label="Navn">
+                <input
+                  className="field-input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoComplete="name"
+                />
+              </Field>
+              <Field label="Telefon" hint="Valgfritt. Synlig for administratorer.">
+                <input
+                  type="tel"
+                  className="field-input"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  autoComplete="tel"
+                  inputMode="tel"
+                  placeholder="+47 900 00 000"
+                />
+              </Field>
+              <Field label="E-post" hint="Dette er innloggingsadressen din og kan ikke endres her ennå.">
+                <input className="field-input opacity-75" value={profile.email} readOnly aria-readonly />
+              </Field>
+              {profile.parts.length > 0 && (
+                <div>
+                  <p className="mb-2 text-[0.8rem] font-medium text-ink-soft">Stemme</p>
+                  <div className="flex flex-wrap gap-2">
+                    {profile.parts.map((part) => (
+                      <Stamp key={part}>{part}</Stamp>
+                    ))}
+                  </div>
                 </div>
+              )}
+              <div className="flex justify-end pt-1">
+                <Button type="submit" variant="primary" loading={savingProfile}>
+                  Lagre profil
+                </Button>
               </div>
-            )}
-            <div className="flex justify-end border-t border-line pt-5">
-              <Button type="submit" variant="primary" loading={savingProfile}>
-                Lagre profil
-              </Button>
-            </div>
-          </form>
-        </section>
+            </form>
+          </section>
 
-        <div className="space-y-6">
-          <PushCard userId={me!.id} />
-          <NotificationsCard current={profile.notifyPosts} />
-          <MentionNotificationsCard current={profile.notifyMentions} />
-          {/* Styreoppgaver angår bare styret — valget vises derfor kun for dem
-              som har `board.manage` (avgjort server-side i `getMyProfile`). */}
-          {profile.canManageBoard && <BoardTaskNotificationsCard current={profile.notifyBoardTasks} />}
           <PasswordCard hasPassword={profile.hasPassword} email={profile.email} />
         </div>
+
+        <div className="space-y-8">
+          <PushCard userId={me!.id} />
+          <section className="rise" style={{ animationDelay: '100ms' }} aria-labelledby="varsler-heading">
+            <h2 id="varsler-heading" className="group-label">
+              Hva du blir varslet om
+            </h2>
+            <div className="surface-group divide-y divide-[var(--line)]">
+              <NotificationsCard current={profile.notifyPosts} />
+              <MentionNotificationsCard current={profile.notifyMentions} />
+              {/* Styreoppgaver angår bare styret — valget vises derfor kun for dem
+                  som har `board.manage` (avgjort server-side i `getMyProfile`). */}
+              {profile.canManageBoard && <BoardTaskNotificationsCard current={profile.notifyBoardTasks} />}
+            </div>
+            <p className="mt-2.5 px-1 text-xs leading-relaxed text-ink-faint">
+              Gjelder e-post og enhetene der du har slått på varsler.
+            </p>
+          </section>
+        </div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Én rad i varslingsgruppen: hva valget gjelder, én linje forklaring, og valget
+ * som segmentert kontroll til høyre (under på smale skjermer). Detaljene står i
+ * en sammenfoldet «Mer om dette» — de er sanne, men ikke det man leter etter.
+ */
+function ChoiceRow<T extends string>({
+  title,
+  description,
+  details,
+  value,
+  options,
+  busy,
+  onChange,
+}: {
+  title: string
+  description: string
+  details: string
+  value: T
+  options: ReadonlyArray<{ value: T; label: string }>
+  busy: boolean
+  onChange: (value: T) => void
+}) {
+  return (
+    <div className="px-5 py-4 sm:px-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6 md:flex-col md:gap-3 lg:flex-row lg:gap-6">
+        <div className="min-w-0">
+          <h3 className="text-[0.98rem] font-semibold text-ink">{title}</h3>
+          <p className="mt-0.5 text-sm leading-snug text-ink-soft">{description}</p>
+        </div>
+        <Segmented label={title} value={value} options={options} onChange={onChange} disabled={busy} className="shrink-0 self-start" />
+      </div>
+      <details className="group mt-2">
+        <summary className="hit inline-flex cursor-pointer list-none items-center gap-1 text-xs font-medium text-ink-faint hover:text-ink-soft [&::-webkit-details-marker]:hidden">
+          Mer om dette
+          <svg width="9" height="6" viewBox="0 0 9 6" fill="none" aria-hidden className="transition-transform group-open:rotate-180">
+            <path d="M1 1l3.5 3.5L8 1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </summary>
+        <p className="mt-1.5 text-xs leading-relaxed text-ink-faint">{details}</p>
+      </details>
     </div>
   )
 }
@@ -166,36 +218,15 @@ function NotificationsCard({ current }: { current: PostNotificationChoice }) {
   }
 
   return (
-    <section className="sheet rise overflow-hidden" style={{ animationDelay: '100ms' }}>
-      <div className="border-b border-line bg-paper-sunken/50 px-5 py-5 sm:px-6">
-        <Kicker className="mb-2">Varsler</Kicker>
-        <h2 className="display-title text-2xl font-semibold text-ink">Varsler om beskjeder</h2>
-        <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-          Beskjeder fra styret ligger alltid på internsiden. Her velger du hvor mye av det du vil bli varslet om —
-          på e-post, og på enhetene der du har slått på varsler.
-        </p>
-      </div>
-      <div className="p-5 sm:p-6">
-        <div className="flex flex-wrap gap-2">
-          {NOTIFY_CHOICES.map((option) => (
-            <Button
-              key={option.value}
-              type="button"
-              variant={choice === option.value ? 'primary' : 'secondary'}
-              size="sm"
-              disabled={busy}
-              onClick={() => void save(option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-        <p className="mt-3 text-xs leading-relaxed text-ink-faint">
-          «Bare viktige» betyr de beskjedene styret selv har merket som viktige. «Av» slår av alle varsler om
-          beskjeder — du finner dem fortsatt under Beskjeder.
-        </p>
-      </div>
-    </section>
+    <ChoiceRow
+      title="Beskjeder"
+      description="Beskjeder fra styret ligger alltid på internsiden — velg hvor mye du vil bli varslet om."
+      details="«Bare viktige» betyr de beskjedene styret selv har merket som viktige. «Av» slår av alle varsler om beskjeder — du finner dem fortsatt under Beskjeder."
+      value={choice}
+      options={NOTIFY_CHOICES}
+      busy={busy}
+      onChange={(next) => void save(next)}
+    />
   )
 }
 
@@ -231,37 +262,15 @@ function MentionNotificationsCard({ current }: { current: MentionNotificationCho
   }
 
   return (
-    <section className="sheet rise overflow-hidden" style={{ animationDelay: '108ms' }}>
-      <div className="border-b border-line bg-paper-sunken/50 px-5 py-5 sm:px-6">
-        <Kicker className="mb-2">Varsler</Kicker>
-        <h2 className="display-title text-2xl font-semibold text-ink">Når noen nevner eller svarer deg</h2>
-        <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-          Skriver noen «@» og navnet ditt på veggen, får du én e-post med lenke til innlegget — og et varsel på
-          enhetene der du har slått på varsler. I forumet får du bare varselet, ingen e-post. Trykker noen «Svar» på
-          noe du har skrevet — en kommentar eller et forumsvar — får du også et varsel, også i en tråd du har dempet.
-        </p>
-      </div>
-      <div className="p-5 sm:p-6">
-        <div className="flex flex-wrap gap-2">
-          {MENTION_CHOICES.map((option) => (
-            <Button
-              key={option.value}
-              type="button"
-              variant={choice === option.value ? 'primary' : 'secondary'}
-              size="sm"
-              disabled={busy}
-              onClick={() => void save(option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-        <p className="mt-3 text-xs leading-relaxed text-ink-faint">
-          Du blir aldri varslet når du nevner eller svarer deg selv, og aldri mer enn én gang per kommentar. «Av» slår
-          det av helt — omtalen og svaret står fortsatt der.
-        </p>
-      </div>
-    </section>
+    <ChoiceRow
+      title="Når noen nevner eller svarer deg"
+      description="@-omtaler på veggen og i forumet, og svar på det du har skrevet."
+      details="Skriver noen «@» og navnet ditt på veggen, får du én e-post med lenke til innlegget — og et varsel på enhetene der du har slått på varsler. I forumet får du bare varselet, ingen e-post. Trykker noen «Svar» på noe du har skrevet — en kommentar eller et forumsvar — får du også et varsel, også i en tråd du har dempet. Du blir aldri varslet når du nevner eller svarer deg selv, og aldri mer enn én gang per kommentar. «Av» slår det av helt — omtalen og svaret står fortsatt der."
+      value={choice}
+      options={MENTION_CHOICES}
+      busy={busy}
+      onChange={(next) => void save(next)}
+    />
   )
 }
 
@@ -297,35 +306,15 @@ function BoardTaskNotificationsCard({ current }: { current: BoardTaskNotificatio
   }
 
   return (
-    <section className="sheet rise overflow-hidden" style={{ animationDelay: '115ms' }}>
-      <div className="border-b border-line bg-paper-sunken/50 px-5 py-5 sm:px-6">
-        <Kicker className="mb-2">Varsler</Kicker>
-        <h2 className="display-title text-2xl font-semibold text-ink">E-post om styreoppgaver</h2>
-        <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-          Gjelder både når noen setter deg som ansvarlig for en oppgave, og den daglige påminnelsen om oppgaver du står
-          som ansvarlig for som har gått over fristen.
-        </p>
-      </div>
-      <div className="p-5 sm:p-6">
-        <div className="flex flex-wrap gap-2">
-          {BOARD_TASK_CHOICES.map((option) => (
-            <Button
-              key={option.value}
-              type="button"
-              variant={choice === option.value ? 'primary' : 'secondary'}
-              size="sm"
-              disabled={busy}
-              onClick={() => void save(option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-        <p className="mt-3 text-xs leading-relaxed text-ink-faint">
-          «Av» slår av all e-post om styreoppgaver. Oppgavene ligger fortsatt under Styre.
-        </p>
-      </div>
-    </section>
+    <ChoiceRow
+      title="E-post om styreoppgaver"
+      description="Når du får en oppgave, og påminnelse om forfalte frister."
+      details="Gjelder både når noen setter deg som ansvarlig for en oppgave, og den daglige påminnelsen om oppgaver du står som ansvarlig for som har gått over fristen. «Av» slår av all e-post om styreoppgaver. Oppgavene ligger fortsatt under Styre."
+      value={choice}
+      options={BOARD_TASK_CHOICES}
+      busy={busy}
+      onChange={(next) => void save(next)}
+    />
   )
 }
 
@@ -412,18 +401,19 @@ function PasswordCard({ hasPassword, email }: { hasPassword: boolean; email: str
   }
 
   return (
-    <section className="sheet rise overflow-hidden" style={{ animationDelay: '130ms' }}>
-      <div className="border-b border-line bg-paper-sunken/50 px-5 py-5 sm:px-6">
+    <section className="rise" style={{ animationDelay: '130ms' }} aria-labelledby="passord-heading">
+      <h2 id="passord-heading" className="group-label">
+        Innlogging
+      </h2>
+      <div className="surface-group overflow-hidden">
+      <div className="border-b border-line px-5 py-4 sm:px-6">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <Kicker className="mb-2">Innlogging</Kicker>
-            <h2 className="display-title text-2xl font-semibold text-ink">
-              {hasPassword ? 'Endre passord' : 'Opprett passord'}
-            </h2>
-          </div>
+          <h3 className="text-[0.98rem] font-semibold text-ink">
+            {hasPassword ? 'Endre passord' : 'Opprett passord'}
+          </h3>
           <Stamp tone={hasPassword ? 'brass' : 'neutral'}>{hasPassword ? 'Aktivt' : 'Valgfritt'}</Stamp>
         </div>
-        <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+        <p className="mt-1 text-sm leading-snug text-ink-soft">
           E-postkode fungerer alltid. Passord er et frivillig alternativ når du ikke vil vente på e-post.
         </p>
       </div>
@@ -489,6 +479,7 @@ function PasswordCard({ hasPassword, email }: { hasPassword: boolean; email: str
           </Button>
         </div>
       )}
+      </div>
     </section>
   )
 }

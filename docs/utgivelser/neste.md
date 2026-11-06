@@ -11,7 +11,7 @@ Nå kan du svare med en GIF, en sticker eller et meme — og reagere med en emoj
 
 **Emoji-reaksjoner**
 - Under beskjeder (også i lista), kommentarer og forumtråder og -svar: trykk smilefjeset og velg 👍 ❤️ 😂 😮 😢 🎉 🎺 — eller «Flere» for alle emojiene (søk på norsk, f.eks. «tommel» eller «hjerte»).
-- Trykk på en reaksjon for å bli med, og igjen for å ta din tilbake. Hold over (eller trykk lenge) for å se hvem som har reagert.
+- Trykk på en reaksjon for å bli med, og igjen for å ta din tilbake. På datamaskin ser du hvem som har reagert ved å holde musepekeren over den.
 - Alle «Liker» fra før er blitt til 👍, og «Lik» i iPhone-appen virker som før.
 
 **Prøv gjerne:** send en GIF i en chat, svar på en forumtråd med en sticker og litt tekst, og reager med 🎺 på en beskjed. Si fra om noe ser rart ut på telefonen.

@@ -424,7 +424,7 @@ export function PickerButton({
         onClick={() => setOpen((o) => !o)}
         className={`inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[9px] text-ink-soft transition-colors hover:bg-paper-sunken hover:text-ink disabled:pointer-events-none disabled:opacity-40 ${
           open ? 'bg-paper-sunken text-ink' : ''
-        } ${compact ? 'h-[42px] w-10' : 'px-2 py-1.5 pointer-coarse:min-h-10 pointer-coarse:px-3'}`}
+        } ${compact ? 'h-[42px] w-10 pointer-coarse:h-11 pointer-coarse:w-11' : 'px-2 py-1.5 pointer-coarse:min-h-11 pointer-coarse:px-3'}`}
       >
         {tab === 'emoji' ? (
           <Icon name="smile" size={compact ? 20 : 17} />

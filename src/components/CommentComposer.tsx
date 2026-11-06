@@ -1,9 +1,13 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { type TextDraft, isTextDraft } from '../lib/drafts'
 import { type MentionUser, toMarkers } from '../lib/mentions'
 import { searchMentionableMembers } from '../server/posts'
 import { MentionTextarea } from './MentionTextarea'
 import { ComposerTools } from './MediaPicker'
 import { MediaDraftStrip, canSendWith, dropMedia, insertAtCursor, pasteMedia, useMediaDraft } from './MessageMedia'
+import { Glyph } from './compose/Composer'
+import { DraftNotice } from './compose/LeaveGuard'
+import { useLocalDraft } from './compose/useLocalDraft'
 import { Button } from './ui'
 
 /**
@@ -23,12 +27,22 @@ import { Button } from './ui'
  *
  * Bilder og GIF-er (knappen, lim inn eller dra inn) lastes opp straks de velges
  * og sendes som id-er sammen med teksten — se `MessageMedia.tsx`.
+ *
+ * `variant="dock"` er feltet i linjen nederst på detaljsiden (`.comment-dock`):
+ * én linje som vokser med teksten (opp til ~6 linjer) og en rund sendeknapp,
+ * som i en meldingsapp.
+ *
+ * `draftKey` (fra `draftKey(me.id, { kind: 'comment', … })`) lagrer teksten på
+ * enheten mens man skriver, så den er der igjen etter en navigasjon eller en
+ * omlasting — «Gjenopprettet utkast fra kl. … · Forkast» over feltet.
  */
 export function CommentComposer({
   postId,
   onSubmit,
   replyTo,
   onCancel,
+  variant = 'inline',
+  draftKey,
 }: {
   postId: string
   /** Kalles med den ferdige teksten (markører, ikke navn) og bildene. Kaster den, beholdes teksten og bildene. */
@@ -39,6 +53,8 @@ export function CommentComposer({
    */
   replyTo?: { name: string }
   onCancel?: () => void
+  variant?: 'inline' | 'dock'
+  draftKey?: string
 }) {
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
@@ -46,6 +62,31 @@ export function CommentComposer({
   const [chosen, setChosen] = useState<MentionUser[]>([])
   const media = useMediaDraft()
   const textRef = useRef<HTMLTextAreaElement>(null)
+  const dockRef = useRef<HTMLTextAreaElement>(null)
+  const local = useLocalDraft<TextDraft>({
+    storageKey: draftKey,
+    value: { body, chosen },
+    initial: EMPTY_DRAFT,
+    validate: isTextDraft,
+    onRestore: (draft) => {
+      setBody(draft.body)
+      setChosen(draft.chosen)
+    },
+  })
+  const discard = () => {
+    local.discard()
+    setBody('')
+    setChosen([])
+  }
+  const notice = <DraftNotice restored={local.restored} onDiscard={discard} />
+
+  // Dokk-feltet vokser med teksten, så man ser hva man skriver.
+  useEffect(() => {
+    const el = dockRef.current
+    if (!el || variant !== 'dock') return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight + 2, 160)}px`
+  }, [body, variant])
 
   const submit = async () => {
     const text = toMarkers(body, chosen)
@@ -56,6 +97,7 @@ export function CommentComposer({
       await onSubmit(text, mediaIds)
       // Bildene hører til kommentaren nå og skal ikke slettes når feltet lukkes.
       media.clear(mediaIds)
+      local.clear()
       setBody('')
       setChosen([])
     } catch {
@@ -64,6 +106,44 @@ export function CommentComposer({
     } finally {
       setBusy(false)
     }
+  }
+
+  if (variant === 'dock') {
+    return (
+      <>
+      {notice}
+      <MediaDraftStrip draft={media} className="mb-2" />
+      <div className="flex items-end gap-1.5" {...dropMedia(media)}>
+        <ComposerTools media={media} disabled={busy} compact onEmoji={(emoji) => insertAtCursor(dockRef.current, body, setBody, emoji)} />
+        <MentionTextarea
+          textareaRef={dockRef}
+          wrapperClassName="min-w-0 flex-1"
+          className="field-input comment-dock-input"
+          rows={1}
+          value={body}
+          onChange={setBody}
+          chosen={chosen}
+          onChosenChange={setChosen}
+          search={(query) => searchMentionableMembers({ data: { postId, query } })}
+          onEnter={() => void submit()}
+          onPaste={pasteMedia(media)}
+          aria-label="Ny kommentar"
+          placeholder="Skriv en kommentar …"
+        />
+        <Button
+          type="button"
+          variant="primary"
+          loading={busy}
+          disabled={!canSendWith(body, media)}
+          onClick={() => void submit()}
+          aria-label="Kommenter"
+          className="comment-dock-send"
+        >
+          {!busy && <Glyph name="send" size={18} />}
+        </Button>
+      </div>
+      </>
+    )
   }
 
   const field = (
@@ -107,7 +187,7 @@ export function CommentComposer({
     <MediaDraftStrip draft={media} />
     </div>
   )
-  if (!replyTo) return field
+  if (!replyTo) return <>{local.restored && <DraftNotice restored={local.restored} onDiscard={discard} className="mt-4" />}{field}</>
   return (
     <div className="space-y-2 rounded-[9px] border border-line bg-paper-sunken/40 p-3">
       <div className="flex items-center gap-2 text-xs text-ink-soft">
@@ -127,7 +207,10 @@ export function CommentComposer({
           </button>
         )}
       </div>
+      {notice}
       {field}
     </div>
   )
 }
+
+const EMPTY_DRAFT: TextDraft = { body: '', chosen: [] }

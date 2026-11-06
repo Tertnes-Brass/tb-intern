@@ -92,6 +92,7 @@ const PATHS = {
   chevronLeft: <path d="M15 5l-7 7 7 7" />,
   close: <path d="M6 6l12 12M18 6 6 18" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+  sort: <path d="M7.5 19.5v-15M4 8l3.5-3.5L11 8M16.5 4.5v15M13 16l3.5 3.5L20 16" />,
   pin: (
     <>
       <path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z" />
@@ -162,6 +163,65 @@ const PATHS = {
       <circle cx="12" cy="12" r="8.5" />
       <path d="M8.5 14a4.2 4.2 0 0 0 7 0" />
       <path d="M9 9.8h.01M15 9.8h.01" strokeWidth="2.4" />
+    </>
+  ),
+  /** Nummerert liste — programmet på notestativet. */
+  list: (
+    <>
+      <path d="M9.5 6.5h11M9.5 12h11M9.5 17.5h11" />
+      <path d="M4 5.5l1.2-.7v3.7M3.8 11.2a1.1 1.1 0 0 1 2 .6c0 .9-2 1.6-2 2.7h2.1M3.9 16.3h1.9l-1 1.2a1 1 0 1 1-.9 1.5" />
+    </>
+  ),
+  /** Tre prikker — «mer». */
+  more: (
+    <>
+      <circle cx="5.5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="18.5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+    </>
+  ),
+  /** Notestativets visninger: tilpass bredde (rull), hel side, to sider. */
+  viewScroll: (
+    <>
+      <path d="M5.5 2.5v6.5a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V2.5" />
+      <path d="M5.5 21.5V15a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v6.5" />
+      <path d="M8.5 6h7M8.5 17.5h7" />
+    </>
+  ),
+  viewPage: (
+    <>
+      <rect x="6" y="3" width="12" height="18" rx="1" />
+      <path d="M8.8 7.5h6.4M8.8 11h6.4M8.8 14.5h6.4" />
+    </>
+  ),
+  viewSpread: (
+    <>
+      <rect x="2.5" y="5" width="9" height="14" rx="1" />
+      <rect x="12.5" y="5" width="9" height="14" rx="1" />
+      <path d="M4.8 9h4.4M4.8 12h4.4M4.8 15h4.4M14.8 9h4.4M14.8 12h4.4M14.8 15h4.4" />
+    </>
+  ),
+  /** Spørsmålstegn i ring — hjelp (bladingen på notestativet). */
+  help: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M9.6 9.6a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.7" />
+      <circle cx="12" cy="16.9" r="0.9" fill="currentColor" stroke="none" />
+    </>
+  ),
+  /** Til starten — strek og pil mot venstre (notestativet: «Fra starten»). */
+  toStart: (
+    <>
+      <path d="M6 5.5v13" />
+      <path d="M18 6.5 10.5 12l7.5 5.5z" />
+    </>
+  ),
+  /** Et trykk — prikk med ring rundt (hjelpen for bladingen). */
+  tap: (
+    <>
+      <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="6.5" opacity="0.55" />
+      <circle cx="12" cy="12" r="10" opacity="0.25" />
     </>
   ),
 } as const

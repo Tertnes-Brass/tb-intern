@@ -1,6 +1,6 @@
-import { Link, createFileRoute, redirect } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { PostForm } from '../../components/PostForm'
-import { Kicker } from '../../components/ui'
+import { draftKey } from '../../lib/drafts'
 
 /**
  * Skriveflaten for et nytt innlegg. Alle innloggede kan skrive på veggen;
@@ -17,28 +17,10 @@ export const Route = createFileRoute('/beskjeder/ny')({
 function NewPostPage() {
   const me = Route.useRouteContext().me
   const canPublish = !!me && (me.permissions.includes('*') || me.permissions.includes('posts.publish'))
+  const canArchive = !!me && (me.permissions.includes('*') || me.permissions.includes('posts.archive'))
 
-  return (
-    <div className="mx-auto max-w-2xl space-y-8">
-      <header className="rise">
-        <Link
-          to="/beskjeder"
-          className="link-quiet mb-4 inline-flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-brass-strong"
-        >
-          ← Veggen
-        </Link>
-        <Kicker className="mb-2">Nytt innlegg</Kicker>
-        <h1 className="display-title text-3xl font-semibold italic text-ink sm:text-4xl">Skriv innlegg</h1>
-        <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-          {canPublish || (!!me && me.permissions.includes('posts.archive'))
-            ? 'Lagre som utkast mens du jobber. Når du publiserer, kan medlemmene få beskjeden på e-post med det samme.'
-            : 'Del en beskjed, et bilde eller et spørsmål med resten av korpset. Innlegget blir synlig for alle innloggede.'}
-        </p>
-      </header>
-
-      <section className="rise" style={{ animationDelay: '80ms' }}>
-        <PostForm canPublish={canPublish} canArchive={!!me && (me.permissions.includes('*') || me.permissions.includes('posts.archive'))} />
-      </section>
-    </div>
-  )
+  // Skriveflaten eier hele siden: «Avbryt · Nytt innlegg · Publiser» øverst,
+  // teksten rett under (src/components/compose/Composer.tsx).
+  // Utkastet på enheten har brukerens id i nøkkelen (src/lib/drafts.ts).
+  return <PostForm canPublish={canPublish} canArchive={canArchive} draftKey={me ? draftKey(me.id, { kind: 'new-post' }) : undefined} />
 }

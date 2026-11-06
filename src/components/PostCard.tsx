@@ -1,18 +1,25 @@
 import { Link } from '@tanstack/react-router'
-import { formatDateTime } from '../lib/format'
 import { postImageUrl } from '../lib/post-images-client'
 import { seenThisSession } from '../lib/read-posts-client'
+import type { SearchHit } from '../lib/post-search'
 import { commentCountLabel } from '../lib/posts'
 import type { PostImage, PostListItem } from '../server/posts'
 import { ReactionBar } from './Reactions'
+import { Glyph } from './compose/Composer'
+import { shortWhen } from './compose/when'
+import { Highlight, SearchHitLine } from './Search'
 import { Avatar, Stamp } from './ui'
 
 /**
  * Kortet på veggen (#28) og de små delene det er bygget av — også brukt på
  * detaljsiden, så et innlegg ser likt ut uansett hvor du møter det.
  *
- * Skillet er tydelig med vilje: et «Fra styret»-innlegg får messingkant og
- * stempel, et medlemsinnlegg får forfatterens avatar og navn.
+ * Kortet er bevisst stille: avsender og én metadatalinje (navn · tid) øverst,
+ * tittel og utdrag som er lenken, og to brikker nederst (Liker · kommentarer)
+ * med 44 pt trykkflate på berøring. En beskjed fra styret eller notearkivaren
+ * kjennes på messingmerket «TB» og avsendernavnet — ikke på kant og stempel i
+ * tillegg. Bare «Viktig» og «Kun styret» er stempler, for de sier noe man ikke
+ * ser ellers.
  */
 
 /** Miniatyrer i feeden; klikk åpner bildet i ny fane (ingen egen lightbox). */
@@ -42,59 +49,90 @@ export function PostImageGrid({ images, total }: { images: PostImage[]; total: n
   )
 }
 
-export function PostCard({ post, draft }: { post: PostListItem; draft?: boolean }) {
-  const when = draft ? `Sist endret ${formatDateTime(post.updatedAt)}` : formatDateTime(post.publishedAt ?? post.createdAt)
-  const unread = !draft && post.unread && !seenThisSession(post.id)
+/** Avsenderen slik den står på kortet og på detaljsiden. */
+export function postSender(post: Pick<PostListItem, 'official' | 'fromArchive' | 'author'>): string {
+  return post.fromArchive ? 'Notearkivar' : post.official ? 'Styret' : post.author.name
+}
+
+/** Avatar for avsenderen: messingmerket for styret og notearkivaren, initialer ellers. */
+export function SenderMark({ post, size = 'md' }: { post: Pick<PostListItem, 'official' | 'fromArchive' | 'author'>; size?: 'sm' | 'md' }) {
+  if (post.official || post.fromArchive) {
+    return (
+      <span
+        aria-hidden
+        className={`${size === 'sm' ? 'h-7 w-7 text-[0.55rem]' : 'h-9 w-9 text-[0.6rem]'} grid shrink-0 place-items-center rounded-full bg-brass font-mono font-semibold uppercase tracking-wide text-paper-raised dark:text-paper`}
+      >
+        TB
+      </span>
+    )
+  }
+  return <Avatar name={post.author.name} size={size} />
+}
+
+export function PostCard({ post, terms, hit }: { post: PostListItem; terms?: string[]; hit?: SearchHit }) {
+  const unread = post.unread && !seenThisSession(post.id)
+  const institutional = post.official || post.fromArchive
   return (
-    <article
-      className={`sheet px-4 py-4 sm:px-5 ${post.official || post.fromArchive ? 'border-brass/45 shadow-[inset_3px_0_0_var(--brass)]' : ''}`}
-    >
-      <div className="flex items-center gap-2.5">
-        {post.official || post.fromArchive ? (
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-brass/40 bg-[var(--brass-soft)] font-mono text-[0.6rem] font-semibold uppercase tracking-wide text-brass-strong">
-            TB
-          </span>
-        ) : (
-          <Avatar name={post.author.name} />
-        )}
+    <article className="post-card">
+      <div className="flex items-center gap-3">
+        <SenderMark post={post} />
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-[0.85rem] font-semibold text-ink">
+          <p className="flex items-center gap-2 text-[0.9rem] font-semibold leading-tight text-ink">
             <span className="truncate">
-              {post.official || post.fromArchive ? (post.fromArchive ? 'Notearkivar' : 'Styret') : post.author.name}
+              <Highlight text={postSender(post)} terms={terms} />
             </span>
-            {/* Samme uttrykk som uleste svar i forumet. */}
-            {unread && <span className="shrink-0 text-xs font-semibold text-brass-strong">● Ulest</span>}
+            {/* Samme messingprikk som uleste svar i forumet. */}
+            {unread && (
+              <span className="h-2 w-2 shrink-0 rounded-full bg-brass" title="Ulest">
+                <span className="sr-only">Ulest</span>
+              </span>
+            )}
           </p>
-          <p className="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-ink-faint">{when}</p>
+          <p className="mt-0.5 truncate text-[0.78rem] text-ink-faint">
+            {institutional && (
+              <>
+                <Highlight text={post.author.name} terms={terms} />
+                {' · '}
+              </>
+            )}
+            {shortWhen(post.publishedAt ?? post.createdAt)}
+          </p>
         </div>
-        <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-          {draft && <Stamp tone="oxblood">Utkast</Stamp>}
-          {(post.official || post.fromArchive) && <Stamp tone="brass">{post.fromArchive ? 'Fra notearkivar' : 'Fra styret'}</Stamp>}
-          {post.importance === 'important' && <Stamp tone="oxblood">Viktig</Stamp>}
-          {post.audience === 'board' && <Stamp>Kun styret</Stamp>}
-        </div>
+        {(post.importance === 'important' || post.audience === 'board') && (
+          <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+            {post.importance === 'important' && <Stamp tone="oxblood">Viktig</Stamp>}
+            {post.audience === 'board' && <Stamp>Kun styret</Stamp>}
+          </div>
+        )}
       </div>
 
-      <Link to="/beskjeder/$postId" params={{ postId: post.id }} className="link-quiet mt-3 block">
+      <Link to="/beskjeder/$postId" params={{ postId: post.id }} className="link-quiet mt-2.5 block">
         {post.title && (
-          <span className="display-title block wrap-anywhere text-[1.1rem] font-semibold leading-snug text-ink sm:text-[1.22rem]">
-            {post.title}
+          <span
+            className={`display-title block wrap-anywhere text-[1.12rem] leading-snug text-ink sm:text-[1.22rem] ${unread ? 'font-bold' : 'font-semibold'}`}
+          >
+            <Highlight text={post.title} terms={terms} />
           </span>
         )}
-        <span className="mt-1 block wrap-anywhere text-sm leading-relaxed text-ink-soft">{post.excerpt}</span>
+        <span className={`block wrap-anywhere text-[0.92rem] leading-relaxed text-ink-soft ${post.title ? 'mt-1 line-clamp-3' : 'line-clamp-5'}`}>
+          <Highlight text={post.excerpt} terms={terms} />
+        </span>
+        {hit && terms && (
+          <SearchHitLine
+            label={hit.kind === 'comment' ? `Kommentar fra ${hit.author}` : 'Lenger ned i teksten'}
+            snippet={hit.snippet}
+            terms={terms}
+          />
+        )}
       </Link>
 
       <PostImageGrid images={post.images} total={post.imageCount} />
 
-      <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-line pt-3">
-        {/* Et utkast har ingen reaksjoner — de kommer når det er publisert. */}
-        {!draft && <ReactionBar kind="post" targetId={post.id} reactions={post.reactions} />}
-        <Link
-          to="/beskjeder/$postId"
-          params={{ postId: post.id }}
-          className="link-brass text-xs"
-        >
-          {commentCountLabel(post.commentCount)}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <ReactionBar kind="post" targetId={post.id} reactions={post.reactions} size="md" />
+        <Link to="/beskjeder/$postId" params={{ postId: post.id }} className="post-chip hit">
+          <Glyph name="comment" size={15} />
+          {post.commentCount === 0 ? 'Kommenter' : commentCountLabel(post.commentCount)}
         </Link>
       </div>
     </article>

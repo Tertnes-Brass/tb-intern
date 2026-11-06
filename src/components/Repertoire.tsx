@@ -193,7 +193,7 @@ export function RepertoireRow({
   // Notestativet krever innlogging; vikarlenken åpner fortsatt fila direkte.
   const stand = shareToken ? undefined : standProjectId
   return (
-    <li className="hairline-row group/row flex gap-4 py-5 sm:gap-6">
+    <li id={`verk-${item.workId}`} className="hairline-row group/row flex scroll-mt-24 gap-4 py-5 sm:gap-6">
       <span className="roman-no w-9 shrink-0 pt-0.5 text-right text-lg text-brass sm:w-11 sm:text-xl" aria-hidden>
         {toRoman(index)}.
       </span>
@@ -239,7 +239,7 @@ export function RepertoireRow({
           )}
         </div>
       </div>
-      {manage && <div className="flex shrink-0 items-start gap-1.5 opacity-100 transition-opacity can-hover:opacity-0 can-hover:group-hover/row:opacity-100">{manage}</div>}
+      {manage && <div className="flex shrink-0 items-start gap-1">{manage}</div>}
     </li>
   )
 }

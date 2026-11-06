@@ -52,8 +52,6 @@ export type HubPost = {
   fromArchive?: boolean
   authorName: string
   commentCount: number
-  /** Reaksjonene som tekst, «👍 3 · 😂 1» (`reactionsText`); tom uten reaksjoner. */
-  reactionText: string
 }
 
 export type HubCalendar = {

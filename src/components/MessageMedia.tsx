@@ -357,7 +357,7 @@ export function MediaButton({
       title={draft.full ? 'Maks fire bilder per melding' : 'Last opp bilde eller GIF fra enheten'}
       className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[9px] text-ink-soft transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brass ${
         off ? 'pointer-events-none opacity-40' : 'cursor-pointer hover:bg-paper-sunken hover:text-ink'
-      } ${compact ? 'h-[42px] w-10' : 'px-2 py-1.5 text-xs pointer-coarse:min-h-10 pointer-coarse:px-3'}`}
+      } ${compact ? 'h-[42px] w-10 pointer-coarse:h-11 pointer-coarse:w-11' : 'px-2 py-1.5 text-xs pointer-coarse:min-h-11 pointer-coarse:px-3'}`}
     >
       <input
         type="file"

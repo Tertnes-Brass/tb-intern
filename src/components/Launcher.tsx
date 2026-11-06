@@ -10,7 +10,8 @@ import { type ThemeMode, readThemeMode, setThemeMode } from '../lib/theme'
 import type { ShellCounts } from '../lib/unread'
 import { Icon, type IconName } from './Icons'
 import { TABS } from './TabBar'
-import { Avatar, BottomSheet } from './ui'
+import { Segmented } from './Segmented'
+import { Avatar, BottomSheet, SheetAction, SheetActions } from './ui'
 
 /** Ikon og kortlinje per område i launcheren. Etikettene kommer fra `areasFor`. */
 const AREA_TILES: Partial<Record<HubAreaTo, { icon: IconName; hint: string }>> = {
@@ -29,12 +30,12 @@ const THEME_CHOICES: Array<{ mode: ThemeMode; label: string }> = [
 ]
 
 /**
- * «Meg og mer» — arket bak avataren på telefon. Her bor alt som ikke har plass
- * i fanelinjen: profilen, de rollestyrte områdene (samme `areasFor` som hub-en,
+ * «Meg og mer» — arket bak avataren på berøringsskjerm og i smale vinduer.
+ * Her bor alt som ikke har plass i fanelinjen: profilen, de rollestyrte områdene (samme `areasFor` som hub-en,
  * minus det fanelinjen allerede har), varsler, utseende og utlogging.
  *
- * Dette er launcher-flaten (b) fra docs/designprinsipper.md §6, men bare på
- * telefon: desktop beholder toppmenyen og brukermenyen.
+ * Dette er launcher-flaten (b) fra docs/designprinsipper.md §6, men bare med
+ * `appnav`: desktop med mus beholder toppmenyen og brukermenyen.
  */
 export function Launcher({
   me,
@@ -77,25 +78,13 @@ export function Launcher({
     <BottomSheet
       open={open}
       onClose={onClose}
-      label="Meg og mer"
-      header={
-        <div className="flex items-center justify-between">
-          <span className="w-16" />
-          <p className="text-[0.95rem] font-semibold text-ink">Meg og mer</p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-h-11 w-16 cursor-pointer text-right text-[0.95rem] font-semibold text-brass-strong"
-          >
-            Ferdig
-          </button>
-        </div>
-      }
+      title="Meg og mer"
+      closeLabel="Ferdig"
     >
       <Link
         to="/min-profil"
         onClick={onClose}
-        className="sheet link-quiet flex items-center gap-3.5 px-4 py-3.5 active:bg-paper-sunken"
+        className="surface-group link-quiet flex items-center gap-3.5 px-4 py-3.5 active:bg-paper-sunken"
       >
         <Avatar name={me.name} />
         <span className="min-w-0 flex-1">
@@ -109,7 +98,7 @@ export function Launcher({
 
       {areas.length > 0 && (
         <>
-          <p className="kicker mb-2.5 mt-6">Dine områder</p>
+          <p className="group-label mt-6">Dine områder</p>
           <ul className="grid grid-cols-3 gap-2.5">
             {areas.map((area) => {
               const tile = AREA_TILES[area.to] ?? { icon: 'chevronRight' as IconName, hint: '' }
@@ -122,7 +111,7 @@ export function Launcher({
                   <Link
                     to={area.to}
                     onClick={onClose}
-                    className="sheet link-quiet relative flex min-h-[104px] flex-1 flex-col justify-between gap-3 px-3 py-3 active:bg-paper-sunken"
+                    className="surface-group link-quiet relative flex min-h-[104px] flex-1 flex-col justify-between gap-3 px-3 py-3 active:bg-paper-sunken"
                   >
                     <Icon name={tile.icon} size={24} className="text-brass-strong" />
                     {overdue && (
@@ -144,17 +133,22 @@ export function Launcher({
         </>
       )}
 
-      <div className="sheet mt-6 divide-y divide-[var(--line)] overflow-hidden">
-        <Link to="/min-profil" hash="varsler" onClick={onClose} className="link-quiet flex min-h-[52px] items-center gap-3 px-4 active:bg-paper-sunken">
+      <SheetActions className="mt-6">
+        <Link
+          to="/min-profil"
+          hash="varsler"
+          onClick={onClose}
+          className="sheet-action"
+        >
           <GroupIcon name="bell" />
-          <span className="flex-1 text-[0.95rem] text-ink">Varsler</span>
-          {push && <span className="text-sm text-ink-faint">{push}</span>}
+          <span className="flex-1">Varsler</span>
+          {push && <span className="sheet-action-value">{push}</span>}
           <Icon name="chevronRight" size={18} className="text-ink-faint" />
         </Link>
         {offline.supported && (
-          <div className="flex min-h-[52px] items-center gap-3 px-4">
+          <div className="sheet-action is-static">
             <GroupIcon name="download" />
-            <span className="flex-1 text-[0.95rem] text-ink">Lagret offline</span>
+            <span className="flex-1">Lagret offline</span>
             {offline.stands > 0 ? (
               <button
                 type="button"
@@ -163,60 +157,51 @@ export function Launcher({
                   await clearOfflineNotes()
                   setOffline((o) => ({ ...o, stands: 0, bytes: 0 }))
                 }}
-                className="min-h-11 cursor-pointer text-sm text-ink-soft"
+                className="-mr-2 min-h-11 cursor-pointer rounded-[9px] px-2 text-sm font-normal text-ink-soft active:bg-paper-sunken"
               >
-                {formatBytes(offline.bytes)} · <span className="text-danger">Fjern</span>
+                {formatBytes(offline.bytes)} · <span className="font-medium text-danger">Fjern</span>
               </button>
             ) : (
-              <span className="text-sm text-ink-faint">Ingenting</span>
+              <span className="sheet-action-value">Ingenting</span>
             )}
           </div>
         )}
-        <div className="px-4 py-3">
-          <div className="flex items-center gap-3">
+        <div className="sheet-action is-static flex-col !items-stretch gap-3 py-3">
+          <div className="flex items-center gap-[0.85rem]">
             <GroupIcon name="contrast" />
-            <span className="flex-1 text-[0.95rem] text-ink">Utseende</span>
+            <span className="flex-1">Utseende</span>
           </div>
-          <div className="mt-3 grid grid-cols-3 rounded-[10px] bg-paper-sunken p-1" role="radiogroup" aria-label="Utseende">
-            {THEME_CHOICES.map((choice) => (
-              <button
-                key={choice.mode}
-                type="button"
-                role="radio"
-                aria-checked={theme === choice.mode}
-                onClick={() => {
-                  setThemeMode(choice.mode)
-                  setTheme(choice.mode)
-                }}
-                className={`min-h-10 cursor-pointer rounded-[8px] px-1 text-[0.8rem] font-medium transition-colors ${
-                  theme === choice.mode ? 'bg-paper-raised text-ink shadow-[var(--shadow-soft)]' : 'text-ink-soft'
-                }`}
-              >
-                {choice.label}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Utseende"
+            stretch
+            value={theme}
+            options={THEME_CHOICES.map((c) => ({ value: c.mode, label: c.label }))}
+            onChange={(mode) => {
+              setThemeMode(mode)
+              setTheme(mode)
+            }}
+          />
         </div>
-      </div>
+      </SheetActions>
 
-      <button
-        type="button"
-        disabled={signingOut}
-        onClick={async () => {
-          setSigningOut(true)
-          try {
-            await signOutHere()
-          } finally {
-            onClose()
-            await router.invalidate()
-            router.navigate({ to: '/login' })
-          }
-        }}
-        className="sheet mt-4 flex min-h-[52px] w-full cursor-pointer items-center justify-center gap-2 text-[0.95rem] font-semibold text-danger active:bg-paper-sunken disabled:opacity-60"
-      >
-        {signingOut ? <span className="spinner" aria-hidden /> : <Icon name="logout" size={19} />}
-        Logg ut
-      </button>
+      <SheetActions>
+        <SheetAction
+          tone="danger"
+          disabled={signingOut}
+          icon={signingOut ? <span className="spinner" aria-hidden /> : <Icon name="logout" size={19} />}
+          label="Logg ut"
+          onClick={async () => {
+            setSigningOut(true)
+            try {
+              await signOutHere()
+            } finally {
+              onClose()
+              await router.invalidate()
+              router.navigate({ to: '/login' })
+            }
+          }}
+        />
+      </SheetActions>
     </BottomSheet>
   )
 }

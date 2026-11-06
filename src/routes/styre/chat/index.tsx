@@ -1,7 +1,5 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
 import { type ChatApi, type ChatChannelApi, ChatPanel } from '../../../components/ChatPanel'
-import { Button, Kicker } from '../../../components/ui'
 import { GENERAL_CHANNEL } from '../../../lib/board'
 import {
   createChannel,
@@ -41,7 +39,6 @@ function ChatPage() {
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
   const router = useRouter()
-  const [creating, setCreating] = useState(false)
 
   const active = data.channels.find((c) => c.channel === search.kanal) ?? data.channels[0]
 
@@ -49,39 +46,31 @@ function ChatPage() {
     void navigate({ search: channel === GENERAL_CHANNEL ? {} : { kanal: channel }, replace: true })
   }
 
+  // Ingen sideoverskrift: chatten er en arbeidsflate som fyller skjermen
+  // (`ChatPanel`), og navnet står i kanallista og som h1 for skjermlesere.
   return (
-    <div className="space-y-6">
-      <header className="rise flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <Kicker className="mb-2">Styrearbeidet</Kicker>
-          <h1 className="display-title text-4xl font-semibold italic text-ink sm:text-5xl">Chat</h1>
-        </div>
-        <Button onClick={() => setCreating(true)}>Ny kanal</Button>
-      </header>
-
-      <ChatPanel
-        channels={data.channels}
-        meId={data.meId}
-        active={active}
-        onOpenChannel={openChannel}
-        api={BOARD_CHAT_API}
-        channelApi={BOARD_CHANNEL_API}
-        onRefresh={() => router.invalidate()}
-        creating={creating}
-        onCreatingChange={setCreating}
-        missingGeneralNote="Fellesekanalen mangler — det skal ikke kunne skje."
-        emptyFor={(channel) =>
-          channel.channel === GENERAL_CHANNEL
-            ? {
-                title: 'Ingen meldinger ennå',
-                body: 'Dette er styrets felles kanal. Skriv den første meldingen.',
-              }
-            : {
-                title: 'Ingen meldinger i tråden',
-                body: 'Diskuter temaet her i stedet for i en chat ingen finner igjen.',
-              }
-        }
-      />
-    </div>
+    <ChatPanel
+      title="Styrechat"
+      kicker="Styrearbeidet"
+      channels={data.channels}
+      meId={data.meId}
+      active={active}
+      onOpenChannel={openChannel}
+      api={BOARD_CHAT_API}
+      channelApi={BOARD_CHANNEL_API}
+      onRefresh={() => router.invalidate()}
+      missingGeneralNote="Fellesekanalen mangler — det skal ikke kunne skje."
+      emptyFor={(channel) =>
+        channel.channel === GENERAL_CHANNEL
+          ? {
+              title: 'Ingen meldinger ennå',
+              body: 'Dette er styrets felles kanal. Skriv den første meldingen.',
+            }
+          : {
+              title: 'Ingen meldinger i tråden',
+              body: 'Diskuter temaet her i stedet for i en chat ingen finner igjen.',
+            }
+      }
+    />
   )
 }

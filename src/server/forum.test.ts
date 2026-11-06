@@ -21,7 +21,7 @@ vi.mock('./access', () => ({
     return state.me
   },
 }))
-import { createForumTopic, editForumText, getForumTopic, listForum, markForumRepliesRead, replyToForum, searchForumMentions, setForumFollow, setForumLock } from './forum'
+import { createForumTopic, editForumText, getForumTopic, listForum, markForumRepliesRead, replyToForum, searchForum, searchForumMentions, setForumFollow, setForumLock } from './forum'
 
 let sqlite: DatabaseSync
 beforeEach(() => {
@@ -475,5 +475,63 @@ describe('images and GIFs', () => {
     expect((await getForumTopic({ data: { id, page: 0 } })).topic.body).toBe('')
     const reply = await replyToForum({ data: { topicId: id, body: 'Bare tekst' } })
     await expect(editForumText({ data: { id: reply.id, kind: 'reply', body: '' } })).rejects.toThrow('Skriv en tekst.')
+  })
+})
+
+describe('forum search and sorting', () => {
+  let tick = 1800000000000
+  beforeEach(() => { vi.spyOn(Date, 'now').mockImplementation(() => ++tick) })
+  afterEach(() => { vi.restoreAllMocks() })
+  const as = (id: 'one' | 'two' | 'three') => { state.me = { id, name: { one: 'Ingrid', two: 'Jonas', three: 'Karim' }[id], permissions: [] } }
+
+  it('finds threads by title, opening post and replies, and links a reply hit to the reply', async () => {
+    const party = await createForumTopic({ data: { title: 'Sommerfest', body: 'Vi griller i parken.' } })
+    as('two')
+    const keys = await createForumTopic({ data: { title: 'Hvem har nøkkelen?', body: 'Til lageret.' } })
+    as('three')
+    const answer = await replyToForum({ data: { topicId: keys.id, body: 'Den henger i slagverkskassa.' } })
+
+    const byTitle = await searchForum({ data: { q: 'sommer' } })
+    expect(byTitle.topics.map((t) => t.id)).toEqual([party.id])
+    expect(byTitle.topics[0].hit).toBeNull()
+
+    const byBody = await searchForum({ data: { q: 'griller' } })
+    expect(byBody.topics[0].hit).toMatchObject({ kind: 'body', snippet: 'Vi griller i parken.' })
+
+    const byReply = await searchForum({ data: { q: 'slagverkskassa' } })
+    expect(byReply.topics.map((t) => t.id)).toEqual([keys.id])
+    expect(byReply.topics[0].hit).toEqual({ kind: 'comment', author: 'Karim', snippet: 'Den henger i slagverkskassa.', commentId: answer.id })
+    // Samme tall som lista: Karim har svart, Ingrid har ikke lest det.
+    as('one')
+    expect((await searchForum({ data: { q: 'nøkkelen' } })).topics[0]).toMatchObject({ replyCount: 1, unreadCount: 1 })
+  })
+
+  it('searches mentions by the current name, never by the marker', async () => {
+    const { id } = await createForumTopic({ data: { title: 'Notestativ', body: 'Spør @[u:two] om stativene.' } })
+    expect((await searchForum({ data: { q: 'jonas' } })).topics.map((t) => t.id)).toEqual([id])
+    expect((await searchForum({ data: { q: 'u:two' } })).topics).toEqual([])
+  })
+
+  it('requires a login and at least two characters', async () => {
+    await expect(searchForum({ data: { q: 'a' } })).rejects.toThrow()
+    state.me = null
+    await expect(searchForum({ data: { q: 'fest' } })).rejects.toThrow('Login')
+  })
+
+  it('sorts the list by activity, new threads or most replies', async () => {
+    const quiet = await createForumTopic({ data: { title: 'Stille tråd', body: 'Ingen svarer.' } })
+    const busy = await createForumTopic({ data: { title: 'Livlig tråd', body: 'Mange svar.' } })
+    const newest = await createForumTopic({ data: { title: 'Ny tråd', body: 'Helt ny.' } })
+    as('two')
+    await replyToForum({ data: { topicId: busy.id, body: 'En' } })
+    await replyToForum({ data: { topicId: busy.id, body: 'To' } })
+    await replyToForum({ data: { topicId: quiet.id, body: 'Likevel et svar' } })
+    const order = async (sort?: 'aktivitet' | 'nye' | 'aktive' | 'treff') => (await listForum({ data: { page: 0, sort } })).topics.map((t) => t.id)
+    expect(await order()).toEqual([quiet.id, busy.id, newest.id])
+    expect(await order('treff')).toEqual(await order())
+    expect(await order('nye')).toEqual([newest.id, busy.id, quiet.id])
+    expect(await order('aktive')).toEqual([busy.id, quiet.id, newest.id])
+    // Søketreffene sorteres med samme regel.
+    expect((await searchForum({ data: { q: 'tråd', sort: 'aktive' } })).topics.map((t) => t.id)).toEqual([busy.id, quiet.id, newest.id])
   })
 })

@@ -8,7 +8,8 @@ export type TabTo = '/' | '/forum' | '/beskjeder' | '/noter' | '/kalender'
 type Tab = { to: TabTo; label: string; icon: IconName; exact?: boolean }
 
 /**
- * Fanelinjen på telefon: de fem første oppføringene i toppmenyen, like for
+ * Fanelinjen på berøringsskjerm og i smale vinduer (`appnav`): de fem første
+ * oppføringene i toppmenyen, like for
  * alle roller (docs/designprinsipper.md §6). Medlemmer og de rollestyrte
  * områdene bor i «Meg og mer» bak avataren, så linjen aldri trenger å rulle.
  * Desktop beholder toppmenyen i `Shell.tsx`.
@@ -31,7 +32,7 @@ export function TabBar({ counts }: { counts: ShellCounts }) {
 
   return (
     <nav
-      className="tab-bar print-hidden pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper md:hidden"
+      className="tab-bar print-hidden pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper desknav:hidden"
       aria-label="Hovedmeny"
     >
       <ul className="px-safe mx-auto grid h-[58px] max-w-lg grid-cols-5">

@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import { BoardDocumentRow, BoardUploadButton } from '../../../components/BoardDocuments'
 import { BoardTaskRowItem, QuickAddTask } from '../../../components/BoardTasks'
 import { toast, toastError } from '../../../components/toast'
-import { Button, EmptyState, Field, Kicker, Modal } from '../../../components/ui'
+import { ActionMenu } from '../../../components/ActionMenu'
+import { BackArrow, Button, EmptyState, Field, Kicker, Modal } from '../../../components/ui'
 import type { BoardTaskStatus } from '../../../lib/board'
 import { formatDate, formatWeekday } from '../../../lib/format'
 import {
@@ -69,37 +70,37 @@ function MeetingPage() {
   return (
     <div className="space-y-9">
       <header className="rise">
-        <Link
-          to="/styre/moter"
-          className="link-quiet mb-4 inline-flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-brass-strong"
-        >
-          ← Møter
-        </Link>
+        <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
+          <Link to="/styre/moter" className="back-link">
+            <BackArrow />
+            Møter
+          </Link>
+          <ActionMenu
+            title={meeting.title}
+            items={[
+              { label: 'Rediger møtet', hint: 'Tittel og dato', icon: 'calendar', onSelect: () => setEditing(true) },
+              { label: 'Slett møtet', icon: 'close', tone: 'danger', onSelect: () => setConfirmDelete(true) },
+            ]}
+          />
+        </div>
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0">
             <Kicker>Styremøte</Kicker>
             <h1 className="display-title mt-2 break-words text-[clamp(2rem,5.5vw,3.4rem)] font-semibold italic leading-[1.05] text-ink">
               {meeting.title}
             </h1>
-            <p className="mt-3 font-mono text-[0.7rem] uppercase tracking-[0.14em] text-ink-soft">
+            <p className="mt-2 text-[0.95rem] text-ink">
               {formatWeekday(meeting.date)} {formatDate(meeting.date)}
             </p>
           </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <Button onClick={() => setEditing(true)}>Rediger</Button>
-            <Button variant="danger" onClick={() => setConfirmDelete(true)}>
-              Slett
-            </Button>
-          </div>
         </div>
-        <div className="staff-rule mt-7 w-full opacity-50" aria-hidden />
       </header>
 
       {/* Møtets egen rekkefølge: agenda før, notater under, vedtak etter. */}
       <section className="rise space-y-5" style={{ animationDelay: '80ms' }}>
         <div>
           <h2 className="kicker mb-3">Agenda</h2>
-          <div className="sheet p-4 sm:p-5">
+          <div className="surface-group p-4 sm:p-5">
             <textarea
               className="field-input min-h-32 leading-relaxed"
               value={agenda}
@@ -112,7 +113,7 @@ function MeetingPage() {
 
         <div>
           <h2 className="kicker mb-3">Notater</h2>
-          <div className="sheet p-4 sm:p-5">
+          <div className="surface-group p-4 sm:p-5">
             <textarea
               className="field-input min-h-48 leading-relaxed"
               value={notes}
@@ -125,7 +126,7 @@ function MeetingPage() {
 
         <div>
           <h2 className="kicker mb-3">Vedtak og oppfølging</h2>
-          <div className="sheet space-y-3 p-4 sm:p-5">
+          <div className="surface-group space-y-3 p-4 sm:p-5">
             <textarea
               ref={decisionsRef}
               className="field-input min-h-32 leading-relaxed"
@@ -179,13 +180,13 @@ function MeetingPage() {
           />
         </div>
         {data.tasks.length === 0 ? (
-          <div className="sheet">
+          <div className="surface-group">
             <EmptyState title="Ingen oppgaver fra dette møtet">
               Skriv inn det som ble fordelt — oppgavene dukker opp både her og på oversikten.
             </EmptyState>
           </div>
         ) : (
-          <ul className="sheet overflow-hidden">
+          <ul className="surface-group overflow-hidden">
             {data.tasks.map((task) => (
               <BoardTaskRowItem
                 key={task.id}
@@ -209,13 +210,13 @@ function MeetingPage() {
           />
         </div>
         {data.documents.length === 0 ? (
-          <div className="sheet">
+          <div className="surface-group">
             <EmptyState title="Ingen dokumenter på møtet">
               Innkalling, referat og vedlegg hører hjemme her.
             </EmptyState>
           </div>
         ) : (
-          <ul className="sheet overflow-hidden">
+          <ul className="surface-group overflow-hidden">
             {data.documents.map((doc) => (
               <BoardDocumentRow key={doc.id} doc={doc} />
             ))}

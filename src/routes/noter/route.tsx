@@ -1,4 +1,5 @@
 import { Link, Outlet, createFileRoute, redirect } from '@tanstack/react-router'
+import { AreaNav } from '../../components/AreaNav'
 
 type AreaNavItem = {
   to: '/noter' | '/noter/prosjekter' | '/noter/arkiv'
@@ -34,23 +35,18 @@ function NoterLayout() {
 
   return (
     <div>
-      <div className="area-nav-wrap print-hidden">
-        <nav
-          className="area-nav"
-          aria-label="Noter"
-        >
-          {items.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              activeOptions={{ exact: item.exact ?? false }}
-              className="area-link"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </div>
+      <AreaNav label="Noter">
+        {items.map((item) => (
+          <Link
+            key={item.to}
+            to={item.to}
+            activeOptions={{ exact: item.exact ?? false }}
+            className="area-link"
+          >
+            {item.label}
+          </Link>
+        ))}
+      </AreaNav>
       <Outlet />
     </div>
   )
