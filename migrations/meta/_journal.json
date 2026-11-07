@@ -239,6 +239,13 @@
       "when": 1793978822350,
       "tag": "0033_slett-i-forumet",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1794056201677,
+      "tag": "0034_tertnes-gif",
+      "breakpoints": true
     }
   ]
 }

@@ -40,6 +40,8 @@ import { Route as StyreIndexRouteImport } from './routes/styre/index'
 import { Route as StyreTaskIdRouteImport } from './routes/styre/$taskId'
 import { Route as VTokenRouteImport } from './routes/v/$token'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiBandMediaMediaIdRouteImport } from './routes/api/band-media/$mediaId'
+import { Route as ApiBandMediaUploadRouteImport } from './routes/api/band-media/upload'
 import { Route as ApiBoardFilesDocumentIdRouteImport } from './routes/api/board-files/$documentId'
 import { Route as ApiBoardFilesUploadRouteImport } from './routes/api/board-files/upload'
 import { Route as ApiDevKlipySplatRouteImport } from './routes/api/dev-klipy/$'
@@ -227,6 +229,16 @@ const VTokenRoute = VTokenRouteImport.update({
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBandMediaMediaIdRoute = ApiBandMediaMediaIdRouteImport.update({
+  id: '/api/band-media/$mediaId',
+  path: '/api/band-media/$mediaId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBandMediaUploadRoute = ApiBandMediaUploadRouteImport.update({
+  id: '/api/band-media/upload',
+  path: '/api/band-media/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiBoardFilesDocumentIdRoute = ApiBoardFilesDocumentIdRouteImport.update({
@@ -427,6 +439,8 @@ export interface FileRoutesByFullPath {
   '/prosjekter/': typeof ProsjekterIndexRoute
   '/styre/': typeof StyreIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/band-media/$mediaId': typeof ApiBandMediaMediaIdRoute
+  '/api/band-media/upload': typeof ApiBandMediaUploadRoute
   '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
   '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
   '/api/dev-klipy/$': typeof ApiDevKlipySplatRoute
@@ -489,6 +503,8 @@ export interface FileRoutesByTo {
   '/prosjekter': typeof ProsjekterIndexRoute
   '/styre': typeof StyreIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/band-media/$mediaId': typeof ApiBandMediaMediaIdRoute
+  '/api/band-media/upload': typeof ApiBandMediaUploadRoute
   '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
   '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
   '/api/dev-klipy/$': typeof ApiDevKlipySplatRoute
@@ -555,6 +571,8 @@ export interface FileRoutesById {
   '/prosjekter/': typeof ProsjekterIndexRoute
   '/styre/': typeof StyreIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/band-media/$mediaId': typeof ApiBandMediaMediaIdRoute
+  '/api/band-media/upload': typeof ApiBandMediaUploadRoute
   '/api/board-files/$documentId': typeof ApiBoardFilesDocumentIdRoute
   '/api/board-files/upload': typeof ApiBoardFilesUploadRoute
   '/api/dev-klipy/$': typeof ApiDevKlipySplatRoute
@@ -622,6 +640,8 @@ export interface FileRouteTypes {
     | '/prosjekter/'
     | '/styre/'
     | '/api/auth/$'
+    | '/api/band-media/$mediaId'
+    | '/api/band-media/upload'
     | '/api/board-files/$documentId'
     | '/api/board-files/upload'
     | '/api/dev-klipy/$'
@@ -684,6 +704,8 @@ export interface FileRouteTypes {
     | '/prosjekter'
     | '/styre'
     | '/api/auth/$'
+    | '/api/band-media/$mediaId'
+    | '/api/band-media/upload'
     | '/api/board-files/$documentId'
     | '/api/board-files/upload'
     | '/api/dev-klipy/$'
@@ -749,6 +771,8 @@ export interface FileRouteTypes {
     | '/prosjekter/'
     | '/styre/'
     | '/api/auth/$'
+    | '/api/band-media/$mediaId'
+    | '/api/band-media/upload'
     | '/api/board-files/$documentId'
     | '/api/board-files/upload'
     | '/api/dev-klipy/$'
@@ -811,6 +835,8 @@ export interface RootRouteChildren {
   MedlemmerIndexRoute: typeof MedlemmerIndexRoute
   ProsjekterIndexRoute: typeof ProsjekterIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiBandMediaMediaIdRoute: typeof ApiBandMediaMediaIdRoute
+  ApiBandMediaUploadRoute: typeof ApiBandMediaUploadRoute
   ApiBoardFilesDocumentIdRoute: typeof ApiBoardFilesDocumentIdRoute
   ApiBoardFilesUploadRoute: typeof ApiBoardFilesUploadRoute
   ApiDevKlipySplatRoute: typeof ApiDevKlipySplatRoute
@@ -1049,6 +1075,20 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/band-media/$mediaId': {
+      id: '/api/band-media/$mediaId'
+      path: '/api/band-media/$mediaId'
+      fullPath: '/api/band-media/$mediaId'
+      preLoaderRoute: typeof ApiBandMediaMediaIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/band-media/upload': {
+      id: '/api/band-media/upload'
+      path: '/api/band-media/upload'
+      fullPath: '/api/band-media/upload'
+      preLoaderRoute: typeof ApiBandMediaUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/board-files/$documentId': {
@@ -1369,6 +1409,8 @@ const rootRouteChildren: RootRouteChildren = {
   MedlemmerIndexRoute: MedlemmerIndexRoute,
   ProsjekterIndexRoute: ProsjekterIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiBandMediaMediaIdRoute: ApiBandMediaMediaIdRoute,
+  ApiBandMediaUploadRoute: ApiBandMediaUploadRoute,
   ApiBoardFilesDocumentIdRoute: ApiBoardFilesDocumentIdRoute,
   ApiBoardFilesUploadRoute: ApiBoardFilesUploadRoute,
   ApiDevKlipySplatRoute: ApiDevKlipySplatRoute,

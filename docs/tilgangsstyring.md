@@ -535,3 +535,22 @@ kopiert til 👍; mobil-API v1 sin `like` er 👍.
 | Medlem | Ja | **Nei** | **Nei** | Ja |
 | `posts.publish` | Ja | Ja | **Nei** | Ja |
 | Uinnlogget | **401** | 401 | 401 | 401 |
+
+## 12. Tertnes-fanen i GIF-velgeren (`gifs.manage`, 7. november 2026)
+
+Korpsets egne GIF-er (`band_media`, migrasjon `0034_tertnes-gif.sql`). Se
+`docs/bilder-i-samtaler.md`.
+
+- **Gaten** `src/routes/api/band-media/$mediaId.ts`: `currentUser()` (401 uten),
+  ellers alle aktive medlemmer. Det er de samme som kan velge GIF-en. Samme
+  headere som `message-media` (`nosniff`, `sandbox`-CSP, `private`, `noindex`,
+  `no-referrer`). En fjernet GIF gir 404.
+- **Legge til** (`api/band-media/upload.ts`, PUT) krever `gifs.manage`. Uten den
+  gir det 403, også for et rått kall. Formatet leses fra bytene (`sniffImage`),
+  og R2-nøkkelen bygges av en fersk id.
+- **Fjerne** (`removeBandMedia`) krever `gifs.manage`.
+- **Velge** (`pickBandMedia`) krever innlogging og lager en KOPI som utkast hos
+  den som valgte. Herfra gjelder §10 uendret: kopien kobles til meldingen og
+  følger stedets regel. Samlingen er aldri en snarvei inn i en annens melding.
+- `gifs.manage` er seedet til `board` (Styremedlem) og gis ellers i
+  rollematrisen. Den gir ingen annen tilgang.

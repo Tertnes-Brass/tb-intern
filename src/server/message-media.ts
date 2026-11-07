@@ -77,8 +77,11 @@ export async function readMediaBody(request: Request): Promise<Uint8Array> {
  * fra bytene — `Content-Type` og filnavn fra klienten brukes ikke til noe — og
  * R2-nøkkelen bygges av en fersk id. Hver opplasting er ett nytt objekt; ingen
  * deduplisering, så et bilde aldri kan dukke opp i en annens melding.
+ *
+ * `title` (alt-tekst) settes bare av serveren selv — for en GIF valgt fra
+ * Tertnes-fanen, som kopieres inn hit (`pickBandMedia`) — aldri fra klienten.
  */
-export async function storeMessageMedia(bytes: Uint8Array, me: Me): Promise<MessageMediaItem> {
+export async function storeMessageMedia(bytes: Uint8Array, me: Me, opts: { title?: string } = {}): Promise<MessageMediaItem> {
   const image = sniffImage(bytes)
   const reason = sniffedRejectionReason(image, bytes.byteLength)
   if (reason || !image) throw new MediaUploadError(reason ?? 'Ukjent filformat')
@@ -92,12 +95,14 @@ export async function storeMessageMedia(bytes: Uint8Array, me: Me): Promise<Mess
   }
   const id = newId()
   const r2Key = `message-media/${id}.${messageMediaExtension(image.contentType)}`
+  const title = opts.title?.trim().slice(0, 200) || null
   await env.FILES.put(r2Key, bytes, { httpMetadata: { contentType: image.contentType } })
   try {
     await db().insert(messageMedia).values({
       id,
       ownerId: me.id,
       r2Key,
+      title,
       contentType: image.contentType,
       size: bytes.byteLength,
       width: image.width,
@@ -109,7 +114,7 @@ export async function storeMessageMedia(bytes: Uint8Array, me: Me): Promise<Mess
     await env.FILES.delete(r2Key).catch(() => {})
     throw err
   }
-  return { id, contentType: image.contentType, width: image.width, height: image.height }
+  return { id, contentType: image.contentType, width: image.width, height: image.height, ...(title ? { title } : {}) }
 }
 
 /**

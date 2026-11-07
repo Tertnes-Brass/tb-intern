@@ -64,6 +64,46 @@ uten nøkkel svarer en etterligning (`/api/dev-klipy`) med KLIPYs egne
 eksempelfiler. Testnøkler har en grense på 100 kall i timen; be om
 produksjonstilgang i partnerpanelet før det tas i bruk av hele korpset.
 
+## Tertnes-fanen: korpsets egne GIF-er (7. november 2026)
+
+Første fane i GIF-velgeren er «Tertnes»: GIF-er og memes laget i korpset, som
+kan brukes om og om igjen. Den første var «Galleri 69».
+
+- **Navn:** Tertnes-fanen (Tertnes-GIF-er).
+- **Formål:** Korpsets interne vitser som GIF-er, lette å finne igjen, uten at
+  de ligger åpent på nettet.
+- **Primærbruker:** Medlemmet som skriver. **Primærhandling:** åpne «GIF»,
+  velge «Tertnes» og trykke på en GIF.
+- **Plass i navigasjonen:** Ingen ny. En fane i GIF-velgeren (først i rekka),
+  der både valg, «+ Legg til» og «Rediger» (fjerne) bor. Velgeren åpner på den
+  fanen man sist valgte noe fra, per enhet (`localStorage`, bare bekvemmelighet).
+- **Rettighet:** Å se og velge krever bare innlogging. Å legge til og fjerne
+  krever den nye rettigheten `gifs.manage` («Tertnes-GIF-er»), seedet til
+  Styremedlem (migrasjon `0034_tertnes-gif.sql`); admin har den via `*`.
+- **Eget rutenavnerom:** Nei. `/api/band-media/upload` (PUT) og
+  `/api/band-media/$mediaId` (GET); resten er serverfunksjoner i
+  `src/server/band-media.ts`.
+
+**Hvorfor ikke i repoet:** repoet er offentlig, og alt i `public/` kan hentes
+uten innlogging. GIF-ene viser folk i korpset, så bytene ligger i R2 under
+`band-media/<fersk id>.<ext>` og hentes bare gjennom gaten (innlogget medlem).
+Tabellen er `band_media`.
+
+**Et valg er en kopi.** `pickBandMedia` kopierer bytene til et vanlig utkast i
+`message_media` (`source = 'upload'`, navnet som alt-tekst) via samme
+`storeMessageMedia` som en opplasting: samme kontroll av bytene, samme tak på
+utkast, samme gate, og mobilappen viser det som et vanlig bilde. Derfor blir en
+GIF som fjernes fra fanen stående i meldingene der den allerede er brukt. Den
+slettes med meldingen.
+
+**Legge til:** fil (GIF, PNG, JPEG eller WebP, maks 10 MB, formatet leses fra
+bytene) og et navn på maks 60 tegn. Navnet er det man søker på (samme ordregler
+som søket på veggen) og det skjermlesere leser opp. Maks 200 i samlingen.
+Skjemaet minner om at alle medlemmer ser GIF-ene, og at man bare skal legge til
+bilder av folk som er med på det. **Fjerne:** «Rediger» → trykk på GIF-en →
+«Fjern» i en bekreftelse i panelet. Det er ikke en egen dialog, fordi velgeren
+lukkes ved et trykk utenfor seg selv. Raden slettes først, så R2.
+
 ## Opplasting av egne bilder
 
 1. Velger man et bilde (knappen «Bilde», lim inn, eller dra inn), lastes det opp
