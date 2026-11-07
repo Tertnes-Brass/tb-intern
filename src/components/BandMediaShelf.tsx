@@ -224,21 +224,43 @@ function ShelfTile({ item, editing, onClick }: { item: BandMediaItem; editing: b
   )
 }
 
+/** Lengste side på forhåndsvisningen i px (lerretet skaleres ned med CSS). */
+const PREVIEW_MAX = 480
+
 /** «Legg til i Tertnes»: fil + navn, som en egen visning i panelet. */
 function AddForm({ onCancel, onAdded }: { onCancel: () => void; onAdded: (item: BandMediaItem) => void }) {
   const input = useRef<HTMLInputElement>(null)
   const nameField = useRef<HTMLInputElement>(null)
+  const previewCanvas = useRef<HTMLCanvasElement>(null)
   const [file, setFile] = useState<File | null>(null)
-  const [preview, setPreview] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
+  // Forhåndsvisningen tegnes på et lerret (første bilde i en GIF), ikke som
+  // <img src="blob:…">: da når ingen adresse avledet av filvalget DOM-en
+  // (CodeQL js/xss-through-dom), og et stort telefonbilde blir et lite lerret.
   useEffect(() => {
-    if (!file) return setPreview(null)
-    const url = URL.createObjectURL(file)
-    setPreview(url)
-    return () => URL.revokeObjectURL(url)
+    if (!file) return
+    let alive = true
+    createImageBitmap(file).then(
+      (bitmap) => {
+        const target = previewCanvas.current
+        if (alive && target) {
+          const scale = Math.min(1, PREVIEW_MAX / Math.max(bitmap.width, bitmap.height))
+          target.width = Math.max(1, Math.round(bitmap.width * scale))
+          target.height = Math.max(1, Math.round(bitmap.height * scale))
+          target.getContext('2d')?.drawImage(bitmap, 0, 0, target.width, target.height)
+        }
+        bitmap.close()
+      },
+      () => {
+        if (alive) setError('Kunne ikke lese bildet')
+      },
+    )
+    return () => {
+      alive = false
+    }
   }, [file])
 
   const choose = (picked: File | undefined) => {
@@ -299,8 +321,8 @@ function AddForm({ onCancel, onAdded }: { onCancel: () => void; onAdded: (item: 
           onClick={() => input.current?.click()}
           className="flex h-36 w-full cursor-pointer items-center justify-center overflow-hidden rounded-[8px] border border-dashed border-line-strong bg-paper-sunken text-sm text-ink-soft hover:border-brass hover:text-brass-strong"
         >
-          {preview ? (
-            <img src={preview} alt="Valgt fil" className="h-full w-full object-contain" />
+          {file ? (
+            <canvas ref={previewCanvas} role="img" aria-label="Valgt fil" className="h-full w-full object-contain" />
           ) : (
             <span className="flex items-center gap-2">
               <Icon name="image" size={17} /> Velg GIF eller bilde
