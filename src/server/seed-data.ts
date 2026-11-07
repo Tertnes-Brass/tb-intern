@@ -68,6 +68,9 @@ export const SEED_ROLE_PERMISSIONS: Array<{ roleId: string; permission: string }
   { roleId: 'board', permission: 'board.manage' },
   { roleId: 'board', permission: 'posts.publish' },
   { roleId: 'board', permission: 'forum.moderate' },
+  // Styret passer på Tertnes-fanen i GIF-velgeren, som det moderer forumet
+  // (prod får det fra migrasjon 0034_tertnes-gif.sql).
+  { roleId: 'board', permission: 'gifs.manage' },
   // Fraværsansvarlig: alt en musiker har, pluss hele oppmøtelista og
   // fraværsoversikten (/fravaer). Ingen prosjekt-, medlems- eller admintilgang.
   // Prod får rollen fra migrasjon 0026_fravaersansvarlig.sql.

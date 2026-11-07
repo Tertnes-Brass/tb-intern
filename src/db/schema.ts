@@ -1030,6 +1030,33 @@ export const messageMedia = sqliteTable(
   ],
 )
 
+// ---------- Tertnes-fanen i GIF-velgeren ----------
+// Korpsets egne GIF-er og memes (src/lib/band-media.ts). Bytene ligger i R2
+// under `band-media/<fersk id>.<ext>` og hentes KUN via `/api/band-media/$id`
+// (innlogget medlem) — aldri i git eller `public/`, for repoet er offentlig og
+// GIF-ene viser folk i korpset. Legges til og fjernes med `gifs.manage`.
+//
+// Et valg i velgeren KOPIERER bytene til et vanlig utkast i `message_media`
+// (`source = 'upload'`): meldingen eier sin egen kopi, så gaten, mobilappen og
+// slettingen der er uendret, og en GIF som fjernes herfra blir stående i
+// meldingene der den allerede er brukt.
+export const bandMedia = sqliteTable(
+  'band_media',
+  {
+    id: text('id').primaryKey(),
+    r2Key: text('r2_key').notNull(),
+    /** Navnet i velgeren: alt-tekst og det man søker på. */
+    title: text('title').notNull(),
+    contentType: text('content_type').notNull(),
+    size: integer('size').notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    addedBy: text('added_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('band_media_created_idx').on(t.createdAt)],
+)
+
 // ---------- Emoji-reaksjoner ----------
 // Én rad per medlem per emoji per innlegg/kommentar/forumtråd/forumsvar
 // (src/lib/reactions.ts). Erstatter `post_reactions` (bare «👍 Liker»), som er

@@ -1,8 +1,11 @@
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KlipyCategory, KlipyConfig, KlipyItem } from '../lib/klipy'
 import { type KlipyFeed, fetchKlipyCategories, fetchKlipyItems, loadKlipyConfig, triggerKlipyShare } from '../lib/klipy-client'
+import type { BandMediaItem } from '../lib/band-media'
 import type { ExternalMediaKind, MessageMediaItem } from '../lib/message-media'
+import { pickBandMedia } from '../server/band-media'
 import { addKlipyMedia } from '../server/klipy'
+import { BandMediaShelf } from './BandMediaShelf'
 import { EmojiPicker } from './EmojiPicker'
 import { Icon } from './Icons'
 import { MediaButton, type MediaDraft } from './MessageMedia'
@@ -11,7 +14,9 @@ import { toastError } from './toast'
 
 /**
  * GIF-velgeren, som i Discord: faner for GIF-er, stickers, memes og emoji, søk,
- * «Trending», «Nylig brukt» og kategorier — med innhold fra KLIPY.
+ * «Trending», «Nylig brukt» og kategorier — med innhold fra KLIPY. Først står
+ * «Tertnes», korpsets egne GIF-er (`BandMediaShelf`, src/lib/band-media.ts),
+ * som ligger hos oss bak innloggingen og ikke har noe med KLIPY å gjøre.
  *
  * Søk og visning går rett fra nettleseren til KLIPY (vilkåret deres, se
  * src/lib/klipy.ts). Søkefeltet heter «Search KLIPY» fordi KLIPY krever det, og
@@ -19,9 +24,33 @@ import { toastError } from './toast'
  * (`addKlipyMedia`), og sendes med meldingen som et vanlig bilde.
  */
 
-export type PickerTab = ExternalMediaKind | 'emoji'
+export type PickerTab = 'tertnes' | ExternalMediaKind | 'emoji'
 
-const TAB_LABEL: Record<PickerTab, string> = { gif: 'GIF-er', sticker: 'Stickers', meme: 'Memes', emoji: 'Emoji' }
+const TAB_LABEL: Record<PickerTab, string> = { tertnes: 'Tertnes', gif: 'GIF-er', sticker: 'Stickers', meme: 'Memes', emoji: 'Emoji' }
+const MEDIA_TABS: PickerTab[] = ['tertnes', 'gif', 'sticker', 'meme']
+
+/**
+ * GIF-knappen åpner på fanen man sist valgte noe fra (per enhet, bare en
+ * bekvemmelighet): den som bruker korpsets egne GIF-er, slipper å bytte fane
+ * hver gang. Emoji huskes ikke — den har sin egen knapp.
+ */
+const LAST_TAB_KEY = 'tb-media-picker-tab'
+function rememberedTab(): PickerTab {
+  try {
+    const saved = localStorage.getItem(LAST_TAB_KEY) as PickerTab | null
+    return saved && MEDIA_TABS.includes(saved) ? saved : 'gif'
+  } catch {
+    return 'gif'
+  }
+}
+function rememberTab(tab: PickerTab): void {
+  if (!MEDIA_TABS.includes(tab)) return
+  try {
+    localStorage.setItem(LAST_TAB_KEY, tab)
+  } catch {
+    // Privat modus eller blokkert lagring: velgeren åpner bare på GIF-er.
+  }
+}
 const KIND_WORD: Record<ExternalMediaKind, string> = { gif: 'GIF', sticker: 'sticker', meme: 'meme' }
 
 function useMedia(query: string): boolean {
@@ -59,22 +88,25 @@ function useKlipyConfig(): [ConfigState, () => void] {
 export function MediaPicker({
   initialTab = 'gif',
   onPickMedia,
+  onPickBand,
   onPickEmoji,
   busy = false,
 }: {
+  /** `'gif'` åpner på fanen man sist valgte noe fra (`rememberedTab`). */
   initialTab?: PickerTab
   onPickMedia: (item: KlipyItem, config: KlipyConfig, query: string) => void
+  onPickBand: (item: BandMediaItem) => void
   /** Uten denne vises ikke Emoji-fanen (der det ikke finnes et tekstfelt å sette inn i). */
   onPickEmoji?: (emoji: string) => void
   busy?: boolean
 }) {
-  const [tab, setTab] = useState<PickerTab>(initialTab)
+  const [tab, setTab] = useState<PickerTab>(() => (initialTab === 'gif' ? rememberedTab() : initialTab))
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState('')
   const [view, setView] = useState<{ feed: KlipyFeed; title: string } | null>(null)
   const [config, retry] = useKlipyConfig()
   const coarse = useMedia('(pointer: coarse)')
-  const tabs: PickerTab[] = onPickEmoji ? ['gif', 'sticker', 'meme', 'emoji'] : ['gif', 'sticker', 'meme']
+  const tabs: PickerTab[] = onPickEmoji ? [...MEDIA_TABS, 'emoji'] : MEDIA_TABS
 
   // Søket venter til man har skrevet ferdig et ord eller to.
   useEffect(() => {
@@ -112,6 +144,15 @@ export function MediaPicker({
 
       {tab === 'emoji' && onPickEmoji ? (
         <EmojiPicker onPick={onPickEmoji} autoFocus={!coarse} className="min-h-0 flex-1" />
+      ) : tab === 'tertnes' ? (
+        <BandMediaShelf
+          busy={busy}
+          coarse={coarse}
+          onPick={(item) => {
+            rememberTab('tertnes')
+            onPickBand(item)
+          }}
+        />
       ) : (
         <>
           <div className="relative shrink-0 px-3 pt-2.5 pb-2">
@@ -151,7 +192,10 @@ export function MediaPicker({
                   onBack={search ? () => setQuery('') : () => setView(null)}
                   busy={busy}
                   scroller={scroller}
-                  onPick={(item) => onPickMedia(item, config.config, search)}
+                  onPick={(item) => {
+                    rememberTab(tab)
+                    onPickMedia(item, config.config, search)
+                  }}
                 />
               ) : (
                 <Home key={tab} config={config.config} kind={tab as ExternalMediaKind} onOpen={setView} />
@@ -410,6 +454,21 @@ export function PickerButton({
     }
   }
 
+  /** Et valg fra Tertnes-fanen: serveren kopierer GIF-en til et utkast, som en opplasting. */
+  const pickBand = async (item: BandMediaItem) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      const media = await pickBandMedia({ data: { id: item.id } })
+      setOpen(false)
+      await onAdd(media)
+    } catch (err) {
+      toastError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const label = tab === 'emoji' ? 'Sett inn emoji' : 'GIF, sticker eller meme'
   return (
     <>
@@ -437,6 +496,7 @@ export function PickerButton({
           initialTab={tab}
           busy={busy}
           onPickMedia={(item, config, query) => void pick(item, config, query)}
+          onPickBand={(item) => void pickBand(item)}
           onPickEmoji={
             onEmoji
               ? (emoji) => {
