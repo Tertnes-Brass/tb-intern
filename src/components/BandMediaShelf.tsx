@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type BandMediaItem, MAX_BAND_MEDIA_TITLE, bandMediaTitleRejection, bandMediaUrl, filterBandMedia } from '../lib/band-media'
 import { uploadBandMedia } from '../lib/band-media-client'
+import { isVideoFile } from '../lib/gif-maker'
 import { MESSAGE_MEDIA_ACCEPT, mediaRejectionReason } from '../lib/message-media'
 import { listBandMedia, removeBandMedia } from '../server/band-media'
 import { Icon } from './Icons'
@@ -12,6 +13,10 @@ import { Button } from './ui'
  * src/lib/band-media.ts). Alle medlemmer kan velge; med `gifs.manage` kan man
  * også legge til og fjerne — rett her i fanen, som en egen visning i panelet
  * (ikke en dialog oppå: velgeren lukkes ved et trykk utenfor seg selv).
+ *
+ * Velger man en video i «Legg til», går den til `onVideo` («Lag GIF fra
+ * video», src/components/gif-maker/GifMaker.tsx): den trenger hele skjermen,
+ * så eieren lukker velgeren og åpner editoren i stedet.
  */
 
 type Loaded = { status: 'loading' } | { status: 'error' } | { status: 'ready'; items: BandMediaItem[]; canManage: boolean }
@@ -29,7 +34,18 @@ function useReducedMotion(): boolean {
   return reduced
 }
 
-export function BandMediaShelf({ busy, coarse, onPick }: { busy: boolean; coarse: boolean; onPick: (item: BandMediaItem) => void }) {
+export function BandMediaShelf({
+  busy,
+  coarse,
+  onPick,
+  onVideo,
+}: {
+  busy: boolean
+  coarse: boolean
+  onPick: (item: BandMediaItem) => void
+  /** En video ble valgt i «Legg til». Uten denne tas bare bilder imot. */
+  onVideo?: (file: File) => void
+}) {
   const [state, setState] = useState<Loaded>({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const [view, setView] = useState<View>({ kind: 'list' })
@@ -57,6 +73,7 @@ export function BandMediaShelf({ busy, coarse, onPick }: { busy: boolean; coarse
   if (view.kind === 'add') {
     return (
       <AddForm
+        onVideo={onVideo}
         onCancel={() => setView({ kind: 'list' })}
         onAdded={(item) => {
           setItems((list) => [item, ...list.filter((i) => i.id !== item.id)])
@@ -227,8 +244,16 @@ function ShelfTile({ item, editing, onClick }: { item: BandMediaItem; editing: b
 /** Lengste side på forhåndsvisningen i px (lerretet skaleres ned med CSS). */
 const PREVIEW_MAX = 480
 
-/** «Legg til i Tertnes»: fil + navn, som en egen visning i panelet. */
-function AddForm({ onCancel, onAdded }: { onCancel: () => void; onAdded: (item: BandMediaItem) => void }) {
+/** «Legg til i Tertnes»: fil + navn, som en egen visning i panelet. En video går videre til `onVideo`. */
+function AddForm({
+  onCancel,
+  onAdded,
+  onVideo,
+}: {
+  onCancel: () => void
+  onAdded: (item: BandMediaItem) => void
+  onVideo?: (file: File) => void
+}) {
   const input = useRef<HTMLInputElement>(null)
   const nameField = useRef<HTMLInputElement>(null)
   const previewCanvas = useRef<HTMLCanvasElement>(null)
@@ -265,6 +290,10 @@ function AddForm({ onCancel, onAdded }: { onCancel: () => void; onAdded: (item: 
 
   const choose = (picked: File | undefined) => {
     if (!picked) return
+    if (onVideo && isVideoFile(picked)) {
+      onVideo(picked)
+      return
+    }
     const reason = mediaRejectionReason({ type: picked.type, size: picked.size })
     if (reason) {
       setError(reason)
@@ -274,6 +303,11 @@ function AddForm({ onCancel, onAdded }: { onCancel: () => void; onAdded: (item: 
     setFile(picked)
     requestAnimationFrame(() => nameField.current?.focus())
   }
+
+  // Editoren hentes mens man velger fil, så den åpner med en gang etter et videovalg.
+  useEffect(() => {
+    if (onVideo) void import('./gif-maker/GifMaker').catch(() => {})
+  }, [onVideo])
 
   const titleError = title ? bandMediaTitleRejection(title) : null
   const ready = !!file && !!title.trim() && !titleError
@@ -308,7 +342,7 @@ function AddForm({ onCancel, onAdded }: { onCancel: () => void; onAdded: (item: 
         <input
           ref={input}
           type="file"
-          accept={MESSAGE_MEDIA_ACCEPT}
+          accept={onVideo ? `${MESSAGE_MEDIA_ACCEPT},video/*` : MESSAGE_MEDIA_ACCEPT}
           className="sr-only"
           tabIndex={-1}
           onChange={(e) => {
@@ -324,8 +358,11 @@ function AddForm({ onCancel, onAdded }: { onCancel: () => void; onAdded: (item: 
           {file ? (
             <canvas ref={previewCanvas} role="img" aria-label="Valgt fil" className="h-full w-full object-contain" />
           ) : (
-            <span className="flex items-center gap-2">
-              <Icon name="image" size={17} /> Velg GIF eller bilde
+            <span className="flex flex-col items-center gap-1 px-4 text-center">
+              <span className="flex items-center gap-2">
+                <Icon name="image" size={17} /> {onVideo ? 'Velg GIF, bilde eller video' : 'Velg GIF eller bilde'}
+              </span>
+              {onVideo && <span className="text-[0.72rem] text-ink-faint">Fra en video lager du GIF-en selv: klipp, utsnitt og loop.</span>}
             </span>
           )}
         </button>
