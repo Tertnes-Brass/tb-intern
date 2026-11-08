@@ -83,6 +83,8 @@ const isAbort = (err: unknown) => err instanceof DOMException && err.name === 'A
 
 export default function GifMaker({ file, onClose, onAdded }: { file: File; onClose: () => void; onAdded: (item: BandMediaItem) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  /** Toppen av innholdet — for å rulle arket dit når steget byttes. */
+  const topRef = useRef<HTMLDivElement>(null)
   const [url, setUrl] = useState<string | null>(null)
   const [meta, setMeta] = useState<Meta | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -188,6 +190,14 @@ export default function GifMaker({ file, onClose, onAdded }: { file: File; onClo
     const video = videoRef.current
     if (video) video.playbackRate = speedValue(speed)
   }, [speed, meta])
+
+  // Nytt steg begynner øverst. Arket beholder ellers rulleposisjonen fra
+  // forrige steg, og «Slik blir GIF-en» åpnet med forhåndsvisningen halvt
+  // ute av bildet (sett i iOS-simulatoren).
+  useEffect(() => {
+    if (phase === 'capturing') return
+    topRef.current?.closest('.sheet-body')?.scrollTo({ top: 0 })
+  }, [phase])
 
   useEffect(() => {
     const video = videoRef.current
@@ -413,6 +423,7 @@ export default function GifMaker({ file, onClose, onAdded }: { file: File; onClo
     >
       {/* Videoen vises aldri selv; den tegnes på lerretet i CropStage. Den må
           likevel stå i dokumentet, ellers spiller ikke iOS den av. */}
+      <div ref={topRef} aria-hidden />
       <video ref={videoRef} muted playsInline preload="auto" aria-hidden className="pointer-events-none fixed top-0 left-0 h-px w-px opacity-0" />
 
       {loadError && (
