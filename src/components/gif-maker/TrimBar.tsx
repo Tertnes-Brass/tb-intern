@@ -225,7 +225,7 @@ export function TrimBar({
           )}
         </div>
       </div>
-      <div className="mt-1.5 flex items-baseline justify-between px-[14px] text-[0.75rem] text-ink-soft tabular-nums">
+      <div className="mt-1.5 flex items-baseline justify-between px-[14px] text-[0.75rem] text-ink-soft">
         <span>{formatClipTime(trim.start)}</span>
         <span className="font-semibold text-ink">{formatSeconds(len)}</span>
         <span>{formatClipTime(trim.end)}</span>

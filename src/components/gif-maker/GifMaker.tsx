@@ -75,6 +75,9 @@ type Encoded =
   | { status: 'too-big'; size: number; width: number; height: number }
   | { status: 'error' }
 
+/** «2,9 MB» — med komma, som resten av teksten her. */
+const sizeLabel = (bytes: number) => formatBytes(bytes).replace('.', ',')
+
 const isAbort = (err: unknown) => err instanceof DOMException && err.name === 'AbortError'
 
 export default function GifMaker({ file, onClose, onAdded }: { file: File; onClose: () => void; onAdded: (item: BandMediaItem) => void }) {
@@ -402,7 +405,6 @@ export default function GifMaker({ file, onClose, onAdded }: { file: File; onClo
       onClose={close}
       kicker="Tertnes"
       title={phase === 'result' ? 'Slik blir GIF-en' : 'Lag GIF fra video'}
-      subtitle={phase === 'result' ? undefined : 'Velg utsnitt og hvilken del av videoen som skal bli GIF.'}
       wide
       mobileFull
       footer={footer}
@@ -426,7 +428,9 @@ export default function GifMaker({ file, onClose, onAdded }: { file: File; onClo
 
       {meta && crop && editing && (
         <div className="space-y-4">
-          <div>
+          {/* Bildet blir stående øverst mens man ruller ned til klipp, form og
+              fart — man skal se hva et valg gjør. */}
+          <div className="sticky -top-4 z-20 -mx-6 -mt-4 bg-paper-raised px-6 pt-4 pb-2 sm:-mx-7 sm:px-7">
             <CropStage
               videoRef={videoRef}
               videoWidth={meta.width}
@@ -458,7 +462,7 @@ export default function GifMaker({ file, onClose, onAdded }: { file: File; onClo
                   onChange={(e) => setView(zoomView(view, Number(e.target.value), 0.5, 0.5, meta.width, meta.height))}
                   className="h-9 min-w-0 flex-1 cursor-pointer accent-[var(--brass)] pointer-coarse:h-11"
                 />
-                <span className="w-9 shrink-0 text-right tabular-nums">{view.zoom.toFixed(1).replace('.', ',')}×</span>
+                <span className="w-9 shrink-0 text-right">{view.zoom.toFixed(1).replace('.', ',')}×</span>
               </label>
               <Button
                 type="button"
@@ -487,7 +491,7 @@ export default function GifMaker({ file, onClose, onAdded }: { file: File; onClo
                   aria-valuetext={`${formatClipTime(track.from)} til ${formatClipTime(track.to)}`}
                   className="h-8 min-w-0 flex-1 cursor-pointer accent-[var(--brass)] pointer-coarse:h-11"
                 />
-                <span className="shrink-0 tabular-nums">
+                <span className="shrink-0">
                   {formatClipTime(track.from).replace(/,\d$/, '')}–{formatClipTime(track.to).replace(/,\d$/, '')}
                 </span>
               </label>
@@ -549,14 +553,14 @@ export default function GifMaker({ file, onClose, onAdded }: { file: File; onClo
               height={outputSize(captured.crop, CAPTURE_MAX_SIDE).height}
               delayMs={FRAME_DELAY_CS * 10}
             />
-            <p className="mt-1.5 text-center text-[0.78rem] text-ink-soft tabular-nums" aria-live="polite">
+            <p className="mt-1.5 text-center text-[0.78rem] text-ink-soft" aria-live="polite">
               {dims.width} × {dims.height} · {formatSeconds(gifSeconds(order.length))} ·{' '}
               {encoded.status === 'working'
                 ? `regner ut størrelsen … ${Math.round(encoded.progress * 100)} %`
                 : encoded.status === 'ready'
-                  ? formatBytes(encoded.bytes.byteLength)
+                  ? sizeLabel(encoded.bytes.byteLength)
                   : encoded.status === 'too-big'
-                    ? formatBytes(encoded.size)
+                    ? sizeLabel(encoded.size)
                     : '–'}
             </p>
             {shrunk && encoded.status !== 'too-big' && (

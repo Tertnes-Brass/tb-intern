@@ -44,12 +44,13 @@ export function CropStage({
     dirty.current = true
   }, [view])
 
-  // Størrelsen: hele bredden, men aldri høyere enn ~40 % av skjermen.
+  // Størrelsen: hele bredden, men aldri høyere enn ~en tredel av skjermen —
+  // resten av editoren skal få plass under, også på telefon.
   useEffect(() => {
     const el = box.current
     if (!el) return
     const measure = () => {
-      const maxH = Math.max(180, Math.min(440, Math.round(window.innerHeight * 0.42)))
+      const maxH = Math.max(160, Math.min(420, Math.round(window.innerHeight * 0.36)))
       const w = Math.min(el.clientWidth, maxH * aspect)
       setSize({ w: Math.round(w), h: Math.round(w / aspect) })
     }
