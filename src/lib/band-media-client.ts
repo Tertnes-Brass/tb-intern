@@ -3,16 +3,21 @@
  * `/api/band-media/upload` med navnet i adressen. Kun nettleser-API-er her.
  */
 
-import { type BandMediaItem, bandMediaTitleRejection } from './band-media'
+import { BAND_MEDIA_CONSENT_REQUIRED, type BandMediaItem, bandMediaTitleRejection } from './band-media'
 import { mediaRejectionReason } from './message-media'
 
-/** Legger en GIF i samlingen. Kaster med en melding som kan vises. */
-export async function uploadBandMedia(file: File, title: string): Promise<BandMediaItem> {
-  const reason = bandMediaTitleRejection(title) ?? mediaRejectionReason({ type: file.type, size: file.size })
+/**
+ * Legger en GIF i samlingen. `consent`: den som legger til har krysset av for at
+ * alle som er med har sagt ja — serveren avviser opplastingen uten. Kaster med
+ * en melding som kan vises.
+ */
+export async function uploadBandMedia(file: File, title: string, consent: boolean): Promise<BandMediaItem> {
+  const reason =
+    bandMediaTitleRejection(title) ?? mediaRejectionReason({ type: file.type, size: file.size }) ?? (consent ? null : BAND_MEDIA_CONSENT_REQUIRED)
   if (reason) throw new Error(reason)
   let res: Response
   try {
-    res = await fetch(`/api/band-media/upload?title=${encodeURIComponent(title)}`, {
+    res = await fetch(`/api/band-media/upload?title=${encodeURIComponent(title)}&consent=1`, {
       method: 'PUT',
       headers: { 'content-type': file.type },
       body: file,

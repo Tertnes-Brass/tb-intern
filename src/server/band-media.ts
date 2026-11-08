@@ -1,12 +1,13 @@
 import { createServerFn } from '@tanstack/react-start'
 import { env } from 'cloudflare:workers'
-import { desc, eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
+import { user } from '../db/auth-schema'
 import { bandMedia } from '../db/schema'
-import { BAND_MEDIA_GONE, BAND_MEDIA_PERMISSION, type BandMediaItem } from '../lib/band-media'
+import { BAND_MEDIA_GONE, BAND_MEDIA_NOT_YOURS, BAND_MEDIA_PERMISSION, type BandMediaListItem, canRemoveBandMedia } from '../lib/band-media'
 import type { MessageMediaItem } from '../lib/message-media'
-import { hasPermission, requireMe, requirePermission } from './access'
+import { hasPermission, requireMe } from './access'
 import { bandMediaSource } from './band-media-store'
 import { storeMessageMedia } from './message-media'
 
@@ -19,20 +20,28 @@ import { storeMessageMedia } from './message-media'
 
 const idInput = z.object({ id: z.string().min(1).max(64) })
 
-/** Samlingen, nyeste først, og om den som spør kan legge til og fjerne. */
-export const listBandMedia = createServerFn().handler(async (): Promise<{ items: BandMediaItem[]; canManage: boolean }> => {
+/**
+ * Samlingen, nyeste først. Hver GIF sier om den er din, og hvem som la den til
+ * — navnet vises bare i «Fjern»-bekreftelsen, så styret ser hvem de bør snakke
+ * med. `canModerate`: kan fjerne andres (`gifs.manage`).
+ */
+export const listBandMedia = createServerFn().handler(async (): Promise<{ items: BandMediaListItem[]; canModerate: boolean }> => {
   const me = await requireMe()
-  const items = await db()
+  const rows = await db()
     .select({
       id: bandMedia.id,
       title: bandMedia.title,
       contentType: bandMedia.contentType,
       width: bandMedia.width,
       height: bandMedia.height,
+      addedBy: bandMedia.addedBy,
+      addedByName: user.name,
     })
     .from(bandMedia)
+    .leftJoin(user, eq(user.id, bandMedia.addedBy))
     .orderBy(desc(bandMedia.createdAt))
-  return { items, canManage: hasPermission(me, BAND_MEDIA_PERMISSION) }
+  const items = rows.map(({ addedBy, addedByName, ...item }) => ({ ...item, mine: addedBy === me.id, addedByName: addedByName ?? null }))
+  return { items, canModerate: hasPermission(me, BAND_MEDIA_PERMISSION) }
 })
 
 /**
@@ -53,15 +62,24 @@ export const pickBandMedia = createServerFn({ method: 'POST' })
   })
 
 /**
- * Fjerner en GIF fra samlingen. Raden først — den er eneste vei til bytene — og
- * så R2. Feiler R2, blir bytene liggende uten rad: usynlige for alle. Meldinger
- * der GIF-en er brukt, har sin egen kopi og røres ikke.
+ * Fjerner en GIF fra samlingen: din egen, eller hvilken som helst med
+ * `gifs.manage`. Raden først — den er eneste vei til bytene — og så R2. Feiler
+ * R2, blir bytene liggende uten rad: usynlige for alle. Meldinger der GIF-en er
+ * brukt, har sin egen kopi og røres ikke.
  */
 export const removeBandMedia = createServerFn({ method: 'POST' })
   .validator(idInput)
   .handler(async ({ data }): Promise<{ removed: boolean }> => {
-    await requirePermission(BAND_MEDIA_PERMISSION)
-    const gone = await db().delete(bandMedia).where(eq(bandMedia.id, data.id)).returning({ r2Key: bandMedia.r2Key })
+    const me = await requireMe()
+    const canModerate = hasPermission(me, BAND_MEDIA_PERMISSION)
+    const row = await db().select({ addedBy: bandMedia.addedBy }).from(bandMedia).where(eq(bandMedia.id, data.id)).get()
+    if (!row) return { removed: false }
+    if (!canRemoveBandMedia(row, { id: me.id, canModerate })) throw new Error(BAND_MEDIA_NOT_YOURS)
+    // Eierskapet sjekkes også i selve DELETE-en (uten moderering), så sjekk og sletting ikke kan skilles.
+    const gone = await db()
+      .delete(bandMedia)
+      .where(canModerate ? eq(bandMedia.id, data.id) : and(eq(bandMedia.id, data.id), eq(bandMedia.addedBy, me.id)))
+      .returning({ r2Key: bandMedia.r2Key })
     for (const { r2Key } of gone) {
       await env.FILES.delete(r2Key).catch((err: unknown) => console.error('[tertnes-gif] kunne ikke slette i R2:', err))
     }

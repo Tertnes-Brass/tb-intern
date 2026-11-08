@@ -536,7 +536,7 @@ kopiert til 👍; mobil-API v1 sin `like` er 👍.
 | `posts.publish` | Ja | Ja | **Nei** | Ja |
 | Uinnlogget | **401** | 401 | 401 | 401 |
 
-## 12. Tertnes-fanen i GIF-velgeren (`gifs.manage`, 7. november 2026)
+## 12. Tertnes-fanen i GIF-velgeren (`gifs.manage`, 7. november 2026; åpnet for alle 8. november)
 
 Korpsets egne GIF-er (`band_media`, migrasjon `0034_tertnes-gif.sql`). Se
 `docs/bilder-i-samtaler.md`.
@@ -545,12 +545,19 @@ Korpsets egne GIF-er (`band_media`, migrasjon `0034_tertnes-gif.sql`). Se
   ellers alle aktive medlemmer. Det er de samme som kan velge GIF-en. Samme
   headere som `message-media` (`nosniff`, `sandbox`-CSP, `private`, `noindex`,
   `no-referrer`). En fjernet GIF gir 404.
-- **Legge til** (`api/band-media/upload.ts`, PUT) krever `gifs.manage`. Uten den
-  gir det 403, også for et rått kall. Formatet leses fra bytene (`sniffImage`),
-  og R2-nøkkelen bygges av en fersk id.
-- **Fjerne** (`removeBandMedia`) krever `gifs.manage`.
+- **Legge til** (`api/band-media/upload.ts`, PUT): alle innloggede, aktive
+  medlemmer (401 uten innlogging) — men bare med `?consent=1`, at den som legger
+  til har krysset av for at alle som er med har sagt ja. Uten det gir det 400
+  (`BAND_MEDIA_CONSENT_REQUIRED`), også for et rått kall. `added_by` er den som
+  bekreftet. Formatet leses fra bytene (`sniffImage`), og R2-nøkkelen bygges av
+  en fersk id.
+- **Fjerne** (`removeBandMedia`): sine egne (`added_by` = deg) kan alle fjerne;
+  andres, og de uten eier (medlemmet er slettet), bare med `gifs.manage`
+  (`canRemoveBandMedia`). Eierskapet sjekkes også i selve `DELETE`-en.
+  Fanen viser hvem som la til en GIF, men bare i «Fjern»-bekreftelsen (navnet,
+  aldri bruker-id-en).
 - **Velge** (`pickBandMedia`) krever innlogging og lager en KOPI som utkast hos
   den som valgte. Herfra gjelder §10 uendret: kopien kobles til meldingen og
   følger stedets regel. Samlingen er aldri en snarvei inn i en annens melding.
-- `gifs.manage` er seedet til `board` (Styremedlem) og gis ellers i
-  rollematrisen. Den gir ingen annen tilgang.
+- `gifs.manage` er nå moderering — fjerne andres — og er seedet til `board`
+  (Styremedlem). Den gir ingen annen tilgang.

@@ -43,6 +43,7 @@ import {
 } from '../../lib/gif-maker'
 import { MAX_MESSAGE_MEDIA_BYTES } from '../../lib/message-media'
 import { captureFrames, createFrameReader, seekVideo, videoReady } from '../../lib/video-frames'
+import { BandMediaConsent } from '../BandMediaConsent'
 import { Icon } from '../Icons'
 import { Segmented } from '../Segmented'
 import { Button, FieldGroup, Modal } from '../ui'
@@ -107,6 +108,7 @@ export default function GifMaker({ file, onClose, onAdded }: { file: File; onClo
 
   const [title, setTitle] = useState('')
   const [titleTouched, setTitleTouched] = useState(false)
+  const [consent, setConsent] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -345,10 +347,10 @@ export default function GifMaker({ file, onClose, onAdded }: { file: File; onClo
   }, [phase, captured, loop, size, autoSize])
 
   const titleError = bandMediaTitleRejection(title)
-  const canSave = phase === 'result' && encoded.status === 'ready' && !saving
+  const canSave = phase === 'result' && encoded.status === 'ready' && consent && !saving
 
   const save = async () => {
-    if (encoded.status !== 'ready' || saving) return
+    if (encoded.status !== 'ready' || saving || !consent) return
     if (titleError) {
       setTitleTouched(true)
       return
@@ -357,7 +359,7 @@ export default function GifMaker({ file, onClose, onAdded }: { file: File; onClo
     setSaveError(null)
     try {
       const gif = new File([encoded.bytes], 'tertnes.gif', { type: 'image/gif' })
-      onAdded(await uploadBandMedia(gif, title))
+      onAdded(await uploadBandMedia(gif, title, consent))
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Kunne ikke legge til GIF-en')
       setSaving(false)
@@ -636,9 +638,7 @@ export default function GifMaker({ file, onClose, onAdded }: { file: File; onClo
             )}
           </div>
 
-          <p className="rounded-[8px] bg-[var(--brass-soft)] px-3 py-2 text-[0.78rem] leading-snug text-ink-soft">
-            Alle medlemmer kan se og bruke GIF-ene i Tertnes. Legg bare til bilder av folk som er med på det.
-          </p>
+          <BandMediaConsent checked={consent} onChange={setConsent} disabled={saving} />
           {saveError && (
             <p role="alert" className="text-[0.82rem] text-danger">
               {saveError}

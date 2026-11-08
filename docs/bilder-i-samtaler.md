@@ -77,9 +77,10 @@ kan brukes om og om igjen. Den første var «Galleri 69».
 - **Plass i navigasjonen:** Ingen ny. En fane i GIF-velgeren (først i rekka),
   der både valg, «+ Legg til» og «Rediger» (fjerne) bor. Velgeren åpner på den
   fanen man sist valgte noe fra, per enhet (`localStorage`, bare bekvemmelighet).
-- **Rettighet:** Å se og velge krever bare innlogging. Å legge til og fjerne
-  krever den nye rettigheten `gifs.manage` («Tertnes-GIF-er»), seedet til
-  Styremedlem (migrasjon `0034_tertnes-gif.sql`); admin har den via `*`.
+- **Rettighet:** Å se, velge og legge til krever bare innlogging (åpnet for
+  alle 8. november 2026), og alle kan fjerne sine egne. Å fjerne andres krever
+  `gifs.manage` («Tertnes-GIF-er»), seedet til Styremedlem (migrasjon
+  `0034_tertnes-gif.sql`); admin har den via `*`.
 - **Eget rutenavnerom:** Nei. `/api/band-media/upload` (PUT) og
   `/api/band-media/$mediaId` (GET); resten er serverfunksjoner i
   `src/server/band-media.ts`.
@@ -99,9 +100,14 @@ slettes med meldingen.
 **Legge til:** fil (GIF, PNG, JPEG eller WebP, maks 10 MB, formatet leses fra
 bytene) og et navn på maks 60 tegn. Navnet er det man søker på (samme ordregler
 som søket på veggen) og det skjermlesere leser opp. Maks 200 i samlingen.
-Skjemaet minner om at alle medlemmer ser GIF-ene, og at man bare skal legge til
-bilder av folk som er med på det. **Fjerne:** «Rediger» → trykk på GIF-en →
-«Fjern» i en bekreftelse i panelet. Det er ikke en egen dialog, fordi velgeren
+**Samtykke:** skjemaet sier at GIF-ene bare
+lagres internt og ikke publiseres på internett, og har en påkrevd avkrysning —
+«Alle som er med, har sagt ja» (spurt alle som kan kjennes igjen, eller ingen
+personer i den). Opplastingen avvises uten (`?consent=1`), også for et rått
+kall. Under GIF-ene står «Er du med i en GIF du vil ha fjernet? Si fra til
+styret.» **Fjerne:** «Rediger» → trykk på en av dine egne (eller hvilken som
+helst, med `gifs.manage`) → «Fjern» i en bekreftelse i panelet, som også sier
+hvem som la den til. Det er ikke en egen dialog, fordi velgeren
 lukkes ved et trykk utenfor seg selv. Raden slettes først, så R2.
 
 ### Lag GIF fra video (8. november 2026)

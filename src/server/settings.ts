@@ -35,7 +35,7 @@ export const PERMISSION_CATALOG: Array<{ key: string; label: string; hint: strin
   { key: 'forum.moderate', label: 'Moderere forum', hint: 'Redigere og slette andres tekst, låse diskusjoner og slette hele tråder' },
   { key: 'posts.publish', label: 'Beskjeder', hint: 'Skrive og publisere beskjeder med vedlegg til korpset' },
   { key: 'posts.archive', label: 'Notearkivarbeskjeder', hint: 'Merke egne innlegg «Fra notearkivar», sette viktighet og sende e-post til korpset' },
-  { key: 'gifs.manage', label: 'Tertnes-GIF-er', hint: 'Legge til og fjerne korpsets egne GIF-er i Tertnes-fanen i GIF-velgeren' },
+  { key: 'gifs.manage', label: 'Tertnes-GIF-er', hint: 'Fjerne alle GIF-er i Tertnes-fanen, også andres (alle kan legge til og fjerne sine egne)' },
   { key: SETTINGS_PERMISSION, label: 'Innstillinger', hint: 'Administrere besetning og roller' },
 ]
 
