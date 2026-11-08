@@ -1,21 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { type BandMediaItem, MAX_BAND_MEDIA_TITLE, bandMediaTitleRejection, bandMediaUrl, filterBandMedia } from '../lib/band-media'
+import {
+  type BandMediaItem,
+  type BandMediaListItem,
+  MAX_BAND_MEDIA_TITLE,
+  bandMediaTitleRejection,
+  bandMediaUrl,
+  filterBandMedia,
+} from '../lib/band-media'
 import { uploadBandMedia } from '../lib/band-media-client'
+import { isVideoFile } from '../lib/gif-maker'
 import { MESSAGE_MEDIA_ACCEPT, mediaRejectionReason } from '../lib/message-media'
 import { listBandMedia, removeBandMedia } from '../server/band-media'
+import { BandMediaConsent } from './BandMediaConsent'
 import { Icon } from './Icons'
 import { toast, toastError } from './toast'
 import { Button } from './ui'
 
 /**
  * Tertnes-fanen i GIF-velgeren: korpsets egne GIF-er og memes (se
- * src/lib/band-media.ts). Alle medlemmer kan velge; med `gifs.manage` kan man
- * også legge til og fjerne — rett her i fanen, som en egen visning i panelet
- * (ikke en dialog oppå: velgeren lukkes ved et trykk utenfor seg selv).
+ * src/lib/band-media.ts). Alle medlemmer kan velge, legge til og fjerne sine
+ * egne; med `gifs.manage` kan man fjerne alle — rett her i fanen, som en egen
+ * visning i panelet (ikke en dialog oppå: velgeren lukkes ved et trykk utenfor
+ * seg selv).
+ *
+ * Velger man en video i «Legg til», går den til `onVideo` («Lag GIF fra
+ * video», src/components/gif-maker/GifMaker.tsx): den trenger hele skjermen,
+ * så eieren lukker velgeren og åpner editoren i stedet.
  */
 
-type Loaded = { status: 'loading' } | { status: 'error' } | { status: 'ready'; items: BandMediaItem[]; canManage: boolean }
-type View = { kind: 'list' } | { kind: 'add' } | { kind: 'remove'; item: BandMediaItem }
+type Loaded = { status: 'loading' } | { status: 'error' } | { status: 'ready'; items: BandMediaListItem[]; canModerate: boolean }
+type View = { kind: 'list' } | { kind: 'add' } | { kind: 'remove'; item: BandMediaListItem }
 
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false)
@@ -29,7 +43,18 @@ function useReducedMotion(): boolean {
   return reduced
 }
 
-export function BandMediaShelf({ busy, coarse, onPick }: { busy: boolean; coarse: boolean; onPick: (item: BandMediaItem) => void }) {
+export function BandMediaShelf({
+  busy,
+  coarse,
+  onPick,
+  onVideo,
+}: {
+  busy: boolean
+  coarse: boolean
+  onPick: (item: BandMediaItem) => void
+  /** En video ble valgt i «Legg til». Uten denne tas bare bilder imot. */
+  onVideo?: (file: File) => void
+}) {
   const [state, setState] = useState<Loaded>({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const [view, setView] = useState<View>({ kind: 'list' })
@@ -49,17 +74,22 @@ export function BandMediaShelf({ busy, coarse, onPick }: { busy: boolean; coarse
   }, [attempt])
 
   const items = state.status === 'ready' ? state.items : []
-  const canManage = state.status === 'ready' && state.canManage
+  const ready = state.status === 'ready'
+  const canModerate = state.status === 'ready' && state.canModerate
+  /** Egne kan alltid fjernes; andres bare med `gifs.manage`. */
+  const canRemove = (item: BandMediaListItem) => canModerate || item.mine
+  const anyRemovable = items.some(canRemove)
   const shown = useMemo(() => filterBandMedia(items, query), [items, query])
-  const setItems = (fn: (items: BandMediaItem[]) => BandMediaItem[]) =>
+  const setItems = (fn: (items: BandMediaListItem[]) => BandMediaListItem[]) =>
     setState((s) => (s.status === 'ready' ? { ...s, items: fn(s.items) } : s))
 
   if (view.kind === 'add') {
     return (
       <AddForm
+        onVideo={onVideo}
         onCancel={() => setView({ kind: 'list' })}
         onAdded={(item) => {
-          setItems((list) => [item, ...list.filter((i) => i.id !== item.id)])
+          setItems((list) => [{ ...item, mine: true, addedByName: null }, ...list.filter((i) => i.id !== item.id)])
           setQuery('')
           setView({ kind: 'list' })
           toast(`La til «${item.title}» i Tertnes`)
@@ -75,7 +105,7 @@ export function BandMediaShelf({ busy, coarse, onPick }: { busy: boolean; coarse
         onRemoved={() => {
           const left = items.filter((i) => i.id !== view.item.id)
           setItems(() => left)
-          if (left.length === 0) setEditing(false)
+          if (!left.some(canRemove)) setEditing(false)
           setView({ kind: 'list' })
           toast(`Fjernet «${view.item.title}» fra Tertnes`)
         }}
@@ -101,13 +131,13 @@ export function BandMediaShelf({ busy, coarse, onPick }: { busy: boolean; coarse
             className="field-input w-full !py-1.5 !pl-8 text-sm"
           />
         </div>
-        {canManage && items.length > 0 && (
+        {anyRemovable && (
           <Button type="button" size="sm" variant={editing ? 'secondary' : 'ghost'} aria-pressed={editing} onClick={() => setEditing((e) => !e)}>
             {editing ? 'Ferdig' : 'Rediger'}
           </Button>
         )}
-        {canManage && !editing && (
-          <Button type="button" size="sm" variant="secondary" onClick={() => setView({ kind: 'add' })} disabled={state.status !== 'ready'}>
+        {!editing && (
+          <Button type="button" size="sm" variant="secondary" onClick={() => setView({ kind: 'add' })} disabled={!ready}>
             + Legg til
           </Button>
         )}
@@ -125,27 +155,33 @@ export function BandMediaShelf({ busy, coarse, onPick }: { busy: boolean; coarse
         {state.status === 'ready' && items.length === 0 && (
           <div className="px-1 py-6 text-center text-sm text-ink-soft">
             <p>Korpset har ingen egne GIF-er her ennå.</p>
-            {canManage && (
-              <button type="button" onClick={() => setView({ kind: 'add' })} className="link-brass mt-1 cursor-pointer text-sm">
-                Legg til den første
-              </button>
-            )}
+            <button type="button" onClick={() => setView({ kind: 'add' })} className="link-brass mt-1 cursor-pointer text-sm">
+              Legg til den første
+            </button>
           </div>
         )}
         {state.status === 'ready' && items.length > 0 && shown.length === 0 && (
           <p className="px-1 py-6 text-center text-sm text-ink-soft">Ingen GIF-er heter det.</p>
         )}
-        {editing && shown.length > 0 && <p className="mb-1.5 px-0.5 text-[0.78rem] text-ink-soft">Trykk på en GIF for å fjerne den.</p>}
+        {editing && shown.length > 0 && (
+          <p className="mb-1.5 px-0.5 text-[0.78rem] text-ink-soft">
+            {canModerate ? 'Trykk på en GIF for å fjerne den.' : 'Trykk på en av dine egne for å fjerne den.'}
+          </p>
+        )}
         <div className={`columns-2 gap-1.5 ${busy ? 'pointer-events-none opacity-60' : ''}`}>
           {shown.map((item) => (
             <ShelfTile
               key={item.id}
               item={item}
               editing={editing}
+              removable={canRemove(item)}
               onClick={() => (editing ? setView({ kind: 'remove', item }) : onPick(item))}
             />
           ))}
         </div>
+        {ready && items.length > 0 && !editing && (
+          <p className="px-1 pt-2 pb-1 text-center text-[0.72rem] text-ink-faint">Er du med i en GIF du vil ha fjernet? Si fra til styret.</p>
+        )}
       </div>
       <p className="shrink-0 border-t border-line px-3 py-1.5 text-right font-mono text-[0.58rem] uppercase tracking-[0.14em] text-ink-faint">
         Korpsets egne · bare for medlemmer
@@ -168,7 +204,18 @@ function ShelfSkeleton() {
  * Én GIF i fanen, med navnet under. Ved redusert bevegelse står den stille
  * (første bilde tegnet på et lerret), som i samtalene.
  */
-function ShelfTile({ item, editing, onClick }: { item: BandMediaItem; editing: boolean; onClick: () => void }) {
+function ShelfTile({
+  item,
+  editing,
+  removable,
+  onClick,
+}: {
+  item: BandMediaListItem
+  editing: boolean
+  /** I «Rediger»: bare dine egne (eller alle, med `gifs.manage`) kan trykkes. */
+  removable: boolean
+  onClick: () => void
+}) {
   const reduced = useReducedMotion()
   const img = useRef<HTMLImageElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -190,9 +237,10 @@ function ShelfTile({ item, editing, onClick }: { item: BandMediaItem; editing: b
       type="button"
       onClick={onClick}
       title={item.title}
-      aria-label={editing ? `Fjern ${item.title}` : item.title}
+      aria-label={editing && removable ? `Fjern ${item.title}` : item.title}
+      disabled={editing && !removable}
       className={`group mb-1.5 block w-full cursor-pointer break-inside-avoid overflow-hidden rounded-[8px] bg-paper-sunken text-left outline-offset-2 ${
-        editing ? 'ring-2 ring-danger/40 hover:ring-danger/70' : 'hover:ring-2 hover:ring-brass/60'
+        editing ? (removable ? 'ring-2 ring-danger/40 hover:ring-danger/70' : 'cursor-default opacity-35') : 'hover:ring-2 hover:ring-brass/60'
       }`}
     >
       <span className="relative block">
@@ -210,7 +258,7 @@ function ShelfTile({ item, editing, onClick }: { item: BandMediaItem; editing: b
           className={`block h-auto w-full ${still ? 'sr-only' : ''}`}
         />
         {still && <canvas ref={canvas} width={item.width} height={item.height} className="block h-auto w-full" aria-hidden />}
-        {editing && (
+        {editing && removable && (
           <span
             aria-hidden
             className="absolute top-1 right-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/65 text-white pointer-coarse:h-9 pointer-coarse:w-9"
@@ -227,8 +275,16 @@ function ShelfTile({ item, editing, onClick }: { item: BandMediaItem; editing: b
 /** Lengste side på forhåndsvisningen i px (lerretet skaleres ned med CSS). */
 const PREVIEW_MAX = 480
 
-/** «Legg til i Tertnes»: fil + navn, som en egen visning i panelet. */
-function AddForm({ onCancel, onAdded }: { onCancel: () => void; onAdded: (item: BandMediaItem) => void }) {
+/** «Legg til i Tertnes»: fil + navn, som en egen visning i panelet. En video går videre til `onVideo`. */
+function AddForm({
+  onCancel,
+  onAdded,
+  onVideo,
+}: {
+  onCancel: () => void
+  onAdded: (item: BandMediaItem) => void
+  onVideo?: (file: File) => void
+}) {
   const input = useRef<HTMLInputElement>(null)
   const nameField = useRef<HTMLInputElement>(null)
   const previewCanvas = useRef<HTMLCanvasElement>(null)
@@ -265,6 +321,10 @@ function AddForm({ onCancel, onAdded }: { onCancel: () => void; onAdded: (item: 
 
   const choose = (picked: File | undefined) => {
     if (!picked) return
+    if (onVideo && isVideoFile(picked)) {
+      onVideo(picked)
+      return
+    }
     const reason = mediaRejectionReason({ type: picked.type, size: picked.size })
     if (reason) {
       setError(reason)
@@ -275,15 +335,21 @@ function AddForm({ onCancel, onAdded }: { onCancel: () => void; onAdded: (item: 
     requestAnimationFrame(() => nameField.current?.focus())
   }
 
+  // Editoren hentes mens man velger fil, så den åpner med en gang etter et videovalg.
+  useEffect(() => {
+    if (onVideo) void import('./gif-maker/GifMaker').catch(() => {})
+  }, [onVideo])
+
   const titleError = title ? bandMediaTitleRejection(title) : null
-  const ready = !!file && !!title.trim() && !titleError
+  const [consent, setConsent] = useState(false)
+  const ready = !!file && !!title.trim() && !titleError && consent
 
   const save = async () => {
     if (!file || !ready || saving) return
     setSaving(true)
     setError(null)
     try {
-      onAdded(await uploadBandMedia(file, title))
+      onAdded(await uploadBandMedia(file, title, consent))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kunne ikke legge til GIF-en')
       setSaving(false)
@@ -308,7 +374,7 @@ function AddForm({ onCancel, onAdded }: { onCancel: () => void; onAdded: (item: 
         <input
           ref={input}
           type="file"
-          accept={MESSAGE_MEDIA_ACCEPT}
+          accept={onVideo ? `${MESSAGE_MEDIA_ACCEPT},video/*` : MESSAGE_MEDIA_ACCEPT}
           className="sr-only"
           tabIndex={-1}
           onChange={(e) => {
@@ -324,8 +390,11 @@ function AddForm({ onCancel, onAdded }: { onCancel: () => void; onAdded: (item: 
           {file ? (
             <canvas ref={previewCanvas} role="img" aria-label="Valgt fil" className="h-full w-full object-contain" />
           ) : (
-            <span className="flex items-center gap-2">
-              <Icon name="image" size={17} /> Velg GIF eller bilde
+            <span className="flex flex-col items-center gap-1 px-4 text-center">
+              <span className="flex items-center gap-2">
+                <Icon name="image" size={17} /> {onVideo ? 'Velg GIF, bilde eller video' : 'Velg GIF eller bilde'}
+              </span>
+              {onVideo && <span className="text-[0.72rem] text-ink-faint">Fra en video lager du GIF-en selv: klipp, utsnitt og loop.</span>}
             </span>
           )}
         </button>
@@ -350,9 +419,9 @@ function AddForm({ onCancel, onAdded }: { onCancel: () => void; onAdded: (item: 
           className="field-input mt-1 w-full !py-1.5 text-sm"
         />
         <p className="mt-1 text-[0.72rem] text-ink-faint">Det man søker på, og det skjermlesere leser opp.</p>
-        <p className="mt-3 rounded-[8px] bg-[var(--brass-soft)] px-2.5 py-2 text-[0.75rem] leading-snug text-ink-soft">
-          Alle medlemmer kan se og bruke GIF-ene her. Legg bare til bilder av folk som er med på det.
-        </p>
+        <div className="mt-3">
+          <BandMediaConsent checked={consent} onChange={setConsent} disabled={saving} compact />
+        </div>
         {(error || titleError) && (
           <p role="alert" className="mt-2 text-[0.78rem] text-danger">
             {error ?? titleError}
@@ -372,7 +441,7 @@ function AddForm({ onCancel, onAdded }: { onCancel: () => void; onAdded: (item: 
 }
 
 /** Bekreftelsen før en GIF fjernes for alle — aldri et direkte trykk. */
-function RemoveConfirm({ item, onCancel, onRemoved }: { item: BandMediaItem; onCancel: () => void; onRemoved: () => void }) {
+function RemoveConfirm({ item, onCancel, onRemoved }: { item: BandMediaListItem; onCancel: () => void; onRemoved: () => void }) {
   const [removing, setRemoving] = useState(false)
   const remove = async () => {
     setRemoving(true)
@@ -394,6 +463,9 @@ function RemoveConfirm({ item, onCancel, onRemoved }: { item: BandMediaItem; onC
       </h3>
       <p className="mt-1 text-center text-[0.8rem] text-ink-soft">
         Den forsvinner fra velgeren for alle. Meldinger der den allerede er brukt, beholder den.
+      </p>
+      <p className="mt-1 text-center text-[0.75rem] text-ink-faint">
+        {item.mine ? 'Du la den til.' : item.addedByName ? `Lagt til av ${item.addedByName}.` : 'Den som la den til, er ikke lenger medlem.'}
       </p>
       <div className="mt-4 flex justify-center gap-2">
         <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={removing} autoFocus>

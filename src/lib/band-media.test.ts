@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_BAND_MEDIA_TITLE, bandMediaTitleRejection, bandMediaUrl, filterBandMedia, normalizeBandMediaTitle } from './band-media'
+import { MAX_BAND_MEDIA_TITLE, bandMediaTitleRejection, bandMediaUrl, canRemoveBandMedia, filterBandMedia, normalizeBandMediaTitle } from './band-media'
 
 describe('navnet på en Tertnes-GIF', () => {
   it('samler mellomrom og fjerner kontrolltegn', () => {
@@ -37,4 +37,14 @@ describe('søket i Tertnes-fanen', () => {
 
 it('adressen til bytene går via gaten', () => {
   expect(bandMediaUrl('abc/../x')).toBe('/api/band-media/abc%2F..%2Fx')
+})
+
+describe('hvem som kan fjerne en Tertnes-GIF', () => {
+  it('egne alltid, andres og eierløse bare med moderering', () => {
+    expect(canRemoveBandMedia({ addedBy: 'silje' }, { id: 'silje', canModerate: false })).toBe(true)
+    expect(canRemoveBandMedia({ addedBy: 'styret' }, { id: 'silje', canModerate: false })).toBe(false)
+    expect(canRemoveBandMedia({ addedBy: null }, { id: 'silje', canModerate: false })).toBe(false)
+    expect(canRemoveBandMedia({ addedBy: null }, { id: 'styret', canModerate: true })).toBe(true)
+    expect(canRemoveBandMedia({ addedBy: 'silje' }, { id: 'styret', canModerate: true })).toBe(true)
+  })
 })

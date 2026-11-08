@@ -11,8 +11,21 @@
 
 import { foldForSearch, searchTerms } from './post-search'
 
-/** Rettigheten som gir «Legg til» og «Fjern» i fanen. Å se og velge krever bare innlogging. */
+/**
+ * Moderering: fjerne ALLE GIF-er i fanen, også andres. Å se, velge og legge til
+ * krever bare innlogging, og alle kan fjerne sine egne (`canRemoveBandMedia`).
+ */
 export const BAND_MEDIA_PERMISSION = 'gifs.manage'
+
+/**
+ * Den som legger til, bekrefter at alle som er med har sagt ja. Avkrysningen er
+ * påkrevd i skjemaet, og opplastingen avvises uten den (`?consent=1`) — også
+ * for et rått kall.
+ */
+export const BAND_MEDIA_CONSENT_REQUIRED = 'Bekreft at alle som er med i GIF-en har sagt ja'
+
+/** Feilen når noen prøver å fjerne en annens GIF uten `gifs.manage`. */
+export const BAND_MEDIA_NOT_YOURS = 'Du kan bare fjerne GIF-er du har lagt til selv'
 
 /** Et tak, så samlingen ikke vokser seg til et nytt arkiv. Rikelig for et korps. */
 export const MAX_BAND_MEDIA = 200
@@ -30,6 +43,14 @@ export type BandMediaItem = {
   contentType: string
   width: number
   height: number
+}
+
+/** Det fanen får: hver GIF, om den er din, og hvem som la den til (til «Fjern»). */
+export type BandMediaListItem = BandMediaItem & { mine: boolean; addedByName: string | null }
+
+/** Egne GIF-er kan alltid fjernes; andres bare med `gifs.manage`. */
+export function canRemoveBandMedia(item: { addedBy: string | null }, me: { id: string; canModerate: boolean }): boolean {
+  return me.canModerate || (item.addedBy !== null && item.addedBy === me.id)
 }
 
 /** Den eneste veien til bytene. */

@@ -318,6 +318,7 @@ export function Modal({
   useDialogOpen(ref, open)
   // På telefon er dialogen et bunnark (styles.css), og overskriften er grepet.
   const drag = useSheetDrag(ref, onClose)
+  const downOnBackdrop = useRef(false)
 
   return (
     <dialog
@@ -326,9 +327,14 @@ export function Modal({
       aria-labelledby={titleId}
       className={`sheet-dialog ${wide ? 'sheet-dialog-wide' : ''} ${mobileFull ? 'sheet-dialog-mobile-full' : ''} ${footer ? 'has-footer' : ''}`}
       onClose={onClose}
+      onPointerDown={(e) => {
+        downOnBackdrop.current = e.target === ref.current
+      }}
       onClick={(e) => {
-        // klikk på backdrop lukker
-        if (e.target === ref.current) onClose()
+        // Klikk på bakgrunnen lukker — men bare når trykket også startet der.
+        // Et drag som slippes utenfor (markere tekst, dra i et bilde) gir et
+        // klikk på dialogen selv, og skal ikke lukke den.
+        if (e.target === ref.current && downOnBackdrop.current) onClose()
       }}
     >
       <div className="sheet-head sheet-head-modal" {...drag}>
@@ -450,6 +456,7 @@ export function BottomSheet({
   const titleId = useId()
   useDialogOpen(ref, open)
   const drag = useSheetDrag(ref, onClose)
+  const downOnBackdrop = useRef(false)
 
   return (
     <dialog
@@ -459,8 +466,11 @@ export function BottomSheet({
       aria-labelledby={title ? titleId : undefined}
       className={`sheet-dialog sheet-dialog-bottom ${footer ? 'has-footer' : ''}`}
       onClose={onClose}
+      onPointerDown={(e) => {
+        downOnBackdrop.current = e.target === ref.current
+      }}
       onClick={(e) => {
-        if (e.target === ref.current) onClose()
+        if (e.target === ref.current && downOnBackdrop.current) onClose()
       }}
     >
       <div className="sheet-head sheet-head-bottom" {...drag}>

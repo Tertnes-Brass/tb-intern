@@ -6,9 +6,10 @@ import type { Me } from './access'
 
 /**
  * Tertnes-fanen i GIF-velgeren, mot ekte SQLite med ALLE migrasjoner og Drizzles
- * D1-driver. Det som skal bevises: at bare `gifs.manage` kan legge til og
- * fjerne, at et valg blir en egen KOPI i meldingen (så den overlever at GIF-en
- * fjernes fra samlingen), og at bytene faktisk forsvinner fra R2.
+ * D1-driver. Det som skal bevises: at alle kan fjerne sine egne, men bare
+ * `gifs.manage` andres, at et valg blir en egen KOPI i meldingen (så den
+ * overlever at GIF-en fjernes fra samlingen), og at bytene faktisk forsvinner
+ * fra R2. At alle innloggede kan legge til (med samtykke), er opplastingsruten.
  */
 
 const state = vi.hoisted(() => ({
@@ -57,7 +58,7 @@ vi.mock('@tanstack/react-start', () => ({
   }),
 }))
 
-import { BAND_MEDIA_GONE, MAX_BAND_MEDIA } from '../lib/band-media'
+import { BAND_MEDIA_GONE, BAND_MEDIA_NOT_YOURS, MAX_BAND_MEDIA } from '../lib/band-media'
 import { listBandMedia, pickBandMedia, removeBandMedia } from './band-media'
 import { bandMediaSource, storeBandMedia } from './band-media-store'
 import { MediaUploadError, messageMediaAccess } from './message-media'
@@ -151,15 +152,47 @@ describe('legge til i samlingen', () => {
 })
 
 describe('Tertnes-fanen', () => {
-  it('viser samlingen nyeste først for alle, men «Legg til» bare med gifs.manage', async () => {
+  it('viser samlingen nyeste først for alle, med hvem som la dem til', async () => {
     const first = await storeBandMedia(gif(1), 'Første', meOf('styret'))
-    const second = await storeBandMedia(gif(2), 'Andre', meOf('styret'))
+    const second = await storeBandMedia(gif(2), 'Andre', meOf('silje'))
     as('silje')
-    expect(await listBandMedia()).toEqual({ items: [expect.objectContaining({ id: second.id }), expect.objectContaining({ id: first.id })], canManage: false })
+    expect(await listBandMedia()).toEqual({
+      items: [
+        expect.objectContaining({ id: second.id, mine: true, addedByName: 'Silje' }),
+        expect.objectContaining({ id: first.id, mine: false, addedByName: 'Styret' }),
+      ],
+      canModerate: false,
+    })
     as('styret')
-    expect((await listBandMedia()).canManage).toBe(true)
+    const forBoard = await listBandMedia()
+    expect(forBoard.canModerate).toBe(true)
+    expect(forBoard.items.map((i) => i.mine)).toEqual([false, true])
+    // R2-nøkkelen og bruker-id-en sendes aldri.
+    expect(Object.keys(forBoard.items[0]).sort()).toEqual(['addedByName', 'contentType', 'height', 'id', 'mine', 'title', 'width'])
     as(null)
     await expect(listBandMedia()).rejects.toThrow(/innlogging/)
+  })
+
+  it('alle kan fjerne sine egne, men ikke andres', async () => {
+    const mine = await storeBandMedia(gif(1), 'Min', meOf('silje'))
+    const theirs = await storeBandMedia(gif(2), 'Styrets', meOf('styret'))
+    as('silje')
+    await expect(removeBandMedia({ data: { id: theirs.id } })).rejects.toThrow(BAND_MEDIA_NOT_YOURS)
+    expect(await bandMediaSource(theirs.id)).not.toBeNull()
+    expect(state.r2.has(`band-media/${theirs.id}.gif`)).toBe(true)
+    expect(await removeBandMedia({ data: { id: mine.id } })).toEqual({ removed: true })
+    expect(await bandMediaSource(mine.id)).toBeNull()
+    expect(state.r2.has(`band-media/${mine.id}.gif`)).toBe(false)
+  })
+
+  it('en GIF uten eier (medlemmet er slettet) kan bare fjernes med gifs.manage', async () => {
+    const orphan = await storeBandMedia(gif(3), 'Gammel', meOf('styret'))
+    sqlite.prepare('UPDATE band_media SET added_by = NULL WHERE id = ?').run(orphan.id)
+    as('silje')
+    expect((await listBandMedia()).items[0]).toMatchObject({ mine: false, addedByName: null })
+    await expect(removeBandMedia({ data: { id: orphan.id } })).rejects.toThrow(BAND_MEDIA_NOT_YOURS)
+    as('styret')
+    expect(await removeBandMedia({ data: { id: orphan.id } })).toEqual({ removed: true })
   })
 
   it('et valg blir en egen kopi som utkast hos den som valgte, med navnet som alt-tekst', async () => {
@@ -176,11 +209,9 @@ describe('Tertnes-fanen', () => {
     expect(await messageMediaAccess(picked.id, meOf('styret'))).toBeNull()
   })
 
-  it('bare gifs.manage kan fjerne; kopiene i meldingene blir stående', async () => {
-    const band = await storeBandMedia(gif(), 'Galleri 69', meOf('styret'))
-    as('silje')
+  it('gifs.manage kan fjerne andres; kopiene i meldingene blir stående', async () => {
+    const band = await storeBandMedia(gif(), 'Galleri 69', meOf('silje'))
     const picked = await pickBandMedia({ data: { id: band.id } })
-    await expect(removeBandMedia({ data: { id: band.id } })).rejects.toThrow(/Ingen tilgang/)
 
     as('styret')
     expect(await removeBandMedia({ data: { id: band.id } })).toEqual({ removed: true })

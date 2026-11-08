@@ -1,4 +1,4 @@
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type RefObject, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KlipyCategory, KlipyConfig, KlipyItem } from '../lib/klipy'
 import { type KlipyFeed, fetchKlipyCategories, fetchKlipyItems, loadKlipyConfig, triggerKlipyShare } from '../lib/klipy-client'
 import type { BandMediaItem } from '../lib/band-media'
@@ -10,7 +10,10 @@ import { EmojiPicker } from './EmojiPicker'
 import { Icon } from './Icons'
 import { MediaButton, type MediaDraft } from './MessageMedia'
 import { Popover } from './Popover'
-import { toastError } from './toast'
+import { toast, toastError } from './toast'
+
+/** «Lag GIF fra video» lastes først når noen velger en video (src/components/gif-maker/GifMaker.tsx). */
+const GifMaker = lazy(() => import('./gif-maker/GifMaker'))
 
 /**
  * GIF-velgeren, som i Discord: faner for GIF-er, stickers, memes og emoji, søk,
@@ -90,6 +93,7 @@ export function MediaPicker({
   onPickMedia,
   onPickBand,
   onPickEmoji,
+  onMakeGif,
   busy = false,
 }: {
   /** `'gif'` åpner på fanen man sist valgte noe fra (`rememberedTab`). */
@@ -98,6 +102,8 @@ export function MediaPicker({
   onPickBand: (item: BandMediaItem) => void
   /** Uten denne vises ikke Emoji-fanen (der det ikke finnes et tekstfelt å sette inn i). */
   onPickEmoji?: (emoji: string) => void
+  /** En video ble valgt under «Legg til» i Tertnes-fanen: lag en GIF av den. */
+  onMakeGif?: (file: File) => void
   busy?: boolean
 }) {
   const [tab, setTab] = useState<PickerTab>(() => (initialTab === 'gif' ? rememberedTab() : initialTab))
@@ -148,6 +154,7 @@ export function MediaPicker({
         <BandMediaShelf
           busy={busy}
           coarse={coarse}
+          onVideo={onMakeGif}
           onPick={(item) => {
             rememberTab('tertnes')
             onPickBand(item)
@@ -436,6 +443,14 @@ export function PickerButton({
   const button = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  /** Videoen i «Lag GIF fra video». Velgeren er lukket så lenge editoren er oppe. */
+  const [videoForGif, setVideoForGif] = useState<File | null>(null)
+  /** Fanen velgeren åpner på neste gang (Tertnes, etter en ny GIF). */
+  const [reopenTab, setReopenTab] = useState<PickerTab | null>(null)
+  const close = () => {
+    setOpen(false)
+    setReopenTab(null)
+  }
 
   const pick = async (item: KlipyItem, config: KlipyConfig, query: string) => {
     if (busy) return
@@ -445,7 +460,7 @@ export function PickerButton({
         data: { kind: item.kind, slug: item.slug, title: item.title, url: item.full.url, width: item.full.width, height: item.full.height },
       })
       triggerKlipyShare(config, item, query)
-      setOpen(false)
+      close()
       await onAdd(media)
     } catch (err) {
       toastError(err)
@@ -460,7 +475,7 @@ export function PickerButton({
     setBusy(true)
     try {
       const media = await pickBandMedia({ data: { id: item.id } })
-      setOpen(false)
+      close()
       await onAdd(media)
     } catch (err) {
       toastError(err)
@@ -480,7 +495,7 @@ export function PickerButton({
         aria-haspopup="dialog"
         title={label}
         aria-label={label}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (open ? close() : setOpen(true))}
         className={`inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[9px] text-ink-soft transition-colors hover:bg-paper-sunken hover:text-ink disabled:pointer-events-none disabled:opacity-40 ${
           open ? 'bg-paper-sunken text-ink' : ''
         } ${compact ? 'h-[42px] w-10 pointer-coarse:h-11 pointer-coarse:w-11' : 'px-2 py-1.5 pointer-coarse:min-h-11 pointer-coarse:px-3'}`}
@@ -491,9 +506,9 @@ export function PickerButton({
           <span className="rounded-[4px] border-[1.5px] border-current px-1 font-mono text-[0.62rem] leading-[1.15] font-bold tracking-wide">GIF</span>
         )}
       </button>
-      <Popover anchor={button} open={open} onClose={() => setOpen(false)} label={label} width={380} height={440}>
+      <Popover anchor={button} open={open} onClose={close} label={label} width={380} height={440}>
         <MediaPicker
-          initialTab={tab}
+          initialTab={reopenTab ?? tab}
           busy={busy}
           onPickMedia={(item, config, query) => void pick(item, config, query)}
           onPickBand={(item) => void pickBand(item)}
@@ -501,12 +516,31 @@ export function PickerButton({
             onEmoji
               ? (emoji) => {
                   onEmoji(emoji)
-                  setOpen(false)
+                  close()
                 }
               : undefined
           }
+          onMakeGif={(file) => {
+            close()
+            setVideoForGif(file)
+          }}
         />
       </Popover>
+      {videoForGif && (
+        <Suspense fallback={null}>
+          <GifMaker
+            file={videoForGif}
+            onClose={() => setVideoForGif(null)}
+            onAdded={(item) => {
+              setVideoForGif(null)
+              toast(`La til «${item.title}» i Tertnes`)
+              // Tilbake i velgeren, på Tertnes-fanen: den nye GIF-en står først.
+              setReopenTab('tertnes')
+              setOpen(true)
+            }}
+          />
+        </Suspense>
+      )}
     </>
   )
 }

@@ -77,9 +77,10 @@ kan brukes om og om igjen. Den første var «Galleri 69».
 - **Plass i navigasjonen:** Ingen ny. En fane i GIF-velgeren (først i rekka),
   der både valg, «+ Legg til» og «Rediger» (fjerne) bor. Velgeren åpner på den
   fanen man sist valgte noe fra, per enhet (`localStorage`, bare bekvemmelighet).
-- **Rettighet:** Å se og velge krever bare innlogging. Å legge til og fjerne
-  krever den nye rettigheten `gifs.manage` («Tertnes-GIF-er»), seedet til
-  Styremedlem (migrasjon `0034_tertnes-gif.sql`); admin har den via `*`.
+- **Rettighet:** Å se, velge og legge til krever bare innlogging (åpnet for
+  alle 8. november 2026), og alle kan fjerne sine egne. Å fjerne andres krever
+  `gifs.manage` («Tertnes-GIF-er»), seedet til Styremedlem (migrasjon
+  `0034_tertnes-gif.sql`); admin har den via `*`.
 - **Eget rutenavnerom:** Nei. `/api/band-media/upload` (PUT) og
   `/api/band-media/$mediaId` (GET); resten er serverfunksjoner i
   `src/server/band-media.ts`.
@@ -99,10 +100,51 @@ slettes med meldingen.
 **Legge til:** fil (GIF, PNG, JPEG eller WebP, maks 10 MB, formatet leses fra
 bytene) og et navn på maks 60 tegn. Navnet er det man søker på (samme ordregler
 som søket på veggen) og det skjermlesere leser opp. Maks 200 i samlingen.
-Skjemaet minner om at alle medlemmer ser GIF-ene, og at man bare skal legge til
-bilder av folk som er med på det. **Fjerne:** «Rediger» → trykk på GIF-en →
-«Fjern» i en bekreftelse i panelet. Det er ikke en egen dialog, fordi velgeren
+**Samtykke:** skjemaet sier at GIF-ene bare
+lagres internt og ikke publiseres på internett, og har en påkrevd avkrysning —
+«Alle som er med, har sagt ja» (spurt alle som kan kjennes igjen, eller ingen
+personer i den). Opplastingen avvises uten (`?consent=1`), også for et rått
+kall. Under GIF-ene står «Er du med i en GIF du vil ha fjernet? Si fra til
+styret.» **Fjerne:** «Rediger» → trykk på en av dine egne (eller hvilken som
+helst, med `gifs.manage`) → «Fjern» i en bekreftelse i panelet, som også sier
+hvem som la den til. Det er ikke en egen dialog, fordi velgeren
 lukkes ved et trykk utenfor seg selv. Raden slettes først, så R2.
+
+### Lag GIF fra video (8. november 2026)
+
+Velger man en video under «+ Legg til» (filvelgeren tar nå også `video/*`;
+på iPhone vises da både bilder og videoer), åpner «Lag GIF fra video». Den
+trenger hele skjermen, så velgeren lukkes, og åpnes igjen på Tertnes-fanen med
+den nye GIF-en først når den er lagt til.
+
+1. **Klipp** — forhåndsvisningen spiller klippet i loop og står fast øverst:
+   - *Utsnitt:* form (Original, 1:1, 4:5, 4:3, 16:9), zoom (glider, knip eller
+     rull) og dra i bildet. Rammen står stille; videoen flyttes under den.
+   - *Klipp:* tidslinje med småbilder og to håndtak (også piltaster). Høyst
+     8 s GIF ved 1× (4 s video ved ½×, 16 s ved 2×). Videoer over 30 s får en
+     glider for «Del av videoen».
+   - *Fart:* ½×, 1×, 2×.
+2. **Slik blir GIF-en** — bildene hentes (~14 per sekund GIF), og man ser
+   resultatet: loop (Vanlig, Frem og tilbake, Baklengs), størrelse (lengste side
+   320/480/640, aldri forstørret) med den faktiske filstørrelsen, og navn.
+   Blir GIF-en over 10 MB, går størrelsen ned av seg selv til man velger selv.
+
+**Alt skjer på enheten.** Videoen spilles av lokalt og leses aldri av serveren;
+bare den ferdige GIF-en lastes opp, med samme `uploadBandMedia`, gate og
+`sniffImage` som en ferdig GIF. Ingen server- eller skjemaendring.
+
+**Kodingen** (`src/lib/gif-encode.ts`, testet): én felles palett for hele GIF-en
+(fra et utvalg av bildene — ingen flimring), ordnet dithering (mønsteret står
+stille fra bilde til bilde) og gjennomsiktige piksler der det som vises allerede
+er (nesten) riktig, så rolige flater koster nesten ingenting. LZW og blokkene er
+`gifenc`. Bildene hentes ved å spole til hvert tidspunkt og lagres som JPEG i
+minnet (`src/lib/video-frames.ts`) — rå piksler for 100+ bilder er for mye for
+en eldre iPhone. Reglene for utsnitt, klipp, fart og loop er rene funksjoner i
+`src/lib/gif-maker.ts`.
+
+**Kjente grenser:** en video nettleseren ikke kan spille av (f.eks. HEVC på en
+PC uten støtte) gir «Nettleseren kan ikke spille av denne videoen» — prøv på
+telefonen der den ble tatt opp.
 
 ## Opplasting av egne bilder
 
