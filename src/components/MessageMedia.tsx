@@ -11,6 +11,7 @@ import {
 } from '../lib/message-media'
 import { discardMessageMedia, imageFilesFrom, uploadMessageMedia } from '../lib/message-media-client'
 import { Icon } from './Icons'
+import { useImageViewer } from './ImageViewer'
 import { toast } from './toast'
 
 /**
@@ -30,17 +31,27 @@ import { toast } from './toast'
 /**
  * Bildene i et innlegg, svar, kommentar eller melding. Ett bilde vises i sin
  * egen form (aldri høyere enn skjermen tåler), flere som et rutenett. Trykk
- * åpner bildet i full størrelse i en ny fane — som bildene på veggen.
+ * åpner bildeviseren over samtalen — som bildene på veggen. Aldri en lenke til
+ * selve fila: i installert app er det en blindvei uten tilbakeknapp.
  */
 export function MessageMediaGallery({ items, className = '' }: { items: readonly MessageMediaItem[]; className?: string }) {
+  const { open, viewer } = useImageViewer(
+    items.map((item) => {
+      const label = mediaLabel([item])
+      return { key: item.id, src: mediaSrc(item), alt: item.title ? `${label}: ${item.title}` : label, external: !!item.externalUrl }
+    }),
+  )
   if (items.length === 0) return null
   const single = items.length === 1
   return (
-    <ul className={`${single ? 'flex' : 'grid max-w-sm grid-cols-2 gap-1.5'} ${className}`}>
-      {items.map((item) => (
-        <GalleryItem key={item.id} item={item} single={single} />
-      ))}
-    </ul>
+    <>
+      <ul className={`${single ? 'flex' : 'grid max-w-sm grid-cols-2 gap-1.5'} ${className}`}>
+        {items.map((item, i) => (
+          <GalleryItem key={item.id} item={item} single={single} onOpen={() => open(i)} />
+        ))}
+      </ul>
+      {viewer}
+    </>
   )
 }
 
@@ -53,7 +64,7 @@ const reducedMotion = () =>
  * om redusert bevegelse: bildet tegnes på et lerret, og «Spill av GIF» viser
  * den levende GIF-en.
  */
-function GalleryItem({ item, single }: { item: MessageMediaItem; single: boolean }) {
+function GalleryItem({ item, single, onOpen }: { item: MessageMediaItem; single: boolean; onOpen: () => void }) {
   const isGif = isAnimatedItem(item)
   const external = !!item.externalUrl
   const sticker = item.externalKind === 'sticker'
@@ -84,12 +95,10 @@ function GalleryItem({ item, single }: { item: MessageMediaItem; single: boolean
       : 'block aspect-square h-full w-full object-cover'
   return (
     <li className="relative min-w-0">
-      <a
-        href={mediaSrc(item)}
-        target="_blank"
-        // KLIPY skal ikke få vite hvilken tråd GIF-en ble åpnet fra.
-        rel="noopener noreferrer"
-        className={`block overflow-hidden ${sticker ? '' : 'rounded-[10px] border border-line bg-paper-sunken'}`}
+      <button
+        type="button"
+        onClick={onOpen}
+        className={`block ${single ? 'max-w-full' : 'w-full'} cursor-zoom-in overflow-hidden ${sticker ? '' : 'rounded-[10px] border border-line bg-paper-sunken'}`}
         aria-label={`${alt} i full størrelse`}
       >
         <img
@@ -110,7 +119,7 @@ function GalleryItem({ item, single }: { item: MessageMediaItem; single: boolean
         {still && (
           <canvas ref={canvas} width={item.width ?? undefined} height={item.height ?? undefined} className={sizeClass} aria-hidden />
         )}
-      </a>
+      </button>
       {isGifItem(item) && (
         <span
           aria-hidden
