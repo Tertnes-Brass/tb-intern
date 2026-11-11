@@ -12,7 +12,8 @@ import { Icon } from '../../../components/Icons'
 import { PinDialog, unpinPost } from '../../../components/PinDialog'
 import { useThreadMark } from '../../../components/useThreadMark'
 import { buildThreads, foldChildren, replyContext } from '../../../lib/threads'
-import { SenderMark, postSender } from '../../../components/PostCard'
+import { SenderMark, postSender, postViewerImages } from '../../../components/PostCard'
+import { useImageViewer } from '../../../components/ImageViewer'
 import { Glyph } from '../../../components/compose/Composer'
 import { shortWhen } from '../../../components/compose/when'
 import { rememberPostRead } from '../../../lib/read-posts-client'
@@ -42,6 +43,7 @@ import {
   resendPostNotifications,
   unpublishPost,
 } from '../../../server/posts'
+import type { PostImage } from '../../../server/posts'
 
 /**
  * Hele innlegget med bilder, reaksjoner og kommentartråd.
@@ -131,6 +133,30 @@ const commentDomId = (id: string) => `kommentar-${id}`
 const commentRef = (c: Comment) => ({ id: c.id, parentId: c.parentId, replyToId: c.replyToId, createdAt: c.createdAt })
 
 /** Kommentaren `#kommentar-<id>` i adressen peker på (fra et varsel eller en e-post). */
+/**
+ * Bildene i innlegget, i full bredde. Trykk åpner bildeviseren, der man kan
+ * bla mellom dem og zoome — en lenke til selve bildefila var en blindvei i
+ * installert app på iPhone (ingen tilbakeknapp).
+ */
+function PostImages({ images }: { images: PostImage[] }) {
+  const { open, viewer } = useImageViewer(postViewerImages(images))
+  if (images.length === 0) return null
+  return (
+    <>
+      <ul className="space-y-3">
+        {images.map((image, i) => (
+          <li key={image.id}>
+            <button type="button" className="block w-full cursor-zoom-in" onClick={() => open(i)} aria-label={`Vis ${image.fileName} i full størrelse`}>
+              <img src={postImageUrl(image.id)} alt={image.fileName} loading="lazy" className="w-full rounded-[11px] border border-line" />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {viewer}
+    </>
+  )
+}
+
 function hashCommentId(): string | null {
   if (typeof window === 'undefined') return null
   const match = /^#kommentar-([\w-]{1,100})$/.exec(window.location.hash)
@@ -556,22 +582,7 @@ function PostPage() {
 
       <article className="rise mt-6 space-y-5" style={{ animationDelay: '80ms' }}>
         <PostBody body={post.body} format={post.format} mentions={post.mentions} />
-        {post.images.length > 0 && (
-          <ul className="space-y-3">
-            {post.images.map((image) => (
-              <li key={image.id}>
-                <a href={postImageUrl(image.id)} target="_blank" rel="noopener noreferrer">
-                  <img
-                    src={postImageUrl(image.id)}
-                    alt={image.fileName}
-                    loading="lazy"
-                    className="w-full rounded-[11px] border border-line"
-                  />
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
+        <PostImages images={post.images} />
         {data.attachments.length > 0 && (
           <section className="rounded-[12px] border border-line" aria-label="Vedlegg">
             <h2 className="kicker px-4 pt-3">Vedlegg</h2>

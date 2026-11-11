@@ -7,6 +7,7 @@ import type { PostImage, PostListItem } from '../server/posts'
 import { ReactionBar } from './Reactions'
 import { Glyph } from './compose/Composer'
 import { Icon } from './Icons'
+import { type ViewerImage, useImageViewer } from './ImageViewer'
 import { shortWhen } from './compose/when'
 import { Highlight, SearchHitLine } from './Search'
 import { Avatar, Stamp } from './ui'
@@ -23,30 +24,52 @@ import { Avatar, Stamp } from './ui'
  * ser ellers.
  */
 
-/** Miniatyrer i feeden; klikk åpner bildet i ny fane (ingen egen lightbox). */
-export function PostImageGrid({ images, total }: { images: PostImage[]; total: number }) {
+/** Bildene i et innlegg slik bildeviseren vil ha dem. */
+export function postViewerImages(images: readonly PostImage[]): ViewerImage[] {
+  return images.map((image) => ({ key: image.id, src: postImageUrl(image.id), alt: image.fileName }))
+}
+
+/**
+ * Miniatyrer i feeden. Trykk åpner bildeviseren over veggen — aldri selve
+ * bildefila, som er en blindvei i installert app. Feeden har bare de første
+ * bildene; flisen med «+N» går til innlegget, der alle står.
+ */
+export function PostImageGrid({ postId, images, total }: { postId: string; images: PostImage[]; total: number }) {
+  const { open, viewer } = useImageViewer(postViewerImages(images))
   if (images.length === 0) return null
   const extra = total - images.length
   return (
-    <ul className="mt-3 grid grid-cols-3 gap-1.5">
-      {images.map((image, i) => (
-        <li key={image.id} className="relative">
-          <a href={postImageUrl(image.id)} target="_blank" rel="noopener noreferrer">
+    <>
+      <ul className="mt-3 grid grid-cols-3 gap-1.5">
+        {images.map((image, i) => {
+          const thumb = (
             <img
               src={postImageUrl(image.id)}
               alt={image.fileName}
               loading="lazy"
               className="aspect-square w-full rounded-[9px] border border-line object-cover"
             />
-          </a>
-          {extra > 0 && i === images.length - 1 && (
-            <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-[9px] bg-ink/45 font-mono text-sm font-semibold text-paper">
-              +{extra}
-            </span>
-          )}
-        </li>
-      ))}
-    </ul>
+          )
+          return (
+            <li key={image.id} className="relative">
+              {extra > 0 && i === images.length - 1 ? (
+                <Link to="/beskjeder/$postId" params={{ postId }} className="block" aria-label={`Se alle ${total} bildene i innlegget`}>
+                  {thumb}
+                  <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-[9px] bg-ink/45 font-mono text-sm font-semibold text-paper">
+                    +{extra}
+                  </span>
+                </Link>
+              ) : (
+                <button type="button" className="block w-full cursor-zoom-in" onClick={() => open(i)} aria-label={`Vis ${image.fileName} i full størrelse`}>
+                  {thumb}
+                </button>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      {viewer}
+    </>
   )
 }
 
@@ -134,7 +157,7 @@ export function PostCard({ post, terms, hit }: { post: PostListItem; terms?: str
         )}
       </Link>
 
-      <PostImageGrid images={post.images} total={post.imageCount} />
+      <PostImageGrid postId={post.id} images={post.images} total={post.imageCount} />
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <ReactionBar kind="post" targetId={post.id} reactions={post.reactions} size="md" />
