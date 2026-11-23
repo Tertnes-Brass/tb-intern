@@ -27,8 +27,8 @@ function HomePage() {
   // Det som ligger på notestativet for neste prosjekt — samme regel som
   // stativet selv, så «6 stemmer» her er de seks man får der.
   const standFileIds = useMemo(
-    () => standEntries(data.repertoire, { hasParts: data.me.parts.length > 0 }).map((e) => e.fileId),
-    [data.repertoire, data.me.parts.length],
+    () => standEntries(data.repertoire, { hasParts: data.nextHasParts }).map((e) => e.fileId),
+    [data.repertoire, data.nextHasParts],
   )
 
   // Stativ lagret offline for prosjekter som ikke lenger er kommende, slettes.

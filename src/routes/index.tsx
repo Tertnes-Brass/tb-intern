@@ -366,7 +366,11 @@ function UpcomingSection({ data }: { data: HubData }) {
                 date={toOsloDate(event.start)}
                 title={event.title}
                 meta={`${eventTimeLabel(event)}${event.location ? ` · ${event.location}` : ''}`}
-                link={{ to: '/kalender/$eventId', params: { eventId: event.occurrenceKey } }}
+                link={
+                  event.projectId
+                    ? { to: '/noter/prosjekter/$projectId', params: { projectId: event.projectId } }
+                    : { to: '/kalender/$eventId', params: { eventId: event.occurrenceKey } }
+                }
               />
             ))}
           </ul>

@@ -208,6 +208,9 @@ export const projects = sqliteTable(
     name: text('name').notNull(),
     kind: text('kind').notNull().default('konsert'), // 'konsert' | 'konkurranse' | 'seminar' | 'annet'
     eventDate: text('event_date'), // ISO-dato
+    // Klokkeslett «HH:MM» i norsk tid. Brukes av spilleoppdrag, som ikke står i
+    // Google-kalenderen og derfor må ha tidspunktet sitt her.
+    startTime: text('start_time'),
     venue: text('venue'),
     description: text('description'),
     isPublished: integer('is_published', { mode: 'boolean' }).notNull().default(false),
@@ -236,6 +239,26 @@ export const projectWorks = sqliteTable(
     percussionSetup: text('percussion_setup'),
   },
   (t) => [primaryKey({ columns: [t.projectId, t.workId] })],
+)
+
+// Hvem som er med på et spilleoppdrag (`projects.kind = 'spilleoppdrag'`). Bare
+// de som står her (og `projects.manage`) ser oppdraget og notene. `part_ids` er
+// et JSON-snapshot av konkrete løv-stemmer, som i `share_links`; tom liste betyr
+// medlemmets vanlige stemmer. Reglene bor i `src/lib/project-access.ts`.
+export const projectCrew = sqliteTable(
+  'project_crew',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    partIds: text('part_ids').notNull().default('[]'),
+    addedBy: text('added_by').references(() => user.id, { onDelete: 'set null' }),
+    addedAt: integer('added_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.userId] }), index('project_crew_user_idx').on(t.userId)],
 )
 
 // ---------- Sceneoppsett ----------

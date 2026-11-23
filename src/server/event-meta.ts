@@ -29,6 +29,7 @@ import {
 } from '../lib/attendance'
 import { newId } from '../lib/id'
 import { isOccurrenceKey } from '../lib/occurrence'
+import { GIG_KIND } from '../lib/project-access'
 import { SETLIST_NOTE_MAX, SETLIST_TITLE_MAX, parseSetlistInput } from '../lib/setlist'
 import { type Me, hasFullArchiveAccess, hasPermission, requireMe, requirePermission } from './access'
 import { loadCalendar } from './calendar-feed'
@@ -288,7 +289,8 @@ export const getEventDetail = createServerFn()
         ? d
             .select({ id: projects.id, name: projects.name, eventDate: projects.eventDate })
             .from(projects)
-            .where(eq(projects.isPublished, true))
+            // Et spilleoppdrag er lukket, og en kobling ville vist navnet til alle.
+            .where(and(eq(projects.isPublished, true), ne(projects.kind, GIG_KIND)))
             .orderBy(asc(projects.eventDate))
         : Promise.resolve([]),
     ])
@@ -334,7 +336,7 @@ export const getEventDetail = createServerFn()
           await d
             .select({ id: projects.id, name: projects.name })
             .from(projects)
-            .where(eq(projects.id, meta.linkedProjectId))
+            .where(and(eq(projects.id, meta.linkedProjectId), ne(projects.kind, GIG_KIND)))
             .limit(1)
         )[0] ?? null)
       : null
@@ -657,7 +659,7 @@ export const setLinkedProject = createServerFn({ method: 'POST' })
       const project = await d
         .select({ id: projects.id })
         .from(projects)
-        .where(and(eq(projects.id, data.projectId), eq(projects.isPublished, true)))
+        .where(and(eq(projects.id, data.projectId), eq(projects.isPublished, true), ne(projects.kind, GIG_KIND)))
         .limit(1)
       if (!project[0]) throw new Error('Ukjent eller upublisert prosjekt')
     }

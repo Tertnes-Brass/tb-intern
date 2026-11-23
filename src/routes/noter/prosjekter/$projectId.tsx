@@ -4,6 +4,7 @@ import { ActionMenu, type ActionMenuItem } from '../../../components/ActionMenu'
 import { Icon } from '../../../components/Icons'
 import { OfflineStandRow } from '../../../components/OfflineStand'
 import { PercussionNotesField, PercussionSetupField } from '../../../components/Percussion'
+import { ProjectCrewSection } from '../../../components/ProjectCrew'
 import { ProjectFormModal } from '../../../components/ProjectForm'
 import { ProjectOrderEditor } from '../../../components/ProjectOrderEditor'
 import { ProjectWorkEdition } from '../../../components/ProjectWorkEdition'
@@ -13,6 +14,7 @@ import { toast, toastError } from '../../../components/toast'
 import { BackArrow, Button, EmptyState, Field, Kicker, Modal, Stamp } from '../../../components/ui'
 import { ZipDownloadButton } from '../../../components/ZipDownload'
 import { formatDate, formatDuration, formatWeekday, relativeDays, toRoman } from '../../../lib/format'
+import { isGig } from '../../../lib/project-access'
 import { standEntries } from '../../../lib/stand'
 import { zipEntryName } from '../../../lib/zip'
 import {
@@ -42,6 +44,7 @@ function ProjectPage() {
   const { me } = Route.useRouteContext()
   const router = useRouter()
   const p = data.project
+  const gig = isGig(p)
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [publishing, setPublishing] = useState(false)
@@ -77,7 +80,13 @@ function ProjectPage() {
     setPublishing(true)
     try {
       await updateProject({ data: { id: p.id, isPublished: !p.isPublished } })
-      toast(p.isPublished ? 'Prosjektet er avpublisert' : 'Publisert! Medlemmene ser det nå')
+      toast(
+        p.isPublished
+          ? 'Prosjektet er avpublisert'
+          : gig
+            ? 'Publisert! De som er med, ser det nå'
+            : 'Publisert! Medlemmene ser det nå',
+      )
       await router.invalidate()
     } catch (err) {
       toastError(err)
@@ -86,7 +95,8 @@ function ProjectPage() {
     }
   }
 
-  const kindLabel = p.kind === 'konsert' ? 'Konsert' : p.kind === 'konkurranse' ? 'Konkurranse' : p.kind
+  const kindLabel =
+    p.kind === 'konsert' ? 'Konsert' : p.kind === 'konkurranse' ? 'Konkurranse' : gig ? 'Spilleoppdrag' : p.kind
   const minutes = totalDuration > 0 ? Math.round(totalDuration / 60) : 0
   const programSummary = [
     data.repertoire.length === 1 ? '1 verk' : `${data.repertoire.length} verk`,
@@ -110,7 +120,13 @@ function ProjectPage() {
         { label: 'Rediger detaljer', hint: 'Navn, dato, sted og beskrivelse', icon: 'calendar', onSelect: () => setEditing(true) },
         {
           label: p.isPublished ? 'Avpubliser' : 'Publiser',
-          hint: p.isPublished ? 'Skjul prosjektet for medlemmene' : 'Medlemmene ser programmet og notene',
+          hint: gig
+            ? p.isPublished
+              ? 'Skjul oppdraget for dem som er med'
+              : 'De som er med, ser programmet og notene'
+            : p.isPublished
+              ? 'Skjul prosjektet for medlemmene'
+              : 'Medlemmene ser programmet og notene',
           icon: 'megaphone',
           onSelect: () => void togglePublish(),
           disabled: publishing,
@@ -142,6 +158,7 @@ function ProjectPage() {
         </h1>
         <p className="mt-3 text-[0.95rem] text-ink">
           {p.eventDate ? `${formatWeekday(p.eventDate)} ${formatDate(p.eventDate)}` : 'Dato ikke satt'}
+          {gig && p.startTime ? ` kl. ${p.startTime}` : ''}
           {p.venue ? <span className="text-ink-soft"> · {p.venue}</span> : null}
         </p>
         {p.description && (
@@ -151,7 +168,7 @@ function ProjectPage() {
           <div className="surface-group mt-5 flex flex-wrap items-center justify-between gap-3 border-oxblood/30 px-4 py-3">
             <p className="flex min-w-0 items-center gap-2.5 text-sm text-ink-soft">
               <Stamp tone="oxblood">Utkast</Stamp>
-              Kun synlig for stab
+              {gig ? 'Bare synlig for stab til det publiseres' : 'Kun synlig for stab'}
             </p>
             {data.canManage && (
               <Button variant="primary" size="sm" onClick={togglePublish} loading={publishing}>
@@ -215,6 +232,10 @@ function ProjectPage() {
         </aside>
 
         <div className="min-w-0 space-y-12 md:col-start-1 md:row-start-2">
+          {data.crew && (
+            <ProjectCrewSection projectId={p.id} crew={data.crew} canManage={data.canManage} myId={me.id} />
+          )}
+
           <section className="rise" style={{ animationDelay: '100ms' }}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line pb-2.5">
               <h2 className="display-title text-xl font-semibold text-ink">Program</h2>

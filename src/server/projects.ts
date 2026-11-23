@@ -6,8 +6,10 @@ import { parts, projectWorks, projects, seasons, workFiles, workLinks, workEditi
 import { resolveEdition } from './work-editions-store'
 import { newId } from '../lib/id'
 import { PERCUSSION_MAX_LENGTH, parsePercussionSetup, showPercussionFor } from '../lib/percussion'
-import { projectReadError } from '../lib/project-access'
+import { START_TIME_PATTERN } from '../lib/gig-calendar'
+import { crewPartsFor, isGig, parseCrewPartIds, projectReadError } from '../lib/project-access'
 import { STAGE_PERMISSION } from '../lib/stage-scene'
+import { crewPartIdsFor, listCrew, visibleToMember } from './project-crew-store'
 import { listStageSetupsForProject } from './stage-setup-store'
 import {
   hasFullArchiveAccess,
@@ -138,12 +140,18 @@ export const getHome = createServerFn().handler(async () => {
   const upcoming = await d
     .select()
     .from(projects)
-    .where(and(eq(projects.isPublished, true), gte(projects.eventDate, today)))
+    // «Mine noter» er personlig: et spilleoppdrag står her bare for dem som er
+    // med, også når den som ser siden kan administrere prosjekter.
+    .where(and(eq(projects.isPublished, true), gte(projects.eventDate, today), visibleToMember(d, me.id)))
     .orderBy(asc(projects.eventDate))
 
   const next = upcoming[0] ?? null
+  const nextPartIds =
+    next && isGig(next)
+      ? crewPartsFor(await crewPartIdsFor(d, next.id, me.id), me.effectivePartIds)
+      : me.effectivePartIds
   const repertoire = next
-    ? await assembleRepertoire(d, next.id, memberFileAccessContext(me, true))
+    ? await assembleRepertoire(d, next.id, memberFileAccessContext(me, true, nextPartIds))
     : []
 
   const archive = canBrowseArchive
@@ -164,6 +172,8 @@ export const getHome = createServerFn().handler(async () => {
 
   return {
     me: { name: me.name, parts: me.parts, roleName: me.roleName },
+    // På et spilleoppdrag kan man ha fått en stemme uten å ha en til vanlig.
+    nextHasParts: nextPartIds.length > 0,
     nextProject: next ? { ...next, percussionNotes: showPercussion ? next.percussionNotes : null } : null,
     repertoire: showPercussion ? repertoire : repertoire.map((r) => ({ ...r, percussionSetup: null })),
     showPercussion,
@@ -192,11 +202,15 @@ export const listProjects = createServerFn()
 
     // Synligheten er uendret: ledelsen ser alt, arkivtilgang ser alt publisert,
     // øvrige kun publiserte prosjekter som ikke er avholdt.
+    // Spilleoppdrag ses i tillegg bare av dem som er med.
     const visibility = canManage
       ? undefined
-      : canBrowseArchive
-        ? eq(projects.isPublished, true)
-        : and(eq(projects.isPublished, true), gte(projects.eventDate, today))
+      : and(
+          visibleToMember(d, me.id),
+          canBrowseArchive
+            ? eq(projects.isPublished, true)
+            : and(eq(projects.isPublished, true), gte(projects.eventDate, today)),
+        )
 
     const rows = await d
       .select({
@@ -241,14 +255,28 @@ export const getProject = createServerFn()
     const canManage = hasPermission(me, 'projects.manage')
     const canBrowseArchive = hasFullArchiveAccess(me)
     const today = new Date().toISOString().slice(0, 10)
-    const readError = projectReadError(project, { canManage, canBrowseArchive }, today)
+    const gig = isGig(project)
+    const crewPartIds = gig ? await crewPartIdsFor(d, project.id, me.id) : null
+    const isCrew = crewPartIds !== null
+    const readError = projectReadError(project, { canManage, canBrowseArchive, isCrew }, today)
     if (readError) throw new Error(readError)
 
+    // Samme regel som fil-gaten: et oppdrag gir noter bare til dem som er med.
     const inAccessibleProject =
-      project.isPublished && !!project.eventDate && project.eventDate >= today
-    const [repertoire, stageSetups] = await Promise.all([
-      assembleRepertoire(d, project.id, memberFileAccessContext(me, inAccessibleProject)),
+      project.isPublished && !!project.eventDate && project.eventDate >= today && (!gig || isCrew)
+    const partIds = gig ? crewPartsFor(crewPartIds, me.effectivePartIds) : me.effectivePartIds
+    const assignedIds = crewPartIds === null ? [] : parseCrewPartIds(crewPartIds)
+    const [repertoire, stageSetups, crew, assignedParts] = await Promise.all([
+      assembleRepertoire(d, project.id, memberFileAccessContext(me, inAccessibleProject, partIds)),
       listStageSetupsForProject(d, project.id),
+      gig ? listCrew(d, project.id) : Promise.resolve(null),
+      assignedIds.length > 0
+        ? d
+            .select({ id: parts.id, nameNo: parts.nameNo, nameEn: parts.nameEn, section: parts.section })
+            .from(parts)
+            .where(inArray(parts.id, assignedIds))
+            .orderBy(asc(parts.sortOrder))
+        : Promise.resolve(null),
     ])
 
     return {
@@ -256,7 +284,11 @@ export const getProject = createServerFn()
       repertoire,
       canManage,
       canShare: hasPermission(me, 'shares.manage'),
-      myParts: me.parts,
+      // Stemmene man spiller i DETTE prosjektet (stativet og vikardelingen).
+      myParts: assignedParts ?? me.parts,
+      // `null` for vanlige prosjekter. Hit kommer bare den som kan se oppdraget.
+      crew,
+      isCrew,
       // Den som ser prosjektet, ser oppsettene (samme regel, se `canReadStageSetups`).
       stageSetups,
       canEditStage: hasPermission(me, STAGE_PERMISSION),
@@ -269,6 +301,7 @@ export const createProject = createServerFn({ method: 'POST' })
       name: z.string().min(1, 'Navn er påkrevd'),
       kind: z.enum(PROJECT_KINDS),
       eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ugyldig dato'),
+      startTime: z.string().regex(START_TIME_PATTERN, 'Ugyldig klokkeslett').nullable().optional(),
       venue: z.string().optional(),
       description: z.string().optional(),
     }),
@@ -282,6 +315,7 @@ export const createProject = createServerFn({ method: 'POST' })
       name: data.name.trim(),
       kind: data.kind,
       eventDate: data.eventDate,
+      startTime: data.startTime ?? null,
       venue: data.venue?.trim() || null,
       description: data.description?.trim() || null,
       seasonId: await findOrCreateSeason(d, data.eventDate),
@@ -316,6 +350,7 @@ export const updateProject = createServerFn({ method: 'POST' })
       name: z.string().min(1).optional(),
       kind: z.enum(PROJECT_KINDS).optional(),
       eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      startTime: z.string().regex(START_TIME_PATTERN, 'Ugyldig klokkeslett').nullable().optional(),
       venue: z.string().nullable().optional(),
       description: z.string().nullable().optional(),
       percussionNotes: z.string().max(PERCUSSION_MAX_LENGTH * 4).nullable().optional(),
@@ -336,6 +371,7 @@ export const updateProject = createServerFn({ method: 'POST' })
         ...(patch.eventDate !== undefined
           ? { eventDate: patch.eventDate, seasonId: await findOrCreateSeason(d, patch.eventDate) }
           : {}),
+        ...(patch.startTime !== undefined ? { startTime: patch.startTime } : {}),
         ...(patch.venue !== undefined ? { venue: patch.venue?.trim() || null } : {}),
         ...(patch.description !== undefined ? { description: patch.description?.trim() || null } : {}),
         ...(patch.percussionNotes !== undefined

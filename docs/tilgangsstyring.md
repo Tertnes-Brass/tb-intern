@@ -345,6 +345,25 @@ lagres ikke. Reglene:
   roller som har `projects.manage`. Den er egen fordi en slagverksansvarlig skal
   kunne tegne riggen uten å kunne endre programmet eller publisere.
 
+## 5f. Spilleoppdrag (`project_crew`, 23. november 2026)
+
+Et prosjekt med `kind = 'spilleoppdrag'` er lukket, se `docs/spilleoppdrag.md`.
+
+| Aktør | Se oppdraget | Noter | Velge hvem som er med |
+|---|---|---|---|
+| Medlem som ikke er med | Nei, svaret er «Fant ikke prosjektet» | Nei | Nei |
+| Medlem som er med | Når det er publisert og ikke passert | Tildelt stemme, ellers sin vanlige | Nei |
+| Arkivinnsyn (`archive.viewAll`/`works.manage`) | Bare hvis hen er med | Arkivtilgangen til filene er uendret | Nei |
+| `projects.manage` | Alltid | Som sin øvrige filtilgang | Ja |
+
+- **Fil-gaten håndhever det.** Et verk som bare står på et oppdrag man ikke er
+  med på, gir ingen prosjekttilgang (`projectFileGrant`). Står verket også i et
+  vanlig publisert prosjekt, gjelder det prosjektet som før.
+- **Gruppeledere** får hele notesettet på et oppdrag de er med på, som i andre
+  tilgjengelige prosjekter. På et oppdrag de ikke er med på, får de ingenting.
+- **Navnet kan ses i to stabsverktøy:** oppgavekoblingen i styreområdet
+  (`board.manage`) og filteret i filtilgangene (`downloads.view`).
+
 ## 6. Produktvalg før fase 4 (avgjort — historikk)
 
 Alle valg ble avgjort før deploy, i tråd med de anbefalte alternativene (se

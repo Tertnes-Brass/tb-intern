@@ -5,7 +5,7 @@
  * `getProject` og av editoren.
  */
 import { z } from 'zod'
-import { type ProjectVisibility, projectReadError } from './project-access'
+import { type ProjectVisibility, isGig, projectReadError } from './project-access'
 
 /** Rettigheten som gir skriving (og lesing av eldre publiserte prosjekters oppsett). */
 export const STAGE_PERMISSION = 'stage.manage'
@@ -130,7 +130,13 @@ export function normalizeStageContact(input: Partial<StageContact>) {
   }
 }
 
-export type StageReader = { canManageProjects: boolean; canBrowseArchive: boolean; canManageStage: boolean }
+export type StageReader = {
+  canManageProjects: boolean
+  canBrowseArchive: boolean
+  canManageStage: boolean
+  /** Står på spilleoppdraget. Betyr noe bare når prosjektet er et oppdrag. */
+  isCrew?: boolean
+}
 
 /**
  * Kan denne brukeren lese oppsettene i prosjektet?
@@ -142,9 +148,14 @@ export type StageReader = { canManageProjects: boolean; canBrowseArchive: boolea
  * er stabens.
  */
 export function canReadStageSetups(project: ProjectVisibility, reader: StageReader, today: string): boolean {
-  const error = projectReadError(project, { canManage: reader.canManageProjects, canBrowseArchive: reader.canBrowseArchive }, today)
+  const error = projectReadError(
+    project,
+    { canManage: reader.canManageProjects, canBrowseArchive: reader.canBrowseArchive, isCrew: reader.isCrew },
+    today,
+  )
   if (!error) return true
-  return reader.canManageStage && project.isPublished
+  // Unntaket for tidligere oppsett åpner aldri et oppdrag man ikke er med på.
+  return reader.canManageStage && project.isPublished && (!isGig(project) || !!reader.isCrew)
 }
 
 /** Filnavn uten tegn som er ulovlige på Windows/macOS. */

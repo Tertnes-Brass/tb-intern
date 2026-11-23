@@ -11,7 +11,7 @@
 
 // Verdiene fra `projects.kind` i skjemaet. Ligger her så både validatoren,
 // filteret i UI-et og testene har én kilde.
-export const PROJECT_KINDS = ['konsert', 'konkurranse', 'seminar', 'annet'] as const
+export const PROJECT_KINDS = ['konsert', 'konkurranse', 'seminar', 'spilleoppdrag', 'annet'] as const
 export type ProjectKind = (typeof PROJECT_KINDS)[number]
 
 export const PROJECT_STATUSES = ['kommende', 'tidligere'] as const

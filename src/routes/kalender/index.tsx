@@ -15,6 +15,7 @@ import { EmptyState, PageHeader, Stamp } from '../../components/ui'
 import { ATTENDANCE_PERMISSION, attendanceSummary } from '../../lib/attendance'
 import { CALENDAR_WINDOW_LABEL } from '../../lib/calendar-window'
 import { relativeDays, toOsloDate } from '../../lib/format'
+import type { AgendaEvent } from '../../lib/gig-calendar'
 import type { CalendarEvent } from '../../lib/ical'
 import { isOccurrenceKey } from '../../lib/occurrence'
 import { getCalendar } from '../../server/calendar'
@@ -51,13 +52,13 @@ const TWO_PANE_QUERY = '(min-width: 768px)'
 // én rad under hver, mens måned samler øvelsene og lar konsertene skille seg ut.
 const monthFmt = new Intl.DateTimeFormat('nb-NO', { month: 'long', year: 'numeric', timeZone: 'Europe/Oslo' })
 
-function monthLabel(event: CalendarEvent): string {
+function monthLabel(event: AgendaEvent): string {
   const label = monthFmt.format(new Date(event.start))
   return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
-function groupByMonth(events: CalendarEvent[]): Array<{ key: string; label: string; events: CalendarEvent[] }> {
-  const groups: Array<{ key: string; label: string; events: CalendarEvent[] }> = []
+function groupByMonth(events: AgendaEvent[]): Array<{ key: string; label: string; events: AgendaEvent[] }> {
+  const groups: Array<{ key: string; label: string; events: AgendaEvent[] }> = []
   for (const event of events) {
     const key = toOsloDate(event.start).slice(0, 7)
     const last = groups[groups.length - 1]
@@ -94,8 +95,13 @@ function CalendarPage() {
   const nextIndex = next ? events.findIndex((e) => e.id === next.id) : events.length
   const withPlan = new Set(data.keysWithPlan)
   const absentKeys = new Set(data.myAbsentKeys)
+  // Et spilleoppdrag åpnes på prosjektsiden og kan ikke velges i panelet.
+  const selectable = events.filter((e) => !e.projectId)
   const selected =
-    events.find((e) => e.occurrenceKey === valgt) ?? (next ? events[nextIndex] : undefined) ?? events[0] ?? null
+    selectable.find((e) => e.occurrenceKey === valgt) ??
+    (next ? events.slice(Math.max(nextIndex, 0)).find((e) => !e.projectId) : undefined) ??
+    selectable[0] ??
+    null
   const upcomingCount = nextIndex === -1 ? events.length : events.length - nextIndex
 
   return (
@@ -156,7 +162,7 @@ function CalendarPage() {
                         hasPlan={withPlan.has(event.occurrenceKey)}
                         absent={absentKeys.has(event.occurrenceKey)}
                         onSelect={
-                          twoPane
+                          twoPane && !event.projectId
                             ? () =>
                                 navigate({
                                   search: { valgt: event.occurrenceKey },
@@ -225,7 +231,7 @@ function AgendaRow({
   absent,
   onSelect,
 }: {
-  event: CalendarEvent
+  event: AgendaEvent
   isNext: boolean
   past: boolean
   selected: boolean
@@ -237,8 +243,9 @@ function AgendaRow({
   return (
     <li>
       <Link
-        to="/kalender/$eventId"
-        params={{ eventId: event.occurrenceKey }}
+        {...(event.projectId
+          ? { to: '/noter/prosjekter/$projectId' as const, params: { projectId: event.projectId } }
+          : { to: '/kalender/$eventId' as const, params: { eventId: event.occurrenceKey } })}
         onClick={(e) => {
           if (!onSelect || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
           e.preventDefault()
@@ -259,6 +266,11 @@ function AgendaRow({
               {event.title}
             </span>
             {isNext && <RowMark tone="brass">Neste</RowMark>}
+            {event.projectId && (
+              <RowMark tone="faint" title="Spilleoppdrag du er med på">
+                Spilleoppdrag
+              </RowMark>
+            )}
             {hasPlan && (
               <RowMark tone="brass" title="Øvingsplan lagt inn">
                 <PlanGlyph />

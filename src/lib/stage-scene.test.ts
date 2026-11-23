@@ -112,9 +112,9 @@ describe('canReadStageSetups', () => {
   const member = { canManageProjects: false, canBrowseArchive: false, canManageStage: false }
   const stage = { ...member, canManageStage: true }
   const manager = { ...member, canManageProjects: true }
-  const upcoming = { isPublished: true, eventDate: '2026-12-01' }
-  const past = { isPublished: true, eventDate: '2026-01-01' }
-  const draft = { isPublished: false, eventDate: '2026-12-01' }
+  const upcoming = { kind: 'konsert', isPublished: true, eventDate: '2026-12-01' }
+  const past = { kind: 'konsert', isPublished: true, eventDate: '2026-01-01' }
+  const draft = { kind: 'konsert', isPublished: false, eventDate: '2026-12-01' }
 
   it('følger prosjektsidens regel for vanlige medlemmer', () => {
     expect(canReadStageSetups(upcoming, member, today)).toBe(true)
@@ -142,13 +142,13 @@ describe('canReadStageSetups', () => {
 describe('projectReadError', () => {
   const viewer = { canManage: false, canBrowseArchive: false }
   it('har samme meldinger som prosjektsiden alltid har hatt', () => {
-    expect(projectReadError({ isPublished: false, eventDate: null }, viewer, '2026-11-02')).toBe(
+    expect(projectReadError({ kind: 'konsert', isPublished: false, eventDate: null }, viewer, '2026-11-02')).toBe(
       'Prosjektet er ikke publisert ennå',
     )
-    expect(projectReadError({ isPublished: true, eventDate: null }, viewer, '2026-11-02')).toBe(
+    expect(projectReadError({ kind: 'konsert', isPublished: true, eventDate: null }, viewer, '2026-11-02')).toBe(
       'Prosjektet er ikke lenger tilgjengelig',
     )
-    expect(projectReadError({ isPublished: true, eventDate: '2026-11-02' }, viewer, '2026-11-02')).toBeNull()
+    expect(projectReadError({ kind: 'konsert', isPublished: true, eventDate: '2026-11-02' }, viewer, '2026-11-02')).toBeNull()
   })
 })
 
