@@ -253,6 +253,13 @@
       "when": 1795417430426,
       "tag": "0035_spilleoppdrag",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1795472189466,
+      "tag": "0036_kan-du",
+      "breakpoints": true
     }
   ]
 }

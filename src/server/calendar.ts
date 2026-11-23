@@ -8,6 +8,7 @@ import { type AgendaEvent, firstUnfinished, mergeGigEvents } from '../lib/gig-ca
 import type { CalendarEvent } from '../lib/ical'
 import { requireMe } from './access'
 import { type CalendarPayload, loadCalendar } from './calendar-feed'
+import { dugnadEvents } from './callout-store'
 import { myGigEvents } from './project-crew-store'
 
 /**
@@ -32,10 +33,12 @@ export const getCalendar = createServerFn().handler(
     const d = db()
     const now = Date.now()
     const window = calendarWindow(now)
-    const [payload, gigs, rows, absent] = await Promise.all([
+    const [payload, gigs, dugnads, rows, absent] = await Promise.all([
       loadCalendar(now),
       // Spilleoppdragene jeg er med på. De står ikke i Google-kalenderen.
       myGigEvents(d, me.id, toOsloDate(window.from), toOsloDate(window.to)),
+      // Dugnadene fra «Kan du?» står for alle og åpner innlegget med svarene.
+      dugnadEvents(d, toOsloDate(window.from), toOsloDate(window.to)),
       // Nøklene med minst ett punkt i øvingsplanen — bare til den diskrete
       // markøren i lista. Ingen innhold, ingen navn: markøren sier at det finnes
       // en plan, og planen selv er uansett åpen for alle innloggede.
@@ -47,7 +50,7 @@ export const getCalendar = createServerFn().handler(
         .from(eventAttendance)
         .where(and(eq(eventAttendance.userId, me.id), eq(eventAttendance.status, 'not_attending'))),
     ])
-    const events = mergeGigEvents<AgendaEvent>(payload.events, gigs)
+    const events = mergeGigEvents<AgendaEvent>(payload.events, [...gigs, ...dugnads])
     return {
       ...payload,
       events,

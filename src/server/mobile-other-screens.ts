@@ -11,13 +11,35 @@ import { postEmailFrom } from '../lib/posts';
 import { MAX_PINNED_POSTS, sortPinned } from '../lib/pins';
 import { mobileMediaRow } from '../lib/message-media';
 import { reactionsText } from '../lib/reactions';
+import { CALLOUT_KIND_LABEL, CALLOUT_STATUS_LABEL, calloutCountLabel, calloutMineLabel } from '../lib/callouts';
+import type { CalloutDetail } from './callout-store';
 import { ATTENDANCE_LABELS, effectiveStatus } from '../lib/attendance';
 import { filterAction, action, choice, field, link, options, remove, row, section, select, text, dateLabel, directions, attendanceChoices, type Screen, type Field, type Values } from './mobile-ui';
+/**
+ * «Kan du?» i appen (tillegg november 2026). Skjermene tegnes av serveren, så
+ * knappene virker uten en ny appversjon. Innsynet kommer ferdig fra `getPost`.
+ */
+function calloutSection(postId: string, c: CalloutDetail) {
+    const when = [c.eventDate ? dateLabel(`${c.eventDate}T12:00:00Z`) : null, c.startTime ? `kl. ${c.startTime}` : null, c.location].filter(Boolean).join(' · ');
+    const answers = c.state.allowed.map(status => action('callouts.respondToCallout', `${c.mine?.status === status ? '✓ ' : ''}${CALLOUT_STATUS_LABEL[status]}`, { postId, status }));
+    const note = c.mine && c.state.allowed.length > 0 ? [action('callouts.respondToCallout', c.mine.note ? 'Endre merknad' : 'Legg til merknad', { postId, status: c.mine.status, note: c.mine.note ?? '' }, [field('note', 'Merknad til den ansvarlige', 'multiline', { nullable: true })])] : [];
+    const names = (people: Array<{ name: string }>) => people.map(p => p.name).join(', ');
+    return section('callout', `Kan du? · ${CALLOUT_KIND_LABEL[c.kind]}`, [
+        row('callout-when', when || 'Uten dato', c.respondBy ? `Svar innen ${dateLabel(`${c.respondBy}T12:00:00Z`)}` : c.state.message, { actions: [...answers, ...note] }),
+        ...(c.mine ? [row('callout-mine', calloutMineLabel(c.kind, c.mine.status, c.isCrew), c.mine.note ?? '')] : []),
+        row('callout-yes', calloutCountLabel(c.yesCount, c.needed), names(c.yes)),
+        ...(c.manage ? [
+            row('callout-maybe', `Usikker: ${c.manage.maybe.length}`, names(c.manage.maybe)),
+            row('callout-no', `Kan ikke: ${c.manage.no.length}`, c.manage.no.map(p => p.note ? `${p.name} («${p.note}»)` : p.name).join(', ')),
+            row('callout-none', `Ikke svart: ${c.manage.unanswered.length}`, names(c.manage.unanswered)),
+        ] : []),
+    ]);
+}
 export async function otherScreen(path: string[], me: Me, query: URLSearchParams): Promise<Screen | null> {
     const [area, id, sub] = path;
     if (area === 'calendar') {
         const d = await getCalendar();
-        return { title: 'Kalender', searchable: true, subtitle: d.error ? 'Kalenderen er midlertidig utilgjengelig.' : undefined, sections: [section('events', 'Aktiviteter', d.events.filter(e => e.title.toLowerCase().includes((query.get('q') ?? '').toLowerCase())).map(e => link('events/' + e.occurrenceKey, e.title, new Date(e.start).toLocaleString('nb-NO', { timeZone: 'Europe/Oslo' }) + (d.keysWithPlan.includes(e.occurrenceKey) ? ' · Øvingsplan' : ''))))] };
+        return { title: 'Kalender', searchable: true, subtitle: d.error ? 'Kalenderen er midlertidig utilgjengelig.' : undefined, sections: [section('events', 'Aktiviteter', d.events.filter(e => e.title.toLowerCase().includes((query.get('q') ?? '').toLowerCase())).map(e => link(e.projectId ? 'projects/' + e.projectId : e.postId ? 'posts/' + e.postId : 'events/' + e.occurrenceKey, e.title, new Date(e.start).toLocaleString('nb-NO', { timeZone: 'Europe/Oslo' }) + (d.keysWithPlan.includes(e.occurrenceKey) ? ' · Øvingsplan' : ''))))] };
     }
     if (area === 'settings') {
         if (!hasPermission(me, 'settings.manage'))
@@ -78,7 +100,7 @@ export async function otherScreen(path: string[], me: Me, query: URLSearchParams
         }
         if (d.delivery)
             actions.push(action('posts.resendPostNotifications', 'Send beskjedvarsler på nytt', { id }, [], { message: 'Sender e-post til mottakerne etter nettsidens regler.' }));
-        return { title: p.heading, sections: [section('post', postEmailFrom(p.author.name, p.official, p.fromArchive), [row('body', '', p.publishedAt ? dateLabel(p.publishedAt) : 'Utkast', { body: mentionPlainText(postPlainText(p.body, p.format), p.mentions), ...(p.format === 'markdown' ? { markdown: mentionPlainText(p.body, p.mentions) } : {}) }), row('reactions', 'Reaksjoner', reactionsText(p.reactions) || 'Ingen ennå'), ...p.images.map(i => row(i.id, 'Bilde', i.fileName, { imagePath: '/api/post-images/' + i.id, actions: p.canEdit ? [remove('posts.deletePostImage', 'Slett bilde', { id: i.id })] : [] }))]), section('comments', 'Kommentarer', d.comments.map(c => row(c.id, c.author.name, dateLabel(c.createdAt), { ...mobileMediaRow(mentionPlainText(c.body, c.mentions), c.media), actions: c.canDelete ? [remove('posts.deleteComment', 'Slett kommentar', { id: c.id })] : [] }))), ...(d.delivery ? [section('delivery', 'E-postlevering', Object.entries(d.delivery).map(([k, v]) => row(k, ({ sent: 'Sendt', logged: 'Logget', failed: 'Feilet', pending: 'Venter' } as Record<string, string>)[k] ?? k, String(v))))] : [])], actions };
+        return { title: p.heading, sections: [section('post', postEmailFrom(p.author.name, p.official, p.fromArchive), [row('body', '', p.publishedAt ? dateLabel(p.publishedAt) : 'Utkast', { body: mentionPlainText(postPlainText(p.body, p.format), p.mentions), ...(p.format === 'markdown' ? { markdown: mentionPlainText(p.body, p.mentions) } : {}) }), row('reactions', 'Reaksjoner', reactionsText(p.reactions) || 'Ingen ennå'), ...p.images.map(i => row(i.id, 'Bilde', i.fileName, { imagePath: '/api/post-images/' + i.id, actions: p.canEdit ? [remove('posts.deletePostImage', 'Slett bilde', { id: i.id })] : [] }))]), ...(d.callout ? [calloutSection(id, d.callout)] : []), section('comments', 'Kommentarer', d.comments.map(c => row(c.id, c.author.name, dateLabel(c.createdAt), { ...mobileMediaRow(mentionPlainText(c.body, c.mentions), c.media), actions: c.canDelete ? [remove('posts.deleteComment', 'Slett kommentar', { id: c.id })] : [] }))), ...(d.delivery ? [section('delivery', 'E-postlevering', Object.entries(d.delivery).map(([k, v]) => row(k, ({ sent: 'Sendt', logged: 'Logget', failed: 'Feilet', pending: 'Venter' } as Record<string, string>)[k] ?? k, String(v))))] : [])], actions };
     }
     if (area === 'downloads') {
         const page = Number(query.get('page') ?? 1);

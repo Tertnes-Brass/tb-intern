@@ -24,7 +24,9 @@ et julebord. Bygget i november 2026.
 - Oppdraget må publiseres før de som er med ser det.
 - Oppdraget skal **ikke** legges inn i Google-kalenderen, for den ser alle. Det
   flettes inn i `/kalender` og «Kommende» på Hjem for dem som er med.
-- Kalenderraden lenker til prosjektet. Oppdrag har verken øvingsplan, fravær
-  eller varsler.
+- Kalenderraden lenker til prosjektet. Oppdrag har verken øvingsplan eller
+  fravær. Den som blir valgt, får et push-varsel, og den ansvarlige får et hvis
+  noen i besetningen svarer at de likevel ikke kan.
+- Vet du ikke hvem som kan, bruker du «Spør korpset». Se `docs/kan-du.md`.
 - iPhone-appen viser oppdraget under prosjekter og noter, men ikke i kalenderen,
   og besetningen velges på nettsiden.

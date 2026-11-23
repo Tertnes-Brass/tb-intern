@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import { and, asc, desc, eq, gte, inArray, like, lt, lte, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, like, lt, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db, type Db } from '../db'
 import { parts, projectWorks, projects, seasons, workFiles, workLinks, workEditions, works } from '../db/schema'
@@ -9,7 +9,9 @@ import { PERCUSSION_MAX_LENGTH, parsePercussionSetup, showPercussionFor } from '
 import { START_TIME_PATTERN } from '../lib/gig-calendar'
 import { crewPartsFor, isGig, parseCrewPartIds, projectReadError } from '../lib/project-access'
 import { STAGE_PERMISSION } from '../lib/stage-scene'
+import { calloutResponses, memberProfiles, postCallouts } from '../db/schema'
 import { crewPartIdsFor, listCrew, visibleToMember } from './project-crew-store'
+import { findOrCreateSeason } from './season-store'
 import { listStageSetupsForProject } from './stage-setup-store'
 import {
   hasFullArchiveAccess,
@@ -25,7 +27,6 @@ import {
   PROJECT_SORTS,
   PROJECT_STATUSES,
   groupBySeason,
-  seasonForDate,
   sortProjects,
 } from './project-list'
 
@@ -266,7 +267,7 @@ export const getProject = createServerFn()
       project.isPublished && !!project.eventDate && project.eventDate >= today && (!gig || isCrew)
     const partIds = gig ? crewPartsFor(crewPartIds, me.effectivePartIds) : me.effectivePartIds
     const assignedIds = crewPartIds === null ? [] : parseCrewPartIds(crewPartIds)
-    const [repertoire, stageSetups, crew, assignedParts] = await Promise.all([
+    const [repertoire, stageSetups, crew, assignedParts, calloutRows] = await Promise.all([
       assembleRepertoire(d, project.id, memberFileAccessContext(me, inAccessibleProject, partIds)),
       listStageSetupsForProject(d, project.id),
       gig ? listCrew(d, project.id) : Promise.resolve(null),
@@ -277,10 +278,22 @@ export const getProject = createServerFn()
             .where(inArray(parts.id, assignedIds))
             .orderBy(asc(parts.sortOrder))
         : Promise.resolve(null),
+      // Spørsmålet på veggen, bare for den som styrer oppdraget.
+      gig && canManage
+        ? d
+            .select({ postId: postCallouts.postId, userId: calloutResponses.userId, status: calloutResponses.status, active: memberProfiles.isActive })
+            .from(postCallouts)
+            .leftJoin(calloutResponses, eq(calloutResponses.postId, postCallouts.postId))
+            .leftJoin(memberProfiles, eq(memberProfiles.authUserId, calloutResponses.userId))
+            .where(eq(postCallouts.projectId, project.id))
+        : Promise.resolve([]),
     ])
 
     return {
       project,
+      callout: calloutRows[0]
+        ? { postId: calloutRows[0].postId, yes: calloutRows.filter((r) => r.status === 'yes' && r.active).length }
+        : null,
       repertoire,
       canManage,
       canShare: hasPermission(me, 'shares.manage'),
@@ -324,24 +337,6 @@ export const createProject = createServerFn({ method: 'POST' })
     })
     return { id }
   })
-
-/**
- * Sesongen datoen hører til, opprettet ved behov. Slår opp på DATOINTERVALL og
- * ikke på navn: en sesong som er døpt om for hånd («Jubileumshøsten 2026») skal
- * gjenbrukes, ikke få en duplikat med standardnavnet ved siden av seg.
- */
-async function findOrCreateSeason(d: Db, eventDate: string): Promise<string> {
-  const existing = await d
-    .select({ id: seasons.id })
-    .from(seasons)
-    .where(and(lte(seasons.startsOn, eventDate), gte(seasons.endsOn, eventDate)))
-    .orderBy(asc(seasons.startsOn))
-    .limit(1)
-  if (existing[0]) return existing[0].id
-  const id = newId()
-  await d.insert(seasons).values({ id, ...seasonForDate(eventDate) })
-  return id
-}
 
 export const updateProject = createServerFn({ method: 'POST' })
   .validator(

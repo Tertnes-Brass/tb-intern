@@ -2,10 +2,25 @@ import { createServerFn } from '@tanstack/react-start'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '../db'
-import { memberProfiles, parts, projectCrew, projects, projectWorks, user, userParts, workFiles } from '../db/schema'
+import {
+  calloutResponses,
+  memberProfiles,
+  notificationPreferences,
+  parts,
+  postCallouts,
+  projectCrew,
+  projects,
+  projectWorks,
+  user,
+  userParts,
+  workFiles,
+} from '../db/schema'
+import { formatDate, toOsloDate } from '../lib/format'
 import { isGig, parseCrewPartIds } from '../lib/project-access'
+import { PUSH_TTL, crewAddedPushMessage } from '../lib/push'
 import { requirePermission } from './access'
 import { buildChildrenMap, expandPartIds } from './parts-tree'
+import { sendPushToUsers } from './push-send'
 
 /**
  * Hvem som er med på et spilleoppdrag, og hvilke stemmer de spiller. Bare
@@ -18,7 +33,16 @@ const MAX_CREW = 60
 
 async function requireGig(projectId: string) {
   const project = (
-    await db().select({ id: projects.id, kind: projects.kind }).from(projects).where(eq(projects.id, projectId)).limit(1)
+    await db()
+      .select({
+        id: projects.id,
+        kind: projects.kind,
+        name: projects.name,
+        eventDate: projects.eventDate,
+        startTime: projects.startTime,
+        isPublished: projects.isPublished,
+      })
+      .from(projects).where(eq(projects.id, projectId)).limit(1)
   )[0]
   if (!project || !isGig(project)) throw new Error('Fant ikke spilleoppdraget')
   return project
@@ -30,7 +54,7 @@ export const getCrewOptions = createServerFn()
     await requirePermission('projects.manage')
     await requireGig(data.projectId)
     const d = db()
-    const [memberRows, ownRows, partRows, programRows, crewRows] = await Promise.all([
+    const [memberRows, ownRows, partRows, programRows, crewRows, responseRows] = await Promise.all([
       d
         .select({ id: user.id, name: user.name })
         .from(memberProfiles)
@@ -52,6 +76,12 @@ export const getCrewOptions = createServerFn()
         .select({ userId: projectCrew.userId, partIds: projectCrew.partIds })
         .from(projectCrew)
         .where(eq(projectCrew.projectId, data.projectId)),
+      // Svarene fra «Kan du?», så man velger blant dem som faktisk kan.
+      d
+        .select({ userId: calloutResponses.userId, status: calloutResponses.status, note: calloutResponses.note })
+        .from(calloutResponses)
+        .innerJoin(postCallouts, eq(calloutResponses.postId, postCallouts.postId))
+        .where(eq(postCallouts.projectId, data.projectId)),
     ])
 
     const childrenMap = buildChildrenMap(partRows)
@@ -72,6 +102,7 @@ export const getCrewOptions = createServerFn()
       })),
       parts: partOptions.map(({ id, nameNo }) => ({ id, nameNo })),
       crew,
+      responses: responseRows,
     }
   })
 
@@ -86,7 +117,7 @@ export const setProjectCrew = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data }) => {
     const me = await requirePermission('projects.manage')
-    await requireGig(data.projectId)
+    const project = await requireGig(data.projectId)
     const d = db()
 
     const userIds = [...new Set(data.members.map((m) => m.userId))]
@@ -124,5 +155,26 @@ export const setProjectCrew = createServerFn({ method: 'POST' })
     )
     // Én batch: et avbrutt kall kan aldri etterlate oppdraget uten musikere.
     await d.batch([remove, ...inserts])
+
+    // Bare de som nettopp ble valgt. Å lagre listen på nytt varsler ingen to ganger.
+    const added = userIds.filter((id) => !before.has(id) && id !== me.id)
+    if (added.length > 0 && project.isPublished && project.eventDate && project.eventDate >= toOsloDate(Date.now())) {
+      try {
+        const off = await d
+          .select({ userId: notificationPreferences.userId })
+          .from(notificationPreferences)
+          .where(and(inArray(notificationPreferences.userId, added), eq(notificationPreferences.mentions, 'off')))
+        const muted = new Set(off.map((row) => row.userId))
+        const when = `${formatDate(project.eventDate)}${project.startTime ? ` kl. ${project.startTime}` : ''}`
+        await sendPushToUsers(
+          added.filter((id) => !muted.has(id)),
+          crewAddedPushMessage({ projectId: project.id, name: project.name, when }),
+          { ttl: PUSH_TTL.mention, urgency: 'high' },
+        )
+      } catch (err) {
+        // Besetningen er lagret; et varsel som feiler skal ikke velte det.
+        console.error('[spilleoppdrag] kunne ikke varsle besetningen:', err)
+      }
+    }
     return { ok: true, count: inserts.length }
   })

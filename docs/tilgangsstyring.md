@@ -364,6 +364,24 @@ Et prosjekt med `kind = 'spilleoppdrag'` er lukket, se `docs/spilleoppdrag.md`.
 - **Navnet kan ses i to stabsverktøy:** oppgavekoblingen i styreområdet
   (`board.manage`) og filteret i filtilgangene (`downloads.view`).
 
+## 5g. «Kan du?» (`post_callouts`, `callout_responses`, 23. november 2026)
+
+Et innlegg kan spørre korpset om folk kan være med, se `docs/kan-du.md`.
+
+| Aktør | Svare | Se hvem som kan | Se usikre, nei, ubesvarte og merknader | Velge besetning |
+|---|---|---|---|---|
+| Medlem som kan lese innlegget | Ja | Ja | Bare sitt eget svar | Nei |
+| Forfatteren av innlegget | Ja | Ja | Ja | Bare med `projects.manage` |
+| `posts.publish` | Ja | Ja | Ja | Bare med `projects.manage` |
+| `projects.manage` | Ja | Ja | Ja, på spilleoppdrag | Ja |
+
+- **Serveren filtrerer.** `calloutDetail` sender `manage: null` til alle andre enn
+  den ansvarlige, så navn og merknader aldri når klienten deres.
+- **Å spørre gir ingen notetilgang.** Filene følger fortsatt `project_crew`. Et
+  «Kan» på et spilleoppdrag endrer ingenting før den ansvarlige har valgt deg.
+- **Spørsmålet gjør oppdraget kjent.** Tittel, dato, tid og sted står i innlegget
+  for hele korpset. Prosjektet, programmet og notene er fortsatt lukket.
+
 ## 6. Produktvalg før fase 4 (avgjort — historikk)
 
 Alle valg ble avgjort før deploy, i tråd med de anbefalte alternativene (se

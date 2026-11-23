@@ -23,6 +23,7 @@ import { type MentionUser, mentionPlainText } from '../lib/mentions'
 import { excerpt, postHeading } from '../lib/posts'
 import { type Me, hasPermission, requireMe } from './access'
 import { loadCalendar } from './calendar-feed'
+import { type OpenCallout, dugnadEvents, unansweredCallouts } from './callout-store'
 import { myGigEvents, visibleToMember } from './project-crew-store'
 import { type UnreadImportantPost, boardCounts, latestUnreadImportant } from './unread'
 
@@ -35,6 +36,8 @@ import { type UnreadImportantPost, boardCounts, latestUnreadImportant } from './
 
 /** Hendelser under hero. Fire er nok til å fylle en skjerm uten å bli en kalender. */
 const UPCOMING_EVENTS = 4
+/** «Kan du?» som venter på svar fra deg. */
+const OPEN_CALLOUTS = 3
 /** Prosjekter under hero når kalenderen ikke er tilgjengelig. */
 const UPCOMING_PROJECTS = 4
 /** Veggen. Tre er nok til å vise at det finnes flere uten å bli en feed. */
@@ -70,6 +73,8 @@ export type HubPayload = {
   calendar: HubCalendar
   nextProject: HubProject | null
   upcomingProjects: Array<{ id: string; name: string; eventDate: string; venue: string | null }>
+  /** Åpne spørsmål jeg ikke har svart på. */
+  callouts: OpenCallout[]
 }
 
 /** Kalenderfeeden har flere felt enn hub-en viser; send bare det som brukes. */
@@ -83,6 +88,7 @@ function toHubEvent(event: AgendaEvent): HubEvent {
     allDay: event.allDay,
     location: event.location,
     ...(event.projectId ? { projectId: event.projectId } : {}),
+    ...(event.postId ? { postId: event.postId } : {}),
   }
 }
 
@@ -99,9 +105,11 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
   const canSeeBoardPosts = hasPermission(me, 'posts.publish')
 
   // Kalender, prosjekter og beskjeder er uavhengige kilder — hent dem samtidig.
-  const [calendar, gigRows, upcomingRows, postRows] = await Promise.all([
+  const [calendar, gigRows, dugnadRows, callouts, upcomingRows, postRows] = await Promise.all([
     loadCalendar(now),
     myGigEvents(d, me.id, toOsloDate(now), toOsloDate(calendarWindow(now).to)),
+    dugnadEvents(d, toOsloDate(now), toOsloDate(calendarWindow(now).to)),
+    unansweredCallouts(d, me.id, OPEN_CALLOUTS, now),
     d
       .select({
         id: projects.id,
@@ -223,11 +231,12 @@ export const getHub = createServerFn().handler(async (): Promise<HubPayload> => 
       // med på flettes inn i lista under, også når de kommer før den.
       upcoming: mergeGigEvents(
         eventsAfter(events, nextEvent, UPCOMING_EVENTS),
-        gigRows.filter((e) => Date.parse(e.end ?? e.start) >= now).map(toHubEvent),
+        [...gigRows, ...dugnadRows].filter((e) => Date.parse(e.end ?? e.start) >= now).map(toHubEvent),
       ).slice(0, UPCOMING_EVENTS),
     },
     nextProject: next ? { ...next, workCount } : null,
     upcomingProjects: upcoming.slice(1, 1 + UPCOMING_PROJECTS),
+    callouts,
   }
 })
 

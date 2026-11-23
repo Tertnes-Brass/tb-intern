@@ -3,6 +3,7 @@ import { postAttachmentUrl } from '../../../lib/post-attachments'
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { ActionMenu, type ActionMenuItem } from '../../../components/ActionMenu'
+import { CalloutPanel } from '../../../components/Callout'
 import { CommentComposer } from '../../../components/CommentComposer'
 import { MessageMediaGallery } from '../../../components/MessageMedia'
 import { ReactionBar } from '../../../components/Reactions'
@@ -582,6 +583,7 @@ function PostPage() {
 
       <article className="rise mt-6 space-y-5" style={{ animationDelay: '80ms' }}>
         <PostBody body={post.body} format={post.format} mentions={post.mentions} />
+        {data.callout && <CalloutPanel postId={post.id} title={post.heading} callout={data.callout} />}
         <PostImages images={post.images} />
         {data.attachments.length > 0 && (
           <section className="rounded-[12px] border border-line" aria-label="Vedlegg">

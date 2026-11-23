@@ -1,10 +1,11 @@
-import { useRouter } from '@tanstack/react-router'
+import { Link, useRouter } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
+import { CALLOUT_STATUS_LABEL, CALLOUT_STATUS_RANK, type CalloutStatus } from '../lib/callouts'
 import { getCrewOptions, setProjectCrew } from '../server/project-crew'
 import type { CrewMember } from '../server/project-crew-store'
 import { Icon } from './Icons'
 import { toast, toastError } from './toast'
-import { Avatar, Button, Modal } from './ui'
+import { Avatar, Button, buttonClass, Modal } from './ui'
 
 /**
  * «Med på oppdraget»: hvem som spiller, og hvilken stemme. Alle som ser et
@@ -15,11 +16,14 @@ export function ProjectCrewSection({
   crew,
   canManage,
   myId,
+  callout = null,
 }: {
   projectId: string
   crew: CrewMember[]
   canManage: boolean
   myId: string
+  /** Spørsmålet på veggen, for den som styrer oppdraget. */
+  callout?: { postId: string; yes: number } | null
 }) {
   const [editing, setEditing] = useState(false)
   return (
@@ -35,6 +39,25 @@ export function ProjectCrewSection({
           </Button>
         )}
       </div>
+
+      {canManage && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-line px-3.5 py-2.5">
+          <p className="min-w-0 flex-1 basis-48 text-sm leading-snug text-ink-soft">
+            {callout
+              ? `Spurt på veggen · ${callout.yes} kan`
+              : 'Vet du ikke hvem som kan? Spør korpset på veggen.'}
+          </p>
+          {callout ? (
+            <Link to="/beskjeder/$postId" params={{ postId: callout.postId }} className={buttonClass('secondary', 'sm')}>
+              Se svarene
+            </Link>
+          ) : (
+            <Link to="/beskjeder/ny" search={{ kan: 'spilleoppdrag', prosjekt: projectId }} className={buttonClass('secondary', 'sm')}>
+              Spør korpset
+            </Link>
+          )}
+        </div>
+      )}
 
       {crew.length === 0 ? (
         <div className="surface-group flex flex-wrap items-center justify-between gap-3 px-4 py-3.5">
@@ -75,7 +98,7 @@ export function ProjectCrewSection({
 
 type Options = Awaited<ReturnType<typeof getCrewOptions>>
 
-function CrewEditor({ projectId, open, onClose }: { projectId: string; open: boolean; onClose: () => void }) {
+export function CrewEditor({ projectId, open, onClose }: { projectId: string; open: boolean; onClose: () => void }) {
   const router = useRouter()
   const [options, setOptions] = useState<Options | null>(null)
   const [selected, setSelected] = useState<Map<string, string[]>>(new Map())
@@ -99,7 +122,14 @@ function CrewEditor({ projectId, open, onClose }: { projectId: string; open: boo
         setSelected(initial)
         // De som alt er med, står øverst. Rekkefølgen låses når arket åpnes, så
         // en rad ikke hopper bort i det man trykker på den.
-        setOrder([...res.members].sort((a, b) => Number(initial.has(b.id)) - Number(initial.has(a.id))).map((m) => m.id))
+        // Deretter de som har svart at de kan, og de som ikke kan til slutt.
+        const answer = new Map(res.responses.map((r) => [r.userId, r.status]))
+        const rank = (id: string) => CALLOUT_STATUS_RANK[answer.get(id) ?? 'none']
+        setOrder(
+          [...res.members]
+            .sort((a, b) => Number(initial.has(b.id)) - Number(initial.has(a.id)) || rank(a.id) - rank(b.id))
+            .map((m) => m.id),
+        )
       })
       .catch((err) => {
         if (cancelled) return
@@ -111,6 +141,8 @@ function CrewEditor({ projectId, open, onClose }: { projectId: string; open: boo
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, projectId])
+
+  const responses = useMemo(() => new Map((options?.responses ?? []).map((r) => [r.userId, r])), [options])
 
   const members = useMemo(() => {
     if (!options) return []
@@ -187,6 +219,7 @@ function CrewEditor({ projectId, open, onClose }: { projectId: string; open: boo
             <ul className="list-group">
               {members.map((member) => {
                 const chosen = selected.get(member.id)
+                const response = responses.get(member.id)
                 return (
                   <li key={member.id}>
                     <button
@@ -208,7 +241,9 @@ function CrewEditor({ projectId, open, onClose }: { projectId: string; open: boo
                         <span className="block truncate text-xs text-ink-faint">
                           {member.ownParts.join(' · ') || 'Ingen stemme til vanlig'}
                         </span>
+                        {response?.note && <span className="block text-xs leading-snug text-ink-soft">«{response.note}»</span>}
                       </span>
+                      {response && <AnswerMark status={response.status} />}
                     </button>
                     {chosen && options.parts.length > 0 && (
                       <div className="px-3.5 pb-2.5 pl-[2.75rem]">
@@ -249,6 +284,11 @@ function CrewEditor({ projectId, open, onClose }: { projectId: string; open: boo
       )}
     </Modal>
   )
+}
+
+function AnswerMark({ status }: { status: CalloutStatus }) {
+  const tone = status === 'yes' ? 'text-brass-strong' : status === 'no' ? 'text-oxblood' : 'text-ink-faint'
+  return <span className={`shrink-0 text-xs font-semibold ${tone}`}>{CALLOUT_STATUS_LABEL[status]}</span>
 }
 
 function PartChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {

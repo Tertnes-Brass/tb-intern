@@ -109,6 +109,13 @@ section when something is pinned. At most five posts are pinned at once; the
 server rejects a sixth — like a past date or a draft — with 409
 `{error: {code: 'pin_rejected', message}}`, where `message` is shown as is.
 
+### «Kan du?» on posts (added 23 November 2026, additive)
+
+The workspace post screen gets a `callout` section when a post asks members
+whether they can join a dugnad or a gig. Its row carries `callouts.respondToCallout`
+actions (`{postId, status: 'yes'|'maybe'|'no', note?}`), so it works in installed
+apps without an update. The server sends only what the member may see.
+
 Returned file/image paths use `/api/files/{id}`, `/api/post-images/{id}` and
 `/api/message-media/{id}`.
 These existing routes repeat authorization before streaming private R2 content.

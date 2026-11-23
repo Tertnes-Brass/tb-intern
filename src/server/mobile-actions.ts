@@ -15,6 +15,7 @@ import * as m6 from './board';
 import * as m7 from './gruppeledere';
 import * as m8 from './event-meta';
 import * as m9 from './posts';
+import * as m10 from './callouts';
 // Explicit registry: never resolve a module/function name supplied by a client.
 // Each registered operation runs its existing Zod validator and permission guard.
 const operations = new Map<string, (input: never) => Promise<unknown>>([
@@ -99,6 +100,7 @@ const operations = new Map<string, (input: never) => Promise<unknown>>([
     ['posts.deletePostImage', m9.deletePostImage],
     ['posts.resendPostNotifications', m9.resendPostNotifications],
     ['posts.setPostPinned', m9.setPostPinned],
+    ['callouts.respondToCallout', m10.respondToCallout],
 ]);
 export async function runMobileAction(operation: string, values: Record<string, unknown>, mentions: MentionUser[] = []) {
     if (typeof values.body === 'string' && mentions.length > 0)

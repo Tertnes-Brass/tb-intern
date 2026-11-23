@@ -5,6 +5,7 @@ import {
   primaryKey,
   sqliteTable,
   text,
+  uniqueIndex,
 } from 'drizzle-orm/sqlite-core'
 import { session, user } from './auth-schema'
 
@@ -663,6 +664,52 @@ export const postComments = sqliteTable(
     index('post_comments_parent_idx').on(t.parentId),
     index('post_comments_reply_to_idx').on(t.replyToId),
   ],
+)
+
+// «Kan du?» på et innlegg: en dugnad eller et spilleoppdrag der folk svarer
+// kan / usikker / kan ikke, mens samtalen går i innleggets vanlige kommentarer.
+// Et spilleoppdrag henter dato, tid og sted fra prosjektet (`project_id`), så de
+// bare finnes ett sted; en dugnad har dem her. Slettes prosjektet, forsvinner
+// spørsmålet og svarene, mens innlegget står igjen som et vanlig innlegg.
+// Reglene: `src/lib/callouts.ts`.
+export const postCallouts = sqliteTable(
+  'post_callouts',
+  {
+    postId: text('post_id')
+      .primaryKey()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: ['dugnad', 'spilleoppdrag'] }).notNull(),
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+    eventDate: text('event_date'),
+    startTime: text('start_time'),
+    location: text('location'),
+    // Norsk kalenderdato «YYYY-MM-DD», til og med den dagen.
+    respondBy: text('respond_by'),
+    needed: integer('needed'),
+    closedAt: integer('closed_at', { mode: 'timestamp_ms' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [uniqueIndex('post_callouts_project_idx').on(t.projectId), index('post_callouts_date_idx').on(t.eventDate)],
+)
+
+// Ett svar per medlem per spørsmål. Ingen rad = har ikke svart. Dette er bevisst
+// ikke `event_attendance`, der ingen rad betyr at man kommer.
+export const calloutResponses = sqliteTable(
+  'callout_responses',
+  {
+    postId: text('post_id')
+      .notNull()
+      .references(() => postCallouts.postId, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    status: text('status', { enum: ['yes', 'maybe', 'no'] }).notNull(),
+    note: text('note'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.userId] }), index('callout_responses_user_idx').on(t.userId)],
 )
 
 // Medlemsomtaler i en kommentar (#83). Teksten inneholder markøren

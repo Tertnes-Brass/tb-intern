@@ -233,7 +233,7 @@ function ProjectPage() {
 
         <div className="min-w-0 space-y-12 md:col-start-1 md:row-start-2">
           {data.crew && (
-            <ProjectCrewSection projectId={p.id} crew={data.crew} canManage={data.canManage} myId={me.id} />
+            <ProjectCrewSection projectId={p.id} crew={data.crew} canManage={data.canManage} myId={me.id} callout={data.callout} />
           )}
 
           <section className="rise" style={{ animationDelay: '100ms' }}>
