@@ -38,6 +38,8 @@ vi.mock('./push-send', () => ({ sendPushToUsers: state.push, unreadCountsFor: as
 import { respondToCallout, setCalloutClosed } from './callouts'
 import { dugnadEvents, unansweredCallouts } from './callout-store'
 import { getCrewOptions, setProjectCrew } from './project-crew'
+import { otherScreen } from './mobile-other-screens'
+import { runMobileAction } from './mobile-actions'
 import { createPost, deletePost, getPost, listPosts, publishPost, updatePost } from './posts'
 
 const me = (id: string, permissions: string[] = []): TestMe => ({
@@ -374,5 +376,43 @@ describe('kalender og Hjem', () => {
     asBoard()
     await setCalloutClosed({ data: { postId: id, closed: true } })
     expect(await unansweredCallouts(state.db as never, 'ola', 3)).toEqual([])
+  })
+})
+
+describe('iPhone-appen', () => {
+  const screen = (id: string) => otherScreen(['posts', id], state.me as never, new URLSearchParams())
+
+  it('gir medlemmet knappene, men ikke andres nei', async () => {
+    const id = await publishDugnad()
+    await answer(id, 'kari', 'no', 'er bortreist')
+    asMember('ola')
+    const page = await screen(id)
+    const section = page!.sections.find((s) => s.id === 'callout')!
+    expect(section.rows[0]!.actions!.map((a) => a.title)).toEqual(['Kan', 'Usikker', 'Kan ikke'])
+    expect(JSON.stringify(page)).not.toContain('Kari')
+    expect(JSON.stringify(page)).not.toContain('bortreist')
+  })
+
+  it('lagrer svaret gjennom app-handlingen', async () => {
+    const id = await publishDugnad()
+    asMember('ola')
+    await runMobileAction('callouts.respondToCallout', { postId: id, status: 'yes' })
+    expect((await detailFor(id)).mine?.status).toBe('yes')
+  })
+
+  it('viser den ansvarlige alle svarene', async () => {
+    const id = await publishDugnad()
+    await answer(id, 'kari', 'no', 'er bortreist')
+    asBoard()
+    const section = (await screen(id))!.sections.find((s) => s.id === 'callout')!
+    expect(section.rows.find((r) => r.id === 'callout-no')?.subtitle).toContain('bortreist')
+  })
+
+  it('lenker dugnaden i appens kalender til innlegget', async () => {
+    const soon = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10)
+    const id = await publishDugnad({ eventDate: soon })
+    asMember('ola')
+    const page = await otherScreen(['calendar'], state.me as never, new URLSearchParams())
+    expect(page!.sections[0]!.rows.map((r) => r.path)).toContain(`posts/${id}`)
   })
 })
