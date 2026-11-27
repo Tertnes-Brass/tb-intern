@@ -33,6 +33,7 @@ const KIND_LABEL: Record<string, string> = {
   konsert: 'Konsert',
   konkurranse: 'Konkurranse',
   seminar: 'Seminar',
+  spilleoppdrag: 'Spilleoppdrag',
   annet: 'Annet',
 }
 

@@ -4,6 +4,7 @@ import { seenThisSession } from '../lib/read-posts-client'
 import type { SearchHit } from '../lib/post-search'
 import { commentCountLabel } from '../lib/posts'
 import type { PostImage, PostListItem } from '../server/posts'
+import { CalloutCard } from './Callout'
 import { ReactionBar } from './Reactions'
 import { Glyph } from './compose/Composer'
 import { Icon } from './Icons'
@@ -158,6 +159,8 @@ export function PostCard({ post, terms, hit }: { post: PostListItem; terms?: str
       </Link>
 
       <PostImageGrid postId={post.id} images={post.images} total={post.imageCount} />
+
+      {post.callout && post.publishedAt !== null && <CalloutCard postId={post.id} title={post.heading} callout={post.callout} />}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <ReactionBar kind="post" targetId={post.id} reactions={post.reactions} size="md" />

@@ -98,6 +98,25 @@ export function isTextDraft(x: unknown): x is TextDraft {
   return typeof d.body === 'string' && isMentionList(d.chosen) && (d.title === undefined || typeof d.title === 'string')
 }
 
+export type PostCalloutDraft = {
+  kind: 'dugnad' | 'spilleoppdrag'
+  projectId: string
+  eventDate: string
+  startTime: string
+  location: string
+  respondBy: string
+  needed: string
+}
+
+const isCalloutDraft = (x: unknown): x is PostCalloutDraft => {
+  if (!x || typeof x !== 'object') return false
+  const c = x as Record<string, unknown>
+  return (
+    (c.kind === 'dugnad' || c.kind === 'spilleoppdrag') &&
+    ['projectId', 'eventDate', 'startTime', 'location', 'respondBy', 'needed'].every((key) => typeof c[key] === 'string')
+  )
+}
+
 /** Innleggsskjemaet: tekst og de valgene som er rene verdier (ikke filer). */
 export type PostDraft = {
   title: string
@@ -108,6 +127,8 @@ export type PostDraft = {
   importance: 'normal' | 'important'
   official: boolean
   fromArchive: boolean
+  /** «Kan du?»-feltene, mens de er åpne i skjemaet. Eldre utkast har dem ikke. */
+  callout?: PostCalloutDraft | null
 }
 
 export function isPostDraft(x: unknown): x is PostDraft {
@@ -121,7 +142,8 @@ export function isPostDraft(x: unknown): x is PostDraft {
     (d.audience === 'all' || d.audience === 'board') &&
     (d.importance === 'normal' || d.importance === 'important') &&
     typeof d.official === 'boolean' &&
-    typeof d.fromArchive === 'boolean'
+    typeof d.fromArchive === 'boolean' &&
+    (d.callout === undefined || d.callout === null || isCalloutDraft(d.callout))
   )
 }
 

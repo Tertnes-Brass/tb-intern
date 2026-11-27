@@ -95,9 +95,14 @@ export function hasFullArchiveAccess(me: Me | null): boolean {
  * holdes separat fra egne stemmer. Aktive gruppeledere får hele notesettet i
  * tilgjengelige prosjekter, uten å få fullt arkivinnsyn eller skriverett.
  */
-export function memberFileAccessContext(me: Me, inAccessibleProject: boolean): AccessCtx {
+export function memberFileAccessContext(
+  me: Me,
+  inAccessibleProject: boolean,
+  // Et spilleoppdrag kan gi andre stemmer enn medlemmets vanlige.
+  effectivePartIds: string[] = me.effectivePartIds,
+): AccessCtx {
   return {
-    effectivePartIds: me.effectivePartIds,
+    effectivePartIds,
     sectionLeaderPartIds: me.leadsLeafPartIds,
     canManageSection: hasPermission(me, 'members.manage.section'),
     isGroupLeader: isGroupLeader(me),

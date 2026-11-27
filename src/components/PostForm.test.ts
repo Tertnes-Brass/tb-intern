@@ -9,6 +9,7 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: unknown }) => children,
   useBlocker: () => ({ status: 'idle' }),
 }))
+vi.mock('../server/callouts', () => ({ listAskableGigs: vi.fn() }))
 vi.mock('../server/posts', () => ({ createPost: state.create, updatePost: state.update, publishPost: state.publish, deletePostImage: vi.fn(), searchMentionableForAudience: vi.fn() }))
 vi.mock('../server/post-attachments', () => ({ deletePostAttachment: state.remove }))
 vi.mock('../lib/post-attachments', async (original) => ({ ...await original<typeof import('../lib/post-attachments')>(), uploadPostAttachment: state.upload }))

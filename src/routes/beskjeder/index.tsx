@@ -9,6 +9,7 @@ import { PostCard, postSender } from '../../components/PostCard'
 import { shortWhen } from '../../components/compose/when'
 import { SearchField, SortButton, SortSheet, useSearchText } from '../../components/Search'
 import { BackArrow, Button, buttonClass, EmptyState, PageHeader, Stamp } from '../../components/ui'
+import { CALLOUT_KINDS, canCreateCallout } from '../../lib/callouts'
 import { toOsloDate } from '../../lib/format'
 import { pinDurationLabel, sortPinned } from '../../lib/pins'
 import {
@@ -46,7 +47,7 @@ import { listPosts, searchPosts, type PostSearchResult } from '../../server/post
 const filterSchema = z.object({
   // Validert så visningen kan lenkes til (docs/designprinsipper.md §4).
   // `utkast` viser bare utkastene (for dem som har noen; andre får en tom liste).
-  vis: z.enum(['alt', 'ulest', 'utkast', 'styret', 'arkivar', 'viktig']).default('alt').catch('alt'),
+  vis: z.enum(['alt', 'ulest', 'kan-du', 'utkast', 'styret', 'arkivar', 'viktig']).default('alt').catch('alt'),
   q: z.string().max(SEARCH_MAX_LENGTH).optional().catch(undefined),
   sortering: z.enum(['treff', 'nyeste', 'eldste', 'aktive', 'aktivitet']).optional().catch(undefined),
 })
@@ -56,6 +57,7 @@ type Filter = z.infer<typeof filterSchema>['vis']
 const FILTERS: Array<{ value: Filter; label: string }> = [
   { value: 'alt', label: 'Alle' },
   { value: 'ulest', label: 'Uleste' },
+  { value: 'kan-du', label: 'Kan du?' },
   { value: 'utkast', label: 'Utkast' },
   { value: 'styret', label: 'Fra styret' },
   { value: 'arkivar', label: 'Notearkivar' },
@@ -258,6 +260,8 @@ function PostsPage() {
   const matchesFilter = (post: (typeof data.posts)[number]) =>
     vis === 'ulest'
       ? isUnread(post)
+      : vis === 'kan-du'
+        ? post.callout !== null
       : vis === 'styret'
         ? post.official
         : vis === 'arkivar'
@@ -291,7 +295,12 @@ function PostsPage() {
   const sortIsDefault = sort === effectiveSort(undefined, searching)
 
   // «Utkast» er bare et filter for dem som har utkast å se.
-  const filters = FILTERS.filter((f) => f.value !== 'utkast' || data.drafts.length > 0 || vis === 'utkast')
+  const hasCallouts = data.posts.some((p) => p.callout)
+  const filters = FILTERS.filter(
+    (f) =>
+      (f.value !== 'utkast' || data.drafts.length > 0 || vis === 'utkast') &&
+      (f.value !== 'kan-du' || hasCallouts || vis === 'kan-du'),
+  )
   const filterLinks = (layout: 'row' | 'rail') =>
     filters.map((filter) => (
       <Link
@@ -312,6 +321,9 @@ function PostsPage() {
     ))
 
   const filterName = FILTERS.find((f) => f.value === vis)?.label ?? ''
+  const permissions = Route.useRouteContext().me?.permissions ?? []
+  const canAsk = CALLOUT_KINDS.some((kind) => canCreateCallout(permissions, kind))
+  const askKind = canCreateCallout(permissions, 'dugnad') ? ('dugnad' as const) : ('spilleoppdrag' as const)
 
   return (
     <div className="mx-auto max-w-2xl lg:max-w-[62rem]">
@@ -319,9 +331,16 @@ function PostsPage() {
         className="rise"
         title="Veggen"
         action={
-          <Link to="/beskjeder/ny" className={buttonClass('primary', 'sm')}>
-            Skriv innlegg
-          </Link>
+          <div className="flex items-center gap-2">
+            {canAsk && (
+              <Link to="/beskjeder/ny" search={{ kan: askKind }} className={buttonClass('secondary', 'sm')}>
+                Spør om noen kan
+              </Link>
+            )}
+            <Link to="/beskjeder/ny" className={buttonClass('primary', 'sm')}>
+              Skriv innlegg
+            </Link>
+          </div>
         }
       />
 

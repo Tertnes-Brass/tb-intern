@@ -9,12 +9,14 @@ import {
   notificationPreferences,
   postCommentMentions,
   postComments,
+  postCallouts,
   postImages,
   postAttachments,
   postMentions,
   postReads,
   reactions,
   posts,
+  projects,
   rolePermissions,
   user,
 } from '../db/schema'
@@ -54,6 +56,8 @@ import {
 import { toOsloDate } from '../lib/format'
 import { MAX_PINNED_POSTS, PIN_DRAFT_MESSAGE, isPinned, pinLimitMessage, pinUntilRejection } from '../lib/pins'
 import { type Me, hasPermission, requireMe } from './access'
+import { CALLOUT_AUDIENCE_ERROR, CALLOUT_KINDS, CALLOUT_LOCATION_MAX, canCreateCallout } from '../lib/callouts'
+import { type CalloutDetail, type CalloutSummary, type PreparedCallout, calloutDetail, calloutSummaries, prepareCallout, upsertCallout } from './callout-store'
 import { canAttachImages } from './post-images'
 import { claimMessageMedia, deleteMediaFor, mediaFor, releaseMessageMedia } from './message-media'
 import { deleteReactionsFor, reactionsFor } from './reaction-store'
@@ -94,6 +98,17 @@ const FEED_IMAGES = 3
 
 const idInput = z.object({ id: z.string().min(1) })
 
+/** «Kan du?» på innlegget. `undefined` lar det stå, `null` tar det bort. */
+const calloutInput = z.object({
+  kind: z.enum(CALLOUT_KINDS),
+  projectId: z.string().min(1).max(100).nullish(),
+  eventDate: z.string().max(10).nullish(),
+  startTime: z.string().max(5).nullish(),
+  location: z.string().max(CALLOUT_LOCATION_MAX).nullish(),
+  respondBy: z.string().max(10).nullish(),
+  needed: z.union([z.number(), z.string().max(4)]).nullish(),
+})
+
 const postInput = z.object({
   title: z.string().trim().max(160, 'Tittelen er for lang').nullish(),
   body: z.string().trim().min(1, 'Teksten kan ikke være tom').max(20_000, 'Teksten er for lang'),
@@ -104,6 +119,7 @@ const postInput = z.object({
   importance: z.enum(['normal', 'important']).default('normal'),
   official: z.boolean().default(false),
   fromArchive: z.boolean().optional(),
+  callout: calloutInput.nullish(),
 })
 
 export type PostAuthor = { id: string | null; name: string }
@@ -163,6 +179,8 @@ export type PostListItem = {
    * detaljsiden (og for redigeringsskjemaet, som må vise `@Navn`).
    */
   mentions: MentionUser[]
+  /** «Kan du?» på innlegget, med det akkurat denne leseren får se. */
+  callout: CalloutSummary | null
 }
 
 export type PostComment = {
@@ -192,6 +210,8 @@ export type PostComment = {
   /** Emoji-reaksjonene (tom for et «slettet»-merke). */
   reactions: ReactionSummary[]
 }
+
+export type { CalloutDetail, CalloutSummary }
 
 export type PostDetail = Omit<PostListItem, 'images'> & { body: string; images: PostImage[] }
 
@@ -299,6 +319,7 @@ async function decorate(
   images: Map<string, PostImage[]>
   mentions: Map<string, MentionUser[]>
   read: Set<string>
+  callouts: Map<string, CalloutSummary>
 }> {
   const ids = rows.map((r) => r.id)
   if (ids.length === 0) {
@@ -309,10 +330,11 @@ async function decorate(
       images: new Map(),
       mentions: new Map(),
       read: new Set(),
+      callouts: new Map(),
     }
   }
   const d = db()
-  const [commentRows, reactionRows, imageRows, mentions, readRows] = await Promise.all([
+  const [commentRows, reactionRows, imageRows, mentions, readRows, callouts] = await Promise.all([
     perChunk(ids, (chunk) =>
       d
         .select({
@@ -348,6 +370,7 @@ async function decorate(
         .from(postReads)
         .where(and(eq(postReads.userId, me.id), inArray(postReads.postId, chunk))),
     ),
+    calloutSummaries(d, rows.map((r) => ({ id: r.id, authorId: r.authorId })), me),
   ])
 
   const images = new Map<string, PostImage[]>()
@@ -363,6 +386,7 @@ async function decorate(
     images,
     mentions,
     read: new Set(readRows.map((r) => r.postId)),
+    callouts,
   }
 }
 
@@ -441,6 +465,7 @@ function toListItem(
     imageCount: all.length,
     canEdit: canEditPost(me, row, canPublish),
     mentions,
+    callout: extra.callouts.get(row.id) ?? null,
   }
 }
 
@@ -584,14 +609,16 @@ export const getPost = createServerFn()
     // Omtalene løses til DAGENS navn her, ikke ved lagring: bytter noen navn,
     // følger omtalen med av seg selv (#83).
     const live = commentRows.filter((c) => !c.deletedAt).map((c) => c.id)
-    const [mentionsByComment, mediaByComment, reactionsByComment] = await Promise.all([
+    const [mentionsByComment, mediaByComment, reactionsByComment, callout] = await Promise.all([
       mentionsFor(commentRows.map((c) => c.id)),
       mediaFor('post_comment', live),
       reactionsFor('post_comment', live, me.id),
+      item.callout ? calloutDetail(db(), row, me) : Promise.resolve(null),
     ])
 
     return {
       post: detail,
+      callout,
       canPublish,
       canArchive: hasPermission(me, 'posts.archive'),
       attachments: await db().select({ id: postAttachments.id, fileName: postAttachments.fileName, size: postAttachments.size })
@@ -642,6 +669,14 @@ export const markPostRead = createServerFn({ method: 'POST' })
  * id-en og kaller `publishPost` etterpå — slik blir et innlegg aldri synlig
  * halvferdig, og bilder blir aldri foreldreløse.
  */
+function calloutWrites(postId: string, prepared: PreparedCallout) {
+  const d = db()
+  return [
+    ...(prepared.project ? [d.insert(projects).values(prepared.project)] : []),
+    upsertCallout(d, postId, prepared.values),
+  ]
+}
+
 export const createPost = createServerFn({ method: 'POST' })
   .validator(postInput)
   .handler(async ({ data }) => {
@@ -651,9 +686,12 @@ export const createPost = createServerFn({ method: 'POST' })
     // Omtalene valideres FØR innlegget lagres — mot målgruppen `sanitizePostInput`
     // faktisk endte på, ikke den klienten påstod at den valgte.
     const mentionIds = await checkedPostMentions(safe.body, safe.audience)
+    const d = db()
+    const prepared = data.callout ? await prepareCallout(d, me, data.callout, null, safe.title) : null
+    if (prepared && safe.audience !== 'all') throw new Error(CALLOUT_AUDIENCE_ERROR)
     const ts = new Date()
     const id = newId()
-    await db()
+    const insert = d
       .insert(posts)
       .values({
         id,
@@ -669,6 +707,9 @@ export const createPost = createServerFn({ method: 'POST' })
         createdAt: ts,
         updatedAt: ts,
       })
+    // Innlegget, et eventuelt nytt oppdrag og spørsmålet lagres samlet.
+    if (prepared) await d.batch([insert, ...calloutWrites(id, prepared)])
+    else await insert
     // Utkast varsler aldri: radene får `notified_at = null` og e-posten går
     // først når innlegget publiseres.
     await syncPostMentions(id, mentionIds)
@@ -692,10 +733,21 @@ export const updatePost = createServerFn({ method: 'POST' })
     const audience = canPublish ? safe.audience : existing.audience
     const mentionIds = await checkedPostMentions(safe.body, audience)
 
+    const d = db()
+    const currentCallout = (
+      await d.select({ kind: postCallouts.kind }).from(postCallouts).where(eq(postCallouts.postId, data.id)).limit(1)
+    )[0]
+    if (data.callout === null && currentCallout && !canCreateCallout(me.permissions, currentCallout.kind)) {
+      throw new Error('Du har ikke tilgang til å fjerne spørsmålet')
+    }
+    const prepared = data.callout ? await prepareCallout(d, me, data.callout, data.id, safe.title) : null
+    const keepsCallout = data.callout === undefined ? !!currentCallout : !!data.callout
+    if (keepsCallout && audience !== 'all') throw new Error(CALLOUT_AUDIENCE_ERROR)
+
     // Arkivaren kan endre egne åpne innlegg. Styremerking og målgruppe beholdes
     // når en eier uten moderasjonsrett retter teksten.
     const canArchiveEdit = hasPermission(me, 'posts.archive') && !existing.official && existing.audience === 'all'
-    await db()
+    const write = d
       .update(posts)
       .set(
         canPublish
@@ -718,6 +770,11 @@ export const updatePost = createServerFn({ method: 'POST' })
             },
       )
       .where(eq(posts.id, data.id))
+    // Teksten og spørsmålet lagres samlet: et avbrutt kall gir aldri halve endringen.
+    if (prepared) await d.batch([write, ...calloutWrites(data.id, prepared)])
+    else if (data.callout === null && currentCallout) {
+      await d.batch([write, d.delete(postCallouts).where(eq(postCallouts.postId, data.id))])
+    } else await write
     await syncPostMentions(data.id, mentionIds)
 
     // Er innlegget allerede publisert, er en ny omtale i teksten en ny beskjed

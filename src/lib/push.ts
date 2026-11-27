@@ -150,6 +150,26 @@ export function commentReplyPushMessage(input: {
   }
 }
 
+/** Du er valgt til et spilleoppdrag. Går bare til dem som nettopp ble lagt til. */
+export function crewAddedPushMessage(input: { projectId: string; name: string; when: string }): PushMessage {
+  return {
+    title: `Du er med på ${clip(input.name)}`,
+    body: `${input.when ? `${input.when}. ` : ''}Notene ligger klare på oppdraget.`,
+    url: `/noter/prosjekter/${encodeURIComponent(input.projectId)}`,
+    tag: `gig-crew:${input.projectId}`,
+  }
+}
+
+/** Noen i besetningen har svart at de likevel ikke kan. */
+export function crewDropoutPushMessage(input: { postId: string; name: string; title: string }): PushMessage {
+  return {
+    title: `${input.name} kan likevel ikke`,
+    body: clip(input.title),
+    url: `/beskjeder/${encodeURIComponent(input.postId)}`,
+    tag: `gig-dropout:${input.postId}`,
+  }
+}
+
 /**
  * Dagen før: «Øvelse i morgen kl. 19:00 — Kan du ikke komme? Meld fravær.»
  * Alle regnes som kommer, så varselet spør ikke om svar — det minner om at

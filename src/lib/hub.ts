@@ -24,6 +24,10 @@ export type HubEvent = {
   end: string | null
   allDay: boolean
   location: string | null
+  /** Satt på et spilleoppdrag: raden lenker da til prosjektet, ikke kalenderen. */
+  projectId?: string
+  /** Satt på en dugnad: raden lenker da til innlegget med svarene. */
+  postId?: string
 }
 
 /** Publisert prosjekt med det hub-en trenger for kortet «Mine noter». */

@@ -17,7 +17,7 @@ vi.mock('./access', () => ({
   requirePermission: state.permission,
   requireMe: async () => ({ effectivePartIds: ['cornet'] }),
   hasFullArchiveAccess: () => state.fullArchive,
-  currentUser: async () => state.user,
+  currentUser: async () => state.user && { effectivePartIds: ['cornet'], ...state.user },
   hasPermission: () => true,
   memberFileAccessContext: (_me: unknown, inAccessibleProject: boolean) => ({ effectivePartIds: ['cornet'], sectionLeaderPartIds: [], canManageSection: false, isGroupLeader: false, canViewScore: true, canViewAll: state.fullArchive, inAccessibleProject }),
 }))

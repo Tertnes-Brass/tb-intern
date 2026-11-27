@@ -2,8 +2,9 @@ import { createFileRoute } from '@tanstack/react-router'
 import { env } from 'cloudflare:workers'
 import { and, eq, gte, sql } from 'drizzle-orm'
 import { db } from '../../../db'
-import { projects, projectWorks, shareLinks, workFiles } from '../../../db/schema'
+import { projectCrew, projects, projectWorks, shareLinks, workFiles } from '../../../db/schema'
 import { sha256Hex } from '../../../lib/id'
+import { projectFileGrant } from '../../../lib/project-access'
 import { currentUser, hasFullArchiveAccess, memberFileAccessContext } from '../../../server/access'
 import { memberCanAccessFile, shareAllows } from '../../../server/file-access'
 import {
@@ -42,32 +43,33 @@ export const Route = createFileRoute('/api/files/$fileId')({
         if (me) {
           actor = { kind: 'user', id: me.id }
           const canViewAll = hasFullArchiveAccess(me)
-          let inAccessibleProject = canViewAll
+          let access = memberFileAccessContext(me, canViewAll)
           if (!canViewAll) {
             const today = new Date().toISOString().slice(0, 10)
-            const accessibleProject = (
-              await d
-                .select({ projectId: projectWorks.projectId })
-                .from(projectWorks)
-                .innerJoin(projects, eq(projectWorks.projectId, projects.id))
-                .where(
-                  and(
-                    eq(projectWorks.workId, file.workId),
-                    sql`${projectWorks.editionId} IS ${file.editionId}`,
-                    eq(projects.isPublished, true),
-                    gte(projects.eventDate, today),
-                  ),
-                )
-                .limit(1)
-            )[0]
-            inAccessibleProject = !!accessibleProject
+            const rows = await d
+              .select({ kind: projects.kind, crewPartIds: projectCrew.partIds })
+              .from(projectWorks)
+              .innerJoin(projects, eq(projectWorks.projectId, projects.id))
+              .leftJoin(projectCrew, and(eq(projectCrew.projectId, projects.id), eq(projectCrew.userId, me.id)))
+              .where(
+                and(
+                  eq(projectWorks.workId, file.workId),
+                  sql`${projectWorks.editionId} IS ${file.editionId}`,
+                  eq(projects.isPublished, true),
+                  gte(projects.eventDate, today),
+                ),
+              )
+            // Et spilleoppdrag åpner verket bare for dem som er med på det,
+            // og da for stemmene de spiller der.
+            const grant = projectFileGrant(rows, me.effectivePartIds)
+            access = memberFileAccessContext(me, grant.inAccessibleProject, grant.effectivePartIds)
           }
           // Hard tilgangsstyring: stemmefiler krever egen effektiv stemme eller
           // et løv i aktivt seksjonsleder-scope, og at verket er i et publisert,
           // kommende prosjekt. Partitur krever scores.view. Fullt arkivinnsyn
           // omgår prosjektkravet. Håndheves server-side her — den ENESTE reelle
           // porten — ikke bare i UI-et.
-          const ok = memberCanAccessFile(file, memberFileAccessContext(me, inAccessibleProject))
+          const ok = memberCanAccessFile(file, access)
           if (!ok) return new Response('Ingen tilgang til denne filen', { status: 403 })
         } else if (shareToken) {
           // Vikartilgang: token må være gyldig, og filen må tilhøre prosjektet

@@ -2,8 +2,9 @@ import { createServerFn } from '@tanstack/react-start'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db, type Db } from '../db'
-import { memberProfiles, projects, stageSetups, user } from '../db/schema'
+import { memberProfiles, projectCrew, projects, stageSetups, user } from '../db/schema'
 import { newId } from '../lib/id'
+import { isGig } from '../lib/project-access'
 import {
   EMPTY_STAGE_APP_STATE,
   STAGE_CONTACT_MAX,
@@ -18,6 +19,7 @@ import {
 } from '../lib/stage-scene'
 import { STAGE_SIZE_LIMITS, STAGE_TEMPLATE_IDS, buildStageTemplate } from '../lib/stage-templates'
 import { type Me, hasFullArchiveAccess, hasPermission, requireMe, requirePermission } from './access'
+import { crewPartIdsFor } from './project-crew-store'
 
 /**
  * Sceneoppsett: tegninger av hvordan korpset og slagverket står, per prosjekt.
@@ -49,6 +51,12 @@ function readerFor(me: Me) {
   }
 }
 
+/** Leseren for ett bestemt prosjekt: på et spilleoppdrag teller det om man er med. */
+async function readerForProject(d: Db, me: Me, project: { id: string; kind: string }) {
+  const isCrew = isGig(project) && (await crewPartIdsFor(d, project.id, me.id)) !== null
+  return { ...readerFor(me), isCrew }
+}
+
 const today = () => new Date().toISOString().slice(0, 10)
 
 async function loadSetup(d: Db, id: string) {
@@ -76,7 +84,9 @@ async function loadSetup(d: Db, id: string) {
 /** Henter oppsettet og avviser likt om det ikke finnes eller ikke kan leses. */
 async function readableSetup(d: Db, me: Me, id: string) {
   const row = await loadSetup(d, id)
-  if (!row || !canReadStageSetups(row.project, readerFor(me), today())) throw new Error(NOT_FOUND)
+  if (!row || !canReadStageSetups(row.project, await readerForProject(d, me, row.project), today())) {
+    throw new Error(NOT_FOUND)
+  }
   return row
 }
 
@@ -146,12 +156,14 @@ export const createStageSetup = createServerFn({ method: 'POST' })
     const d = db()
     const project = (
       await d
-        .select({ id: projects.id, isPublished: projects.isPublished, eventDate: projects.eventDate })
+        .select({ id: projects.id, kind: projects.kind, isPublished: projects.isPublished, eventDate: projects.eventDate })
         .from(projects)
         .where(eq(projects.id, data.projectId))
         .limit(1)
     )[0]
-    if (!project || !canReadStageSetups(project, readerFor(me), today())) throw new Error('Fant ikke prosjektet')
+    if (!project || !canReadStageSetups(project, await readerForProject(d, me, project), today())) {
+      throw new Error('Fant ikke prosjektet')
+    }
 
     const title = normalizeStageTitle(data.title)
     let scene: unknown
@@ -256,23 +268,29 @@ export const deleteStageSetup = createServerFn({ method: 'POST' })
  */
 export const listStageSetupSources = createServerFn().handler(async () => {
   const me = await requirePermission(STAGE_PERMISSION)
-  const rows = await db()
-    .select({
-      id: stageSetups.id,
-      title: stageSetups.title,
-      projectId: projects.id,
-      projectName: projects.name,
-      eventDate: projects.eventDate,
-      isPublished: projects.isPublished,
-    })
-    .from(stageSetups)
-    .innerJoin(projects, eq(projects.id, stageSetups.projectId))
-    .orderBy(desc(projects.eventDate), desc(stageSetups.createdAt))
-    .limit(300)
+  const d = db()
+  const [rows, crewRows] = await Promise.all([
+    d
+      .select({
+        id: stageSetups.id,
+        title: stageSetups.title,
+        projectId: projects.id,
+        projectName: projects.name,
+        kind: projects.kind,
+        eventDate: projects.eventDate,
+        isPublished: projects.isPublished,
+      })
+      .from(stageSetups)
+      .innerJoin(projects, eq(projects.id, stageSetups.projectId))
+      .orderBy(desc(projects.eventDate), desc(stageSetups.createdAt))
+      .limit(300),
+    d.select({ projectId: projectCrew.projectId }).from(projectCrew).where(eq(projectCrew.userId, me.id)),
+  ])
+  const myGigs = new Set(crewRows.map((r) => r.projectId))
   const reader = readerFor(me)
   const day = today()
   return rows
-    .filter((r) => canReadStageSetups(r, reader, day))
+    .filter((r) => canReadStageSetups(r, { ...reader, isCrew: myGigs.has(r.projectId) }, day))
     .slice(0, 80)
     .map(({ id, title, projectId, projectName, eventDate }) => ({ id, title, projectId, projectName, eventDate }))
 })

@@ -16,6 +16,7 @@ import {
 } from '../lib/work-filter'
 import { normalizeWorkMetadata, workMetadataInput } from '../lib/work-metadata'
 import { hasFullArchiveAccess, hasPermission, requireMe, requirePermission } from './access'
+import { visibleToMember } from './project-crew-store'
 
 export const listWorks = createServerFn()
   .validator(archiveSearchInput.optional())
@@ -146,7 +147,13 @@ export const getWork = createServerFn()
         .select({ id: projects.id, name: projects.name, eventDate: projects.eventDate, editionId: projectWorks.editionId })
         .from(projectWorks)
         .innerJoin(projects, eq(projectWorks.projectId, projects.id))
-        .where(eq(projectWorks.workId, data.id))
+        // Arkivinnsyn åpner ikke et spilleoppdrag: navnet vises bare til dem som ser det.
+        .where(
+          and(
+            eq(projectWorks.workId, data.id),
+            hasPermission(me, 'projects.manage') ? undefined : visibleToMember(d, me.id),
+          ),
+        )
         .orderBy(desc(projects.eventDate)),
     ])
 

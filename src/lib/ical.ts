@@ -190,7 +190,7 @@ function zoneOffsetMs(utcMs: number, timeZone: string): number {
  * våren i Oslo) finnes ikke tidspunktet, og vi lander deterministisk på
  * tidspunktet rett etter hoppet — som er det Google også gjør.
  */
-function floatingToUtc(floatingMs: number, timeZone: string): number {
+export function floatingToUtc(floatingMs: number, timeZone: string): number {
   const first = floatingMs - zoneOffsetMs(floatingMs, timeZone)
   return floatingMs - zoneOffsetMs(first, timeZone)
 }

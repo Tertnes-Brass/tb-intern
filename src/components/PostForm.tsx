@@ -1,6 +1,7 @@
 import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { useId, useMemo, useRef, useState } from 'react'
-import { type PostDraft, isPostDraft } from '../lib/drafts'
+import { type PostCalloutDraft, type PostDraft, isPostDraft } from '../lib/drafts'
+import { CALLOUT_KINDS, canCreateCallout } from '../lib/callouts'
 import { attachmentRejectionReason, MAX_POST_ATTACHMENTS, postAttachmentUrl, uploadPostAttachment, type PostAttachment } from '../lib/post-attachments'
 import { deletePostAttachment } from '../server/post-attachments'
 import { markdownToHtml } from '../lib/markdown'
@@ -18,6 +19,8 @@ import {
   notifyResultMessage,
 } from '../lib/posts'
 import { createPost, deletePostImage, publishPost, searchMentionableForAudience, updatePost } from '../server/posts'
+import { CalloutFields, EMPTY_CALLOUT } from './CalloutFields'
+import { Icon } from './Icons'
 import { MentionTextarea } from './MentionTextarea'
 import { toast, toastError } from './toast'
 import { ComposerBar, ComposerLayout, ComposerTitle, Glyph, Segmented, ToolButton } from './compose/Composer'
@@ -79,6 +82,12 @@ export type PostFormValues = {
   mentions: MentionUser[]
   /** Serverens versjon — et lokalt utkast fra før en senere endring merkes. */
   updatedAt?: number
+  /** «Kan du?» slik det er lagret. */
+  callout?: PostCalloutDraft | null
+  /** Noen har svart: typen og oppdraget står fast. */
+  calloutLocked?: boolean
+  /** Oppdraget spørsmålet er knyttet til. */
+  calloutLinked?: { name: string; when: string } | null
 }
 
 const AUDIENCES: Array<{ value: PostAudience; label: string; hint: string }> = [
@@ -104,17 +113,30 @@ const IMPORTANCES: Array<{ value: PostImportance; label: string; hint: string }>
   { value: 'important', label: 'Viktig', hint: 'Merkes «Viktig», og når også dem som bare vil ha viktige e-poster.' },
 ]
 
+/** Det serveren trenger. Et knyttet oppdrag har dato, tid og sted på prosjektet. */
+function calloutPayload(c: PostCalloutDraft) {
+  const shared = { kind: c.kind, respondBy: c.respondBy || null, needed: c.needed || null }
+  if (c.kind === 'spilleoppdrag' && c.projectId) return { ...shared, projectId: c.projectId }
+  return { ...shared, projectId: null, eventDate: c.eventDate, startTime: c.startTime || null, location: c.location || null }
+}
+
 export function PostForm({
   post,
   canPublish: canBoard,
   canArchive = false,
   draftKey,
+  permissions = [],
+  presetCallout = null,
 }: {
   post?: PostFormValues
   canPublish: boolean
   canArchive?: boolean
   /** `draftKey(me.id, …)` fra `src/lib/drafts.ts`. Uten nøkkel lagres ingen utkast. */
   draftKey?: string
+  /** Avgjør om «Kan du?» tilbys. Serveren håndhever det uansett. */
+  permissions?: readonly string[]
+  /** Åpnet fra «Spør korpset» eller veggen: feltene står klare. */
+  presetCallout?: PostCalloutDraft | null
 }) {
   const canPublish = canBoard || (canArchive && !post?.official && (!post || post.audience === 'all'))
   const navigate = useNavigate()
@@ -141,6 +163,12 @@ export function PostForm({
   const [importance, setImportance] = useState<PostImportance>(post?.importance ?? 'normal')
   const [official, setOfficial] = useState(post?.official ?? false)
   const [fromArchive, setFromArchive] = useState(post?.fromArchive ?? false)
+  const startCallout = post ? (post.callout ?? null) : presetCallout
+  const [callout, setCallout] = useState<PostCalloutDraft | null>(startCallout)
+  const [confirmRemoveCallout, setConfirmRemoveCallout] = useState(false)
+  const calloutKinds = CALLOUT_KINDS.filter((kind) => canCreateCallout(permissions, kind))
+  // Den som ikke kan endre spørsmålet, sender det ikke med. Da blir det stående.
+  const canEditCallout = post?.callout ? canCreateCallout(permissions, post.callout.kind) : calloutKinds.length > 0
   // Avslått som standard (#85): publisering og masseutsending er to handlinger.
   const [notify, setNotify] = useState(DEFAULT_NOTIFY)
   const [existingImages, setExistingImages] = useState<PostFormImage[]>(post?.images ?? [])
@@ -166,8 +194,9 @@ export function PostForm({
     importance: post?.importance ?? 'normal',
     official: post?.official ?? false,
     fromArchive: post?.fromArchive ?? false,
+    callout: startCallout,
   }))
-  const currentDraft: PostDraft = { title, body, chosen, format, audience, importance, official, fromArchive }
+  const currentDraft: PostDraft = { title, body, chosen, format, audience, importance, official, fromArchive, callout }
   const applyDraft = (d: PostDraft, trusted = false) => {
     setTitle(d.title)
     setBody(d.body)
@@ -180,6 +209,7 @@ export function PostForm({
     setImportance(trusted || canPublish ? d.importance : 'normal')
     setOfficial(trusted ? d.official : canBoard && d.official)
     setFromArchive(trusted ? d.fromArchive : canPublish && d.fromArchive)
+    setCallout(trusted || canEditCallout ? (d.callout ?? null) : startCallout)
   }
   const local = useLocalDraft<PostDraft>({
     storageKey: draftKey,
@@ -261,8 +291,11 @@ export function PostForm({
       importance,
       official,
       fromArchive,
+      // `undefined` lar et lagret spørsmål stå; `null` tar det bort.
+      ...(canEditCallout ? { callout: callout ? calloutPayload(callout) : post?.callout ? null : undefined } : {}),
     }
     if (!values.body) throw new Error('Skriv noe i teksten først')
+    if (callout && !values.title) throw new Error('Et «Kan du?»-innlegg må ha en tittel')
     let id = savedIdRef.current
     if (id) await updatePost({ data: { id, ...values } })
     else {
@@ -364,8 +397,8 @@ export function PostForm({
   const main = (
     <div className="composer-sheet">
       <ComposerTitle
-        label="Tittel (valgfri)"
-        placeholder="Tittel (valgfri)"
+        label={callout ? 'Tittel' : 'Tittel (valgfri)'}
+        placeholder={callout ? (callout.kind === 'dugnad' ? 'Dugnad i øvingslokalet' : 'Spilleoppdrag på julebord') : 'Tittel (valgfri)'}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         maxLength={160}
@@ -456,6 +489,18 @@ export function PostForm({
           </ul>
           <p className="mt-1.5 text-xs text-ink-faint">{imageHint}</p>
         </div>
+      )}
+
+      {callout && canEditCallout && (
+        <CalloutFields
+          value={callout}
+          onChange={setCallout}
+          onRemove={() => (post?.callout ? setConfirmRemoveCallout(true) : setCallout(null))}
+          kinds={calloutKinds}
+          locked={post?.calloutLocked ?? false}
+          linked={post?.calloutLinked ?? null}
+          onGigPicked={(gig) => setTitle((current) => current || gig.name)}
+        />
       )}
 
       {canBoard && (existingAttachments.length > 0 || attachmentFiles.length > 0) && (
@@ -565,6 +610,18 @@ export function PostForm({
             </ToolButton>
           </>
         )}
+        {canEditCallout && !callout && (
+          <ToolButton
+            icon={<Icon name="check" size={18} />}
+            title="Spør hvem som kan være med på en dugnad eller et spilleoppdrag"
+            onClick={() => {
+              setCallout({ ...EMPTY_CALLOUT, kind: calloutKinds[0] ?? 'dugnad' })
+              setAudience('all')
+            }}
+          >
+            Kan du?
+          </ToolButton>
+        )}
         {format === 'markdown' && (
           <ToolButton icon={<Glyph name={preview ? 'pencil' : 'eye'} />} active={preview} aria-pressed={preview} onClick={() => setPreview(!preview)}>
             {preview ? 'Skriv' : 'Forhåndsvis'}
@@ -614,9 +671,9 @@ export function PostForm({
           legend="Hvem skal se det?"
           name="post-audience"
           value={audience}
-          options={AUDIENCES.filter((a) => canBoard || a.value === 'all')}
+          options={AUDIENCES.filter((a) => (canBoard && !callout) || a.value === 'all')}
           onChange={setAudience}
-          hint={AUDIENCES.find((a) => a.value === audience)!.hint}
+          hint={callout ? 'Et «Kan du?»-innlegg går alltid til hele korpset.' : AUDIENCES.find((a) => a.value === audience)!.hint}
         />
       )}
       {canPublish && (
@@ -751,6 +808,28 @@ export function PostForm({
           </div>
         </Modal>
       )}
+
+      <Modal open={confirmRemoveCallout} onClose={() => setConfirmRemoveCallout(false)} title="Fjerne «Kan du?»?">
+        <p className="text-sm leading-relaxed text-ink-soft">
+          Når du lagrer, blir dette et vanlig innlegg, og alle svarene slettes. Kommentarene blir stående. Et knyttet spilleoppdrag
+          og besetningen på det blir også stående.
+        </p>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="ghost" onClick={() => setConfirmRemoveCallout(false)}>
+            Behold
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            onClick={() => {
+              setCallout(null)
+              setConfirmRemoveCallout(false)
+            }}
+          >
+            Fjern spørsmålet
+          </Button>
+        </div>
+      </Modal>
 
       <Modal
         open={confirmRemove !== null}

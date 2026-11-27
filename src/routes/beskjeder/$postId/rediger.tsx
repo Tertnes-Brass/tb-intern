@@ -3,6 +3,7 @@ import { PostForm } from '../../../components/PostForm'
 import { draftKey } from '../../../lib/drafts'
 import { EmptyState } from '../../../components/ui'
 import { getPost } from '../../../server/posts'
+import { calloutWhen } from '../../../components/Callout'
 
 /**
  * Redigering — samme skjema som `/beskjeder/ny`. Eieren kan endre sitt eget
@@ -19,7 +20,7 @@ export const Route = createFileRoute('/beskjeder/$postId/rediger')({
 })
 
 function EditPostPage() {
-  const { post, canPublish, canArchive, attachments } = Route.useLoaderData()
+  const { post, callout, canPublish, canArchive, attachments } = Route.useLoaderData()
   const me = Route.useRouteContext().me
 
   if (!post.canEdit) {
@@ -29,7 +30,24 @@ function EditPostPage() {
   // Samme skriveflate som et nytt innlegg; «Avbryt» går tilbake til innlegget.
   return (
     <PostForm
-      post={{ ...post, attachments }}
+      post={{
+        ...post,
+        attachments,
+        callout: callout && {
+          kind: callout.kind,
+          projectId: callout.projectId ?? '',
+          eventDate: callout.eventDate ?? '',
+          startTime: callout.startTime ?? '',
+          location: callout.location ?? '',
+          respondBy: callout.respondBy ?? '',
+          needed: callout.needed === null ? '' : String(callout.needed),
+        },
+        calloutLocked: !!callout?.manage && callout.manage.yes.length + callout.manage.maybe.length + callout.manage.no.length > 0,
+        calloutLinked: callout?.kind === 'spilleoppdrag' && callout.projectId
+          ? { name: 'Spilleoppdrag', when: [calloutWhen(callout), callout.location].filter(Boolean).join(' · ') }
+          : null,
+      }}
+      permissions={me?.permissions ?? []}
       canPublish={canPublish}
       canArchive={canArchive}
       draftKey={me ? draftKey(me.id, { kind: 'edit-post', postId: post.id }) : undefined}

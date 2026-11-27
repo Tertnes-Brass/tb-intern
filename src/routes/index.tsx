@@ -1,3 +1,4 @@
+import { CALLOUT_KIND_LABEL } from '../lib/callouts'
 import { Link, createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { DateTile, ListHeader, eventDayLabel, eventTimeLabel, rsvpEventLabel } from '../components/calendar/parts'
@@ -336,11 +337,46 @@ function PostsSection({ data }: { data: HubData }) {
 
 // ---------- Kommende ----------
 
+/** Spørsmål som venter på svar fra deg. Svaret gis på innlegget, der samtalen er. */
+function CalloutsSection({ data }: { data: HubData }) {
+  if (data.callouts.length === 0) return null
+  return (
+    <section className="mb-6" aria-labelledby="hub-kan-du">
+      <div id="hub-kan-du">
+        <ListHeader title="Kan du?" meta={data.callouts.length} />
+      </div>
+      <ul className="list-group mt-2">
+        {data.callouts.map((c) => (
+          <li key={c.postId}>
+            <Link
+              to="/beskjeder/$postId"
+              params={{ postId: c.postId }}
+              className="list-row-link link-quiet flex min-h-14 items-center gap-3 px-4 py-2.5"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[0.95rem] font-medium text-ink">{c.title}</span>
+                <span className="block truncate text-xs text-ink-soft">
+                  {CALLOUT_KIND_LABEL[c.kind]} · {formatDate(c.eventDate)}
+                  {c.respondBy ? ` · svar innen ${formatDate(c.respondBy)}` : ''}
+                </span>
+              </span>
+              <span className="shrink-0 text-[0.82rem] font-semibold text-brass-strong">Svar</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 function UpcomingSection({ data }: { data: HubData }) {
   // Kalenderen er hovedkilden; uten den er «Kommende» prosjektene i stedet.
   const useCalendar = data.calendar.configured && !data.calendar.error
+  // Dugnader er våre egne data og skal stå her også når kalenderen svikter.
+  const dugnads = useCalendar ? [] : data.calendar.upcoming.filter((event) => event.postId)
   return (
     <section className="hub-upcoming rise" style={{ animationDelay: '150ms' }}>
+      <CalloutsSection data={data} />
       <ListHeader
         title="Kommende"
         action={
@@ -366,15 +402,30 @@ function UpcomingSection({ data }: { data: HubData }) {
                 date={toOsloDate(event.start)}
                 title={event.title}
                 meta={`${eventTimeLabel(event)}${event.location ? ` · ${event.location}` : ''}`}
-                link={{ to: '/kalender/$eventId', params: { eventId: event.occurrenceKey } }}
+                link={
+                  event.projectId
+                    ? { to: '/noter/prosjekter/$projectId', params: { projectId: event.projectId } }
+                    : event.postId
+                      ? { to: '/beskjeder/$postId', params: { postId: event.postId } }
+                      : { to: '/kalender/$eventId', params: { eventId: event.occurrenceKey } }
+                }
               />
             ))}
           </ul>
         )
-      ) : data.upcomingProjects.length === 0 ? (
+      ) : data.upcomingProjects.length === 0 && dugnads.length === 0 ? (
         <p className="py-3 text-sm text-ink-faint">Ingenting mer planlagt — foreløpig.</p>
       ) : (
         <ul>
+          {dugnads.map((event) => (
+            <UpcomingRow
+              key={event.id}
+              date={toOsloDate(event.start)}
+              title={event.title}
+              meta={`${eventTimeLabel(event)}${event.location ? ` · ${event.location}` : ''}`}
+              link={{ to: '/beskjeder/$postId', params: { postId: event.postId! } }}
+            />
+          ))}
           {data.upcomingProjects.map((p) => (
             <UpcomingRow
               key={p.id}
@@ -402,6 +453,7 @@ function UpcomingRow({
   link:
     | { to: '/kalender/$eventId'; params: { eventId: string } }
     | { to: '/noter/prosjekter/$projectId'; params: { projectId: string } }
+    | { to: '/beskjeder/$postId'; params: { postId: string } }
 }) {
   return (
     <li className="hairline-row">
